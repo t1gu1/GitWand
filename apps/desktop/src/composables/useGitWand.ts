@@ -215,16 +215,17 @@ export function useGitWand() {
       resolveOptions.value = {};
     }
 
-    // Read each file
-    const loaded: ConflictFile[] = [];
-    for (const filePath of conflictedPaths) {
-      const content = await readFile(cwd, filePath);
-      loaded.push({
-        path: filePath,
-        content,
-        result: resolve(content, filePath, resolveOptions.value),
-      });
-    }
+    // Read each file (parallel — I/O bound, order preserved by Promise.all)
+    const loaded: ConflictFile[] = await Promise.all(
+      conflictedPaths.map(async (filePath) => {
+        const content = await readFile(cwd, filePath);
+        return {
+          path: filePath,
+          content,
+          result: resolve(content, filePath, resolveOptions.value),
+        };
+      }),
+    );
 
     files.value = loaded;
     if (loaded.length > 0) {
