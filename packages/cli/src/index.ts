@@ -17,10 +17,58 @@
  *   npx gitwand resolve --ci --dry-run
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFile, writeFile } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { resolve as resolvePath } from "node:path";
 import { resolve, type MergeResult } from "@gitwand/core";
+
+// ─── Concurrency pool ───────────────────────────────────────────
+
+/** Borne par défaut sur le nombre de fichiers traités en parallèle. */
+const DEFAULT_CONCURRENCY = 8;
+
+/**
+ * Petit pool de workers avec concurrence bornée. Préserve l'ordre des
+ * résultats (résultats écrits à `results[i]`), indépendamment de l'ordre
+ * de complétion. Conçu pour rester dépourvu de dépendance externe — le
+ * CLI n'a volontairement aucun runtime dep hors `@gitwand/core`.
+ *
+ * @param items        — items à traiter (liste indexée)
+ * @param concurrency  — plafond de workers en vol (min = 1)
+ * @param worker       — fonction appelée par item, async autorisée
+ */
+async function runPool<In, Out>(
+  items: In[],
+  concurrency: number,
+  worker: (item: In, index: number) => Promise<Out>,
+): Promise<Out[]> {
+  const results: Out[] = new Array(items.length);
+  const width = Math.max(1, Math.min(concurrency, items.length));
+  let nextIndex = 0;
+
+  const runOne = async () => {
+    while (true) {
+      const i = nextIndex++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  };
+
+  await Promise.all(Array.from({ length: width }, runOne));
+  return results;
+}
+
+/**
+ * Extrait une concurrence entière positive depuis un flag stringifié
+ * (`--concurrency=12`). Retourne `DEFAULT_CONCURRENCY` pour toute valeur
+ * non parseable ou ≤ 0, afin de ne jamais casser l'invocation.
+ */
+function parseConcurrency(flag: boolean | string | undefined): number {
+  if (typeof flag !== "string") return DEFAULT_CONCURRENCY;
+  const n = Number.parseInt(flag, 10);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_CONCURRENCY;
+  return n;
+}
 
 // ─── ANSI Colors ────────────────────────────────────────────────
 const isCI = process.env.CI === "true" || process.env.CI === "1";
@@ -55,11 +103,12 @@ function printHelp() {
   console.log(`  gitwand --help                  Show this help`);
   console.log();
   console.log(`${c.bold}Options:${c.reset}`);
-  console.log(`  --dry-run       Analyze without writing files`);
-  console.log(`  --verbose       Show details for each resolution`);
-  console.log(`  --no-whitespace Don't resolve whitespace-only conflicts`);
-  console.log(`  --ci            CI mode: JSON output + exit code 1 if unresolved`);
-  console.log(`  --json          Output results as JSON (implies --ci behavior)`);
+  console.log(`  --dry-run         Analyze without writing files`);
+  console.log(`  --verbose         Show details for each resolution`);
+  console.log(`  --no-whitespace   Don't resolve whitespace-only conflicts`);
+  console.log(`  --concurrency=N   Parallel file workers (default ${DEFAULT_CONCURRENCY}, min 1)`);
+  console.log(`  --ci              CI mode: JSON output + exit code 1 if unresolved`);
+  console.log(`  --json            Output results as JSON (implies --ci behavior)`);
   console.log();
 }
 
@@ -282,8 +331,11 @@ function buildPartialContent(
 /**
  * Main command: resolve
  */
-function cmdResolve(files: string[], flags: Record<string, boolean>) {
+async function cmdResolve(files: string[], flags: Record<string, boolean | string>) {
   const isCIMode = flags.ci || flags.json;
+  const verbose = !isCIMode && (flags.verbose === true || typeof flags.verbose === "string");
+  const resolveWhitespace = !(flags["no-whitespace"] === true);
+  const concurrency = parseConcurrency(flags.concurrency);
 
   if (!isCIMode) {
     printBanner();
@@ -307,68 +359,95 @@ function cmdResolve(files: string[], flags: Record<string, boolean>) {
     }
   }
 
-  const results: Array<{ file: string; result: MergeResult }> = [];
+  // Chaque fichier est traité concurremment par le pool, mais chaque worker
+  // produit (a) son MergeResult et (b) les lignes non-CI à afficher. Les
+  // résultats sont indexés par position dans `files`, donc l'ordre du rapport
+  // JSON et de l'affichage utilisateur reste déterministe — indépendant de
+  // l'ordre de complétion des workers.
+  type FileOutcome = {
+    file: string;
+    result: MergeResult | null; // null = fichier introuvable
+    printLines: string[];
+  };
 
-  let totalResolved = 0;
-  let totalRemaining = 0;
-  let totalConflicts = 0;
-
-  for (const file of files) {
+  // Note : on met `verbose: false` pour `resolve()` afin d'éviter les
+  // `console.log` internes qui interleaveraient entre workers ; on ré-imprime
+  // nous-mêmes un résumé plus riche (incluant `trace.summary`) en verbose.
+  const outcomes = await runPool<string, FileOutcome>(files, concurrency, async (file) => {
     const filePath = resolvePath(file);
     let content: string;
-
     try {
-      content = readFileSync(filePath, "utf-8");
+      content = await readFile(filePath, "utf-8");
     } catch {
-      if (!isCIMode) {
-        console.log(`${c.red}  \u2717 ${file} — file not found${c.reset}`);
-      }
-      continue;
+      return {
+        file,
+        result: null,
+        printLines: isCIMode ? [] : [`${c.red}  \u2717 ${file} — file not found${c.reset}`],
+      };
     }
 
     const result = resolve(content, file, {
-      verbose: !isCIMode && (flags.verbose ?? false),
-      resolveWhitespace: !(flags["no-whitespace"] ?? false),
+      verbose: false,
+      resolveWhitespace,
     });
 
-    results.push({ file, result });
+    // Écriture sur disque (sauf dry-run). L'écriture est concurrente entre
+    // fichiers distincts, mais chaque fichier n'a qu'un seul writer — il n'y
+    // a donc pas de write-race possible tant que les chemins sont distincts.
+    if (!flags["dry-run"] && result.stats.autoResolved > 0) {
+      const newContent =
+        result.mergedContent ?? buildPartialContent(content, result.resolutions);
+      await writeFile(filePath, newContent, "utf-8");
+    }
 
-    totalConflicts += result.stats.totalConflicts;
-    totalResolved += result.stats.autoResolved;
-    totalRemaining += result.stats.remaining;
-
+    const printLines: string[] = [];
     if (!isCIMode) {
       if (result.stats.totalConflicts === 0) {
-        console.log(`${c.dim}  \u25CB ${file} — no conflicts${c.reset}`);
+        printLines.push(`${c.dim}  \u25CB ${file} — no conflicts${c.reset}`);
       } else {
         const icon = result.stats.remaining === 0 ? "\u2713" : "\u25D0";
         const color = result.stats.remaining === 0 ? c.green : c.yellow;
 
-        console.log(
+        printLines.push(
           `${color}  ${icon} ${file} — ${result.stats.autoResolved}/${result.stats.totalConflicts} resolved${c.reset}`,
         );
 
-        // Show details in verbose mode
-        if (flags.verbose) {
+        if (verbose) {
           for (const res of result.resolutions) {
             const status = res.autoResolved
               ? `${c.green}auto${c.reset}`
               : `${c.red}manual${c.reset}`;
-            console.log(
+            printLines.push(
               `${c.dim}    L${res.hunk.startLine} [${res.hunk.type}] ${status} — ${res.hunk.explanation}${c.reset}`,
             );
+            printLines.push(`${c.dim}      trace: ${res.hunk.trace.summary}${c.reset}`);
           }
         }
       }
     }
 
-    // Write resolved file (unless dry-run)
-    if (!flags["dry-run"] && result.stats.autoResolved > 0) {
-      // Use mergedContent if all resolved, otherwise rebuild with partial resolutions
-      const newContent =
-        result.mergedContent ?? buildPartialContent(content, result.resolutions);
-      writeFileSync(filePath, newContent, "utf-8");
+    return { file, result, printLines };
+  });
+
+  // Flush ordonné (ordre de `files`, pas ordre de complétion).
+  if (!isCIMode) {
+    for (const outcome of outcomes) {
+      for (const line of outcome.printLines) {
+        console.log(line);
+      }
     }
+  }
+
+  const results: Array<{ file: string; result: MergeResult }> = [];
+  let totalResolved = 0;
+  let totalRemaining = 0;
+  let totalConflicts = 0;
+  for (const outcome of outcomes) {
+    if (outcome.result === null) continue;
+    results.push({ file: outcome.file, result: outcome.result });
+    totalConflicts += outcome.result.stats.totalConflicts;
+    totalResolved += outcome.result.stats.autoResolved;
+    totalRemaining += outcome.result.stats.remaining;
   }
 
   // CI mode: JSON output
@@ -408,8 +487,9 @@ function cmdResolve(files: string[], flags: Record<string, boolean>) {
 /**
  * Command: status
  */
-function cmdStatus(flags: Record<string, boolean>) {
+async function cmdStatus(flags: Record<string, boolean | string>) {
   const isCIMode = flags.ci || flags.json;
+  const concurrency = parseConcurrency(flags.concurrency);
 
   if (!isCIMode) {
     printBanner();
@@ -430,35 +510,41 @@ function cmdStatus(flags: Record<string, boolean>) {
     console.log(`${c.cyan}${files.length} conflicted file(s):${c.reset}\n`);
   }
 
-  const statusEntries: Array<{
-    path: string;
-    total: number;
-    resolvable: number;
-    percentage: number;
-  }> = [];
+  type StatusOutcome = {
+    entry: { path: string; total: number; resolvable: number; percentage: number } | null;
+    printLine: string | null;
+  };
 
-  for (const file of files) {
+  const outcomes = await runPool<string, StatusOutcome>(files, concurrency, async (file) => {
     const filePath = resolvePath(file);
     try {
-      const content = readFileSync(filePath, "utf-8");
+      const content = await readFile(filePath, "utf-8");
       const result = resolve(content, file);
-
       const resolvable = result.stats.autoResolved;
       const total = result.stats.totalConflicts;
       const pct = total > 0 ? Math.round((resolvable / total) * 100) : 0;
-
-      statusEntries.push({ path: file, total, resolvable, percentage: pct });
-
-      if (!isCIMode) {
-        const color = pct === 100 ? c.green : pct > 0 ? c.yellow : c.red;
-        console.log(
-          `  ${color}${file}${c.reset} — ${resolvable}/${total} resolvable (${pct}%)`,
-        );
-      }
+      const entry = { path: file, total, resolvable, percentage: pct };
+      if (isCIMode) return { entry, printLine: null };
+      const color = pct === 100 ? c.green : pct > 0 ? c.yellow : c.red;
+      return {
+        entry,
+        printLine: `  ${color}${file}${c.reset} — ${resolvable}/${total} resolvable (${pct}%)`,
+      };
     } catch {
-      if (!isCIMode) {
-        console.log(`  ${c.red}${file}${c.reset} — read error`);
-      }
+      return {
+        entry: null,
+        printLine: isCIMode ? null : `  ${c.red}${file}${c.reset} — read error`,
+      };
+    }
+  });
+
+  const statusEntries = outcomes
+    .map((o) => o.entry)
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
+  if (!isCIMode) {
+    for (const outcome of outcomes) {
+      if (outcome.printLine !== null) console.log(outcome.printLine);
     }
   }
 
@@ -473,25 +559,40 @@ function cmdStatus(flags: Record<string, boolean>) {
 const args = process.argv.slice(2);
 const command = args[0];
 
-const flags: Record<string, boolean> = {};
+// Les flags supportent désormais `--key` (boolean) ET `--key=value` (string),
+// le second étant requis pour `--concurrency=N`.
+const flags: Record<string, boolean | string> = {};
 const positional: string[] = [];
 
 for (const arg of args.slice(1)) {
   if (arg.startsWith("--")) {
-    flags[arg.slice(2)] = true;
+    const body = arg.slice(2);
+    const eq = body.indexOf("=");
+    if (eq >= 0) {
+      flags[body.slice(0, eq)] = body.slice(eq + 1);
+    } else {
+      flags[body] = true;
+    }
   } else {
     positional.push(arg);
   }
 }
 
-if (!command || command === "--help" || command === "-h") {
-  printHelp();
-} else if (command === "resolve") {
-  cmdResolve(positional, flags);
-} else if (command === "status") {
-  cmdStatus(flags);
-} else {
-  console.error(`${c.red}Unknown command: ${command}${c.reset}`);
-  printHelp();
-  process.exit(1);
+async function main() {
+  if (!command || command === "--help" || command === "-h") {
+    printHelp();
+  } else if (command === "resolve") {
+    await cmdResolve(positional, flags);
+  } else if (command === "status") {
+    await cmdStatus(flags);
+  } else {
+    console.error(`${c.red}Unknown command: ${command}${c.reset}`);
+    printHelp();
+    process.exit(1);
+  }
 }
+
+main().catch((err) => {
+  console.error(`${c.red}Fatal: ${err instanceof Error ? err.message : String(err)}${c.reset}`);
+  process.exit(2);
+});
