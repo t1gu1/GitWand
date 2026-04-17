@@ -12,7 +12,7 @@
  */
 import { computed, inject, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
-import { safeHtml } from "../composables/useSafeHtml";
+import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 import { ghListReviewerCandidates, type GitBranch, type ReviewerCandidate } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
@@ -187,129 +187,18 @@ function insertCodeBlock() {
   });
 }
 
-// ─── Minimal Markdown → HTML renderer ───────────────────
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function renderMarkdown(src: string): string {
-  if (!src.trim()) return `<p class="pcv-preview-empty">${t("pr.create.previewEmpty")}</p>`;
-  const lines = src.split("\n");
-  const out: string[] = [];
-  let i = 0;
-  let inCode = false;
-  let codeLang = "";
-  let codeBuf: string[] = [];
-  let listType: "ul" | "ol" | null = null;
-
-  const closeList = () => {
-    if (listType) { out.push(`</${listType}>`); listType = null; }
-  };
-
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // Fenced code block
-    const fence = line.match(/^```(\w*)\s*$/);
-    if (fence) {
-      if (!inCode) {
-        closeList();
-        inCode = true;
-        codeLang = fence[1];
-        codeBuf = [];
-      } else {
-        inCode = false;
-        out.push(`<pre class="pcv-code"><code${codeLang ? ` class="lang-${escapeHtml(codeLang)}"` : ""}>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
-      }
-      i++; continue;
-    }
-    if (inCode) { codeBuf.push(line); i++; continue; }
-
-    // Heading
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) {
-      closeList();
-      const lvl = h[1].length;
-      out.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`);
-      i++; continue;
-    }
-
-    // Blockquote
-    if (/^>\s?/.test(line)) {
-      closeList();
-      const buf: string[] = [];
-      while (i < lines.length && /^>\s?/.test(lines[i])) {
-        buf.push(lines[i].replace(/^>\s?/, ""));
-        i++;
-      }
-      out.push(`<blockquote>${inline(buf.join(" "))}</blockquote>`);
-      continue;
-    }
-
-    // Unordered list
-    const ul = line.match(/^\s*[-*]\s+(.*)$/);
-    if (ul) {
-      if (listType !== "ul") { closeList(); out.push("<ul>"); listType = "ul"; }
-      out.push(`<li>${inline(ul[1])}</li>`);
-      i++; continue;
-    }
-    // Ordered list
-    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
-    if (ol) {
-      if (listType !== "ol") { closeList(); out.push("<ol>"); listType = "ol"; }
-      out.push(`<li>${inline(ol[1])}</li>`);
-      i++; continue;
-    }
-
-    // Horizontal rule
-    if (/^-{3,}\s*$/.test(line)) {
-      closeList();
-      out.push("<hr />");
-      i++; continue;
-    }
-
-    // Blank line → close list / paragraph break
-    if (line.trim() === "") { closeList(); i++; continue; }
-
-    // Paragraph — consume contiguous non-empty lines
-    closeList();
-    const para: string[] = [];
-    while (i < lines.length && lines[i].trim() !== "" &&
-           !/^#{1,6}\s/.test(lines[i]) && !/^```/.test(lines[i]) &&
-           !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i]) &&
-           !/^>\s?/.test(lines[i])) {
-      para.push(lines[i]);
-      i++;
-    }
-    out.push(`<p>${inline(para.join(" "))}</p>`);
+// ─── Markdown preview ───────────────────────────────────
+// Markdown rendering is delegated to the shared `useSafeHtml` composable
+// (markdown-it + DOMPurify). We only add the component-specific empty
+// state here. The rendered HTML is fed to `v-html` via `safeHtml()`,
+// which also re-sanitizes for defense in depth.
+const bodyPreview = computed(() => {
+  const src = p.newPrBody.value;
+  if (!src.trim()) {
+    return `<p class="pcv-preview-empty">${t("pr.create.previewEmpty")}</p>`;
   }
-  closeList();
-  if (inCode) out.push(`<pre class="pcv-code"><code>${escapeHtml(codeBuf.join("\n"))}</code></pre>`);
-  return out.join("\n");
-}
-
-function inline(text: string): string {
-  let s = escapeHtml(text);
-  // Inline code first (protect from other transforms)
-  const codes: string[] = [];
-  s = s.replace(/`([^`]+)`/g, (_, c) => {
-    codes.push(`<code class="pcv-inline-code">${c}</code>`);
-    return `\u0000${codes.length - 1}\u0000`;
-  });
-  // Links [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, txt, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${txt}</a>`);
-  // Bold **x** / __x__
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-  // Italic *x* / _x_
-  s = s.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
-  s = s.replace(/(^|[^_])_([^_]+)_/g, "$1<em>$2</em>");
-  // Restore inline code
-  s = s.replace(/\u0000(\d+)\u0000/g, (_, n) => codes[Number(n)]);
-  return s;
-}
-
-const bodyPreview = computed(() => renderMarkdown(p.newPrBody.value));
+  return renderMarkdown(src);
+});
 
 // ─── Validation ─────────────────────────────────────────
 const canSubmit = computed(
@@ -1096,14 +985,14 @@ function removeReviewer(name: string) {
   color: var(--color-text-muted);
 }
 .pcv-preview :deep(a) { color: var(--color-accent); text-decoration: underline; }
-.pcv-preview :deep(.pcv-inline-code) {
+.pcv-preview :deep(.md-inline-code) {
   font-family: var(--font-mono, monospace);
   font-size: 0.9em;
   padding: 1px 5px;
   background: var(--color-bg-tertiary);
   border-radius: 4px;
 }
-.pcv-preview :deep(.pcv-code) {
+.pcv-preview :deep(.md-code-block) {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -1112,7 +1001,7 @@ function removeReviewer(name: string) {
   font-size: var(--font-size-sm);
   margin: 8px 0;
 }
-.pcv-preview :deep(.pcv-code code) {
+.pcv-preview :deep(.md-code-block code) {
   font-family: var(--font-mono, monospace);
 }
 .pcv-preview :deep(.pcv-preview-empty) {

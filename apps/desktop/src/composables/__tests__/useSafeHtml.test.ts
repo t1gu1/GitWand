@@ -162,6 +162,19 @@ describe("renderMarkdown — markdown → sanitized HTML", () => {
     expect(out).toContain('class="md-table"');
   });
 
+  it("adds slug ids to headings for in-page anchor links", () => {
+    const out = renderMarkdown("# Hello World\n\n## Getting Started\n");
+    expect(out).toContain('id="hello-world"');
+    expect(out).toContain('id="getting-started"');
+  });
+
+  it("strips punctuation from heading slugs (parity with legacy renderer)", () => {
+    const out = renderMarkdown("## What's new? — 2026");
+    // The legacy slugify removed punctuation, collapsed whitespace, and
+    // trimmed leading/trailing dashes.
+    expect(out).toMatch(/id="whats-new-2026"/);
+  });
+
   it("returns empty string for nullish input", () => {
     expect(renderMarkdown(null)).toBe("");
     expect(renderMarkdown(undefined)).toBe("");

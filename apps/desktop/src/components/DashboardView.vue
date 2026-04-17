@@ -15,7 +15,7 @@ import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
-import { safeHtml } from "../composables/useSafeHtml";
+import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 
 const { t, locale } = useI18n();
 const ai = useAIProvider();
@@ -449,94 +449,20 @@ function formatNumber(n: number): string {
   return n.toString();
 }
 
-// ─── Markdown → HTML (basic) ───────────────────────────────
-function renderMarkdown(md: string): string {
-  const headerInfo = extractReadmeHeader(md);
-  let body = headerInfo.rest;
-
-  // Code blocks are replaced with opaque placeholders BEFORE any other
-  // markdown transformation runs. Otherwise shell comments inside them
-  // (like `# Browser dev mode`) get picked up by the H1 regex below
-  // and rendered as huge headings.
-  const codeBlocks: string[] = [];
-  body = body.replace(/```(\w*)\n([\s\S]*?)```/g, (_m, _lang, code) => {
-    const placeholder = `\u0000CODE_BLOCK_${codeBlocks.length}\u0000`;
-    codeBlocks.push(`<pre class="md-code-block"><code>${escapeHtml(code.trimEnd())}</code></pre>`);
-    return placeholder;
-  });
-
-  // Also strip HTML comments early — the README often uses them as
-  // section dividers, and we don't want them dumped as raw text.
-  body = body.replace(/<!--[\s\S]*?-->/g, "");
-
-  let html = body
-    .replace(/(?:^\|.+\|\s*\n)(^\|[-| :]+\|\s*\n)((?:^\|.+\|\s*\n)*)/gm, (_m) => {
-      const lines = _m.trim().split("\n");
-      const headCells = lines[0].split("|").filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join("");
-      const rows = lines.slice(2).map(line => {
-        const cells = line.split("|").filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join("");
-        return `<tr>${cells}</tr>`;
-      }).join("");
-      return `<table class="md-table"><thead><tr>${headCells}</tr></thead><tbody>${rows}</tbody></table>`;
-    })
-    .replace(/^######\s+(.+)$/gm, (_m, t) => `<h6 id="${slugify(t)}">${t}</h6>`)
-    .replace(/^#####\s+(.+)$/gm, (_m, t) => `<h5 id="${slugify(t)}">${t}</h5>`)
-    .replace(/^####\s+(.+)$/gm, (_m, t) => `<h4 id="${slugify(t)}">${t}</h4>`)
-    .replace(/^###\s+(.+)$/gm, (_m, t) => `<h3 id="${slugify(t)}">${t}</h3>`)
-    .replace(/^##\s+(.+)$/gm, (_m, t) => `<h2 id="${slugify(t)}">${t}</h2>`)
-    .replace(/^#\s+(.+)$/gm, (_m, t) => `<h1 id="${slugify(t)}">${t}</h1>`)
-    .replace(/^[\s]*[-*]\s+\[x\]\s+(.+)$/gm, '<li class="md-check md-checked">$1</li>')
-    .replace(/^[\s]*[-*]\s+\[ \]\s+(.+)$/gm, '<li class="md-check">$1</li>')
-    .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt: string, src: string) => {
-      if (src.startsWith("assets/") || src.startsWith("./") || src.startsWith("../")) {
-        return `<span class="md-img-placeholder" title="${escapeHtml(alt)}">${escapeHtml(alt || "image")}</span>`;
-      }
-      return `<img src="${src}" alt="${escapeHtml(alt)}" class="md-img">`;
-    })
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="md-link">$1</a>')
-    .replace(/^---+$/gm, '<hr class="md-hr">')
-    .replace(/^[\s]*[-*]\s+(.+)$/gm, '<li>$1</li>')
-    .replace(/^[\s]*\d+\.\s+(.+)$/gm, '<li>$1</li>')
-    .replace(/^>\s+(.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
-
-  html = html.replace(/((?:<li[^>]*>.*<\/li>\s*)+)/g, "<ul>$1</ul>");
-
-  html = html
-    .split("\n\n")
-    .map((block) => {
-      const trimmed = block.trim();
-      if (!trimmed) return "";
-      if (
-        trimmed.startsWith("<h") ||
-        trimmed.startsWith("<p") ||
-        trimmed.startsWith("<pre") ||
-        trimmed.startsWith("<ul") ||
-        trimmed.startsWith("<ol") ||
-        trimmed.startsWith("<table") ||
-        trimmed.startsWith("<blockquote") ||
-        trimmed.startsWith("<hr") ||
-        trimmed.startsWith("<li") ||
-        trimmed.startsWith("<img") ||
-        trimmed.startsWith("<div") ||
-        trimmed.startsWith("<details")
-      ) {
-        return trimmed;
-      }
-      return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
-    })
-    .join("\n");
-
-  // Restore the code blocks last.
-  html = html.replace(/\u0000CODE_BLOCK_(\d+)\u0000/g, (_m, idx) => {
-    const i = parseInt(idx, 10);
-    return codeBlocks[i] ?? "";
-  });
-
-  return headerInfo.headerHtml + html;
+// ─── README rendering ──────────────────────────────────────
+// Markdown parsing is delegated to the shared `useSafeHtml` composable
+// (markdown-it + DOMPurify). The only README-specific step kept here is
+// `extractReadmeHeader`, which promotes the HTML block that many
+// projects ship at the top of their README (title, tagline, nav links,
+// shields.io badges) into a dedicated styled header. Anything below
+// that block is run through the standard markdown-it renderer.
+function renderReadme(md: string): string {
+  const { headerHtml, rest } = extractReadmeHeader(md);
+  // Strip HTML comments early — READMEs often use them as section
+  // dividers, and we don't want them rendered as text. markdown-it's
+  // `html: false` mode escapes them, which looks noisy in the UI.
+  const cleaned = rest.replace(/<!--[\s\S]*?-->/g, "");
+  return headerHtml + renderMarkdown(cleaned);
 }
 
 function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
@@ -581,7 +507,9 @@ function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
   if (titleMatch) headerHtml += `<h1 class="md-readme-title">${titleMatch[1]}</h1>`;
   if (strongMatch) headerHtml += `<p class="md-readme-tagline">${strongMatch[1]}</p>`;
   if (navLinks.length > 0) {
-    headerHtml += `<nav class="md-readme-nav">${navLinks.map(l => `<a href="${l.href}" class="md-link">${l.text}</a>`).join('<span class="md-readme-sep">&bull;</span>')}</nav>`;
+    // Using <div> (not <nav>) so DOMPurify's tag whitelist does not
+    // drop the element — the class still carries the styling intent.
+    headerHtml += `<div class="md-readme-nav">${navLinks.map(l => `<a href="${l.href}" class="md-link">${l.text}</a>`).join('<span class="md-readme-sep">&bull;</span>')}</div>`;
   }
   if (badges.length > 0) {
     headerHtml += `<div class="md-readme-badges">${badges.map(b => `<img src="${b.src}" alt="${b.alt}" class="md-badge">`).join(" ")}</div>`;
@@ -589,24 +517,6 @@ function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
   headerHtml += '</div>';
 
   return { headerHtml, rest };
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/<[^>]+>/g, "")
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 onMounted(loadDashboard);
@@ -992,7 +902,7 @@ watch(() => props.cwd, loadDashboard);
           <div
             v-if="readmeTab === 'formatted'"
             class="readme-formatted"
-            v-html="safeHtml(renderMarkdown(readmeContent))"
+            v-html="safeHtml(renderReadme(readmeContent))"
           />
           <pre v-else class="readme-raw"><code>{{ readmeContent }}</code></pre>
         </div>

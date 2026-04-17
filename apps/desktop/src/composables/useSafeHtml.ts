@@ -31,6 +31,22 @@
 import DOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
 
+/**
+ * Lowercase, strip non-word characters, collapse whitespace / dashes.
+ * Matches the legacy DashboardView behaviour so existing in-page anchor
+ * links (e.g. `#installation`) keep working after the renderer swap.
+ */
+function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/<[^>]+>/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .trim();
+}
+
 // ─── DOMPurify profile ─────────────────────────────────────────────
 
 /**
@@ -171,6 +187,22 @@ rules.code_inline = (tokens, idx, options, env, self) => {
 rules.table_open = () => '<table class="md-table">';
 rules.blockquote_open = () => '<blockquote class="md-blockquote">';
 rules.hr = () => '<hr class="md-hr">';
+
+// Attach `id="slug-of-heading"` to every heading token. This lets the
+// README pane act as a table of contents target (same behaviour as the
+// legacy regex renderer in DashboardView), without pulling in the
+// `markdown-it-anchor` plugin for such a small use case.
+rules.heading_open = (tokens, idx, options, env, self) => {
+  const open = tokens[idx];
+  const inline = tokens[idx + 1];
+  const text = inline?.children?.map((c) => c.content).join("") ?? "";
+  const slug = slugifyHeading(text);
+  if (slug && open.attrIndex("id") < 0) {
+    open.attrPush(["id", slug]);
+  }
+  return self.renderToken(tokens, idx, options);
+};
+
 rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   const existing = token.attrIndex("class");
