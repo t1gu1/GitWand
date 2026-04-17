@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -11,6 +11,81 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 /// - Native file system access (reading conflicted files, browsing directories)
 /// - Git command execution
 /// - Window management
+///
+/// ─── Trust boundaries ──────────────────────────────────────
+///
+/// Tauri commands live on a trust boundary: inputs come from the webview,
+/// where they may originate from untrusted repo content (READMEs, PR bodies,
+/// file names). Categories of commands and their security invariants:
+///
+/// 1. **Filesystem read/write** (`read_file`, `write_file`, `list_dir`):
+///    - Paths are constrained under an explicit `cwd` root via `safe_repo_path`.
+///    - No `..` segments may escape the root.
+///
+/// 2. **Git command execution** (`get_conflicted_files`, diff/log/status, etc.):
+///    - Arguments are passed mechanically via `.arg()` — never interpolated
+///      into a shell string. Safe by construction against command injection.
+///    - `cwd` is used as `.current_dir()` for the process, so the git binary
+///      itself confines filesystem access to the repo.
+///
+/// 3. **External CLI execution** (`gh`, `claude`, editor): same rules as (2).
+///    `claude` runs with API-key env vars stripped to force the OAuth session.
+///
+/// 4. **Window / IPC events**: trusted frontend-only surface.
+///
+/// When adding a new command, classify it against one of these categories and
+/// reuse the helpers below.
+
+/// Ensure `rel_path`, resolved under `cwd`, stays inside the canonical `cwd`.
+///
+/// Rejects empty paths, absolute `rel_path` that would escape the root,
+/// and any resolution that lands outside `cwd` (defense against `..` traversal
+/// and symlink escapes).
+fn safe_repo_path(cwd: &str, rel_path: &str) -> Result<PathBuf, String> {
+    if cwd.trim().is_empty() {
+        return Err("cwd must not be empty".to_string());
+    }
+    if rel_path.trim().is_empty() {
+        return Err("path must not be empty".to_string());
+    }
+
+    let cwd_path = Path::new(cwd);
+    if !cwd_path.is_absolute() {
+        return Err(format!("cwd must be absolute (got: {})", cwd));
+    }
+
+    let cwd_canonical = cwd_path
+        .canonicalize()
+        .map_err(|e| format!("cwd does not resolve: {}", e))?;
+
+    // Treat rel_path as relative to cwd. If it happens to be absolute we still
+    // require it to sit below cwd_canonical after resolution.
+    let joined = cwd_canonical.join(rel_path);
+
+    // For writes the target file may not exist yet — canonicalize the parent
+    // directory instead and reassemble the final path.
+    let resolved = match joined.canonicalize() {
+        Ok(p) => p,
+        Err(_) => {
+            let parent = joined.parent().ok_or("path has no parent")?;
+            let parent_canonical = parent
+                .canonicalize()
+                .map_err(|e| format!("parent path does not resolve: {}", e))?;
+            let file_name = joined.file_name().ok_or("path has no file name")?;
+            parent_canonical.join(file_name)
+        }
+    };
+
+    if !resolved.starts_with(&cwd_canonical) {
+        return Err(format!(
+            "path escapes cwd (resolved: {}, cwd: {})",
+            resolved.display(),
+            cwd_canonical.display()
+        ));
+    }
+
+    Ok(resolved)
+}
 
 // ─── Configurable git binary ──────────────────────────────
 //
@@ -524,13 +599,15 @@ fn git_log(
 // ─── File system commands ──────────────────────────────────
 
 #[tauri::command]
-fn read_file(path: String) -> Result<String, String> {
-    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read {}: {}", path, e))
+fn read_file(cwd: String, path: String) -> Result<String, String> {
+    let full = safe_repo_path(&cwd, &path)?;
+    std::fs::read_to_string(&full).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
 #[tauri::command]
-fn write_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
+fn write_file(cwd: String, path: String, content: String) -> Result<(), String> {
+    let full = safe_repo_path(&cwd, &path)?;
+    std::fs::write(&full, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
 
 // ─── Directory listing (for FolderPicker) ──────────────────

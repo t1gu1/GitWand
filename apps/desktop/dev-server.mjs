@@ -10,9 +10,53 @@
 
 import { createServer } from "node:http";
 import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync } from "node:fs";
-import { resolve, join, dirname, basename } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync } from "node:fs";
+import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
+
+/**
+ * Resolve `relPath` under `cwd`, ensuring the result stays inside the canonical
+ * cwd. Mirrors the Rust `safe_repo_path` helper in `src-tauri/src/lib.rs` so
+ * dev-server and the Tauri backend enforce the same boundary.
+ *
+ * Throws if cwd is empty/non-absolute, relPath is empty, or the resolved path
+ * escapes cwd (via `..` segments or symlink).
+ */
+function safeRepoPath(cwd, relPath) {
+  if (!cwd || !cwd.trim()) throw new Error("cwd must not be empty");
+  if (!relPath || !relPath.trim()) throw new Error("path must not be empty");
+  if (!isAbsolute(cwd)) throw new Error(`cwd must be absolute (got: ${cwd})`);
+
+  let cwdCanonical;
+  try {
+    cwdCanonical = realpathSync(cwd);
+  } catch (e) {
+    throw new Error(`cwd does not resolve: ${e.message}`);
+  }
+
+  const joined = join(cwdCanonical, relPath);
+
+  // For writes the target file may not exist yet — canonicalize the parent
+  // and reassemble the final path.
+  let resolved;
+  try {
+    resolved = realpathSync(joined);
+  } catch {
+    const parent = dirname(joined);
+    let parentCanonical;
+    try {
+      parentCanonical = realpathSync(parent);
+    } catch (e) {
+      throw new Error(`parent path does not resolve: ${e.message}`);
+    }
+    resolved = join(parentCanonical, basename(joined));
+  }
+
+  if (resolved !== cwdCanonical && !resolved.startsWith(cwdCanonical + sep)) {
+    throw new Error(`path escapes cwd (resolved: ${resolved}, cwd: ${cwdCanonical})`);
+  }
+  return resolved;
+}
 
 /** Resolve the full path to a CLI binary, checking Homebrew paths on macOS. */
 function resolveBin(name) {
@@ -138,16 +182,37 @@ async function githubFetch(path, token, accept = "application/vnd.github+json") 
 
 const PORT = parseInt(process.argv.find((_, i, a) => a[i - 1] === "--port") ?? "3001", 10);
 
-/** CORS headers for Vite dev server (port 1420) */
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Content-Type": "application/json",
-};
+/**
+ * Allow-listed origins for CORS.
+ *
+ * The dev-server exposes filesystem + git commands, so an open CORS (`*`)
+ * would let any page the user visits in another browser tab poke the API.
+ * We restrict to the Tauri webview origin and the usual Vite/Tauri dev ports.
+ */
+const ALLOWED_ORIGINS = new Set([
+  "tauri://localhost",
+  "http://localhost:1420",
+  "http://127.0.0.1:1420",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  `http://localhost:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+]);
 
-function jsonResponse(res, data, status = 200) {
-  res.writeHead(status, CORS);
+/** Build CORS headers for a given request, echoing the origin only if allow-listed. */
+function corsHeaders(req) {
+  const origin = req.headers.origin;
+  const allowed = origin && ALLOWED_ORIGINS.has(origin) ? origin : "";
+  return {
+    ...(allowed ? { "Access-Control-Allow-Origin": allowed, "Vary": "Origin" } : {}),
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
+}
+
+function jsonResponse(req, res, data, status = 200) {
+  res.writeHead(status, corsHeaders(req));
   res.end(JSON.stringify(data));
 }
 
@@ -162,7 +227,7 @@ function readBody(req) {
 const server = createServer(async (req, res) => {
   // CORS preflight
   if (req.method === "OPTIONS") {
-    res.writeHead(204, CORS);
+    res.writeHead(204, corsHeaders(req));
     return res.end();
   }
 
@@ -172,7 +237,7 @@ const server = createServer(async (req, res) => {
     // GET /api/conflicted-files?cwd=/path/to/repo
     if (url.pathname === "/api/conflicted-files" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd param" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
       const resolvedCwd = resolve(cwd);
       try {
@@ -181,7 +246,7 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
         });
         const files = stdout.trim().split("\n").filter(Boolean);
-        return jsonResponse(res, { cwd: resolvedCwd, files });
+        return jsonResponse(req, res, { cwd: resolvedCwd, files });
       } catch {
         // Not a git repo or no conflicts
         // Fallback: scan for conflict markers
@@ -194,24 +259,28 @@ const server = createServer(async (req, res) => {
           .split("\n")
           .filter(Boolean)
           .map((f) => f.replace(/^\.\//, ""));
-        return jsonResponse(res, { cwd: resolvedCwd, files });
+        return jsonResponse(req, res, { cwd: resolvedCwd, files });
       }
     }
 
     // POST /api/read-file  { cwd, path }
     if (url.pathname === "/api/read-file" && req.method === "POST") {
       const { cwd, path } = await readBody(req);
-      const fullPath = join(resolve(cwd), path);
+      let fullPath;
+      try { fullPath = safeRepoPath(cwd, path); }
+      catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
       const content = readFileSync(fullPath, "utf-8");
-      return jsonResponse(res, { path, content });
+      return jsonResponse(req, res, { path, content });
     }
 
     // POST /api/write-file  { cwd, path, content }
     if (url.pathname === "/api/write-file" && req.method === "POST") {
       const { cwd, path, content } = await readBody(req);
-      const fullPath = join(resolve(cwd), path);
+      let fullPath;
+      try { fullPath = safeRepoPath(cwd, path); }
+      catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
       writeFileSync(fullPath, content, "utf-8");
-      return jsonResponse(res, { ok: true });
+      return jsonResponse(req, res, { ok: true });
     }
 
     // GET /api/list-dir?path=/some/dir  — list directories for folder picker
@@ -238,21 +307,21 @@ const server = createServer(async (req, res) => {
           .sort((a, b) => a.name.localeCompare(b.name));
 
         const parentDir = dirname(dirPath);
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           current: dirPath,
           parent: parentDir !== dirPath ? parentDir : null,
           home: homedir(),
           dirs,
         });
       } catch (err) {
-        return jsonResponse(res, { error: `Cannot read directory: ${err.message}` }, 400);
+        return jsonResponse(req, res, { error: `Cannot read directory: ${err.message}` }, 400);
       }
     }
 
     // GET /api/git-status?cwd=<path>
     if (url.pathname === "/api/git-status" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd param" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
       try {
         const resolvedCwd = resolve(cwd);
@@ -360,9 +429,9 @@ const server = createServer(async (req, res) => {
           }
         }
 
-        return jsonResponse(res, { branch, remote, ahead, behind, staged, unstaged, untracked, conflicted });
+        return jsonResponse(req, res, { branch, remote, ahead, behind, staged, unstaged, untracked, conflicted });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -372,7 +441,7 @@ const server = createServer(async (req, res) => {
       const path = url.searchParams.get("path");
       const staged = url.searchParams.get("staged") === "true";
 
-      if (!cwd || !path) return jsonResponse(res, { error: "Missing cwd or path param" }, 400);
+      if (!cwd || !path) return jsonResponse(req, res, { error: "Missing cwd or path param" }, 400);
 
       try {
         const resolvedCwd = resolve(cwd);
@@ -387,7 +456,7 @@ const server = createServer(async (req, res) => {
             });
             newFiles = (r.stdout || "").trim().split("\n").filter(Boolean);
           } catch { /* ignore */ }
-          return jsonResponse(res, { path, hunks: [], isDirectory: true, newFiles });
+          return jsonResponse(req, res, { path, hunks: [], isDirectory: true, newFiles });
         }
 
         const args = staged ? ["diff", "--cached", "--", path] : ["diff", "--", path];
@@ -463,24 +532,24 @@ const server = createServer(async (req, res) => {
 
         if (currentHunk) hunks.push(currentHunk);
 
-        return jsonResponse(res, { path, hunks });
+        return jsonResponse(req, res, { path, hunks });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // GET /api/git-get-user?cwd=<path>
     if (url.pathname === "/api/git-get-user" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd param" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const { execSync } = await import("child_process");
         const name = execSync("git config user.name", { cwd: resolvedCwd, encoding: "utf8" }).trim();
         const email = execSync("git config user.email", { cwd: resolvedCwd, encoding: "utf8" }).trim();
-        return jsonResponse(res, { name, email });
+        return jsonResponse(req, res, { name, email });
       } catch (err) {
-        return jsonResponse(res, { name: "", email: "" });
+        return jsonResponse(req, res, { name: "", email: "" });
       }
     }
 
@@ -492,7 +561,7 @@ const server = createServer(async (req, res) => {
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
 
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd param" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
       try {
         const resolvedCwd = resolve(cwd);
@@ -526,16 +595,16 @@ const server = createServer(async (req, res) => {
           });
         }
 
-        return jsonResponse(res, entries);
+        return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-stage  { cwd, paths }
     if (url.pathname === "/api/git-stage" && req.method === "POST") {
       const { cwd, paths } = await readBody(req);
-      if (!cwd || !paths) return jsonResponse(res, { error: "Missing cwd or paths" }, 400);
+      if (!cwd || !paths) return jsonResponse(req, res, { error: "Missing cwd or paths" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         // Remove stale index.lock if present (can happen after a crash)
@@ -546,17 +615,17 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
         const detail = err.stderr?.toString().trim() || err.stdout?.toString().trim() || err.message;
-        return jsonResponse(res, { error: detail }, 500);
+        return jsonResponse(req, res, { error: detail }, 500);
       }
     }
 
     // POST /api/git-unstage  { cwd, paths }
     if (url.pathname === "/api/git-unstage" && req.method === "POST") {
       const { cwd, paths } = await readBody(req);
-      if (!cwd || !paths) return jsonResponse(res, { error: "Missing cwd or paths" }, 400);
+      if (!cwd || !paths) return jsonResponse(req, res, { error: "Missing cwd or paths" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync(`git reset HEAD -- ${paths.map((p) => `"${p}"`).join(" ")}`, {
@@ -564,17 +633,17 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
         const detail = err.stderr?.toString().trim() || err.stdout?.toString().trim() || err.message;
-        return jsonResponse(res, { error: detail }, 500);
+        return jsonResponse(req, res, { error: detail }, 500);
       }
     }
 
     // POST /api/git-stage-patch  { cwd, patch }
     if (url.pathname === "/api/git-stage-patch" && req.method === "POST") {
       const { cwd, patch } = await readBody(req);
-      if (!cwd || !patch) return jsonResponse(res, { error: "Missing cwd or patch" }, 400);
+      if (!cwd || !patch) return jsonResponse(req, res, { error: "Missing cwd or patch" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync("git apply --cached --unidiff-zero -", {
@@ -582,16 +651,16 @@ const server = createServer(async (req, res) => {
           input: patch,
           encoding: "utf-8",
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-unstage-patch  { cwd, patch }
     if (url.pathname === "/api/git-unstage-patch" && req.method === "POST") {
       const { cwd, patch } = await readBody(req);
-      if (!cwd || !patch) return jsonResponse(res, { error: "Missing cwd or patch" }, 400);
+      if (!cwd || !patch) return jsonResponse(req, res, { error: "Missing cwd or patch" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync("git apply --cached --reverse --unidiff-zero -", {
@@ -599,16 +668,16 @@ const server = createServer(async (req, res) => {
           input: patch,
           encoding: "utf-8",
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-commit  { cwd, message }
     if (url.pathname === "/api/git-commit" && req.method === "POST") {
       const { cwd, message } = await readBody(req);
-      if (!cwd || !message) return jsonResponse(res, { error: "Missing cwd or message" }, 400);
+      if (!cwd || !message) return jsonResponse(req, res, { error: "Missing cwd or message" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execFileSync("git", ["commit", "-m", message], {
@@ -619,16 +688,16 @@ const server = createServer(async (req, res) => {
           cwd: resolvedCwd,
           encoding: "utf-8",
         }).trim();
-        return jsonResponse(res, { hash });
+        return jsonResponse(req, res, { hash });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-amend-commit  { cwd, message }
     if (url.pathname === "/api/git-amend-commit" && req.method === "POST") {
       const { cwd, message } = await readBody(req);
-      if (!cwd || !message) return jsonResponse(res, { error: "Missing cwd or message" }, 400);
+      if (!cwd || !message) return jsonResponse(req, res, { error: "Missing cwd or message" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execFileSync("git", ["commit", "--amend", "-m", message], {
@@ -639,16 +708,16 @@ const server = createServer(async (req, res) => {
           cwd: resolvedCwd,
           encoding: "utf-8",
         }).trim();
-        return jsonResponse(res, { hash });
+        return jsonResponse(req, res, { hash });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-push  { cwd, setUpstream? }
     if (url.pathname === "/api/git-push" && req.method === "POST") {
       const { cwd, setUpstream } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const cmd = setUpstream
@@ -659,16 +728,16 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { success: true, message: stdout.trim() });
+        return jsonResponse(req, res, { success: true, message: stdout.trim() });
       } catch (err) {
-        return jsonResponse(res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
       }
     }
 
     // POST /api/git-fetch  { cwd }
     if (url.pathname === "/api/git-fetch" && req.method === "POST") {
       const { cwd } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync("git fetch --prune 2>&1", {
@@ -677,16 +746,16 @@ const server = createServer(async (req, res) => {
           shell: true,
           timeout: 15000,
         });
-        return jsonResponse(res, { success: true });
+        return jsonResponse(req, res, { success: true });
       } catch (err) {
-        return jsonResponse(res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
       }
     }
 
     // POST /api/git-merge  { cwd, branch }
     if (url.pathname === "/api/git-merge" && req.method === "POST") {
       const { cwd, branch } = await readBody(req);
-      if (!cwd || !branch) return jsonResponse(res, { success: false, message: "Missing cwd or branch" }, 400);
+      if (!cwd || !branch) return jsonResponse(req, res, { success: false, message: "Missing cwd or branch" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const stdout = execSync(`git merge "${branch}" 2>&1`, {
@@ -694,14 +763,14 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { success: true, message: stdout.trim() || "Merge completed" });
+        return jsonResponse(req, res, { success: true, message: stdout.trim() || "Merge completed" });
       } catch (err) {
         // Merge conflicts are not fatal — check if it's a conflict vs real error
         const stderr = (err.stderr || "").toString();
         const stdout = (err.stdout || "").toString();
         const combined = stderr + stdout;
         const isConflict = combined.includes("CONFLICT") || combined.includes("Automatic merge failed");
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           success: false,
           conflicts: isConflict,
           message: isConflict ? "Merge conflicts detected" : (stderr || stdout || err.message || "Merge failed").trim(),
@@ -712,7 +781,7 @@ const server = createServer(async (req, res) => {
     // POST /api/git-merge-continue  { cwd }
     if (url.pathname === "/api/git-merge-continue" && req.method === "POST") {
       const { cwd } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { success: false, message: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const stdout = execSync('git -c core.editor=true merge --continue 2>&1', {
@@ -721,16 +790,16 @@ const server = createServer(async (req, res) => {
           shell: true,
           env: { ...process.env, GIT_MERGE_AUTOEDIT: "no", GIT_EDITOR: "true" },
         });
-        return jsonResponse(res, { success: true, message: stdout.trim() || "Merge completed" });
+        return jsonResponse(req, res, { success: true, message: stdout.trim() || "Merge completed" });
       } catch (err) {
-        return jsonResponse(res, { success: false, message: (err.stderr || err.stdout || err.message || "").toString().trim() });
+        return jsonResponse(req, res, { success: false, message: (err.stderr || err.stdout || err.message || "").toString().trim() });
       }
     }
 
     // POST /api/git-merge-abort  { cwd }
     if (url.pathname === "/api/git-merge-abort" && req.method === "POST") {
       const { cwd } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { success: false, message: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync("git merge --abort 2>&1", {
@@ -738,16 +807,16 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { success: true, message: "Merge aborted" });
+        return jsonResponse(req, res, { success: true, message: "Merge aborted" });
       } catch (err) {
-        return jsonResponse(res, { success: false, message: (err.stderr || err.message || "").trim() });
+        return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
       }
     }
 
     // POST /api/git-pull  { cwd, rebase? }
     if (url.pathname === "/api/git-pull" && req.method === "POST") {
       const { cwd, rebase } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const cmd = rebase ? "git pull --rebase 2>&1" : "git pull 2>&1";
@@ -756,9 +825,9 @@ const server = createServer(async (req, res) => {
           encoding: "utf-8",
           shell: true,
         });
-        return jsonResponse(res, { success: true, message: stdout.trim() });
+        return jsonResponse(req, res, { success: true, message: stdout.trim() });
       } catch (err) {
-        return jsonResponse(res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
       }
     }
 
@@ -768,7 +837,7 @@ const server = createServer(async (req, res) => {
       const filePath = url.searchParams.get("path");
       const fromHash = url.searchParams.get("from");
       const toHash = url.searchParams.get("to");
-      if (!cwd || !filePath || !fromHash || !toHash) return jsonResponse(res, { error: "Missing params" }, 400);
+      if (!cwd || !filePath || !fromHash || !toHash) return jsonResponse(req, res, { error: "Missing params" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         // Stream via spawn — explicit 10 MB cap can still be exceeded on
@@ -813,13 +882,13 @@ const server = createServer(async (req, res) => {
         }
         if (currentHunk) hunks.push(currentHunk);
 
-        return jsonResponse(res, { path: filePath, hunks });
+        return jsonResponse(req, res, { path: filePath, hunks });
       } catch (err) {
         // Empty diff if identical
         if (err.status === 0 || (err.stdout && err.stdout.trim() === "")) {
-          return jsonResponse(res, { path: filePath, hunks: [] });
+          return jsonResponse(req, res, { path: filePath, hunks: [] });
         }
-        return jsonResponse(res, { path: filePath, hunks: [] });
+        return jsonResponse(req, res, { path: filePath, hunks: [] });
       }
     }
 
@@ -828,7 +897,7 @@ const server = createServer(async (req, res) => {
     // Pour les fichiers suivis modifiés, utiliser git restore (ou checkout --)
     if (url.pathname === "/api/git-discard" && req.method === "POST") {
       const { cwd, paths, untracked } = await readBody(req);
-      if (!cwd || !paths) return jsonResponse(res, { error: "Missing cwd or paths" }, 400);
+      if (!cwd || !paths) return jsonResponse(req, res, { error: "Missing cwd or paths" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         if (untracked) {
@@ -846,9 +915,9 @@ const server = createServer(async (req, res) => {
             shell: true,
           });
         }
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message, stderr: err.stderr }, 500);
+        return jsonResponse(req, res, { error: err.message, stderr: err.stderr }, 500);
       }
     }
 
@@ -856,7 +925,7 @@ const server = createServer(async (req, res) => {
     // Ajoute le chemin au fichier .gitignore du repo
     if (url.pathname === "/api/git-gitignore" && req.method === "POST") {
       const { cwd, path: filePath } = await readBody(req);
-      if (!cwd || !filePath) return jsonResponse(res, { error: "Missing cwd or path" }, 400);
+      if (!cwd || !filePath) return jsonResponse(req, res, { error: "Missing cwd or path" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const gitignorePath = join(resolvedCwd, ".gitignore");
@@ -871,9 +940,9 @@ const server = createServer(async (req, res) => {
             : existing + "\n" + filePath + "\n";
           writeFileSync(gitignorePath, newContent, "utf-8");
         }
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -881,7 +950,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/git-show" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const hash = url.searchParams.get("hash");
-      if (!cwd || !hash) return jsonResponse(res, { error: "Missing cwd or hash param" }, 400);
+      if (!cwd || !hash) return jsonResponse(req, res, { error: "Missing cwd or hash param" }, 400);
 
       try {
         const resolvedCwd = resolve(cwd);
@@ -941,16 +1010,16 @@ const server = createServer(async (req, res) => {
         if (currentHunk) currentHunks.push(currentHunk);
         if (currentPath) diffs.push({ path: currentPath, hunks: currentHunks });
 
-        return jsonResponse(res, diffs);
+        return jsonResponse(req, res, diffs);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // GET /api/git-branches?cwd=<path>
     if (url.pathname === "/api/git-branches" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd param" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const format = "%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)";
@@ -989,57 +1058,57 @@ const server = createServer(async (req, res) => {
           branches.push({ name, isCurrent, isRemote, upstream, ahead, behind, lastCommit, lastCommitDate });
         }
 
-        return jsonResponse(res, branches);
+        return jsonResponse(req, res, branches);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-create-branch  { cwd, name, checkout }
     if (url.pathname === "/api/git-create-branch" && req.method === "POST") {
       const { cwd, name, checkout } = await readBody(req);
-      if (!cwd || !name) return jsonResponse(res, { error: "Missing cwd or name" }, 400);
+      if (!cwd || !name) return jsonResponse(req, res, { error: "Missing cwd or name" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const cmd = checkout ? `git checkout -b "${name}"` : `git branch "${name}"`;
         execSync(cmd, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-switch-branch  { cwd, name }
     if (url.pathname === "/api/git-switch-branch" && req.method === "POST") {
       const { cwd, name } = await readBody(req);
-      if (!cwd || !name) return jsonResponse(res, { error: "Missing cwd or name" }, 400);
+      if (!cwd || !name) return jsonResponse(req, res, { error: "Missing cwd or name" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync(`git checkout "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-delete-branch  { cwd, name, force }
     if (url.pathname === "/api/git-delete-branch" && req.method === "POST") {
       const { cwd, name, force } = await readBody(req);
-      if (!cwd || !name) return jsonResponse(res, { error: "Missing cwd or name" }, 400);
+      if (!cwd || !name) return jsonResponse(req, res, { error: "Missing cwd or name" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const flag = force ? "-D" : "-d";
         execSync(`git branch ${flag} "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-stash  { cwd, message? }
     if (url.pathname === "/api/git-stash" && req.method === "POST") {
       const { cwd, message } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const args = ["stash", "push", "--include-untracked"];
@@ -1048,22 +1117,22 @@ const server = createServer(async (req, res) => {
           args.push("-m", trimmed);
         }
         execFileSync("git", args, { cwd: resolvedCwd, encoding: "utf-8" });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
     // POST /api/git-stash-pop  { cwd }
     if (url.pathname === "/api/git-stash-pop" && req.method === "POST") {
       const { cwd } = await readBody(req);
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         execSync("git stash pop", { cwd: resolvedCwd, encoding: "utf-8", shell: true });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1071,7 +1140,7 @@ const server = createServer(async (req, res) => {
     // Returns StashEntry[] — empty array when there are no stashes (not an error).
     if (url.pathname === "/api/git-stash-list" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const out = execFileSync(
@@ -1099,9 +1168,9 @@ const server = createServer(async (req, res) => {
               date,
             };
           });
-        return jsonResponse(res, entries);
+        return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1109,7 +1178,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/git-stash-apply" && req.method === "POST") {
       const { cwd, index } = await readBody(req);
       if (!cwd || typeof index !== "number") {
-        return jsonResponse(res, { error: "Missing cwd or index" }, 400);
+        return jsonResponse(req, res, { error: "Missing cwd or index" }, 400);
       }
       try {
         const resolvedCwd = resolve(cwd);
@@ -1117,9 +1186,9 @@ const server = createServer(async (req, res) => {
           cwd: resolvedCwd,
           encoding: "utf-8",
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1127,7 +1196,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/git-stash-drop" && req.method === "POST") {
       const { cwd, index } = await readBody(req);
       if (!cwd || typeof index !== "number") {
-        return jsonResponse(res, { error: "Missing cwd or index" }, 400);
+        return jsonResponse(req, res, { error: "Missing cwd or index" }, 400);
       }
       try {
         const resolvedCwd = resolve(cwd);
@@ -1135,9 +1204,9 @@ const server = createServer(async (req, res) => {
           cwd: resolvedCwd,
           encoding: "utf-8",
         });
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1146,7 +1215,7 @@ const server = createServer(async (req, res) => {
       const cwd = url.searchParams.get("cwd");
       const idx = url.searchParams.get("index");
       if (!cwd || idx === null) {
-        return jsonResponse(res, { error: "Missing cwd or index" }, 400);
+        return jsonResponse(req, res, { error: "Missing cwd or index" }, 400);
       }
       try {
         const resolvedCwd = resolve(cwd);
@@ -1155,9 +1224,9 @@ const server = createServer(async (req, res) => {
           ["stash", "show", "-p", `stash@{${parseInt(idx, 10)}}`],
           { cwd: resolvedCwd, encoding: "utf-8" },
         );
-        return jsonResponse(res, { diff: out });
+        return jsonResponse(req, res, { diff: out });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1165,7 +1234,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/git-blame") {
       const cwd = url.searchParams.get("cwd");
       const filePath = url.searchParams.get("path");
-      if (!cwd || !filePath) return jsonResponse(res, { error: "cwd and path required" }, 400);
+      if (!cwd || !filePath) return jsonResponse(req, res, { error: "cwd and path required" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const raw = execSync(
@@ -1195,9 +1264,9 @@ const server = createServer(async (req, res) => {
           i++;
           blameLines.push({ hash: hash.slice(0, 8), hashFull: hash, finalLine, origLine, author, authorDate, summary, content });
         }
-        return jsonResponse(res, blameLines);
+        return jsonResponse(req, res, blameLines);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1206,7 +1275,7 @@ const server = createServer(async (req, res) => {
       const cwd = url.searchParams.get("cwd");
       const filePath = url.searchParams.get("path");
       const count = parseInt(url.searchParams.get("count") || "50", 10);
-      if (!cwd || !filePath) return jsonResponse(res, { error: "cwd and path required" }, 400);
+      if (!cwd || !filePath) return jsonResponse(req, res, { error: "cwd and path required" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
         const format = "%H%n%h%n%an%n%aI%n%s%n%b%n---END---";
@@ -1230,9 +1299,9 @@ const server = createServer(async (req, res) => {
             body: parts.slice(5).join("\n").trim(),
           });
         }
-        return jsonResponse(res, entries);
+        return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1242,16 +1311,16 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-list-prs" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const state = url.searchParams.get("state") || "open";
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token found. Run: gh auth login" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token found. Run: gh auth login" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo from git remote origin" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo from git remote origin" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/pulls?state=${state}&per_page=50`, token);
         if (!resp.ok) {
           const text = await resp.text();
-          return jsonResponse(res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
+          return jsonResponse(req, res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
         }
         const raw = await resp.json();
         const prs = raw.map((pr) => ({
@@ -1269,10 +1338,10 @@ const server = createServer(async (req, res) => {
           deletions: pr.deletions ?? 0,
           labels: (pr.labels ?? []).map((l) => l.name),
         }));
-        return jsonResponse(res, prs);
+        return jsonResponse(req, res, prs);
       } catch (err) {
         console.error("[gh-list-prs]", err.message);
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1283,22 +1352,22 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-create-pr" && req.method === "POST") {
       const payload = await readBody(req);
       const { cwd, title, body: prBody, base, head, draft, reviewers } = payload;
-      if (!cwd || !title) return jsonResponse(res, { error: "Missing cwd or title" }, 400);
+      if (!cwd || !title) return jsonResponse(req, res, { error: "Missing cwd or title" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token found. Run: gh auth login" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token found. Run: gh auth login" }, 401);
         const repoCwd = resolve(cwd);
         const nwo = getRepoNwo(repoCwd);
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo from git remote origin" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo from git remote origin" }, 400);
 
         // Resolve head: default to current branch (git symbolic-ref HEAD)
         let headBranch = (head ?? "").trim();
         if (!headBranch) {
           const r = spawnSync(GIT, ["symbolic-ref", "--short", "HEAD"], { cwd: repoCwd, encoding: "utf-8" });
-          if (r.status !== 0) return jsonResponse(res, { error: "Could not determine current branch" }, 500);
+          if (r.status !== 0) return jsonResponse(req, res, { error: "Could not determine current branch" }, 500);
           headBranch = r.stdout.trim();
         }
-        if (!headBranch) return jsonResponse(res, { error: "Empty head branch" }, 400);
+        if (!headBranch) return jsonResponse(req, res, { error: "Empty head branch" }, 400);
 
         // Resolve base: explicit → repo's default branch on GitHub
         let baseBranch = (base ?? "").trim();
@@ -1313,7 +1382,7 @@ const server = createServer(async (req, res) => {
         }
 
         if (baseBranch === headBranch) {
-          return jsonResponse(res, { error: `Base and head branches are the same (${headBranch})` }, 400);
+          return jsonResponse(req, res, { error: `Base and head branches are the same (${headBranch})` }, 400);
         }
 
         // Create the PR
@@ -1335,7 +1404,7 @@ const server = createServer(async (req, res) => {
         });
         if (!createResp.ok) {
           const text = await createResp.text();
-          return jsonResponse(res, { error: `GitHub API ${createResp.status}: ${text}` }, 500);
+          return jsonResponse(req, res, { error: `GitHub API ${createResp.status}: ${text}` }, 500);
         }
         const pr = await createResp.json();
 
@@ -1373,7 +1442,7 @@ const server = createServer(async (req, res) => {
           }
         }
 
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           number: pr.number,
           title: pr.title,
           state: pr.state,
@@ -1390,7 +1459,7 @@ const server = createServer(async (req, res) => {
         });
       } catch (err) {
         console.error("[gh-create-pr]", err.message);
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1398,12 +1467,12 @@ const server = createServer(async (req, res) => {
     // Lists assignees (users with push access) for autocomplete.
     if (url.pathname === "/api/gh-reviewer-candidates" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Paginate up to 3 pages of 100 = 300 candidates.
         const all = [];
         const seen = new Set();
@@ -1424,10 +1493,10 @@ const server = createServer(async (req, res) => {
           if (raw.length < 100) break;
         }
         all.sort((a, b) => a.login.toLowerCase().localeCompare(b.login.toLowerCase()));
-        return jsonResponse(res, all);
+        return jsonResponse(req, res, all);
       } catch (err) {
         console.error("[gh-reviewer-candidates]", err.message);
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1435,16 +1504,16 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-detail" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
-        if (!resp.ok) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const pr = await resp.json();
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           number: pr.number,
           title: pr.title,
           body: pr.body ?? "",
@@ -1468,7 +1537,7 @@ const server = createServer(async (req, res) => {
           checks_status: "",
         });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1476,18 +1545,18 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-diff" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token, "application/vnd.github.v3.diff");
-        if (!resp.ok) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const diff = await resp.text();
-        return jsonResponse(res, { diff });
+        return jsonResponse(req, res, { diff });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1495,30 +1564,30 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-checks" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Get PR head SHA first
         const prResp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
-        if (!prResp.ok) return jsonResponse(res, { error: `GitHub API ${prResp.status}` }, 500);
+        if (!prResp.ok) return jsonResponse(req, res, { error: `GitHub API ${prResp.status}` }, 500);
         const pr = await prResp.json();
         const sha = pr.head?.sha;
-        if (!sha) return jsonResponse(res, []);
+        if (!sha) return jsonResponse(req, res, []);
         // Get check runs for that commit
         const checksResp = await githubFetch(`/repos/${nwo}/commits/${sha}/check-runs?per_page=100`, token);
-        if (!checksResp.ok) return jsonResponse(res, { error: `GitHub API ${checksResp.status}` }, 500);
+        if (!checksResp.ok) return jsonResponse(req, res, { error: `GitHub API ${checksResp.status}` }, 500);
         const data = await checksResp.json();
-        return jsonResponse(res, (data.check_runs ?? []).map((c) => ({
+        return jsonResponse(req, res, (data.check_runs ?? []).map((c) => ({
           name: c.name,
           state: c.status === "completed" ? c.conclusion : c.status,
           conclusion: c.conclusion ?? "",
           details_url: c.html_url ?? "",
         })));
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1528,17 +1597,17 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-comments" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Fetch all review comments (paginated — up to 200)
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/comments?per_page=100`, token);
-        if (!resp.ok) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const raw = await resp.json();
-        return jsonResponse(res, raw.map((c) => ({
+        return jsonResponse(req, res, raw.map((c) => ({
           id: c.id,
           body: c.body,
           author: c.user?.login ?? "",
@@ -1555,7 +1624,7 @@ const server = createServer(async (req, res) => {
           url: c.html_url ?? "",
         })));
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1564,15 +1633,15 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-comment" && req.method === "POST") {
       const body = await readBody(req);
       const { cwd, number, body: commentBody, path: filePath, line, side, start_line, start_side, in_reply_to_id } = body;
-      if (!cwd || !number || !commentBody) return jsonResponse(res, { error: "Missing required fields" }, 400);
+      if (!cwd || !number || !commentBody) return jsonResponse(req, res, { error: "Missing required fields" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Get PR head commit SHA
         const prResp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
-        if (!prResp.ok) return jsonResponse(res, { error: `GitHub API ${prResp.status}` }, 500);
+        if (!prResp.ok) return jsonResponse(req, res, { error: `GitHub API ${prResp.status}` }, 500);
         const pr = await prResp.json();
         const commit_id = pr.head?.sha;
         const payload = in_reply_to_id
@@ -1591,10 +1660,10 @@ const server = createServer(async (req, res) => {
         });
         if (!resp.ok) {
           const text = await resp.text();
-          return jsonResponse(res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
+          return jsonResponse(req, res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
         }
         const c = await resp.json();
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           id: c.id, body: c.body, author: c.user?.login ?? "",
           created_at: c.created_at, updated_at: c.updated_at,
           path: c.path, line: c.line ?? null, original_line: c.original_line ?? null,
@@ -1602,7 +1671,7 @@ const server = createServer(async (req, res) => {
           in_reply_to_id: c.in_reply_to_id ?? null, diff_hunk: c.diff_hunk ?? "", url: c.html_url ?? "",
         });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1612,12 +1681,12 @@ const server = createServer(async (req, res) => {
       const id = url.searchParams.get("id");
       const body = await readBody(req);
       const { cwd, body: newBody } = body;
-      if (!id || !cwd || !newBody) return jsonResponse(res, { error: "Missing id, cwd or body" }, 400);
+      if (!id || !cwd || !newBody) return jsonResponse(req, res, { error: "Missing id, cwd or body" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await fetch(`https://api.github.com/repos/${nwo}/pulls/comments/${id}`, {
           method: "PATCH",
           headers: {
@@ -1628,11 +1697,11 @@ const server = createServer(async (req, res) => {
           },
           body: JSON.stringify({ body: newBody }),
         });
-        if (!resp.ok) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const c = await resp.json();
-        return jsonResponse(res, { id: c.id, body: c.body, updated_at: c.updated_at });
+        return jsonResponse(req, res, { id: c.id, body: c.body, updated_at: c.updated_at });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1640,12 +1709,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-comment" && req.method === "DELETE") {
       const cwd = url.searchParams.get("cwd");
       const id = url.searchParams.get("id");
-      if (!cwd || !id) return jsonResponse(res, { error: "Missing cwd or id" }, 400);
+      if (!cwd || !id) return jsonResponse(req, res, { error: "Missing cwd or id" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await fetch(`https://api.github.com/repos/${nwo}/pulls/comments/${id}`, {
           method: "DELETE",
           headers: {
@@ -1654,10 +1723,10 @@ const server = createServer(async (req, res) => {
             "X-GitHub-Api-Version": "2022-11-28",
           },
         });
-        if (!resp.ok && resp.status !== 204) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
-        return jsonResponse(res, { ok: true });
+        if (!resp.ok && resp.status !== 204) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1667,18 +1736,18 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-reviews" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews`, token);
-        if (!resp.ok) return jsonResponse(res, { error: `GitHub API ${resp.status}` }, 500);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const reviews = await resp.json();
-        return jsonResponse(res, reviews);
+        return jsonResponse(req, res, reviews);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1689,16 +1758,16 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-submit-review" && req.method === "POST") {
       const body = await readBody(req);
       const { cwd, number, event: reviewEvent, body: reviewBody, comments = [] } = body;
-      if (!cwd || !number || !reviewEvent) return jsonResponse(res, { error: "Missing cwd, number, or event" }, 400);
+      if (!cwd || !number || !reviewEvent) return jsonResponse(req, res, { error: "Missing cwd, number, or event" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
 
         // Get PR head SHA (required by GitHub API)
         const prResp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
-        if (!prResp.ok) return jsonResponse(res, { error: `GitHub API ${prResp.status}` }, 500);
+        if (!prResp.ok) return jsonResponse(req, res, { error: `GitHub API ${prResp.status}` }, 500);
         const pr = await prResp.json();
         const commitId = pr.head.sha;
 
@@ -1730,12 +1799,12 @@ const server = createServer(async (req, res) => {
             if (text) detail = ` — ${text}`;
           }
           const message = `${errBody.message || `GitHub API ${resp.status}`}${detail}`;
-          return jsonResponse(res, { error: message }, resp.status);
+          return jsonResponse(req, res, { error: message }, resp.status);
         }
         const review = await resp.json();
-        return jsonResponse(res, review);
+        return jsonResponse(req, res, review);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1747,16 +1816,16 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-conflict-preview" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const number = url.searchParams.get("number");
-      if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
 
         // Get PR base branch + head SHA from GitHub API
         const prResp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
-        if (!prResp.ok) return jsonResponse(res, { error: `GitHub API ${prResp.status}` }, 500);
+        if (!prResp.ok) return jsonResponse(req, res, { error: `GitHub API ${prResp.status}` }, 500);
         const pr = await prResp.json();
         const baseBranch = pr.base.ref;
         const headSha = pr.head.sha;
@@ -1775,7 +1844,7 @@ const server = createServer(async (req, res) => {
 
         // Find merge base
         const mbRes = spawnSync(GIT, ["merge-base", baseRef, prRef], { cwd: absPath, encoding: "utf-8" });
-        if (mbRes.status !== 0) return jsonResponse(res, { error: "Cannot find merge-base" }, 500);
+        if (mbRes.status !== 0) return jsonResponse(req, res, { error: "Cannot find merge-base" }, 500);
         const mergeBase = mbRes.stdout.trim();
 
         // Run git merge-tree (read-only)
@@ -1833,7 +1902,7 @@ const server = createServer(async (req, res) => {
         const isConflicting = mergeability === false || mergeState === "dirty" || mergeState === "blocked";
         const conflictingFiles = isConflicting ? overlapping : [];
 
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           mergeable: mergeability,
           mergeableState: mergeState,
           conflictingFiles,
@@ -1845,7 +1914,7 @@ const server = createServer(async (req, res) => {
             : `✅ Pas de conflit détecté`,
         });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1854,7 +1923,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-hotspots" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const pathsParam = url.searchParams.get("paths");
-      if (!cwd || !pathsParam) return jsonResponse(res, { error: "Missing cwd or paths" }, 400);
+      if (!cwd || !pathsParam) return jsonResponse(req, res, { error: "Missing cwd or paths" }, 400);
       try {
         const absPath = resolve(cwd);
         const paths = pathsParam.split(",").filter(Boolean);
@@ -1888,9 +1957,9 @@ const server = createServer(async (req, res) => {
             lastChange: lastCommitRes.stdout.trim(),
           };
         });
-        return jsonResponse(res, hotspots);
+        return jsonResponse(req, res, hotspots);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1898,13 +1967,13 @@ const server = createServer(async (req, res) => {
     // Returns total number of tracked files in the repo.
     if (url.pathname === "/api/git-file-count" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
-      if (!cwd) return jsonResponse(res, { error: "Missing cwd" }, 400);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const r = spawnSync(GIT, ["ls-files", "--cached"], { cwd: resolve(cwd), encoding: "utf-8" });
         const count = (r.stdout || "").trim().split("\n").filter(Boolean).length;
-        return jsonResponse(res, { count });
+        return jsonResponse(req, res, { count });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1913,12 +1982,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-pr-file-history" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const pathsParam = url.searchParams.get("paths");
-      if (!cwd || !pathsParam) return jsonResponse(res, { error: "Missing cwd or paths" }, 400);
+      if (!cwd || !pathsParam) return jsonResponse(req, res, { error: "Missing cwd or paths" }, 400);
       try {
         const token = getGithubToken();
-        if (!token) return jsonResponse(res, { error: "No GitHub token" }, 401);
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
-        if (!nwo) return jsonResponse(res, { error: "Could not determine GitHub repo" }, 400);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const paths = pathsParam.split(",").filter(Boolean);
 
         // Get all review comments (last 100) and filter by path
@@ -1942,9 +2011,9 @@ const server = createServer(async (req, res) => {
               : null,
           };
         }
-        return jsonResponse(res, result);
+        return jsonResponse(req, res, result);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -1985,7 +2054,7 @@ const server = createServer(async (req, res) => {
         }
 
         if (!resolved) {
-          return jsonResponse(res, {
+          return jsonResponse(req, res, {
             found: false,
             path: "",
             version: "",
@@ -2021,7 +2090,7 @@ const server = createServer(async (req, res) => {
           detail = `Impossible d'exécuter claude: ${err.message}`;
         }
 
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           found: true,
           path: resolved,
           version,
@@ -2030,7 +2099,7 @@ const server = createServer(async (req, res) => {
           detail,
         });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2051,11 +2120,11 @@ const server = createServer(async (req, res) => {
         });
         if (r.status !== 0) {
           const detail = (r.stderr || r.stdout || "").trim() || "Claude CLI a échoué sans message";
-          return jsonResponse(res, { error: detail }, 500);
+          return jsonResponse(req, res, { error: detail }, 500);
         }
-        return res.writeHead(200, { ...CORS, "Content-Type": "text/plain" }).end(r.stdout);
+        return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2087,12 +2156,12 @@ const server = createServer(async (req, res) => {
             } catch { /* try next */ }
           }
           if (!ok) {
-            return jsonResponse(res, { error: "Aucun terminal compatible trouvé. Ouvrez un terminal et tapez: claude login" }, 500);
+            return jsonResponse(req, res, { error: "Aucun terminal compatible trouvé. Ouvrez un terminal et tapez: claude login" }, 500);
           }
         }
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2100,7 +2169,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/gh-merge-pr" && req.method === "POST") {
       try {
         const { cwd, number, method } = await readBody(req);
-        if (!cwd || !number) return jsonResponse(res, { error: "Missing cwd or number" }, 400);
+        if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
         const mergeFlag = method === "squash" ? "--squash"
           : method === "rebase" ? "--rebase"
           : "--merge";
@@ -2110,11 +2179,11 @@ const server = createServer(async (req, res) => {
         });
         if (r.status !== 0) {
           const detail = (r.stderr || r.stdout || "").trim() || "gh pr merge failed";
-          return jsonResponse(res, { error: detail }, 500);
+          return jsonResponse(req, res, { error: detail }, 500);
         }
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2126,7 +2195,7 @@ const server = createServer(async (req, res) => {
       try {
         const { cwd, base, todoLines } = await readBody(req);
         if (!cwd || !base || !todoLines) {
-          return jsonResponse(res, { error: "Missing cwd, base, or todoLines" }, 400);
+          return jsonResponse(req, res, { error: "Missing cwd, base, or todoLines" }, 400);
         }
         const resolvedCwd = resolve(cwd);
         const todoContent = todoLines.join("\n") + "\n";
@@ -2181,14 +2250,14 @@ const server = createServer(async (req, res) => {
         if (result.code !== 0) {
           const stderr = result.stderr ?? "";
           if (stderr.includes("CONFLICT") || stderr.includes("could not apply")) {
-            return jsonResponse(res, { ok: true, conflict: true });
+            return jsonResponse(req, res, { ok: true, conflict: true });
           }
-          return jsonResponse(res, { error: stderr || "Rebase failed" }, 500);
+          return jsonResponse(req, res, { error: stderr || "Rebase failed" }, 500);
         }
-        return jsonResponse(res, { ok: true });
+        return jsonResponse(req, res, { ok: true });
       } catch (err) {
         console.error("[rebase] Error:", err);
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2199,20 +2268,20 @@ const server = createServer(async (req, res) => {
       try {
         const { cwd: execCwd, args } = await readBody(req);
         if (!args || !Array.isArray(args) || args.length === 0) {
-          return jsonResponse(res, { error: "No arguments provided" }, 400);
+          return jsonResponse(req, res, { error: "No arguments provided" }, 400);
         }
         const r = spawnSync(GIT, args, {
           cwd: resolve(execCwd),
           encoding: "utf-8",
           maxBuffer: 20 * 1024 * 1024,
         });
-        return jsonResponse(res, {
+        return jsonResponse(req, res, {
           stdout: r.stdout ?? "",
           stderr: r.stderr ?? "",
           exitCode: r.status ?? -1,
         });
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
@@ -2249,19 +2318,23 @@ const server = createServer(async (req, res) => {
         // Not found — return empty string (same as Rust backend)
         return res.writeHead(200, { "Content-Type": "text/plain" }).end("");
       } catch (err) {
-        return jsonResponse(res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.message }, 500);
       }
     }
 
-    jsonResponse(res, { error: "Not found" }, 404);
+    jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
-    jsonResponse(res, { error: err.message }, 500);
+    jsonResponse(req, res, { error: err.message }, 500);
   }
 });
 
-server.listen(PORT, () => {
+// Bind on loopback only. The dev-server exposes filesystem + git commands,
+// so it must never be reachable from other hosts on the network.
+server.listen(PORT, "127.0.0.1", () => {
   console.log(`\n  GitWand Dev Server`);
-  console.log(`  http://localhost:${PORT}\n`);
+  console.log(`  http://127.0.0.1:${PORT}\n`);
+  console.log(`  \u26A0\uFE0F  DEVELOPMENT ONLY — do not expose publicly.`);
+  console.log(`     Bound to 127.0.0.1, CORS restricted to Tauri + Vite dev origins.\n`);
   console.log(`  Endpoints:`);
   console.log(`    GET  /api/conflicted-files?cwd=<path>`);
   console.log(`    POST /api/read-file   { cwd, path }`);

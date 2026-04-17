@@ -94,7 +94,8 @@ export async function getConflictedFiles(cwd: string): Promise<string[]> {
  */
 export async function readFile(cwd: string, path: string): Promise<string> {
   if (isTauri()) {
-    return tauriInvoke<string>("read_file", { path: `${cwd}/${path}` });
+    // Rust backend validates that `path`, resolved under `cwd`, stays inside cwd.
+    return tauriInvoke<string>("read_file", { cwd, path });
   }
   const res = await fetch(`${DEV_SERVER}/api/read-file`, {
     method: "POST",
@@ -115,7 +116,8 @@ export async function writeFile(
   content: string,
 ): Promise<void> {
   if (isTauri()) {
-    await tauriInvoke("write_file", { path: `${cwd}/${path}`, content });
+    // Rust backend validates that `path`, resolved under `cwd`, stays inside cwd.
+    await tauriInvoke("write_file", { cwd, path, content });
     return;
   }
   const res = await fetch(`${DEV_SERVER}/api/write-file`, {
