@@ -10,6 +10,22 @@ edition = "2021"
 name = "gitwand_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+# ─── Parity probe (P2.3) ─────────────────────────────────────
+#
+# Petit binaire de test qui expose les commandes Tauri critiques en CLI,
+# pour le harness de tests de parité Rust↔Node (`apps/desktop/tests/parity/`).
+# Gardé sous feature flag `parity-probe` pour qu'il ne soit pas embarqué
+# dans les builds de production.
+#
+# Build : `cargo build --features parity-probe --bin parity-probe`
+[[bin]]
+name = "parity-probe"
+path = "src/bin/parity_probe.rs"
+required-features = ["parity-probe"]
+
+[features]
+parity-probe = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

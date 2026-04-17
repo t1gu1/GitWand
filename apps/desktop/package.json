@@ -13,6 +13,7 @@
     "tauri": "tauri",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:parity": "vitest run --config vitest.config.parity.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {

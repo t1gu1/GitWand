@@ -1,0 +1,125 @@
+# Parity tests — Rust ↔ Node
+
+Ces tests valident que **le backend Rust** (`src-tauri/src/lib.rs`) et
+**le dev-server Node** (`dev-server.mjs`) produisent **la même sortie** pour
+une commande Git donnée sur un repo déterministe.
+
+Pourquoi : GitWand maintient **deux implémentations** de chaque commande
+(Rust pour Tauri, Node pour le mode dev/web). Toute dérive entre les deux
+se manifeste tôt ou tard en un bug frontend — « marche en dev, pas en app ».
+Ces tests détectent ces dérives mécaniquement, avant le merge.
+
+## Prérequis
+
+Compiler le binaire `parity-probe` (une seule fois, puis après chaque
+modif de `lib.rs`) :
+
+```sh
+cd apps/desktop/src-tauri
+cargo build --features parity-probe --bin parity-probe
+```
+
+Le binaire sort à `apps/desktop/src-tauri/target/debug/parity-probe`.
+
+Alternative : pointer sur un binaire pré-build via l'env var `PARITY_PROBE` :
+
+```sh
+PARITY_PROBE=/path/to/parity-probe pnpm --filter @gitwand/desktop test:parity
+```
+
+## Exécution
+
+```sh
+# Depuis la racine du monorepo
+pnpm --filter @gitwand/desktop test:parity
+```
+
+Les tests ne sont **pas** lancés par `pnpm test` par défaut : ils ont leur
+propre config (`vitest.config.parity.ts`) et leur propre script, car ils
+dépendent d'un binaire Rust à builder et lancent des sous-process.
+
+## Ajouter un test pour une nouvelle commande
+
+Recette à trois étapes :
+
+### 1. Exposer la fonction Rust
+
+Dans `src-tauri/src/lib.rs`, ajouter `pub` devant la fonction cible :
+
+```rust
+#[tauri::command]
+pub fn git_foo(cwd: String, ...) -> Result<FooOutput, String> { ... }
+```
+
+(Le `#[tauri::command]` reste — il est compatible avec `pub`.)
+
+### 2. Brancher le probe
+
+Dans `src-tauri/src/bin/parity_probe.rs`, ajouter une branche au `match` :
+
+```rust
+"git-foo" => {
+    let input: FooInput = serde_json::from_str(&stdin_json)?;
+    to_json(git_foo(input.cwd, ...))
+}
+```
+
+Où `FooInput` est un struct local au probe (pas besoin de pub) qui décrit
+les args JSON. Recompiler (`cargo build --features parity-probe ...`).
+
+### 3. Écrire le test
+
+Dupliquer `git-status.test.mjs` → `git-foo.test.mjs`, adapter :
+
+```js
+await assertParity(dev, {
+  command: "git-foo",
+  args: { cwd, /* args Rust */ },
+  httpPath: `/api/git-foo?cwd=${encodeURIComponent(cwd)}&...`,
+});
+```
+
+Si la commande a des champs **volatils** (timestamps, paths absolus qui
+incluent le tmpdir système, etc.), les déclarer dans `normalize.mjs` en
+ajoutant un `case "git-foo":` qui appelle `blankVolatile(camel, [...])`.
+
+Si la commande **écrit** (POST), fournir `method: "POST"` + `body`.
+
+## Architecture interne
+
+```
+tests/parity/
+├── fixtures.mjs           ── Repos Git déterministes (hashes reproductibles)
+├── probe.mjs              ── Wrapper stdin/stdout autour du binaire Rust
+├── dev-server-runner.mjs  ── Lance dev-server.mjs sur un port éphémère
+├── normalize.mjs          ── snake→camel + gomme champs volatils
+├── harness.mjs            ── assertParity(dev, { command, args, httpPath })
+└── git-*.test.mjs         ── Tests par commande
+```
+
+Chaque suite lance son propre dev-server (`beforeAll`/`afterAll`) pour éviter
+tout state partagé entre fichiers de test.
+
+## Déterminisme des fixtures
+
+Toutes les fixtures fixent via env var Git :
+
+- `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` — identité stable
+- `GIT_AUTHOR_DATE`, `GIT_COMMITTER_DATE` — date ancrée en 2024-01-01 UTC,
+  incrémentée de 1 seconde par commit
+- `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_SYSTEM=/dev/null` — isoler
+  des configs personnelles (`user.signingkey`, `commit.gpgsign`, etc.)
+
+Conséquence : les **hashes de commit sont reproductibles** d'une machine
+à l'autre. Si un test échoue parce qu'un hash diffère, c'est une vraie
+divergence Rust/Node, pas du bruit environnemental.
+
+## Pourquoi pas juste `fetch` côté Rust aussi ?
+
+On pourrait lancer un second serveur HTTP en Rust et `fetch` des deux
+côtés. On a préféré le modèle « probe stdio » parce que :
+
+1. Pas de port à gérer côté Rust (moins de flakiness parallèle).
+2. Chaque invocation est une exécution propre — pas de state inter-tests.
+3. Le binaire probe peut être feature-gated (`required-features`) et donc
+   absent du bundle Tauri livré, contrairement à un serveur qui pollue `lib.rs`.

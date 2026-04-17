@@ -95,7 +95,7 @@ fn safe_repo_path(cwd: &str, rel_path: &str) -> Result<PathBuf, String> {
 
 static GIT_BINARY: OnceLock<Mutex<String>> = OnceLock::new();
 
-fn git_binary() -> String {
+pub fn git_binary() -> String {
     GIT_BINARY
         .get_or_init(|| Mutex::new("git".to_string()))
         .lock()
@@ -164,7 +164,7 @@ struct GitStatus {
 }
 
 #[tauri::command]
-fn git_status(cwd: String) -> Result<GitStatus, String> {
+pub fn git_status(cwd: String) -> Result<GitStatus, String> {
     let output = std::process::Command::new(git_binary())
         .args(["status", "--porcelain=v2", "--branch"])
         .current_dir(&cwd)
@@ -523,7 +523,7 @@ fn git_get_user(cwd: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn git_log(
+pub fn git_log(
     cwd: String,
     count: Option<i32>,
     all: Option<bool>,
@@ -1140,7 +1140,7 @@ struct GitBranch {
 }
 
 #[tauri::command]
-fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+pub fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     // Use git branch -a --format to get structured output
     let output = std::process::Command::new(git_binary())
         .args([
