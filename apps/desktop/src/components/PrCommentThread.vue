@@ -9,6 +9,7 @@
  */
 import { ref, computed } from "vue";
 import type { PrReviewComment } from "../utils/backend";
+import { safeHtml } from "../composables/useSafeHtml";
 
 const props = defineProps<{
   /** All comments in this thread, sorted oldest first. */
@@ -164,7 +165,7 @@ function timeAgo(dateStr: string): string {
           <button class="pct-submit-btn" @click="submitEdit" :disabled="!editText.trim()">Enregistrer</button>
         </div>
       </div>
-      <div v-else class="pct-body" v-html="renderBody(comment.body)" />
+      <div v-else class="pct-body" v-html="safeHtml(renderBody(comment.body))" />
 
       <!-- Apply suggestion button -->
       <div v-if="hasSuggestion(comment) && editingId !== comment.id" class="pct-suggestion-actions">

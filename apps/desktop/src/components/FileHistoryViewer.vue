@@ -4,6 +4,7 @@ import type { BlameLine, FileLogEntry, GitDiff } from "../utils/backend";
 import { getGitBlame, getGitFileLog, getGitFileDiff } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { detectLanguage, highlightLine } from "../utils/highlight";
+import { safeHtml } from "../composables/useSafeHtml";
 import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useBlameContext } from "../composables/useBlameContext";
@@ -319,7 +320,7 @@ function shortHash(hash: string): string {
             <td class="fhv-blame-meta fhv-blame-meta--empty" v-else></td>
             <td class="fhv-blame-lineno mono">{{ line.finalLine }}</td>
             <td class="fhv-blame-content mono">
-              <span v-html="hl(line.content) || '\u00a0'"></span>
+              <span v-html="safeHtml(hl(line.content)) || '\u00a0'"></span>
             </td>
           </tr>
         </tbody>
@@ -419,14 +420,14 @@ function shortHash(hash: string): string {
                     {{ pair.left?.lineNo ?? '' }}
                   </td>
                   <td class="line-content mono sbs-content" :class="pair.left ? `sbs-cell--${pair.left.type}` : 'sbs-cell--empty'">
-                    <span v-html="pair.leftHtml ?? (pair.left ? (hl(pair.left.content) || '\u00a0') : '\u00a0')"></span>
+                    <span v-html="safeHtml(pair.leftHtml ?? (pair.left ? hl(pair.left.content) : '')) || '\u00a0'"></span>
                   </td>
                   <td class="sbs-gutter"></td>
                   <td class="line-no mono" :class="pair.right ? `sbs-cell--${pair.right.type}` : 'sbs-cell--empty'">
                     {{ pair.right?.lineNo ?? '' }}
                   </td>
                   <td class="line-content mono sbs-content" :class="pair.right ? `sbs-cell--${pair.right.type}` : 'sbs-cell--empty'">
-                    <span v-html="pair.rightHtml ?? (pair.right ? (hl(pair.right.content) || '\u00a0') : '\u00a0')"></span>
+                    <span v-html="safeHtml(pair.rightHtml ?? (pair.right ? hl(pair.right.content) : '')) || '\u00a0'"></span>
                   </td>
                 </tr>
               </tbody>

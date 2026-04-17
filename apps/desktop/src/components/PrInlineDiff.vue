@@ -13,6 +13,7 @@ import { ref, computed } from "vue";
 import type { GitDiff, DiffLine, PrReviewComment } from "../utils/backend";
 import PrCommentThread from "./PrCommentThread.vue";
 import { detectLanguage, highlightLine } from "../utils/highlight";
+import { safeHtml } from "../composables/useSafeHtml";
 import { useAIProvider } from "../composables/useAIProvider";
 import { usePrHunkCritique, type HunkCritiqueResult } from "../composables/usePrHunkCritique";
 import { useI18n } from "../composables/useI18n";
@@ -330,7 +331,7 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
               {{ dl.type === 'add' ? '+' : dl.type === 'delete' ? '-' : ' ' }}
             </div>
             <!-- Content -->
-            <div class="pid-content mono" v-html="hl(dl.content) || '&nbsp;'" />
+            <div class="pid-content mono" v-html="safeHtml(hl(dl.content)) || '&nbsp;'" />
           </div>
 
           <!-- Comment threads anchored to this line -->

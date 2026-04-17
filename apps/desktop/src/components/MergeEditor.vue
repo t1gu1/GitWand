@@ -4,6 +4,7 @@ import type { ConflictFile } from "../composables/useGitWand";
 import type { ConflictHunk } from "@gitwand/core";
 import { highlightConflict } from "../utils/diffHighlight";
 import { useI18n } from "../composables/useI18n";
+import { safeHtml } from "../composables/useSafeHtml";
 import { useAIProvider, type ConflictContext } from "../composables/useAIProvider";
 
 import { useHunkExplanation } from "../composables/useHunkExplanation";
@@ -393,7 +394,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <span class="panel-dot panel-dot--ours" aria-hidden="true"></span>
                     {{ t('merge.currentBranch') }}
                   </div>
-                  <pre class="panel-code mono"><code v-html="highlightedHtml(seg.hunkIndex!, 'ours')"></code></pre>
+                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'ours'))"></code></pre>
                 </div>
 
                 <!-- Base (if diff3) -->
@@ -405,7 +406,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <span class="panel-dot panel-dot--base" aria-hidden="true"></span>
                     Base
                   </div>
-                  <pre class="panel-code mono"><code v-html="highlightedHtml(seg.hunkIndex!, 'base')"></code></pre>
+                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'base'))"></code></pre>
                 </div>
 
                 <!-- Incoming (theirs) -->
@@ -414,7 +415,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <span class="panel-dot panel-dot--theirs" aria-hidden="true"></span>
                     {{ t('merge.incomingBranch') }}
                   </div>
-                  <pre class="panel-code mono"><code v-html="highlightedHtml(seg.hunkIndex!, 'theirs')"></code></pre>
+                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'theirs'))"></code></pre>
                 </div>
               </div>
             </template>

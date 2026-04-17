@@ -15,6 +15,7 @@ import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
+import { safeHtml } from "../composables/useSafeHtml";
 
 const { t, locale } = useI18n();
 const ai = useAIProvider();
@@ -991,7 +992,7 @@ watch(() => props.cwd, loadDashboard);
           <div
             v-if="readmeTab === 'formatted'"
             class="readme-formatted"
-            v-html="renderMarkdown(readmeContent)"
+            v-html="safeHtml(renderMarkdown(readmeContent))"
           />
           <pre v-else class="readme-raw"><code>{{ readmeContent }}</code></pre>
         </div>

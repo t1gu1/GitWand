@@ -4,6 +4,7 @@ import type { GitDiff, GitLogEntry, DiffLine } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import type { DiffMode } from "../utils/diffMode";
 import { detectLanguage, highlightLine } from "../utils/highlight";
+import { safeHtml } from "../composables/useSafeHtml";
 import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
 
 const { t } = useI18n();
@@ -432,7 +433,7 @@ function onContentScroll(e: Event) {
                       {{ line.type === 'add' ? '+' : line.type === 'delete' ? '-' : ' ' }}
                     </td>
                     <td class="cdv-line-content mono">
-                      <span v-html="hl(line.content, diffs[fileIdx - 1].path) || '\u00a0'"></span>
+                      <span v-html="safeHtml(hl(line.content, diffs[fileIdx - 1].path)) || '\u00a0'"></span>
                     </td>
                   </tr>
                 </tbody>
@@ -453,7 +454,7 @@ function onContentScroll(e: Event) {
                       {{ pair.left?.type === 'delete' ? '-' : pair.left?.type === 'context' ? ' ' : '' }}
                     </td>
                     <td class="cdv-line-content mono cdv-sbs-content" :class="pair.left ? `cdv-sbs--${pair.left.type}` : 'cdv-sbs--empty'">
-                      <span v-html="pair.leftHtml ?? (pair.left ? (hl(pair.left.content, diffs[fileIdx - 1].path) || '\u00a0') : '\u00a0')"></span>
+                      <span v-html="safeHtml(pair.leftHtml ?? (pair.left ? hl(pair.left.content, diffs[fileIdx - 1].path) : '')) || '\u00a0'"></span>
                     </td>
                     <td class="cdv-sbs-gutter"></td>
                     <td class="cdv-line-no mono" :class="pair.right ? `cdv-sbs--${pair.right.type}` : 'cdv-sbs--empty'">
@@ -463,7 +464,7 @@ function onContentScroll(e: Event) {
                       {{ pair.right?.type === 'add' ? '+' : pair.right?.type === 'context' ? ' ' : '' }}
                     </td>
                     <td class="cdv-line-content mono cdv-sbs-content" :class="pair.right ? `cdv-sbs--${pair.right.type}` : 'cdv-sbs--empty'">
-                      <span v-html="pair.rightHtml ?? (pair.right ? (hl(pair.right.content, diffs[fileIdx - 1].path) || '\u00a0') : '\u00a0')"></span>
+                      <span v-html="safeHtml(pair.rightHtml ?? (pair.right ? hl(pair.right.content, diffs[fileIdx - 1].path) : '')) || '\u00a0'"></span>
                     </td>
                   </tr>
                 </tbody>

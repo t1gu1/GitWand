@@ -7,6 +7,7 @@
  */
 import { inject } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { safeHtml } from "../composables/useSafeHtml";
 import type { CICheck } from "../utils/backend";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
@@ -166,7 +167,7 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
           </div>
 
           <div class="pdv-section-label">Description</div>
-          <div v-if="p.prDetail.value.body" class="pdv-body-text" v-html="p.renderBody(p.prDetail.value.body)" />
+          <div v-if="p.prDetail.value.body" class="pdv-body-text" v-html="safeHtml(p.renderBody(p.prDetail.value.body))" />
           <div v-else class="pdv-muted">Aucune description.</div>
 
           <div class="pdv-links">

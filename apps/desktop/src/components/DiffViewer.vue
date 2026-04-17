@@ -4,6 +4,7 @@ import type { GitDiff, DiffLine } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import type { DiffMode } from "../utils/diffMode";
 import { detectLanguage, highlightLine } from "../utils/highlight";
+import { safeHtml } from "../composables/useSafeHtml";
 import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
 import { buildPatch, selectWholeHunk, type LineSelection } from "../utils/patchBuilder";
 
@@ -562,7 +563,7 @@ function onDiffScroll() {
                   {{ il.line.type === 'add' ? '+' : il.line.type === 'delete' ? '-' : ' ' }}
                 </td>
                 <td class="line-content mono">
-                  <span v-html="hlWord(hunkIdx, il.origIdx, il.line.content) || '\u00a0'"></span>
+                  <span v-html="safeHtml(hlWord(hunkIdx, il.origIdx, il.line.content)) || '\u00a0'"></span>
                 </td>
               </tr>
             </tbody>
@@ -615,7 +616,7 @@ function onDiffScroll() {
                 {{ pair.left?.type === 'delete' ? '-' : pair.left?.type === 'context' ? ' ' : '' }}
               </td>
               <td class="line-content mono sbs-content" :class="pair.left ? `sbs-cell--${pair.left.type}` : 'sbs-cell--empty'">
-                <span v-html="pair.leftHtml ?? (pair.left ? (hl(pair.left.content) || '\u00a0') : '\u00a0')"></span>
+                <span v-html="safeHtml(pair.leftHtml ?? (pair.left ? hl(pair.left.content) : '')) || '\u00a0'"></span>
               </td>
               <!-- Separator -->
               <td class="sbs-gutter"></td>
@@ -627,7 +628,7 @@ function onDiffScroll() {
                 {{ pair.right?.type === 'add' ? '+' : pair.right?.type === 'context' ? ' ' : '' }}
               </td>
               <td class="line-content mono sbs-content" :class="pair.right ? `sbs-cell--${pair.right.type}` : 'sbs-cell--empty'">
-                <span v-html="pair.rightHtml ?? (pair.right ? (hl(pair.right.content) || '\u00a0') : '\u00a0')"></span>
+                <span v-html="safeHtml(pair.rightHtml ?? (pair.right ? hl(pair.right.content) : '')) || '\u00a0'"></span>
               </td>
             </tr>
           </tbody>

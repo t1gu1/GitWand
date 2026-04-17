@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
+import { safeHtml } from "../composables/useSafeHtml";
 import {
   ghListPrs,
   ghCreatePr,
@@ -711,7 +712,7 @@ watch(() => props.cwd, () => { loadRemote(); loadPrs(); selectedPr.value = null;
                 </div>
 
                 <div class="pr-section-label">Description</div>
-                <div v-if="prDetail.body" class="pr-body-text" v-html="renderBody(prDetail.body)" />
+                <div v-if="prDetail.body" class="pr-body-text" v-html="safeHtml(renderBody(prDetail.body))" />
                 <div v-else class="pr-placeholder pr-placeholder--sm">Aucune description.</div>
 
                 <div class="pr-links">

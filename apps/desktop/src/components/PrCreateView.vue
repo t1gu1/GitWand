@@ -12,6 +12,7 @@
  */
 import { computed, inject, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { safeHtml } from "../composables/useSafeHtml";
 import { ghListReviewerCandidates, type GitBranch, type ReviewerCandidate } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
@@ -621,7 +622,7 @@ function removeReviewer(name: string) {
           <div
             v-show="editorTab === 'preview'"
             class="pcv-preview"
-            v-html="bodyPreview"
+            v-html="safeHtml(bodyPreview)"
           />
         </div>
         <p class="pcv-hint">{{ t("pr.create.bodyHint") }}</p>
