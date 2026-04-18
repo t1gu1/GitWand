@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-// English is the default; switch to French only if the browser prefers it.
-const locale = ref<'fr' | 'en'>((typeof navigator !== 'undefined' && navigator.language?.startsWith('fr')) ? 'fr' : 'en')
+// English is the canonical default for everyone — French is opt-in via the toggle.
+const locale = ref<'fr' | 'en'>('en')
 const faqOpen = ref<number | null>(null)
 function toggleFaq(i: number) {
   faqOpen.value = faqOpen.value === i ? null : i
