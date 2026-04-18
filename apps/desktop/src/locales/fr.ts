@@ -1,13 +1,11 @@
 /**
- * GitWand — French locale (default)
+ * GitWand — French locale.
  *
- * Convention:
- *   - Keys are grouped by component / feature area
- *   - Use {0}, {1}, ... for positional interpolation
- *   - Use {count} for pluralization helpers
- *   - Keep alphabetical order inside each group
+ * Must match the exact structure of en.ts (enforced by TypeScript).
  */
-const fr = {
+import type { Locale } from "./en";
+
+const fr: Locale = {
   // ─── Common ─────────────────────────────────────────────
   common: {
     cancel: "Annuler",
@@ -521,26 +519,6 @@ const fr = {
     aiAlternates: "Autres candidats propos\u00e9s :",
     noCandidateAiUnavailable: "Les modifications touchent plusieurs commits. Active un provider IA dans les r\u00e9glages pour obtenir un classement.",
   },
-} as const;
-
-// Widen literal string types to plain `string` for locale compatibility
-type Widen<T> = {
-  [K in keyof T]: T[K] extends string ? string : Widen<T[K]>;
 };
-
-/** The shape of a locale: same structure as fr, but with `string` values. */
-export type Locale = Widen<typeof fr>;
-
-/** All possible dotted keys: "header.open", "sidebar.tabChanges", etc. */
-export type LocaleKey = FlatKeys<typeof fr>;
-
-// Utility: flatten nested keys
-type FlatKeys<T, Prefix extends string = ""> = T extends Record<string, unknown>
-  ? {
-      [K in keyof T & string]: T[K] extends Record<string, unknown>
-        ? FlatKeys<T[K], `${Prefix}${K}.`>
-        : `${Prefix}${K}`;
-    }[keyof T & string]
-  : never;
 
 export default fr;
