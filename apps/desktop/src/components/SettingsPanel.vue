@@ -393,7 +393,7 @@ function onKeyDown(e: KeyboardEvent) {
           <svg v-else-if="tab.icon === 'ai'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
           </svg>
-          <span>{{ tab.id === 'general' ? 'Général' : tab.id === 'git' ? 'Git' : tab.id === 'editor' ? 'Éditeur' : 'IA' }}</span>
+          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : t('settings.tabAi') }}</span>
         </button>
       </div>
 
@@ -572,9 +572,9 @@ function onKeyDown(e: KeyboardEvent) {
           <div class="sp-row sp-row--checkbox">
             <label class="sp-checkbox-label" for="setting-ai-enabled">
               <input id="setting-ai-enabled" type="checkbox" class="sp-checkbox" :checked="settings.aiEnabled" @change="onAIEnabledChange" />
-              <span>Activer les suggestions IA</span>
+              <span>{{ t('settings.aiEnable') }}</span>
             </label>
-            <span class="sp-hint">Propose des résolutions intelligentes pour les conflits complexes (confiance &lt; 60%)</span>
+            <span class="sp-hint">{{ t('settings.aiEnableHint') }}</span>
           </div>
 
           <template v-if="settings.aiEnabled">
@@ -873,7 +873,7 @@ function onKeyDown(e: KeyboardEvent) {
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
                 <circle cx="8" cy="8" r="7"/><path d="M8 7v4" stroke-linecap="round"/><circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none"/>
               </svg>
-              <p>L'IA analyse le contexte du conflit (base/ours/theirs, messages de commit, nom de fichier) pour proposer une résolution. Votre code n'est envoyé qu'au provider sélectionné. Aucune suggestion n'est appliquée automatiquement.</p>
+              <p>{{ t('settings.aiPrivacyNote') }}</p>
             </div>
           </template>
         </template>

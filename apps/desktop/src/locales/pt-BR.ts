@@ -437,6 +437,13 @@ const ptBR: Locale = {
   // ─── Settings ───────────────────────────────────────────
   settings: {
     title: "Configurações",
+    tabGeneral: "Geral",
+    tabGit: "Git",
+    tabEditor: "Editor",
+    tabAi: "IA",
+    aiEnable: "Ativar sugestões de IA",
+    aiEnableHint: "Propõe resoluções inteligentes para conflitos complexos (confiança < 60%)",
+    aiPrivacyNote: "A IA analisa o contexto do conflito (base/ours/theirs, mensagens de commit, nome do arquivo) para propor uma resolução. Seu código é enviado apenas ao provedor selecionado. Nenhuma sugestão é aplicada automaticamente.",
     language: "Idioma da interface",
     languageAuto: "Automático (sistema)",
     commitMessageLang: "Idioma das mensagens de commit",

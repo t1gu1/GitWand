@@ -447,6 +447,13 @@ const fr: Locale = {
   // ─── Settings ───────────────────────────────────────────
   settings: {
     title: "Param\u00e8tres",
+    tabGeneral: "G\u00e9n\u00e9ral",
+    tabGit: "Git",
+    tabEditor: "\u00c9diteur",
+    tabAi: "IA",
+    aiEnable: "Activer les suggestions IA",
+    aiEnableHint: "Propose des r\u00e9solutions intelligentes pour les conflits complexes (confiance < 60%)",
+    aiPrivacyNote: "L'IA analyse le contexte du conflit (base/ours/theirs, messages de commit, nom de fichier) pour proposer une r\u00e9solution. Votre code n'est envoy\u00e9 qu'au provider s\u00e9lectionn\u00e9. Aucune suggestion n'est appliqu\u00e9e automatiquement.",
     language: "Langue de l\u2019interface",
     languageAuto: "Automatique (syst\u00e8me)",
     commitMessageLang: "Langue des messages de commit",

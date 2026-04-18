@@ -436,6 +436,13 @@ const es: Locale = {
   // ─── Settings ───────────────────────────────────────────
   settings: {
     title: "Ajustes",
+    tabGeneral: "General",
+    tabGit: "Git",
+    tabEditor: "Editor",
+    tabAi: "IA",
+    aiEnable: "Activar sugerencias de IA",
+    aiEnableHint: "Propone resoluciones inteligentes para conflictos complejos (confianza < 60%)",
+    aiPrivacyNote: "La IA analiza el contexto del conflicto (base/ours/theirs, mensajes de commit, nombre de archivo) para proponer una resolución. Tu código solo se envía al proveedor seleccionado. Ninguna sugerencia se aplica automáticamente.",
     language: "Idioma de la interfaz",
     languageAuto: "Automático (sistema)",
     commitMessageLang: "Idioma de los mensajes de commit",

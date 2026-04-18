@@ -427,6 +427,13 @@ const zhCN: Locale = {
 
   settings: {
     title: "设置",
+    tabGeneral: "通用",
+    tabGit: "Git",
+    tabEditor: "编辑器",
+    tabAi: "AI",
+    aiEnable: "启用 AI 建议",
+    aiEnableHint: "为复杂冲突（置信度 < 60%）提出智能解决方案",
+    aiPrivacyNote: "AI 会分析冲突上下文（base/ours/theirs、提交信息、文件名）以提出解决方案。你的代码只会发送给你选择的服务商。任何建议都不会自动应用。",
     language: "界面语言",
     languageAuto: "自动（跟随系统）",
     commitMessageLang: "提交信息语言",

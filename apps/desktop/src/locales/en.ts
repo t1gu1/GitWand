@@ -454,6 +454,15 @@ const en = {
   // ─── Settings ───────────────────────────────────────────
   settings: {
     title: "Settings",
+    // Tab titles
+    tabGeneral: "General",
+    tabGit: "Git",
+    tabEditor: "Editor",
+    tabAi: "AI",
+    // AI tab (header block)
+    aiEnable: "Enable AI suggestions",
+    aiEnableHint: "Proposes smart resolutions for complex conflicts (confidence < 60%)",
+    aiPrivacyNote: "The AI analyzes the conflict context (base/ours/theirs, commit messages, file name) to propose a resolution. Your code is only sent to the selected provider. No suggestion is applied automatically.",
     language: "Interface language",
     languageAuto: "Automatic (system)",
     commitMessageLang: "Commit message language",
