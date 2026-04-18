@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-const locale = ref<'fr' | 'en'>((typeof navigator !== 'undefined' && navigator.language?.startsWith('en')) ? 'en' : 'fr')
+// English is the default; switch to French only if the browser prefers it.
+const locale = ref<'fr' | 'en'>((typeof navigator !== 'undefined' && navigator.language?.startsWith('fr')) ? 'fr' : 'en')
 const faqOpen = ref<number | null>(null)
 function toggleFaq(i: number) {
   faqOpen.value = faqOpen.value === i ? null : i
@@ -9,7 +10,7 @@ function toggleFaq(i: number) {
 
 const i18n = {
   fr: {
-    badge: 'v1.4.0 · Open Source · MIT',
+    badge: 'v1.5.0 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
@@ -79,7 +80,7 @@ const i18n = {
     ],
   },
   en: {
-    badge: 'v1.4.0 · Open Source · MIT',
+    badge: 'v1.5.0 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',

@@ -179,30 +179,58 @@ Refonte du moteur de classification et outillage desktop de distribution. Livré
 **Branding**
 - Favicon hex-cube partagé entre l'app desktop et le website
 
+### v1.5.0 — Hardening, performance & English-first
+
+Vague de durcissement : sécurité (XSS, CORS, path traversal), mémoire du moteur de diff, parallélisme côté app + CLI, validation post-merge étendue, et bascule du défaut de locale vers l'anglais. Aucun changement d'API publique — c'est une release de consolidation.
+
+**Sécurité**
+- Assainissement XSS sur 10 vues via un composable partagé `useSafeHtml` / `useMarkdown` (DOMPurify + markdown-it)
+- Dev-server : CORS restreint et validation de chemin filesystem contre le path traversal
+
+**Moteur — performance**
+- LCS mémoire O(n·m) → O(min(n, m)) via approche hybride (Int32Array DP sous 4M cellules, Hirschberg au-dessus) — ~35× sur 3000×3000, tie-break inchangé
+- Parallélisation de la lecture des conflits dans l'app (borné)
+- Parallélisation de la boucle CLI `gitwand resolve` (borné)
+
+**Extension utilisateur**
+- Option `generatedFiles` dans `.gitwandrc` — globs additifs routés vers le résolveur `generated_file`
+- Validation post-merge étendue aux formats YAML et TOML (erreurs préfixées `YAML: …` / `TOML: …`)
+
+**Parité Rust ↔ Node**
+- Harnais de tests de parité pour 3 commandes Tauri — détecte les dérives entre backend Rust et dev-server Node
+
+**i18n**
+- Locale par défaut basculée vers l'anglais (app desktop + website) ; le français reste auto-détecté et maintenu en parallèle
+
+**Internals**
+- Split de `resolver.ts` en 6 sous-modules (validation, policy, generated-detection, …)
+- Split de `cli/index.ts` en sous-modules par commande
+- Retrait de `@types/dompurify` (deprecated — DOMPurify 3.x fournit ses propres types)
+
 ---
 
-## Next — v1.5.0 — Visual diff & distribution
+## Next — v1.6.0 — Visual diff & distribution
 
-### 1.5.1 — Folder diff
+### 1.6.1 — Folder diff
 
 - Comparer deux dossiers, branches ou commits — arbre récursif avec indicateurs ajouté/supprimé/modifié
 - Filtrage par type de fichier, pattern glob, type de changement
 - Résumé IA des changements de dossier (réutilise la plomberie v1.3)
 
-### 1.5.2 — Image diff (différenciateur fort)
+### 1.6.2 — Image diff (différenciateur fort)
 
 - Comparaison visuelle : side-by-side, overlay, blink, slider split
 - Formats : PNG, JPEG, SVG, WebP, GIF
 - Heatmap des zones modifiées, métadonnées (taille, dimensions, profil couleur)
 - Description IA des changements visuels (alt text, zones d'attention)
 
-### 1.5.3 — Submodules & Worktrees
+### 1.6.3 — Submodules & Worktrees
 
 - Initialiser, mettre à jour, naviguer dans les submodules depuis l'UI
 - Git worktrees : créer, lister, supprimer — chaque worktree dans un onglet
 - Checkout rapide via worktree sans switcher
 
-### 1.5.4 — MCP Registry & npm publish
+### 1.6.4 — MCP Registry & npm publish
 
 - Publier `@gitwand/mcp` sur npm
 - Soumettre au MCP Registry officiel

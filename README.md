@@ -23,7 +23,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-8B5CF6">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-100%25-3178C6">
   <img alt="Tests" src="https://img.shields.io/badge/tests-322%20passing-22c55e">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.4.0-22c55e">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.5.0-22c55e">
 </p>
 
 ---
@@ -498,7 +498,19 @@ GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference l
 - [x] Desktop — auto-update check against GitHub Releases + app version display
 - [x] Shared hex-cube favicon across desktop app and website
 
-### Next — v1.5.0 — Visual diff & distribution
+### v1.5.0 — Hardening, performance & English-first ✅
+
+- [x] XSS hardening — shared `useSafeHtml` / `useMarkdown` composable sanitising every `v-html` via DOMPurify + markdown-it
+- [x] Dev-server CORS + filesystem-path enforcement to prevent cross-origin and traversal
+- [x] English-first UI — default locale flipped to English across app and website, French kept in sync
+- [x] `.gitwandrc` — `generatedFiles` option for user-defined glob patterns routed to the `generated_file` resolver
+- [x] Post-merge validation extended to YAML + TOML with format-specific error reporting
+- [x] LCS memory — O(n·m) → O(min(n, m)) via hybrid `Int32Array` DP + Hirschberg (~35× on 3000×3000)
+- [x] Parallel conflict loading + `saveAllFiles` in the desktop app (bounded concurrency)
+- [x] Parallel CLI file loop in `gitwand resolve`
+- [x] Rust↔Node parity probe harness for 3 Tauri commands
+
+### Next — v1.6.0 — Visual diff & distribution
 
 - [ ] Folder diff — compare two folders, branches, or commits
 - [ ] Image diff — side-by-side, blink, slider (PNG, JPEG, SVG, WebP, GIF)
