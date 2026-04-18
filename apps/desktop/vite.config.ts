@@ -21,7 +21,10 @@ export default defineConfig({
   },
   envPrefix: ["VITE_", "TAURI_"],
   build: {
-    target: ["es2021", "chrome100", "safari13"],
+    // safari14 is the first Safari with BigInt literal support (needed
+    // by smol-toml, pulled in transitively by v1.5.0 post-merge TOML
+    // validation). Tauri 2 recommends macOS 11+ which ships Safari 14+.
+    target: ["es2021", "chrome100", "safari14"],
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
   },
