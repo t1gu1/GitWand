@@ -23,7 +23,11 @@
 //! Le harness Node attend un binaire pré-compilé à un chemin connu, typiquement
 //! `target/debug/parity-probe` (surchargeable via `PARITY_PROBE` env var).
 
-use gitwand_desktop_lib::{git_branches, git_log, git_status};
+// Les `_parity` sont des wrappers publics qui délèguent aux `#[tauri::command]`
+// privés de lib.rs. On ne peut pas importer les commandes directement : la
+// proc-macro de Tauri génère une aide `__cmd__<name>` qui entre en conflit si
+// la fn elle-même est `pub`. Voir le bloc "Parity probe re-exports" dans lib.rs.
+use gitwand_desktop_lib::{git_branches_parity, git_log_parity, git_status_parity};
 use serde_json::{json, Value};
 use std::io::{self, Read};
 use std::process::ExitCode;
@@ -76,7 +80,7 @@ fn main() -> ExitCode {
                 Ok(v) => v,
                 Err(code) => return code,
             };
-            to_json(git_status(cwd))
+            to_json(git_status_parity(cwd))
         }
         "git-log" => {
             let cwd = match must_str("cwd") {
@@ -86,14 +90,14 @@ fn main() -> ExitCode {
             let count = input.get("count").and_then(|v| v.as_i64()).map(|v| v as i32);
             let all = input.get("all").and_then(|v| v.as_bool());
             let author = input.get("author").and_then(|v| v.as_str()).map(|s| s.to_string());
-            to_json(git_log(cwd, count, all, author))
+            to_json(git_log_parity(cwd, count, all, author))
         }
         "git-branches" => {
             let cwd = match must_str("cwd") {
                 Ok(v) => v,
                 Err(code) => return code,
             };
-            to_json(git_branches(cwd))
+            to_json(git_branches_parity(cwd))
         }
         other => {
             eprintln!("unknown command: {}", other);

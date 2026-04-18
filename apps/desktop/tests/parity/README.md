@@ -44,14 +44,20 @@ Recette à trois étapes :
 
 ### 1. Exposer la fonction Rust
 
-Dans `src-tauri/src/lib.rs`, ajouter `pub` devant la fonction cible :
+**Attention** : `#[tauri::command]` génère un helper `pub struct __cmd__<fn>`
+qui entre en conflit avec un `pub fn` de même nom (E0255 au build). On
+garde donc la commande Tauri **privée** et on ajoute un wrapper public.
+
+Dans `src-tauri/src/lib.rs`, au bloc *Parity probe re-exports* (en bas du
+fichier, juste avant `pub fn run()`), ajouter :
 
 ```rust
-#[tauri::command]
-pub fn git_foo(cwd: String, ...) -> Result<FooOutput, String> { ... }
+pub fn git_foo_parity(cwd: String, ...) -> Result<FooOutput, String> {
+    git_foo(cwd, ...)
+}
 ```
 
-(Le `#[tauri::command]` reste — il est compatible avec `pub`.)
+Laisser la fn `git_foo` elle-même telle quelle (privée + `#[tauri::command]`).
 
 ### 2. Brancher le probe
 
@@ -60,7 +66,7 @@ Dans `src-tauri/src/bin/parity_probe.rs`, ajouter une branche au `match` :
 ```rust
 "git-foo" => {
     let input: FooInput = serde_json::from_str(&stdin_json)?;
-    to_json(git_foo(input.cwd, ...))
+    to_json(git_foo_parity(input.cwd, ...))
 }
 ```
 

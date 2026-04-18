@@ -145,14 +145,14 @@ fn get_conflicted_files(cwd: String) -> Result<Vec<String>, String> {
 // ─── Git status ───────────────────────────────────────────
 
 #[derive(Serialize)]
-struct FileChange {
+pub struct FileChange {
     path: String,
     status: String, // "added", "modified", "deleted", "renamed"
     old_path: Option<String>,
 }
 
 #[derive(Serialize)]
-struct GitStatus {
+pub struct GitStatus {
     branch: String,
     remote: Option<String>,
     ahead: i32,
@@ -164,7 +164,7 @@ struct GitStatus {
 }
 
 #[tauri::command]
-pub fn git_status(cwd: String) -> Result<GitStatus, String> {
+fn git_status(cwd: String) -> Result<GitStatus, String> {
     let output = std::process::Command::new(git_binary())
         .args(["status", "--porcelain=v2", "--branch"])
         .current_dir(&cwd)
@@ -493,7 +493,7 @@ fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDiff, String> 
 // ─── Git log ───────────────────────────────────────────────
 
 #[derive(Serialize)]
-struct GitLogEntry {
+pub struct GitLogEntry {
     hash: String,
     hash_full: String,
     author: String,
@@ -523,7 +523,7 @@ fn git_get_user(cwd: String) -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-pub fn git_log(
+fn git_log(
     cwd: String,
     count: Option<i32>,
     all: Option<bool>,
@@ -1128,7 +1128,7 @@ fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
 // ─── Git branches ────────────────────────────────────────────
 
 #[derive(Serialize)]
-struct GitBranch {
+pub struct GitBranch {
     name: String,
     is_current: bool,
     is_remote: bool,
@@ -1140,7 +1140,7 @@ struct GitBranch {
 }
 
 #[tauri::command]
-pub fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     // Use git branch -a --format to get structured output
     let output = std::process::Command::new(git_binary())
         .args([
@@ -3064,6 +3064,37 @@ fn open_in_editor(cwd: String, path: String, editor: String) -> Result<(), Strin
         .spawn()
         .map_err(|e| format!("Failed to open editor '{}': {}", editor_cmd, e))?;
     Ok(())
+}
+
+// ─── Parity probe re-exports ───────────────────────────────
+//
+// `#[tauri::command]` generates a helper `pub struct __cmd__<fn_name>` next
+// to the function, and making the wrapped fn itself `pub` collides with that
+// helper's name in the macro namespace (E0255). So we keep the Tauri commands
+// private and expose tiny `pub fn <name>_parity` wrappers that the
+// `parity-probe` binary (see `src/bin/parity_probe.rs`) imports to run the
+// *same* code paths as the Tauri handler, without going through a Tauri
+// `Invoke`.
+//
+// Not gated behind the `parity-probe` feature on purpose: these are 3-line
+// wrappers that add no runtime cost, and keeping them always-compiled avoids
+// the "works with this feature, breaks without it" class of bugs.
+
+pub fn git_status_parity(cwd: String) -> Result<GitStatus, String> {
+    git_status(cwd)
+}
+
+pub fn git_log_parity(
+    cwd: String,
+    count: Option<i32>,
+    all: Option<bool>,
+    author: Option<String>,
+) -> Result<Vec<GitLogEntry>, String> {
+    git_log(cwd, count, all, author)
+}
+
+pub fn git_branches_parity(cwd: String) -> Result<Vec<GitBranch>, String> {
+    git_branches(cwd)
 }
 
 // ─── Tauri entry point ─────────────────────────────────────
