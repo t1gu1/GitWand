@@ -573,20 +573,44 @@ export async function fetchUsers() {
 
   /**
    * Save all files back to disk.
+   *
+   * Parallélisé via `Promise.all` — miroir de `loadFiles` au-dessus. Chaque
+   * `writeFile` est indépendant (le backend écrit par chemin, pas de state
+   * partagé), donc on lance tout de front.
+   *
+   * Sémantique d'erreur : on attend que TOUTES les écritures se terminent
+   * (au lieu de `return`-er à la première comme avant). Ça maximise le
+   * nombre de fichiers effectivement sauvés lors d'une panne partielle —
+   * l'utilisateur voit un message pointant le premier échec (dans l'ordre
+   * d'origine, pas d'ordre de résolution) et les fichiers non fautifs sont
+   * bien sur disque. Comportement antérieur : bail-on-first, laissait les
+   * fichiers restants non sauvés — perte de travail lors d'un simple
+   * permission error isolé.
    */
   async function saveAllFiles() {
     if (!folderPath.value) return;
 
-    let saved = 0;
-    for (const file of files.value) {
-      try {
-        await writeFile(folderPath.value, file.path, file.content);
-        saved++;
-      } catch (err: any) {
-        error.value = `Erreur sauvegarde ${file.path}: ${err.message}`;
-        return;
-      }
+    const failures: Array<{ index: number; path: string; err: unknown }> = [];
+    await Promise.all(
+      files.value.map(async (file, index) => {
+        try {
+          await writeFile(folderPath.value!, file.path, file.content);
+        } catch (err) {
+          failures.push({ index, path: file.path, err });
+        }
+      }),
+    );
+
+    if (failures.length > 0) {
+      // Rapport stable : premier échec selon l'ordre d'origine, pas selon
+      // l'ordre dans lequel les promesses se résolvent.
+      failures.sort((a, b) => a.index - b.index);
+      const first = failures[0];
+      const msg = first.err instanceof Error ? first.err.message : String(first.err);
+      error.value = `Erreur sauvegarde ${first.path}: ${msg}`;
+      return;
     }
+
     error.value = null;
   }
 
