@@ -32,6 +32,7 @@ export const DEFAULT_OPTIONS: Required<GitWandOptions> = {
   explainOnly: false,
   policy: DEFAULT_POLICY,
   patternOverrides: {},
+  generatedFiles: [],
 };
 
 /** Ordre de confiance pour comparaison. */

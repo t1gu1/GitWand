@@ -287,4 +287,10 @@ export interface GitWandOptions {
    * Exemple : `{ "*.lock": "prefer-theirs", "src/**\/*.ts": "prefer-ours" }`
    */
   patternOverrides?: Record<string, import("./config.js").MergePolicy>;
+  /**
+   * Patterns glob de fichiers auto-générés (P2.4).
+   * S'ajoutent aux built-ins (lockfiles, bundles, `dist/`…) sans les remplacer.
+   * Exemple : `["src/**\/*.generated.ts", "*.pb.go", "api/openapi-client/**"]`.
+   */
+  generatedFiles?: string[];
 }

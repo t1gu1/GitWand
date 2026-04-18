@@ -208,6 +208,11 @@ export interface GitWandrcConfig {
   policy?: MergePolicy;
   /** Overrides par pattern glob */
   patterns?: Record<string, MergePolicy>;
+  /**
+   * Patterns glob supplémentaires pour fichiers auto-générés (P2.4).
+   * S'ajoutent aux built-ins (lockfiles, bundles, `dist/`…) sans les remplacer.
+   */
+  generatedFiles?: string[];
 }
 
 /**
@@ -243,6 +248,18 @@ export function parseGitwandrc(json: string): GitWandrcConfig | null {
       }
       if (Object.keys(patterns).length > 0) {
         result.patterns = patterns;
+      }
+    }
+
+    // Valider les patterns de fichiers auto-générés (P2.4).
+    // On accepte un tableau de strings non vides ; on skip tout ce qui n'est pas
+    // une string pour rester tolérant aux configs « presque valides ».
+    if (Array.isArray(parsed.generatedFiles)) {
+      const generatedFiles = parsed.generatedFiles.filter(
+        (p: unknown): p is string => typeof p === "string" && p.length > 0,
+      );
+      if (generatedFiles.length > 0) {
+        result.generatedFiles = generatedFiles;
       }
     }
 

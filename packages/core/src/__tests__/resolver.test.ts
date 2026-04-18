@@ -735,6 +735,72 @@ const x = 2;
       const result = resolve(ts, "src/utils/config.ts");
       expect(result.hunks[0].type).not.toBe("generated_file");
     });
+
+    // ─── P2.4 — user-provided generated patterns ─────────
+
+    it("P2.4: reclassifie via un pattern user (*.generated.ts)", () => {
+      const ts = `<<<<<<< HEAD
+export const foo = { a: 1, b: 2, c: 3 };
+export function bar() { return 1; }
+=======
+export const foo = { a: 1, b: 999, d: 4 };
+export function bar() { return 2; }
+>>>>>>> master`;
+      // Sans config : pas reclassifié (fichier non dans les built-ins)
+      const baseline = resolve(ts, "src/schema.generated.ts", { minConfidence: "medium" });
+      expect(baseline.hunks[0].type).not.toBe("generated_file");
+
+      // Avec user pattern : reclassifié
+      const withConfig = resolve(ts, "src/schema.generated.ts", {
+        minConfidence: "medium",
+        generatedFiles: ["**/*.generated.ts"],
+      });
+      expect(withConfig.hunks[0].type).toBe("generated_file");
+      expect(withConfig.hunks[0].confidence.boosters[0]).toMatch(/user pattern: /);
+    });
+
+    it("P2.4: les built-ins gardent la priorité sur les user patterns", () => {
+      // package-lock.json matche un built-in ; un user pattern ne doit pas
+      // écraser le label descriptif ("npm lockfile" > "user pattern: ...").
+      const lockJson = `<<<<<<< HEAD
+    "node_modules/foo": { "version": "1.0.0" }
+=======
+    "node_modules/foo": { "version": "1.1.0", "extra": true }
+>>>>>>> master`;
+      const result = resolve(lockJson, "package-lock.json", {
+        minConfidence: "medium",
+        generatedFiles: ["**/*"], // user pattern qui matche tout
+      });
+      expect(result.hunks[0].type).toBe("generated_file");
+      // Le booster doit refléter le built-in, pas le user pattern
+      expect(result.hunks[0].confidence.boosters[0]).toContain("npm lockfile");
+      expect(result.hunks[0].confidence.boosters[0]).not.toContain("user pattern:");
+    });
+
+    it("P2.4: un tableau vide de user patterns n'altère pas la détection", () => {
+      const ts = `<<<<<<< HEAD
+const x = 1;
+=======
+const x = 2;
+>>>>>>> master`;
+      const result = resolve(ts, "src/foo.ts", { generatedFiles: [] });
+      expect(result.hunks[0].type).not.toBe("generated_file");
+    });
+
+    it("P2.4: match glob sur basename (*.pb.go sans chemin)", () => {
+      const go = `<<<<<<< HEAD
+var Foo = []byte{0x01, 0x02}
+var Bar = []byte{0x03}
+=======
+var Foo = []byte{0x01, 0x02, 0x03}
+var Bar = []byte{0x04, 0x05}
+>>>>>>> master`;
+      const result = resolve(go, "proto/user.pb.go", {
+        minConfidence: "medium",
+        generatedFiles: ["*.pb.go"],
+      });
+      expect(result.hunks[0].type).toBe("generated_file");
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════

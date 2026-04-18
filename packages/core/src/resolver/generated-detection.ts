@@ -8,6 +8,7 @@
  */
 
 import type { ConflictHunk, ConfidenceScore, ConflictType } from "../types.js";
+import { matchGlob } from "../config.js";
 
 /** Patterns de fichiers auto-générés qui ne doivent pas être mergés ligne par ligne. */
 export const GENERATED_FILE_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
@@ -24,11 +25,31 @@ export const GENERATED_FILE_PATTERNS: Array<{ pattern: RegExp; label: string }> 
   { pattern: /mix-manifest\.json$/i, label: "Laravel Mix manifest" },
 ];
 
-/** Retourne `generated: true` si le chemin correspond à un pattern auto-généré connu. */
-export function isGeneratedFile(filePath: string): { generated: boolean; label: string } {
+/**
+ * Retourne `generated: true` si le chemin correspond à un pattern auto-généré.
+ *
+ * Les `userGlobs` optionnels (P2.4) permettent d'étendre les built-ins avec des
+ * patterns glob définis dans `.gitwandrc` (ex: `src/**\/*.generated.ts`, `*.pb.go`,
+ * `api/openapi-client/**`). Les built-ins sont checkés en premier (plus rapide,
+ * label descriptif) ; les user patterns ne sont évalués qu'en fallback.
+ *
+ * @param filePath - Chemin du fichier à tester
+ * @param userGlobs - Patterns glob supplémentaires issus de la config projet
+ */
+export function isGeneratedFile(
+  filePath: string,
+  userGlobs?: readonly string[],
+): { generated: boolean; label: string } {
   for (const { pattern, label } of GENERATED_FILE_PATTERNS) {
     if (pattern.test(filePath)) {
       return { generated: true, label };
+    }
+  }
+  if (userGlobs) {
+    for (const glob of userGlobs) {
+      if (matchGlob(glob, filePath)) {
+        return { generated: true, label: `user pattern: ${glob}` };
+      }
     }
   }
   return { generated: false, label: "" };

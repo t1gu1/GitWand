@@ -108,8 +108,8 @@ export function resolve(
   const outputLines: string[] = [];
   let allResolved = true;
 
-  // Détecter si le fichier est auto-généré
-  const genInfo = isGeneratedFile(filePath);
+  // Détecter si le fichier est auto-généré (built-ins + user patterns P2.4)
+  const genInfo = isGeneratedFile(filePath, options.generatedFiles);
 
   // v1.4 — fileFrequency : compteur de hunks "complex" déjà vus dans ce fichier.
   // Appliqué comme pénalité sur la dimension fileFrequency du score de confiance.

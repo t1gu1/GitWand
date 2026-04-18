@@ -180,6 +180,35 @@ describe("Phase 7.4 — parseGitwandrc", () => {
     expect(parseGitwandrc("42")).toBeNull();
     expect(parseGitwandrc("null")).toBeNull();
   });
+
+  // ─── P2.4 — generatedFiles ────────────────────────────────
+
+  it("P2.4: parse un tableau generatedFiles valide", () => {
+    const json = JSON.stringify({
+      generatedFiles: ["**/*.generated.ts", "*.pb.go"],
+    });
+    const cfg = parseGitwandrc(json);
+    expect(cfg!.generatedFiles).toEqual(["**/*.generated.ts", "*.pb.go"]);
+  });
+
+  it("P2.4: filtre les entrées non-string dans generatedFiles", () => {
+    const json = JSON.stringify({
+      generatedFiles: ["**/*.gen.ts", 42, null, "", "valid.pattern"],
+    });
+    const cfg = parseGitwandrc(json);
+    expect(cfg!.generatedFiles).toEqual(["**/*.gen.ts", "valid.pattern"]);
+  });
+
+  it("P2.4: generatedFiles non-array est ignoré", () => {
+    const json = JSON.stringify({ generatedFiles: "not an array" });
+    const cfg = parseGitwandrc(json);
+    expect(cfg!.generatedFiles).toBeUndefined();
+  });
+
+  it("P2.4: generatedFiles vide ou sans entrée valide → undefined", () => {
+    expect(parseGitwandrc(JSON.stringify({ generatedFiles: [] }))!.generatedFiles).toBeUndefined();
+    expect(parseGitwandrc(JSON.stringify({ generatedFiles: [42, null] }))!.generatedFiles).toBeUndefined();
+  });
 });
 
 // ─── Fixtures pour les tests d'intégration ───────────────

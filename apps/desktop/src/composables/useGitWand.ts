@@ -207,6 +207,7 @@ export function useGitWand() {
           resolveOptions.value = {
             policy: cfg.policy,
             patternOverrides: cfg.patterns,
+            generatedFiles: cfg.generatedFiles,
           };
         }
       }
