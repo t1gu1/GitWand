@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
+import { t } from "./useI18n";
 
 /**
  * Generates a stash message from the current working-tree diff.
@@ -87,12 +88,10 @@ export function useStashMessage() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
       if (!cwd) {
-        throw new Error("Aucun repo ouvert (cwd vide).");
+        throw new Error(t("errors.noRepoOpen"));
       }
 
       // The stash captures staged + unstaged + untracked. We feed the model a
@@ -112,9 +111,7 @@ export function useStashMessage() {
       let diff = diffRes.stdout ?? "";
       const status = statusRes.stdout ?? "";
       if (diff.length === 0 && status.trim().length === 0) {
-        throw new Error(
-          "Aucun changement local à stasher — modifie des fichiers avant de générer un message.",
-        );
+        throw new Error(t("errors.noChangesToStash"));
       }
       if (diff.length > maxDiffChars) {
         diff = diff.slice(0, maxDiffChars) + "\n... (diff truncated)";
@@ -125,7 +122,7 @@ export function useStashMessage() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       const message = cleanMessage(raw);
       lastMessage.value = message;

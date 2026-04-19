@@ -2,6 +2,7 @@ import { ref } from "vue";
 import type { ConflictHunk } from "@gitwand/core";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
+import { t } from "./useI18n";
 
 /**
  * Asks the configured AI provider to translate a hunk's deterministic
@@ -128,9 +129,7 @@ export function useHunkExplanation() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
 
       const systemPrompt = buildSystemPrompt(locale);
@@ -138,7 +137,7 @@ export function useHunkExplanation() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       return cleanExplanation(raw);
     } catch (err: unknown) {

@@ -390,10 +390,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               <span class="rb-squash-title">
                 ✨ {{ squashSuggestion.summary || t('rebase.aiSquashSuggest') }}
               </span>
-              <button class="rb-squash-dismiss" @click="dismissSquashSuggestion" aria-label="Close">✕</button>
+              <button class="rb-squash-dismiss" @click="dismissSquashSuggestion" :aria-label="t('rebase.aiSquashClose')">✕</button>
             </div>
             <p v-if="squashSuggestion.groups.length === 0" class="rb-squash-empty">
-              {{ locale === 'fr' ? "L'IA n'a rien trouvé à squasher — chaque commit a une intention distincte." : "The AI found nothing to squash — every commit has a distinct intent." }}
+              {{ t('rebase.aiSquashEmpty') }}
             </p>
             <ul v-else class="rb-squash-groups">
               <li v-for="(group, gi) in squashSuggestion.groups" :key="gi" class="rb-squash-group">

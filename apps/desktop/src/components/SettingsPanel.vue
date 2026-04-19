@@ -265,12 +265,12 @@ function startClaudeConnect() {
 function validateAndSaveClaudeKey(key: string) {
   const trimmed = key.trim();
   if (!trimmed) {
-    claudeConnectError.value = "Veuillez coller votre clé API";
+    claudeConnectError.value = t("settings.aiConnectErrorEmpty");
     claudeConnectStep.value = "error";
     return;
   }
   if (!trimmed.startsWith("sk-ant-")) {
-    claudeConnectError.value = "La clé doit commencer par sk-ant-...";
+    claudeConnectError.value = t("settings.aiConnectErrorPrefix");
     claudeConnectStep.value = "error";
     return;
   }
@@ -580,19 +580,19 @@ function onKeyDown(e: KeyboardEvent) {
           <template v-if="settings.aiEnabled">
             <!-- Provider -->
             <div class="sp-row">
-              <label class="sp-label" for="setting-ai-provider">Provider</label>
+              <label class="sp-label" for="setting-ai-provider">{{ t('settings.aiProviderLabel') }}</label>
               <select
                 id="setting-ai-provider" class="sp-select"
                 :value="settings.aiProvider"
                 @change="onAIProviderChange(($event.target as HTMLSelectElement).value as AIProvider)"
               >
-                <option value="claude">Claude (Anthropic API)</option>
+                <option value="claude">{{ t('settings.aiProviderClaude') }}</option>
                 <option value="claude-code-cli">
-                  Claude Code CLI (abonnement Max/Pro){{ claudeCliInfo && !claudeCliInfo.found ? ' — non détecté' : '' }}
+                  {{ t('settings.aiProviderClaudeCli') }}{{ claudeCliInfo && !claudeCliInfo.found ? t('settings.aiProviderClaudeCliNotFound') : '' }}
                 </option>
-                <option value="openai-compat">API compatible OpenAI</option>
+                <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                 <option value="ollama" :disabled="!ollamaAvailable">
-                  Ollama (local){{ ollamaAvailable ? '' : ' — non détecté' }}
+                  {{ t('settings.aiProviderOllama') }}{{ ollamaAvailable ? '' : t('settings.aiProviderOllamaNotFound') }}
                 </option>
               </select>
             </div>
@@ -601,19 +601,19 @@ function onKeyDown(e: KeyboardEvent) {
             <template v-if="settings.aiProvider === 'claude'">
               <!-- Auth mode selector -->
               <div class="sp-row">
-                <label class="sp-label">Authentification</label>
+                <label class="sp-label">{{ t('settings.aiAuthLabel') }}</label>
                 <div class="sp-auth-toggle">
                   <button
                     :class="['sp-auth-btn', { 'sp-auth-btn--active': claudeAuthMode === 'connect' }]"
                     @click="claudeAuthMode = 'connect'"
                   >
-                    Connecter
+                    {{ t('settings.aiAuthConnect') }}
                   </button>
                   <button
                     :class="['sp-auth-btn', { 'sp-auth-btn--active': claudeAuthMode === 'apikey' }]"
                     @click="claudeAuthMode = 'apikey'"
                   >
-                    Clé API
+                    {{ t('settings.aiAuthApiKey') }}
                   </button>
                 </div>
               </div>
@@ -623,8 +623,8 @@ function onKeyDown(e: KeyboardEvent) {
                 <div v-if="settings.aiApiKey" class="sp-row">
                   <div class="sp-connected-badge">
                     <span class="sp-connected-dot"></span>
-                    <span>Connecté — {{ maskedApiKey }}</span>
-                    <button class="sp-disconnect-btn" @click="disconnectClaude">Déconnecter</button>
+                    <span>{{ t('settings.aiAuthConnected', maskedApiKey) }}</span>
+                    <button class="sp-disconnect-btn" @click="disconnectClaude">{{ t('settings.aiAuthDisconnect') }}</button>
                   </div>
                 </div>
                 <div v-else class="sp-row">
@@ -636,16 +636,16 @@ function onKeyDown(e: KeyboardEvent) {
                           <path d="M9 1C4.58 1 1 4.58 1 9s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8z"/>
                           <path d="M6 9h6M9 6v6"/>
                         </svg>
-                        Connecter avec Claude
+                        {{ t('settings.aiConnectButton') }}
                       </button>
-                      <span class="sp-hint">Ouvre la console Anthropic pour créer une clé API</span>
+                      <span class="sp-hint">{{ t('settings.aiConnectHint') }}</span>
                     </div>
 
                     <!-- Step 2: Waiting for key -->
                     <div v-if="claudeConnectStep === 'waiting'" class="sp-connect-waiting">
                       <p class="sp-connect-instruction">
-                        1. Créez ou copiez une clé API depuis la console Anthropic<br />
-                        2. Collez-la ci-dessous :
+                        {{ t('settings.aiConnectInstruction1') }}<br />
+                        {{ t('settings.aiConnectInstruction2') }}
                       </p>
                       <div class="sp-key-row">
                         <input
@@ -660,22 +660,22 @@ function onKeyDown(e: KeyboardEvent) {
                           :disabled="!claudeConnectKeyInput.trim()"
                           @click="validateAndSaveClaudeKey(claudeConnectKeyInput)"
                         >
-                          Enregistrer
+                          {{ t('settings.aiConnectSave') }}
                         </button>
                       </div>
                       <div v-if="claudeConnectError" class="sp-connect-error">{{ claudeConnectError }}</div>
-                      <button class="sp-text-btn" @click="claudeConnectStep = 'idle'">Annuler</button>
+                      <button class="sp-text-btn" @click="claudeConnectStep = 'idle'">{{ t('settings.aiConnectCancel') }}</button>
                     </div>
 
                     <!-- Step 3: Success -->
                     <div v-if="claudeConnectStep === 'success'" class="sp-connect-success">
-                      Connecté avec succès !
+                      {{ t('settings.aiConnectSuccess') }}
                     </div>
 
                     <!-- Step 3b: Error -->
                     <div v-if="claudeConnectStep === 'error'" class="sp-connect-error-block">
                       <div class="sp-connect-error">{{ claudeConnectError }}</div>
-                      <button class="sp-text-btn" @click="claudeConnectStep = 'waiting'">Réessayer</button>
+                      <button class="sp-text-btn" @click="claudeConnectStep = 'waiting'">{{ t('settings.aiConnectRetry') }}</button>
                     </div>
                   </div>
                 </div>
@@ -684,7 +684,7 @@ function onKeyDown(e: KeyboardEvent) {
               <!-- Manual API key mode -->
               <template v-if="claudeAuthMode === 'apikey'">
                 <div class="sp-row">
-                  <label class="sp-label" for="setting-ai-key">Clé API Anthropic</label>
+                  <label class="sp-label" for="setting-ai-key">{{ t('settings.aiApiKeyLabel') }}</label>
                   <div class="sp-key-row">
                     <input
                       id="setting-ai-key"
@@ -694,7 +694,7 @@ function onKeyDown(e: KeyboardEvent) {
                       @input="updateSetting('aiApiKey', ($event.target as HTMLInputElement).value)"
                       placeholder="sk-ant-api03-..."
                     />
-                    <button class="sp-key-toggle" @click="showApiKey = !showApiKey" :title="showApiKey ? 'Masquer' : 'Afficher'">
+                    <button class="sp-key-toggle" @click="showApiKey = !showApiKey" :title="showApiKey ? t('settings.aiHideKey') : t('settings.aiShowKey')">
                       <svg v-if="showApiKey" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
                         <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z"/><circle cx="8" cy="8" r="2"/>
                       </svg>
@@ -703,20 +703,20 @@ function onKeyDown(e: KeyboardEvent) {
                       </svg>
                     </button>
                   </div>
-                  <span class="sp-hint">Disponible sur <a href="https://console.anthropic.com/settings/keys" target="_blank" class="sp-link">console.anthropic.com</a></span>
+                  <span class="sp-hint">{{ t('settings.aiApiKeyAvailable') }} <a href="https://console.anthropic.com/settings/keys" target="_blank" class="sp-link">console.anthropic.com</a></span>
                 </div>
               </template>
 
               <div class="sp-row">
-                <label class="sp-label" for="setting-ai-model-claude">Modèle</label>
+                <label class="sp-label" for="setting-ai-model-claude">{{ t('settings.aiModelLabel') }}</label>
                 <select
                   id="setting-ai-model-claude" class="sp-select"
                   :value="settings.aiModel"
                   @change="updateSetting('aiModel', ($event.target as HTMLSelectElement).value)"
                 >
-                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4 (recommandé)</option>
-                  <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (rapide)</option>
-                  <option value="claude-opus-4-20250514">Claude Opus 4 (premium)</option>
+                  <option value="claude-sonnet-4-20250514">{{ t('settings.aiModelSonnet') }}</option>
+                  <option value="claude-haiku-4-5-20251001">{{ t('settings.aiModelHaiku') }}</option>
+                  <option value="claude-opus-4-20250514">{{ t('settings.aiModelOpus') }}</option>
                 </select>
               </div>
             </template>
@@ -724,44 +724,44 @@ function onKeyDown(e: KeyboardEvent) {
             <!-- Claude Code CLI provider (piggyback on user's subscription) -->
             <template v-if="settings.aiProvider === 'claude-code-cli'">
               <div class="sp-row">
-                <label class="sp-label">État du CLI</label>
+                <label class="sp-label">{{ t('settings.aiCliStatus') }}</label>
                 <div class="sp-cli-status">
                   <template v-if="claudeCliDetecting">
-                    <span class="sp-hint">Détection en cours…</span>
+                    <span class="sp-hint">{{ t('settings.aiCliDetecting') }}</span>
                   </template>
                   <template v-else-if="!claudeCliInfo || !claudeCliInfo.found">
                     <div class="sp-connect-error-block">
                       <div class="sp-connect-error">
-                        Binaire <code>claude</code> introuvable.
+                        {{ t('settings.aiCliNotFound') }} <code>claude</code> {{ t('settings.aiCliNotFoundSuffix') }}
                       </div>
                       <span class="sp-hint">
-                        Installez-le avec
+                        {{ t('settings.aiCliInstallHint') }}
                         <code>npm install -g @anthropic-ai/claude-code</code>
-                        puis cliquez sur Re-détecter.
+                        {{ t('settings.aiCliInstallHintSuffix') }}
                       </span>
-                      <button class="sp-text-btn" @click="runClaudeCliDetect">Re-détecter</button>
+                      <button class="sp-text-btn" @click="runClaudeCliDetect">{{ t('settings.aiCliRedetect') }}</button>
                     </div>
                   </template>
                   <template v-else-if="claudeCliInfo.logged_in">
                     <div class="sp-connected-badge">
                       <span class="sp-connected-dot"></span>
-                      <span>Connecté — {{ claudeCliInfo.version || 'claude' }}</span>
-                      <button class="sp-disconnect-btn" @click="runClaudeCliDetect">Re-détecter</button>
+                      <span>{{ t('settings.aiCliConnected', claudeCliInfo.version || 'claude') }}</span>
+                      <button class="sp-disconnect-btn" @click="runClaudeCliDetect">{{ t('settings.aiCliRedetect') }}</button>
                     </div>
-                    <span class="sp-hint">Les appels utiliseront votre abonnement Claude Max/Pro.</span>
+                    <span class="sp-hint">{{ t('settings.aiCliConnectedHint') }}</span>
                   </template>
                   <template v-else>
                     <div class="sp-connect-error-block">
                       <div class="sp-connect-error">
-                        CLI trouvé mais non authentifié.
+                        {{ t('settings.aiCliNotAuthenticated') }}
                       </div>
-                      <span class="sp-hint">{{ claudeCliInfo.detail || "Lance `claude login` pour te connecter." }}</span>
+                      <span class="sp-hint">{{ claudeCliInfo.detail || t('settings.aiCliLoginHint') }}</span>
                       <button
                         class="sp-connect-btn"
                         :disabled="claudeCliLoginLoading"
                         @click="runClaudeCliLogin"
                       >
-                        {{ claudeCliLoginLoading ? 'En attente de connexion…' : 'Se connecter (ouvre un terminal)' }}
+                        {{ claudeCliLoginLoading ? t('settings.aiCliLoginWaiting') : t('settings.aiCliLoginButton') }}
                       </button>
                     </div>
                   </template>
@@ -772,29 +772,25 @@ function onKeyDown(e: KeyboardEvent) {
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
                   <circle cx="8" cy="8" r="7"/><path d="M8 7v4" stroke-linecap="round"/><circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none"/>
                 </svg>
-                <p>
-                  GitWand exécute <code>claude -p</code> localement.
-                  Aucune clé API n'est requise : la session utilise l'authentification
-                  stockée par Claude Code sur votre machine.
-                </p>
+                <p>{{ t('settings.aiCliInfoBox') }}</p>
               </div>
             </template>
 
             <!-- OpenAI-compatible provider -->
             <template v-if="settings.aiProvider === 'openai-compat'">
               <div class="sp-row">
-                <label class="sp-label" for="setting-ai-endpoint">Endpoint API</label>
+                <label class="sp-label" for="setting-ai-endpoint">{{ t('settings.aiCompatEndpoint') }}</label>
                 <input
                   id="setting-ai-endpoint" class="sp-input mono" type="text"
                   :value="settings.aiApiEndpoint"
                   @input="updateSetting('aiApiEndpoint', ($event.target as HTMLInputElement).value)"
                   placeholder="https://api.openai.com/v1"
                 />
-                <span class="sp-hint">Compatible OpenAI, Mistral, Groq, Azure, etc.</span>
+                <span class="sp-hint">{{ t('settings.aiCompatEndpointHint') }}</span>
               </div>
 
               <div class="sp-row">
-                <label class="sp-label" for="setting-ai-key-compat">Clé API</label>
+                <label class="sp-label" for="setting-ai-key-compat">{{ t('settings.aiCompatApiKey') }}</label>
                 <div class="sp-key-row">
                   <input
                     id="setting-ai-key-compat"
@@ -804,7 +800,7 @@ function onKeyDown(e: KeyboardEvent) {
                     @input="updateSetting('aiApiKey', ($event.target as HTMLInputElement).value)"
                     placeholder="sk-..."
                   />
-                  <button class="sp-key-toggle" @click="showApiKey = !showApiKey" :title="showApiKey ? 'Masquer' : 'Afficher'">
+                  <button class="sp-key-toggle" @click="showApiKey = !showApiKey" :title="showApiKey ? t('settings.aiHideKey') : t('settings.aiShowKey')">
                     <svg v-if="showApiKey" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
                       <path d="M2 8s2.5-4 6-4 6 4 6 4-2.5 4-6 4-6-4-6-4z"/><circle cx="8" cy="8" r="2"/>
                     </svg>
@@ -816,7 +812,7 @@ function onKeyDown(e: KeyboardEvent) {
               </div>
 
               <div class="sp-row">
-                <label class="sp-label" for="setting-ai-model-compat">Modèle</label>
+                <label class="sp-label" for="setting-ai-model-compat">{{ t('settings.aiModelLabel') }}</label>
                 <input
                   id="setting-ai-model-compat" class="sp-input mono" type="text"
                   :value="settings.aiModel"
@@ -829,7 +825,7 @@ function onKeyDown(e: KeyboardEvent) {
             <!-- Ollama provider -->
             <template v-if="settings.aiProvider === 'ollama'">
               <div class="sp-row">
-                <label class="sp-label" for="setting-ai-ollama-url">URL Ollama</label>
+                <label class="sp-label" for="setting-ai-ollama-url">{{ t('settings.aiOllamaUrl') }}</label>
                 <div class="sp-key-row">
                   <input
                     id="setting-ai-ollama-url" class="sp-input mono sp-input--key" type="text"
@@ -837,19 +833,19 @@ function onKeyDown(e: KeyboardEvent) {
                     @input="updateSetting('aiOllamaUrl', ($event.target as HTMLInputElement).value)"
                     placeholder="http://localhost:11434"
                   />
-                  <button class="sp-key-toggle" @click="detectOllama" title="Tester la connexion">
+                  <button class="sp-key-toggle" @click="detectOllama" :title="t('settings.aiOllamaTest')">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
                       <path d="M14 8A6 6 0 112 8" /><path d="M14 8l-2-2m2 2l-2 2"/>
                     </svg>
                   </button>
                 </div>
                 <span class="sp-hint" :class="{ 'sp-hint--ok': ollamaAvailable }">
-                  {{ ollamaAvailable ? `Connecté — ${ollamaModels.length} modèle(s) disponible(s)` : 'Non connecté. Installez Ollama sur ollama.com' }}
+                  {{ ollamaAvailable ? t('settings.aiOllamaConnected', ollamaModels.length) : t('settings.aiOllamaNotConnected') }}
                 </span>
               </div>
 
               <div class="sp-row" v-if="ollamaAvailable">
-                <label class="sp-label" for="setting-ai-ollama-model">Modèle</label>
+                <label class="sp-label" for="setting-ai-ollama-model">{{ t('settings.aiModelLabel') }}</label>
                 <select
                   v-if="ollamaModels.length > 0"
                   id="setting-ai-ollama-model" class="sp-select"

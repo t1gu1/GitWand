@@ -309,21 +309,21 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <path d="M8 1v2m0 10v2M1 8h2m10 0h2m-2.05-4.95-1.41 1.41m-7.08 7.08-1.41 1.41m0-9.9 1.41 1.41m7.08 7.08 1.41 1.41"/>
                     <circle cx="8" cy="8" r="3"/>
                   </svg>
-                  {{ aiLoading && aiSuggestionHunkIndex === seg.hunkIndex ? 'IA...' : 'IA' }}
+                  {{ aiLoading && aiSuggestionHunkIndex === seg.hunkIndex ? t('mergeEditor.aiLoading') : t('mergeEditor.aiButton') }}
                 </a>
                 <span class="inline-sep">|</span>
                 <a
                   class="inline-action inline-action--explain"
                   :class="{ 'inline-action--loading': aiExplainLoading && explanationHunkIndex === seg.hunkIndex }"
                   href="#"
-                  :title="locale === 'fr' ? 'Expliquer ce conflit en langage naturel' : 'Explain this conflict in plain language'"
+                  :title="t('mergeEditor.explainTooltip')"
                   @click.prevent="requestHunkExplanation(seg.hunkIndex!, hunkForSegment(seg)!)"
                 >
                   <svg class="ai-icon" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
                     <path d="M8 14.5a.75.75 0 0 0 .75-.75v-1h-1.5v1a.75.75 0 0 0 .75.75Z" fill="currentColor" stroke="none"/>
                     <path d="M8 1.5a4.5 4.5 0 0 0-3 7.85V11h6V9.35A4.5 4.5 0 0 0 8 1.5Z"/>
                   </svg>
-                  {{ aiExplainLoading && explanationHunkIndex === seg.hunkIndex ? (locale === 'fr' ? 'Analyse…' : 'Analysing…') : (locale === 'fr' ? 'Expliquer' : 'Explain') }}
+                  {{ aiExplainLoading && explanationHunkIndex === seg.hunkIndex ? t('mergeEditor.explainAnalyzing') : t('mergeEditor.explain') }}
                 </a>
               </template>
               <span
@@ -334,7 +334,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
 
             <!-- ── AI error banner ──────────────────────── -->
             <div v-if="aiError && aiSuggestionHunkIndex === seg.hunkIndex" class="ai-error-banner">
-              <span>IA : {{ aiError }}</span>
+              <span>{{ t('mergeEditor.aiErrorPrefix') }} : {{ aiError }}</span>
               <a href="#" @click.prevent="dismissAISuggestion" class="ai-error-close">OK</a>
             </div>
 
@@ -353,7 +353,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                 <path d="M6.5 13h3M7 14.5h2"/>
               </svg>
               <span v-if="explanationError" class="hunk-explanation-error">{{ explanationError }}</span>
-              <span v-else-if="aiExplainLoading && !hunkExplanations[seg.hunkIndex!]">{{ locale === 'fr' ? 'Analyse du conflit en cours…' : 'Analysing conflict…' }}</span>
+              <span v-else-if="aiExplainLoading && !hunkExplanations[seg.hunkIndex!]">{{ t('mergeEditor.analyzingConflict') }}</span>
               <span v-else>{{ hunkExplanations[seg.hunkIndex!] }}</span>
               <a v-if="!aiExplainLoading" class="hunk-explanation-close" href="#" @click.prevent="dismissExplanation">✕</a>
             </div>
@@ -361,7 +361,7 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
             <!-- ── Inline Edit Mode ─────────────────────── -->
             <div v-if="editingHunkIndex === seg.hunkIndex" class="hunk-edit">
               <div class="edit-header">
-                <span class="edit-label">{{ aiSuggestionHunkIndex === seg.hunkIndex ? 'Suggestion IA — vérifiez et ajustez' : t('merge.customEdit') }}</span>
+                <span class="edit-label">{{ aiSuggestionHunkIndex === seg.hunkIndex ? t('mergeEditor.aiSuggestionLabel') : t('merge.customEdit') }}</span>
                 <div class="edit-actions-inline">
                   <a
                     class="inline-action inline-action--validate"
