@@ -1,6 +1,6 @@
 {
   "name": "@gitwand/core",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "GitWand core — automatic Git conflict resolution engine",
   "type": "module",
   "main": "dist/index.js",

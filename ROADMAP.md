@@ -207,6 +207,21 @@ Vague de durcissement : sécurité (XSS, CORS, path traversal), mémoire du mote
 - Split de `cli/index.ts` en sous-modules par commande
 - Retrait de `@types/dompurify` (deprecated — DOMPurify 3.x fournit ses propres types)
 
+### v1.5.1 — Release hotfix & macOS TCC
+
+Patch de release correctif : ship le bundle universel macOS qui échouait au build, calme la boîte de dialogue de permissions macOS qui se déclenchait 50 fois, et termine la migration i18n des messages d'erreur dans les composables.
+
+**CI release**
+- `autobins = false` dans `apps/desktop/src-tauri/Cargo.toml` — empêche Cargo d'auto-découvrir `src/bin/parity_probe.rs` comme cible bin non gatée, ce qui brisait le `lipo -create` universel lorsque le binaire existait pour une seule architecture
+- Rename `shortcut` → `_shortcut` dans la closure global-shortcut pour éteindre le warning clippy
+
+**macOS TCC (Transparency, Consent, Control)**
+- Guard `MACOS_TCC_PROTECTED` sur `list_dir` (Rust) et l'endpoint équivalent dans `dev-server.mjs` — skip le probe `.git` sur `Documents`, `Desktop`, `Downloads`, `Pictures`, `Movies`, `Music`, `Library` lors du listing du home ; ces dossiers ne sont jamais des repos git et leurs enfants déclenchaient TCC en boucle sur les builds ad-hoc non signés
+
+**i18n**
+- Migration des messages d'erreur des composables IA (`useCommitMessage`, `useBranchName`, `useReleaseNotes`, `useStashMessage`, `usePrDescription`, `useSquashSuggestion`, `usePrHunkCritique`, `useBlameContext`, `useMergeRisk`, `useCommitSearch`, `useHunkExplanation`, `useAIProvider`) vers le namespace `errors.*` déjà peuplé dans les 5 locales
+- Export du helper `t` standalone depuis `useI18n` pour traduire depuis des modules non-composant
+
 ---
 
 ## Next — v1.6.0 — Visual diff & distribution

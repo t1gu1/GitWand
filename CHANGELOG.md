@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-04-19
+
+### Fixed
+
+- **CI release — universal macOS `lipo` failure** — Cargo was auto-discovering `src/bin/parity_probe.rs` as an unconditional bin target, bypassing the `required-features = ["parity-probe"]` gate on the explicit `[[bin]]` entry. During a `universal-apple-darwin` build this caused the `parity-probe` binary to exist for one arch but not the other, and the subsequent `lipo -create` step failed. Fix: `autobins = false` in `apps/desktop/src-tauri/Cargo.toml` so the feature gate is the only way to produce the binary.
+- **macOS permission dialog prompting 50× on home folder** — opening the home directory triggered a `.join(".git").exists()` probe on every entry, which hit macOS TCC for `Documents`, `Desktop`, `Downloads`, `Pictures`, `Movies`, `Music`, and `Library`. Unsigned/ad-hoc dev builds don't persist TCC decisions, so the dialog reappeared for every child access. Fix: `MACOS_TCC_PROTECTED` guard in both the Rust (`list_dir`) and Node (`dev-server.mjs`) backends skips the `.git` probe for these well-known system folders when listing the home directory — they're never git repos anyway.
+- **Unused variable warning** — `shortcut` → `_shortcut` in the global-shortcut closure at `src-tauri/src/lib.rs` (silences the clippy warning in release builds).
+
+### Changed
+
+- `@gitwand/core`, `@gitwand/desktop`, and `gitwand-website` bumped to `1.5.1`.
+
+### Internals
+
+- **i18n sweep — composable errors** — the remaining hardcoded French error strings in the AI-powered composables (`useCommitMessage`, `useBranchName`, `useReleaseNotes`, `useStashMessage`, `usePrDescription`, `useSquashSuggestion`, `usePrHunkCritique`, `useBlameContext`, `useMergeRisk`, `useCommitSearch`, `useHunkExplanation`, `useAIProvider`) now route through the `errors.*` namespace populated in all 5 locales. A standalone `t` helper is exported from `useI18n` so non-component modules can translate without instantiating the composable.
+
 ## [1.5.0] - 2026-04-19
 
 ### Security

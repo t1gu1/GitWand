@@ -23,7 +23,7 @@
   <img alt="License" src="https://img.shields.io/badge/license-MIT-8B5CF6">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-100%25-3178C6">
   <img alt="Tests" src="https://img.shields.io/badge/tests-322%20passing-22c55e">
-  <img alt="Version" src="https://img.shields.io/badge/version-1.5.0-22c55e">
+  <img alt="Version" src="https://img.shields.io/badge/version-1.5.1-22c55e">
 </p>
 
 ---
@@ -509,6 +509,12 @@ GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference l
 - [x] Parallel conflict loading + `saveAllFiles` in the desktop app (bounded concurrency)
 - [x] Parallel CLI file loop in `gitwand resolve`
 - [x] Rust↔Node parity probe harness for 3 Tauri commands
+
+### v1.5.1 — Release hotfix & macOS TCC ✅
+
+- [x] Fix CI universal-darwin `lipo` failure — `autobins = false` so `parity-probe` only builds under its feature flag
+- [x] Stop macOS 50× permission prompt loop — skip `.git` probe on TCC-protected home subfolders (Documents, Desktop, Downloads, Pictures, Movies, Music, Library)
+- [x] Composable error messages routed through i18n (`errors.*` keys across 5 locales)
 
 ### Next — v1.6.0 — Visual diff & distribution
 
