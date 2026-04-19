@@ -1,14 +1,30 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-// English is the canonical default for everyone — French is opt-in via the toggle.
-const locale = ref<'fr' | 'en'>('en')
+type Locale = 'en' | 'fr' | 'es' | 'pt-BR' | 'zh-CN'
+
+// English is the canonical default for everyone — other languages are opt-in via the picker.
+// The picker mirrors the 5 locales supported by the desktop app (apps/desktop/src/locales/).
+const locale = ref<Locale>('en')
 const faqOpen = ref<number | null>(null)
 function toggleFaq(i: number) {
   faqOpen.value = faqOpen.value === i ? null : i
 }
 
-const i18n = {
+// Short labels keep the picker compact; `title` surfaces the full native name on hover.
+const LOCALES: { code: Locale; label: string; title: string }[] = [
+  { code: 'en',    label: 'EN', title: 'English' },
+  { code: 'fr',    label: 'FR', title: 'Français' },
+  { code: 'es',    label: 'ES', title: 'Español' },
+  { code: 'pt-BR', label: 'PT', title: 'Português (Brasil)' },
+  { code: 'zh-CN', label: '中',  title: '简体中文' },
+]
+
+function setLocale(code: Locale) {
+  locale.value = code
+}
+
+const i18n: Record<Locale, any> = {
   fr: {
     badge: 'v1.5.0 · Open Source · MIT',
     heroH1a: 'Git, sans',
@@ -149,22 +165,238 @@ const i18n = {
       { q: 'How do I install the MCP server?', a: 'No installation needed: npx @gitwand/mcp is all it takes. Add the configuration to Claude Desktop, Claude Code, or your preferred MCP client — the documentation covers each case.' },
     ],
   },
+  es: {
+    badge: 'v1.5.0 · Open Source · MIT',
+    heroH1a: 'Git, sin',
+    heroH1b: 'dolores de cabeza.',
+    heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
+    download: 'Descargar',
+    docs: 'Documentación →',
+    platforms: 'macOS · Linux · Windows',
+    statPatterns: 'patrones de resolución',
+    statResolved: 'conflictos resueltos automáticamente',
+    statInterfaces: 'interfaces (Escritorio, CLI, VS Code)',
+    featTitle: 'Todo lo que necesitas para Git',
+    featSub: 'Un flujo de trabajo completo, sin compromisos de rendimiento.',
+    featPerf: 'Rendimiento nativo',
+    featPerfDesc: 'Construido con Tauri 2 y Vue 3. Arranque en menos de un segundo. Cero sobrecarga de Electron.',
+    featResolve: 'Resolución inteligente',
+    featResolveDesc: '10 patrones de resolución con registro de patrones (v1.4) y puntuación de confianza. Más del 95 % de los conflictos triviales resueltos sin intervención.',
+    featDiff: 'Diff visual',
+    featDiffDesc: 'Visor de diff unificado con resaltado de sintaxis, staging por hunk y vista previa de merge.',
+    featHistory: 'Historial y grafo',
+    featHistoryDesc: 'Historial completo, grafo DAG interactivo, blame de archivos y búsqueda en lenguaje natural en los commits.',
+    featPR: 'Pull Requests integradas',
+    featPRDesc: 'Revisa los PR de GitHub directamente en la app. Comentarios, revisiones, estado de CI y vista previa de conflictos.',
+    featUI: '3 interfaces',
+    featUIDesc: 'App de escritorio (macOS/Linux/Windows), CLI gitwand resolve para CI/CD y extensión de VS Code.',
+    featAIPR: 'Revisión de código y PR con IA',
+    featAIPRDesc: 'Título y descripción de PR generados automáticamente, crítica IA por hunk en el panel Review y sugerencias de nombre de rama a partir del diff.',
+    featAIMerge: 'Insight de merge con IA',
+    featAIMergeDesc: 'Explicación de conflictos en lenguaje natural, resumen de riesgo por IA antes de rebase/merge y squash semántico en rebase interactivo.',
+    featAIFlow: 'Commits e historial con IA',
+    featAIFlowDesc: 'Mensajes de commit y stash generados, Absorb ordenado semánticamente, contexto de blame y release notes a partir de git log.',
+    conflictTitle: 'Conflictos de merge, resueltos automáticamente',
+    conflictSub: 'GitWand analiza la semántica del código, no solo las líneas. Elige la resolución correcta por ti.',
+    conflictBefore: 'Antes — conflicto en bruto',
+    conflictAfter: 'Después — resuelto automáticamente',
+    conflictBadge: 'Confianza 97 % · prefer-theirs · semántico',
+    previewTitle: 'Un cliente Git que te va a encantar',
+    previewSub: 'Interfaz limpia, tema oscuro, todas las funciones de Git en un mismo lugar.',
+    platformsTitle: 'Disponible en todas partes',
+    plMacSub: 'Intel + Apple Silicon',
+    plLinuxSub: '.deb · .AppImage · .rpm',
+    plWinSub: 'Instalador .exe · .msi',
+    plCli: 'CLI npm',
+    plCliSub: 'npm i -g gitwand',
+    plVscode: 'VS Code',
+    plVscodeSub: 'Marketplace de extensiones',
+    ctaTitle: '¿Listo para simplificar tu flujo Git?',
+    ctaSub: 'Gratis, open source y hecho para desarrolladores que quieren ir rápido.',
+    ctaDownload: 'Descargar GitWand',
+    llmTitle: 'Tus agentes IA en el bucle',
+    llmSub: 'El servidor MCP de GitWand expone su motor de conflictos a los agentes IA. GitWand resuelve lo trivial — tu agente toma el relevo en los casos complejos.',
+    llmBadge: 'Servidor MCP · stdio · Sin clave API',
+    llmStep1: 'Análisis',
+    llmStep1Desc: 'El agente llama a gitwand_preview_merge para evaluar el número de conflictos, su complejidad y el porcentaje que GitWand puede resolver por sí solo.',
+    llmStep2: 'Auto-resolución',
+    llmStep2Desc: 'GitWand resuelve al instante los patrones triviales (whitespace, one-side-change, same-change…) y devuelve los hunks ambiguos con su traza de clasificación.',
+    llmStep3: 'Resolución con IA',
+    llmStep3Desc: 'Para cada conflicto complejo, el agente dispone del contexto completo: contenido ours/theirs/base, traza de clasificación y puntuaciones de confianza.',
+    llmCompat: 'Compatible con',
+    llmDocs: 'Ver la documentación de MCP →',
+    faqTitle: 'Preguntas frecuentes',
+    faqItems: [
+      { q: '¿GitWand es realmente gratis?', a: 'Sí, GitWand es totalmente open source bajo licencia MIT. Puedes usarlo, modificarlo y redistribuirlo libremente.' },
+      { q: '¿Cómo funciona la resolución inteligente de conflictos?', a: 'GitWand analiza la semántica del código con 10 patrones de resolución (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orquestados por un pattern registry (v1.4) y una puntuación de confianza por hunk. Los conflictos triviales se resuelven automáticamente; los casos complejos se presentan con una traza de explicación completa.' },
+      { q: '¿Qué es el servidor MCP y por qué usarlo?', a: 'El servidor MCP expone el motor de GitWand a los agentes IA — Claude Code, Cursor, Windsurf y otros. Funciona en local vía stdio, sin clave API ni acceso a la red. GitWand gestiona el 95 %+ de los conflictos triviales; el agente IA se ocupa de los casos ambiguos con todo el contexto necesario.' },
+      { q: '¿GitWand funciona con cualquier repositorio Git?', a: 'Sí. GitWand funciona con cualquier repositorio Git local, sea cual sea el hosting (GitHub, GitLab, Bitbucket, Gitea…). La vista de Pull Requests está limitada a GitHub por ahora.' },
+      { q: '¿Qué lo diferencia de otros clientes Git?', a: 'GitWand destaca por su motor de resolución integrado, su arquitectura nativa Tauri (sin Electron), sus 3 interfaces coherentes (escritorio, CLI, VS Code) y su servidor MCP para la integración con agentes IA.' },
+      { q: '¿Cómo se instala el servidor MCP?', a: 'No hace falta instalación: basta con npx @gitwand/mcp. Añade la configuración en Claude Desktop, Claude Code o tu cliente MCP preferido — la documentación detalla cada caso.' },
+    ],
+  },
+  'pt-BR': {
+    badge: 'v1.5.0 · Open Source · MIT',
+    heroH1a: 'Git, sem',
+    heroH1b: 'dor de cabeça.',
+    heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
+    download: 'Baixar',
+    docs: 'Documentação →',
+    platforms: 'macOS · Linux · Windows',
+    statPatterns: 'padrões de resolução',
+    statResolved: 'conflitos resolvidos automaticamente',
+    statInterfaces: 'interfaces (Desktop, CLI, VS Code)',
+    featTitle: 'Tudo que você precisa para Git',
+    featSub: 'Um fluxo completo, sem abrir mão do desempenho.',
+    featPerf: 'Desempenho nativo',
+    featPerfDesc: 'Construído com Tauri 2 e Vue 3. Inicialização em menos de um segundo. Zero overhead do Electron.',
+    featResolve: 'Resolução inteligente',
+    featResolveDesc: '10 padrões de resolução com pattern registry (v1.4) e pontuação de confiança. 95 %+ dos conflitos triviais resolvidos sem intervenção.',
+    featDiff: 'Diff visual',
+    featDiffDesc: 'Visualizador de diff unificado com syntax highlighting, staging por hunk e preview de merge.',
+    featHistory: 'Histórico e grafo',
+    featHistoryDesc: 'Histórico completo, grafo DAG interativo, blame de arquivo e busca em linguagem natural nos commits.',
+    featPR: 'Pull Requests integradas',
+    featPRDesc: 'Revise PRs do GitHub direto no app. Comentários, reviews, status de CI e preview de conflitos.',
+    featUI: '3 interfaces',
+    featUIDesc: 'App desktop (macOS/Linux/Windows), CLI gitwand resolve para CI/CD e extensão VS Code.',
+    featAIPR: 'Code review e PR com IA',
+    featAIPRDesc: 'Título e descrição de PR gerados automaticamente, crítica IA por hunk no painel Review e sugestão de nome de branch a partir do diff.',
+    featAIMerge: 'Insight de merge com IA',
+    featAIMergeDesc: 'Explicação de conflito em linguagem natural, resumo de risco por IA antes de rebase/merge e squash semântico no rebase interativo.',
+    featAIFlow: 'Commits e histórico com IA',
+    featAIFlowDesc: 'Mensagens de commit e stash geradas, Absorb ordenado semanticamente, contexto de blame e release notes a partir do git log.',
+    conflictTitle: 'Conflitos de merge, resolvidos automaticamente',
+    conflictSub: 'GitWand analisa a semântica do código, não apenas as linhas. Ele escolhe a resolução certa por você.',
+    conflictBefore: 'Antes — conflito bruto',
+    conflictAfter: 'Depois — resolvido automaticamente',
+    conflictBadge: 'Confiança 97 % · prefer-theirs · semântico',
+    previewTitle: 'Um cliente Git que você vai amar',
+    previewSub: 'Interface limpa, tema escuro, todos os recursos do Git no mesmo lugar.',
+    platformsTitle: 'Disponível em todo lugar',
+    plMacSub: 'Intel + Apple Silicon',
+    plLinuxSub: '.deb · .AppImage · .rpm',
+    plWinSub: 'Instalador .exe · .msi',
+    plCli: 'CLI npm',
+    plCliSub: 'npm i -g gitwand',
+    plVscode: 'VS Code',
+    plVscodeSub: 'Extension Marketplace',
+    ctaTitle: 'Pronto para simplificar seu fluxo Git?',
+    ctaSub: 'Gratuito, open source, feito para devs que querem ir rápido.',
+    ctaDownload: 'Baixar o GitWand',
+    llmTitle: 'Seus agentes de IA no loop',
+    llmSub: 'O servidor MCP do GitWand expõe o motor de conflitos aos agentes de IA. O GitWand resolve o trivial — seu agente assume os casos complexos.',
+    llmBadge: 'Servidor MCP · stdio · Sem chave de API',
+    llmStep1: 'Análise',
+    llmStep1Desc: 'O agente chama gitwand_preview_merge para avaliar o número de conflitos, a complexidade e o percentual que o GitWand consegue resolver sozinho.',
+    llmStep2: 'Auto-resolução',
+    llmStep2Desc: 'O GitWand resolve instantaneamente os padrões triviais (whitespace, one-side-change, same-change…) e devolve os hunks ambíguos com o trace de classificação.',
+    llmStep3: 'Resolução com IA',
+    llmStep3Desc: 'Para cada conflito complexo, o agente tem o contexto completo: conteúdo ours/theirs/base, trace de classificação e scores de confiança.',
+    llmCompat: 'Compatível com',
+    llmDocs: 'Ver a documentação do MCP →',
+    faqTitle: 'Perguntas frequentes',
+    faqItems: [
+      { q: 'O GitWand é realmente gratuito?', a: 'Sim, o GitWand é totalmente open source sob licença MIT. Você pode usar, modificar e redistribuir livremente.' },
+      { q: 'Como funciona a resolução inteligente de conflitos?', a: 'O GitWand analisa a semântica do código com 10 padrões de resolução (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orquestrados por um pattern registry (v1.4) e pontuação de confiança por hunk. Conflitos triviais são resolvidos automaticamente; casos complexos são apresentados com trace de explicação completo.' },
+      { q: 'O que é o servidor MCP e por que usá-lo?', a: 'O servidor MCP expõe o motor do GitWand a agentes de IA — Claude Code, Cursor, Windsurf e outros. Roda localmente via stdio, sem chave de API nem acesso à rede. O GitWand cuida de 95 %+ dos conflitos triviais; o agente de IA lida com os ambíguos com todo o contexto necessário.' },
+      { q: 'O GitWand funciona com qualquer repositório Git?', a: 'Sim. O GitWand funciona com qualquer repositório Git local, independente do hosting (GitHub, GitLab, Bitbucket, Gitea…). A view de Pull Requests está limitada ao GitHub por enquanto.' },
+      { q: 'Qual é a diferença para outros clientes Git?', a: 'O GitWand se destaca pelo motor de resolução integrado, arquitetura nativa Tauri (sem Electron), 3 interfaces coerentes (desktop, CLI, VS Code) e servidor MCP para integração com agentes de IA.' },
+      { q: 'Como instalar o servidor MCP?', a: 'Não é preciso instalar: basta npx @gitwand/mcp. Adicione a configuração no Claude Desktop, Claude Code ou no seu cliente MCP favorito — a documentação detalha cada caso.' },
+    ],
+  },
+  'zh-CN': {
+    badge: 'v1.5.0 · 开源 · MIT',
+    heroH1a: 'Git,告别',
+    heroH1b: '烦恼。',
+    heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
+    download: '下载',
+    docs: '文档 →',
+    platforms: 'macOS · Linux · Windows',
+    statPatterns: '种解决模式',
+    statResolved: '冲突自动解决',
+    statInterfaces: '种界面(桌面端、CLI、VS Code)',
+    featTitle: 'Git 所需的一切',
+    featSub: '完整的工作流,无需牺牲性能。',
+    featPerf: '原生性能',
+    featPerfDesc: '基于 Tauri 2 与 Vue 3 构建。亚秒级启动。零 Electron 开销。',
+    featResolve: '智能解决',
+    featResolveDesc: '10 种解决模式,配合模式注册表(v1.4)和置信度评分。95% 以上的简单冲突无需干预即可解决。',
+    featDiff: '可视化 Diff',
+    featDiffDesc: '统一的 diff 查看器,支持语法高亮、按 hunk 暂存和合并预览。',
+    featHistory: '历史与图谱',
+    featHistoryDesc: '完整历史、交互式 DAG 图谱、文件 blame,以及对提交的自然语言搜索。',
+    featPR: '集成的 Pull Requests',
+    featPRDesc: '直接在应用中审阅 GitHub PR。评论、评审、CI 状态与冲突预览。',
+    featUI: '3 种界面',
+    featUIDesc: '桌面应用(macOS/Linux/Windows)、用于 CI/CD 的 gitwand resolve CLI,以及 VS Code 扩展。',
+    featAIPR: 'AI 代码评审与 PR',
+    featAIPRDesc: '自动生成 PR 标题和描述,在 Review 面板中按 hunk 进行 AI 评审,并基于 diff 提供分支命名建议。',
+    featAIMerge: 'AI 合并洞察',
+    featAIMergeDesc: '用自然语言解释冲突,在 rebase/merge 前给出 AI 风险摘要,并在交互式 rebase 中进行语义 squash。',
+    featAIFlow: 'AI 提交与历史',
+    featAIFlowDesc: '生成 commit 与 stash 信息、按语义排序的 Absorb、blame 上下文,以及基于 git log 的发布说明。',
+    conflictTitle: '合并冲突,自动解决',
+    conflictSub: 'GitWand 分析代码语义,而不仅仅是文本行。它为你挑选正确的解决方案。',
+    conflictBefore: '之前 — 原始冲突',
+    conflictAfter: '之后 — 自动解决',
+    conflictBadge: '置信度 97% · prefer-theirs · 语义化',
+    previewTitle: '你会爱上的 Git 客户端',
+    previewSub: '简洁的界面、深色主题,所有 Git 功能集于一处。',
+    platformsTitle: '处处可用',
+    plMacSub: 'Intel + Apple Silicon',
+    plLinuxSub: '.deb · .AppImage · .rpm',
+    plWinSub: '.exe · .msi 安装程序',
+    plCli: 'CLI npm',
+    plCliSub: 'npm i -g gitwand',
+    plVscode: 'VS Code',
+    plVscodeSub: '扩展市场',
+    ctaTitle: '准备好简化你的 Git 工作流了吗?',
+    ctaSub: '免费、开源,为追求效率的开发者而生。',
+    ctaDownload: '下载 GitWand',
+    llmTitle: '让你的 AI 代理参与其中',
+    llmSub: 'GitWand 的 MCP 服务器将其冲突引擎开放给 AI 代理。GitWand 处理简单情况 — 你的代理接管复杂情况。',
+    llmBadge: 'MCP 服务器 · stdio · 无需 API 密钥',
+    llmStep1: '分析',
+    llmStep1Desc: '代理调用 gitwand_preview_merge 来评估冲突数量、复杂度,以及 GitWand 能独立解决的比例。',
+    llmStep2: '自动解决',
+    llmStep2Desc: 'GitWand 立即解决简单模式(whitespace、one-side-change、same-change…),并返回带有分类追踪的模糊 hunk。',
+    llmStep3: 'AI 解决',
+    llmStep3Desc: '对于每个复杂冲突,代理都能获得完整上下文:ours/theirs/base 内容、分类追踪以及置信度评分。',
+    llmCompat: '兼容',
+    llmDocs: '查看 MCP 文档 →',
+    faqTitle: '常见问题',
+    faqItems: [
+      { q: 'GitWand 真的免费吗?', a: '是的,GitWand 在 MIT 许可下完全开源。你可以自由使用、修改和分发。' },
+      { q: '智能冲突解决是如何工作的?', a: 'GitWand 使用 10 种解决模式(whitespace_only、same_change、one_side_change、reorder_only、insertion_at_boundary…)分析代码语义,由模式注册表(v1.4)进行编排,并对每个 hunk 打出置信度评分。简单冲突自动解决;复杂情况会附上完整的解释追踪呈现出来。' },
+      { q: 'MCP 服务器是什么?为什么要用?', a: 'MCP 服务器将 GitWand 的引擎开放给 AI 代理 — Claude Code、Cursor、Windsurf 等。通过 stdio 在本地运行,无需 API 密钥,也不需要网络访问。GitWand 处理 95%+ 的简单冲突;AI 代理则在完整上下文下应对模糊情况。' },
+      { q: 'GitWand 适用于任何 Git 仓库吗?', a: '是的。GitWand 适用于任何本地 Git 仓库,无论托管在哪里(GitHub、GitLab、Bitbucket、Gitea…)。Pull Requests 视图目前仅限 GitHub。' },
+      { q: '与其他 Git 客户端有什么区别?', a: 'GitWand 的亮点在于内置的解决引擎、原生的 Tauri 架构(非 Electron)、3 种一致的界面(桌面端、CLI、VS Code),以及用于 AI 代理集成的 MCP 服务器。' },
+      { q: '如何安装 MCP 服务器?', a: '无需安装:一条 npx @gitwand/mcp 即可。将配置添加到 Claude Desktop、Claude Code 或你喜欢的 MCP 客户端 — 文档覆盖了每种情况。' },
+    ],
+  },
 }
 
 const t = computed(() => i18n[locale.value])
-
-function toggleLocale() {
-  locale.value = locale.value === 'fr' ? 'en' : 'fr'
-}
 </script>
 
 <template>
   <div class="gw-landing">
 
-    <!-- Language toggle -->
-    <button class="lang-toggle" @click="toggleLocale" :title="locale === 'fr' ? 'Switch to English' : 'Passer en français'">
-      {{ locale === 'fr' ? 'EN' : 'FR' }}
-    </button>
+    <!-- Language picker (mirrors the 5 locales of the desktop app) -->
+    <div class="lang-picker" role="group" aria-label="Language">
+      <button
+        v-for="L in LOCALES"
+        :key="L.code"
+        class="lang-pill"
+        :class="{ 'lang-pill--active': locale === L.code }"
+        :title="L.title"
+        :aria-pressed="locale === L.code"
+        @click="setLocale(L.code)"
+      >
+        {{ L.label }}
+      </button>
+    </div>
 
     <!-- ══════════════════════════════════════
          HERO
@@ -536,29 +768,47 @@ function toggleLocale() {
 
 <style scoped>
 /* ───────────────────────────────────────────
-   Language toggle
+   Language picker (5 locales, segmented)
 ─────────────────────────────────────────── */
-.lang-toggle {
+.lang-picker {
   position: fixed;
   top: 78px;
   right: 20px;
   z-index: 100;
-  background: rgba(124, 58, 237, 0.15);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(124, 58, 237, 0.12);
   border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+.lang-pill {
+  background: transparent;
+  border: none;
   color: #c4b5fd;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  padding: 6px 14px;
-  border-radius: 8px;
+  padding: 5px 10px;
+  border-radius: 7px;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: all 0.2s ease;
+  transition: background 0.15s, color 0.15s;
+  min-width: 30px;
+  line-height: 1.1;
 }
-.lang-toggle:hover {
-  background: rgba(124, 58, 237, 0.3);
+.lang-pill:hover {
+  background: rgba(124, 58, 237, 0.2);
   color: #e9e5ff;
-  border-color: rgba(124, 58, 237, 0.5);
+}
+.lang-pill--active {
+  background: rgba(124, 58, 237, 0.45);
+  color: #ffffff;
+}
+.lang-pill--active:hover {
+  background: rgba(124, 58, 237, 0.55);
+  color: #ffffff;
 }
 
 /* ───────────────────────────────────────────
