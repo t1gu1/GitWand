@@ -1,7 +1,6 @@
 import { ref } from "vue";
 import { useAIProvider } from "./useAIProvider";
 import type { MergePreviewSummary, PreviewFileResult } from "./useMergePreview";
-import { t } from "./useI18n";
 
 /**
  * "Should I merge?" — turns a `MergePreviewSummary` into a short,
@@ -120,11 +119,13 @@ export function useMergeRisk() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(t("errors.noAiProvider"));
+        throw new Error(
+          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
+        );
       }
-      if (!summary) throw new Error(t("errors.noMergePreview"));
+      if (!summary) throw new Error("Aucun aperçu de merge à analyser.");
       if (!summary.sourceBranch || !targetBranch) {
-        throw new Error(t("errors.missingBranch"));
+        throw new Error("Branche source ou cible manquante.");
       }
 
       const systemPrompt = buildSystemPrompt(locale);
@@ -137,7 +138,7 @@ export function useMergeRisk() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error(t("errors.emptyAiResponse"));
+        throw new Error("Le provider IA n'a retourné aucune réponse.");
       }
       return cleanAssessment(raw);
     } catch (err: unknown) {

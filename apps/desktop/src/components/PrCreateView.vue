@@ -93,12 +93,12 @@ function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ─── Templates with modal confirmation ──────────────────
 interface Template { key: string; label: string; body: string; }
-const templates: Template[] = [
-  { key: "feat",  label: "Feature",         body: "## Contexte\n\n_Pourquoi ce changement ?_\n\n## Changements\n\n- \n\n## Comment tester\n\n1. " },
-  { key: "fix",   label: "Bugfix",          body: "## Problème\n\n_Décris le bug._\n\n## Cause\n\n## Correctif\n\n## Comment reproduire / tester\n\n1. " },
-  { key: "chore", label: "Chore / Refacto", body: "## Contexte\n\n## Changements\n\n- \n\n## Impact\n\n_Rien de fonctionnel, uniquement interne._" },
-  { key: "docs",  label: "Docs",            body: "## Contexte\n\n## Changements\n\n- " },
-];
+const templates = computed<Template[]>(() => [
+  { key: "feat",  label: t("pr.create.templateFeat"),  body: t("pr.create.templateFeatBody") },
+  { key: "fix",   label: t("pr.create.templateFix"),   body: t("pr.create.templateFixBody") },
+  { key: "chore", label: t("pr.create.templateChore"), body: t("pr.create.templateChoreBody") },
+  { key: "docs",  label: t("pr.create.templateDocs"),  body: t("pr.create.templateDocsBody") },
+]);
 
 const pendingTemplate = ref<Template | null>(null);
 

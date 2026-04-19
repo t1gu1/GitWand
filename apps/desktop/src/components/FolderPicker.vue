@@ -220,7 +220,7 @@ onUnmounted(() => {
         <div class="fp-actions">
           <button class="fp-btn fp-btn--cancel" @click="$emit('cancel')">{{ t('common.cancel') }}</button>
           <button class="fp-btn fp-btn--select" @click="selectCurrent">
-            Sélectionner ce dossier
+            {{ t('folderPicker.selectThis') }}
           </button>
         </div>
       </div>

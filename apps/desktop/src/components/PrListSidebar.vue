@@ -7,6 +7,9 @@
  */
 import { inject, onMounted } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const panel = inject<PrPanelState>(PR_PANEL_KEY)!;
 
@@ -16,9 +19,9 @@ onMounted(() => {
 
 function stateChip(state: string) {
   const s = state.toUpperCase();
-  if (s === "OPEN") return { label: "Open", cls: "pls-chip--open" };
-  if (s === "MERGED") return { label: "Merged", cls: "pls-chip--merged" };
-  return { label: "Closed", cls: "pls-chip--closed" };
+  if (s === "OPEN") return { label: t("pr.list.stateOpen"), cls: "pls-chip--open" };
+  if (s === "MERGED") return { label: t("pr.list.stateMerged"), cls: "pls-chip--merged" };
+  return { label: t("pr.list.stateClosed"), cls: "pls-chip--closed" };
 }
 </script>
 
@@ -26,13 +29,13 @@ function stateChip(state: string) {
   <div class="pls-root">
     <!-- Header -->
     <div class="pls-header">
-      <span class="pls-title">Pull Requests</span>
+      <span class="pls-title">{{ t('pr.list.title') }}</span>
       <select v-model="panel.filterState.value" class="pls-filter" @change="panel.loadPrs">
-        <option value="open">Ouvertes</option>
-        <option value="closed">Fermées</option>
-        <option value="all">Toutes</option>
+        <option value="open">{{ t('pr.list.filterOpen') }}</option>
+        <option value="closed">{{ t('pr.list.filterClosed') }}</option>
+        <option value="all">{{ t('pr.list.filterAll') }}</option>
       </select>
-      <button class="pls-refresh" @click="panel.loadPrs" title="Rafraîchir">↺</button>
+      <button class="pls-refresh" @click="panel.loadPrs" :title="t('pr.list.refresh')">↺</button>
     </div>
 
     <!-- New PR button — opens the full creation view in the main area -->
@@ -41,7 +44,7 @@ function stateChip(state: string) {
       :class="{ 'pls-new-btn--active': panel.showCreateForm.value }"
       @click="panel.showCreateForm.value = true"
     >
-      + Nouvelle PR
+      {{ t('pr.list.newBtn') }}
     </button>
 
     <!-- Messages -->
@@ -49,8 +52,8 @@ function stateChip(state: string) {
     <div v-if="panel.success.value" class="pls-msg pls-msg--success" @click="panel.success.value = null">{{ panel.success.value }}</div>
 
     <!-- List -->
-    <div v-if="panel.loading.value" class="pls-placeholder">Chargement…</div>
-    <div v-else-if="panel.prs.value.length === 0" class="pls-placeholder">Aucune PR trouvée.</div>
+    <div v-if="panel.loading.value" class="pls-placeholder">{{ t('pr.list.loading') }}</div>
+    <div v-else-if="panel.prs.value.length === 0" class="pls-placeholder">{{ t('pr.list.empty') }}</div>
     <div v-else class="pls-list">
       <button
         v-for="pr in panel.prs.value"
@@ -62,7 +65,7 @@ function stateChip(state: string) {
         <div class="pls-item-top">
           <span class="pls-num">#{{ pr.number }}</span>
           <span class="pls-chip" :class="stateChip(pr.state).cls">{{ stateChip(pr.state).label }}</span>
-          <span v-if="pr.draft" class="pls-chip pls-chip--draft">Draft</span>
+          <span v-if="pr.draft" class="pls-chip pls-chip--draft">{{ t('pr.list.draft') }}</span>
           <span class="pls-time">{{ panel.timeAgo(pr.updatedAt || pr.createdAt) }}</span>
         </div>
         <div class="pls-item-title">{{ pr.title }}</div>

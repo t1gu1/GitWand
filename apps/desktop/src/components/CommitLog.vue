@@ -169,7 +169,9 @@ function authorColor(name: string): string {
     </div>
     <p v-if="aiSearchError" class="log-search-error">{{ aiSearchError }}</p>
     <p v-if="aiMatches !== null" class="log-search-status">
-      ✨ {{ t('log.aiSearchResults', displayedEntries.length) }}
+      ✨ {{ locale === 'fr'
+        ? `Recherche IA : ${displayedEntries.length} commit(s) correspondent.`
+        : `AI search: ${displayedEntries.length} matching commit(s).` }}
     </p>
 
     <div class="log-loading" v-if="loading">

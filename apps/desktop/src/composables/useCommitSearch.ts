@@ -1,7 +1,6 @@
 import { ref } from "vue";
 import type { GitLogEntry } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
-import { t } from "./useI18n";
 
 /**
  * Natural-language commit search.
@@ -167,10 +166,12 @@ export function useCommitSearch() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(t("errors.noAiProvider"));
+        throw new Error(
+          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
+        );
       }
       if (!query.trim()) {
-        throw new Error(t("errors.aiQueryRequired"));
+        throw new Error("Saisis une requête avant de lancer la recherche IA.");
       }
       if (entries.length === 0) {
         return [];
@@ -182,7 +183,7 @@ export function useCommitSearch() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error(t("errors.emptyAiResponse"));
+        throw new Error("Le provider IA n'a retourné aucune réponse.");
       }
 
       const allowed = new Set(slice.map((e) => e.hashFull));

@@ -1,7 +1,6 @@
 import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
-import { t } from "./useI18n";
 
 /**
  * Suggests a Git branch name from:
@@ -114,10 +113,14 @@ export function useBranchName() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(t("errors.noAiProvider"));
+        throw new Error(
+          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
+        );
       }
       if (!description.trim() && !cwd) {
-        throw new Error(t("errors.branchNameNeedInput"));
+        throw new Error(
+          "Donne une description ou ouvre un repo — rien à proposer sinon.",
+        );
       }
 
       // Pull a small slice of the WIP diff for context — tolerant of
@@ -138,7 +141,9 @@ export function useBranchName() {
       }
 
       if (!description.trim() && !diff) {
-        throw new Error(t("errors.branchNameNoContext"));
+        throw new Error(
+          "Aucune description et aucune modification locale — tape quelques mots pour guider la suggestion.",
+        );
       }
 
       const systemPrompt = buildSystemPrompt();
@@ -146,12 +151,14 @@ export function useBranchName() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error(t("errors.emptyAiResponse"));
+        throw new Error("Le provider IA n'a retourné aucune réponse.");
       }
 
       const clean = sanitizeBranchName(raw, maxLen);
       if (!clean) {
-        throw new Error(t("errors.aiBranchNameUnparsable"));
+        throw new Error(
+          "La réponse du provider IA n'a pas pu être convertie en nom de branche valide.",
+        );
       }
       return clean;
     } catch (err: unknown) {

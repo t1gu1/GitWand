@@ -9,9 +9,12 @@ import { inject } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
 import { safeHtml } from "../composables/useSafeHtml";
 import type { CICheck } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
 import PrIntelligencePanel from "./PrIntelligencePanel.vue";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: "refresh"): void;
@@ -27,15 +30,15 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
   <div class="pdv-root">
     <!-- Merge dialog -->
     <div v-if="p.mergingPr.value" class="pdv-merge-dialog">
-      <p>Merger la PR <strong>#{{ p.mergingPr.value.number }}</strong> — {{ p.mergingPr.value.title }}</p>
+      <p>{{ t('pr.detail.mergePromptPrefix') }} <strong>#{{ p.mergingPr.value.number }}</strong> — {{ p.mergingPr.value.title }}</p>
       <div class="pdv-merge-options">
-        <label><input type="radio" v-model="p.mergeMethod.value" value="merge" /> Merge commit</label>
-        <label><input type="radio" v-model="p.mergeMethod.value" value="squash" /> Squash and merge</label>
-        <label><input type="radio" v-model="p.mergeMethod.value" value="rebase" /> Rebase and merge</label>
+        <label><input type="radio" v-model="p.mergeMethod.value" value="merge" /> {{ t('pr.detail.mergeMethodMerge') }}</label>
+        <label><input type="radio" v-model="p.mergeMethod.value" value="squash" /> {{ t('pr.detail.mergeMethodSquash') }}</label>
+        <label><input type="radio" v-model="p.mergeMethod.value" value="rebase" /> {{ t('pr.detail.mergeMethodRebase') }}</label>
       </div>
       <div class="pdv-merge-actions">
-        <button class="eco-btn eco-btn--primary" @click="p.mergePr">Merger</button>
-        <button class="eco-btn" @click="p.mergingPr.value = null">Annuler</button>
+        <button class="eco-btn eco-btn--primary" @click="p.mergePr">{{ t('pr.detail.merge') }}</button>
+        <button class="eco-btn" @click="p.mergingPr.value = null">{{ t('pr.detail.cancel') }}</button>
       </div>
     </div>
 
@@ -49,12 +52,12 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
         <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
         <path d="M6 9v6M18 15V9a3 3 0 0 0-3-3H9"/>
       </svg>
-      <span>Sélectionnez une PR dans la liste</span>
+      <span>{{ t('pr.detail.emptySelect') }}</span>
     </div>
 
     <!-- Detail loading -->
     <div v-else-if="p.detailLoading.value && !p.prDetail.value" class="pdv-empty">
-      Chargement des détails…
+      {{ t('pr.detail.loading') }}
     </div>
 
     <!-- Detail error -->
@@ -74,36 +77,36 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
           <span>{{ p.prDetail.value.author }}</span>
           <span class="mono">{{ p.prDetail.value.branch }} → {{ p.prDetail.value.base }}</span>
           <span>{{ p.timeAgo(p.prDetail.value.createdAt) }}</span>
-          <span v-if="p.prDetail.value.mergedAt">· Mergée {{ p.timeAgo(p.prDetail.value.mergedAt) }}</span>
+          <span v-if="p.prDetail.value.mergedAt">{{ t('pr.detail.mergedAgo', p.timeAgo(p.prDetail.value.mergedAt)) }}</span>
         </div>
         <div class="pdv-header-actions">
           <button
             class="eco-btn eco-btn--xs"
             @click="p.checkoutPr(p.selectedPr.value!)"
-          >Checkout</button>
+          >{{ t('pr.detail.checkout') }}</button>
           <button
             v-if="p.selectedPr.value?.state === 'OPEN' || p.selectedPr.value?.state === 'open'"
             class="eco-btn eco-btn--xs eco-btn--primary"
             @click="p.mergingPr.value = p.selectedPr.value"
-          >Merger</button>
+          >{{ t('pr.detail.merge') }}</button>
           <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url)">↗ GitHub</button>
         </div>
       </div>
 
       <!-- Tabs -->
       <div class="pdv-tabs">
-        <button :class="['pdv-tab', { active: p.detailTab.value === 'info' }]" @click="p.detailTab.value = 'info'">Info</button>
+        <button :class="['pdv-tab', { active: p.detailTab.value === 'info' }]" @click="p.detailTab.value = 'info'">{{ t('pr.detail.tabInfo') }}</button>
         <button :class="['pdv-tab', { active: p.detailTab.value === 'diff' }]" @click="p.detailTab.value = 'diff'">
-          Diff
+          {{ t('pr.detail.tabDiff') }}
           <span v-if="p.prDetail.value.changedFiles" class="pdv-tab-count">{{ p.prDetail.value.changedFiles }}</span>
           <span v-if="p.commentCount.value" class="pdv-tab-count pdv-tab-count--comment">💬{{ p.commentCount.value }}</span>
         </button>
         <button :class="['pdv-tab', { active: p.detailTab.value === 'checks' }]" @click="p.detailTab.value = 'checks'">
-          {{ p.checksIcon(p.prDetail.value.checksStatus) }} CI
+          {{ p.checksIcon(p.prDetail.value.checksStatus) }} {{ t('pr.detail.tabCi') }}
           <span v-if="p.prChecks.value.length" class="pdv-tab-count">{{ p.prChecks.value.length }}</span>
         </button>
         <button :class="['pdv-tab', { active: p.detailTab.value === 'intelligence' }]" @click="p.detailTab.value = 'intelligence'">
-          🧠 Intelligence
+          {{ t('pr.detail.tabIntelligence') }}
         </button>
         <div class="pdv-tab-spacer" />
         <button
@@ -111,7 +114,7 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
           :class="p.draftReviewComments.value.length ? 'eco-btn--primary' : ''"
           @click="p.showReviewModal.value = true"
         >
-          ✍️ Review{{ p.draftReviewComments.value.length ? ` (${p.draftReviewComments.value.length})` : '' }}
+          {{ p.draftReviewComments.value.length ? t('pr.detail.reviewBtnWithCount', p.draftReviewComments.value.length) : t('pr.detail.reviewBtn') }}
         </button>
       </div>
 
@@ -132,58 +135,58 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 
           <div class="pdv-stats-grid">
             <div class="pdv-stat">
-              <span class="pdv-stat-label">Merge</span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statMerge') }}</span>
               <span>{{ p.mergeableIcon(p.prDetail.value.mergeable) }} {{ p.prDetail.value.mergeable }}</span>
             </div>
             <div class="pdv-stat">
-              <span class="pdv-stat-label">Fichiers</span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statFiles') }}</span>
               <span>{{ p.prDetail.value.changedFiles }}</span>
             </div>
             <div class="pdv-stat">
-              <span class="pdv-stat-label">Diff</span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statDiff') }}</span>
               <span>
                 <span class="pdv-add">+{{ p.prDetail.value.additions }}</span>
                 <span class="pdv-del"> -{{ p.prDetail.value.deletions }}</span>
               </span>
             </div>
             <div class="pdv-stat">
-              <span class="pdv-stat-label">Commentaires</span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statComments') }}</span>
               <span>{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
             </div>
           </div>
 
           <div v-if="p.prDetail.value.reviewers.length" class="pdv-section">
-            <span class="pdv-section-label">Reviewers</span>
+            <span class="pdv-section-label">{{ t('pr.detail.reviewers') }}</span>
             <div class="pdv-chips">
               <span v-for="r in p.prDetail.value.reviewers" :key="r" class="pdv-chip">{{ r }}</span>
             </div>
           </div>
 
           <div v-if="p.prDetail.value.labels.length" class="pdv-section">
-            <span class="pdv-section-label">Labels</span>
+            <span class="pdv-section-label">{{ t('pr.detail.labels') }}</span>
             <div class="pdv-chips">
               <span v-for="l in p.prDetail.value.labels" :key="l" class="pdv-chip">{{ l }}</span>
             </div>
           </div>
 
-          <div class="pdv-section-label">Description</div>
+          <div class="pdv-section-label">{{ t('pr.detail.description') }}</div>
           <div v-if="p.prDetail.value.body" class="pdv-body-text" v-html="safeHtml(p.renderBody(p.prDetail.value.body))" />
-          <div v-else class="pdv-muted">Aucune description.</div>
+          <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
 
           <div class="pdv-links">
-            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/commits')">📦 Commits</button>
-            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/files')">📄 Fichiers</button>
-            <button v-if="p.prDetail.value.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/checks')">🔗 CI</button>
+            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/commits')">{{ t('pr.detail.linkCommits') }}</button>
+            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/files')">{{ t('pr.detail.linkFiles') }}</button>
+            <button v-if="p.prDetail.value.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/checks')">{{ t('pr.detail.linkCi') }}</button>
           </div>
         </div>
 
         <!-- Diff tab -->
         <div v-else-if="p.detailTab.value === 'diff'" class="pdv-body pdv-diff-body">
-          <div v-if="p.detailLoading.value && !p.prDiffFiles.value.length" class="pdv-loading">Chargement du diff…</div>
+          <div v-if="p.detailLoading.value && !p.prDiffFiles.value.length" class="pdv-loading">{{ t('pr.detail.loadingDiff') }}</div>
           <template v-else-if="p.prDiffFiles.value.length">
             <!-- File sidebar -->
             <div class="pdv-diff-sidebar">
-              <div class="pdv-diff-count">{{ p.prDiffFiles.value.length }} fichier{{ p.prDiffFiles.value.length > 1 ? 's' : '' }}</div>
+              <div class="pdv-diff-count">{{ t('pr.detail.filesCount', p.prDiffFiles.value.length) }}</div>
               <button
                 v-for="file in p.prDiffFiles.value"
                 :key="file.path"
@@ -218,12 +221,12 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
               />
             </div>
           </template>
-          <div v-else class="pdv-loading">Aucun diff disponible.</div>
+          <div v-else class="pdv-loading">{{ t('pr.detail.noDiff') }}</div>
         </div>
 
         <!-- CI tab -->
         <div v-else-if="p.detailTab.value === 'checks'" class="pdv-body pdv-checks-body">
-          <div v-if="p.prChecks.value.length === 0" class="pdv-loading">Aucun check CI trouvé.</div>
+          <div v-if="p.prChecks.value.length === 0" class="pdv-loading">{{ t('pr.detail.noChecks') }}</div>
           <div v-else class="pdv-checks">
             <div v-for="c in p.prChecks.value" :key="c.name" class="pdv-check">
               <span class="pdv-check-icon">{{ p.checkIcon(c) }}</span>

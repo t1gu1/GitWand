@@ -18,6 +18,9 @@ import type {
   PullRequestDetail,
   GitDiff,
 } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   cwd: string;
@@ -60,10 +63,10 @@ const scope = computed(() => {
   else if (totalLines > 100 || changedFiles > 3) risk = "medium";
 
   const riskLabel: Record<string, string> = {
-    low: "Faible",
-    medium: "Modéré",
-    high: "Élevé",
-    critical: "Critique",
+    low: t("pr.intel.riskLow"),
+    medium: t("pr.intel.riskMedium"),
+    high: t("pr.intel.riskHigh"),
+    critical: t("pr.intel.riskCritical"),
   };
   const riskColor: Record<string, string> = {
     low: "var(--color-success)",
@@ -97,30 +100,30 @@ const aiFlags = computed<AiFlag[]>(() => {
     const totalDeleted = diff.hunks.reduce((sum, h) => sum + h.lines.filter((l) => l.type === "delete").length, 0);
 
     if (totalAdded + totalDeleted > 200) {
-      flags.push({ file: diff.path, reason: `Fichier très modifié (${totalAdded + totalDeleted} lignes changées) — review attentive recommandée.`, severity: "warn" });
+      flags.push({ file: diff.path, reason: t("pr.intel.flagBigFile", totalAdded + totalDeleted), severity: "warn" });
     }
 
     // Detect potential breaking changes: removed exports, deleted function signatures
     const deletedLines = diff.hunks.flatMap((h) => h.lines.filter((l) => l.type === "delete").map((l) => l.content));
     const hasExportRemoval = deletedLines.some((l) => /^\s*(export\s+(default|const|function|class)|module\.exports|def |pub fn |public )/.test(l));
     if (hasExportRemoval) {
-      flags.push({ file: diff.path, reason: "Suppression d'export/API publique détectée — risque de breaking change.", severity: "error" });
+      flags.push({ file: diff.path, reason: t("pr.intel.flagExportRemoved"), severity: "error" });
     }
 
     // Detect config/env file changes
     if (/\.(env|config|yaml|yml|toml|json|lock)$/.test(diff.path)) {
-      flags.push({ file: diff.path, reason: "Fichier de configuration modifié — vérifier l'impact sur les autres environnements.", severity: "info" });
+      flags.push({ file: diff.path, reason: t("pr.intel.flagConfigChange"), severity: "info" });
     }
 
     // Detect migration files
     if (/migrat|schema\.sql|\.sql$/.test(diff.path.toLowerCase())) {
-      flags.push({ file: diff.path, reason: "Migration de base de données détectée — vérifier la réversibilité.", severity: "warn" });
+      flags.push({ file: diff.path, reason: t("pr.intel.flagDbMigration"), severity: "warn" });
     }
 
     // Large single hunk
     for (const hunk of diff.hunks) {
       if (hunk.lines.length > 100) {
-        flags.push({ file: diff.path, reason: `Hunk de ${hunk.lines.length} lignes — difficile à reviewer d'un seul coup.`, severity: "info" });
+        flags.push({ file: diff.path, reason: t("pr.intel.flagBigHunk", hunk.lines.length), severity: "info" });
         break; // Only once per file
       }
     }
@@ -145,22 +148,21 @@ watch(() => props.prDiffFiles, (files) => {
     <section class="pi-section">
       <div class="pi-section-header">
         <span class="pi-section-icon">🔀</span>
-        <span class="pi-section-title">Conflict Prediction</span>
+        <span class="pi-section-title">{{ t('pr.intel.conflictTitle') }}</span>
         <span class="pi-badge pi-badge--info">git merge-tree</span>
         <div class="pi-spacer" />
         <button
           v-if="!conflictPreview && !conflictLoading"
           class="pi-action-btn"
           @click="emit('load-conflict-preview')"
-        >Analyser</button>
-        <span v-if="conflictLoading" class="pi-loading">Analyse en cours…</span>
+        >{{ t('pr.intel.analyze') }}</button>
+        <span v-if="conflictLoading" class="pi-loading">{{ t('pr.intel.analyzing') }}</span>
       </div>
 
       <div v-if="conflictError" class="pi-msg pi-msg--error">{{ conflictError }}</div>
 
       <div v-if="!conflictPreview && !conflictLoading && !conflictError" class="pi-empty">
-        Cliquez sur « Analyser » pour simuler le merge et détecter les conflits potentiels
-        <em>sans toucher au working tree</em>.
+        {{ t('pr.intel.analyzeHint') }} <em>{{ t('pr.intel.analyzeHintEm') }}</em>.
       </div>
 
       <template v-if="conflictPreview">
@@ -173,7 +175,7 @@ watch(() => props.prDiffFiles, (files) => {
         </div>
 
         <div v-if="conflictPreview.overlappingFiles.length > 0" class="pi-conflict-detail">
-          <div class="pi-subsection-label">Fichiers modifiés des deux côtés (risque de conflit)</div>
+          <div class="pi-subsection-label">{{ t('pr.intel.overlappingLabel') }}</div>
           <div class="pi-file-list">
             <div
               v-for="f in conflictPreview.overlappingFiles"
@@ -186,14 +188,14 @@ watch(() => props.prDiffFiles, (files) => {
               </span>
               <span class="pi-file-name mono">{{ f }}</span>
               <span class="pi-file-label">
-                {{ conflictPreview.conflictingFiles.includes(f) ? 'Conflit probable' : 'Chevauchement' }}
+                {{ conflictPreview.conflictingFiles.includes(f) ? t('pr.intel.conflictLikely') : t('pr.intel.overlap') }}
               </span>
             </div>
           </div>
         </div>
 
         <div v-if="conflictPreview.cleanFiles.length > 0" class="pi-conflict-detail">
-          <div class="pi-subsection-label">Fichiers sans risque ({{ conflictPreview.cleanFiles.length }})</div>
+          <div class="pi-subsection-label">{{ t('pr.intel.cleanFilesLabel', conflictPreview.cleanFiles.length) }}</div>
           <div class="pi-file-list pi-file-list--compact">
             <span v-for="f in conflictPreview.cleanFiles.slice(0, 8)" :key="f" class="pi-chip pi-chip--clean">
               {{ f.split('/').pop() }}
@@ -210,7 +212,7 @@ watch(() => props.prDiffFiles, (files) => {
     <section class="pi-section">
       <div class="pi-section-header">
         <span class="pi-section-icon">📐</span>
-        <span class="pi-section-title">Review Scope</span>
+        <span class="pi-section-title">{{ t('pr.intel.scopeTitle') }}</span>
         <span
           class="pi-badge pi-badge--risk"
           :style="{ background: scope.riskColor + '28', color: scope.riskColor, borderColor: scope.riskColor + '70' }"
@@ -220,22 +222,22 @@ watch(() => props.prDiffFiles, (files) => {
       <div class="pi-scope-grid">
         <div class="pi-scope-card">
           <div class="pi-scope-value">{{ scope.changedFiles }}</div>
-          <div class="pi-scope-label">fichiers</div>
+          <div class="pi-scope-label">{{ t('pr.intel.scopeFiles') }}</div>
         </div>
         <div class="pi-scope-card">
           <div class="pi-scope-value">
             <span class="pi-add">+{{ scope.additions }}</span>
             <span class="pi-del"> -{{ scope.deletions }}</span>
           </div>
-          <div class="pi-scope-label">lignes</div>
+          <div class="pi-scope-label">{{ t('pr.intel.scopeLines') }}</div>
         </div>
         <div v-if="scope.pct !== null" class="pi-scope-card">
           <div class="pi-scope-value">{{ scope.pct }}%</div>
-          <div class="pi-scope-label">de la codebase</div>
+          <div class="pi-scope-label">{{ t('pr.intel.scopePct') }}</div>
         </div>
         <div class="pi-scope-card">
           <div class="pi-scope-value">{{ scope.totalLines }}</div>
-          <div class="pi-scope-label">lignes totales</div>
+          <div class="pi-scope-label">{{ t('pr.intel.scopeTotal') }}</div>
         </div>
       </div>
 
@@ -250,10 +252,10 @@ watch(() => props.prDiffFiles, (files) => {
         />
       </div>
       <div class="pi-risk-hint">
-        <span v-if="scope.risk === 'low'">Changement léger — review standard.</span>
-        <span v-else-if="scope.risk === 'medium'">Changement modéré — attention aux effets de bord.</span>
-        <span v-else-if="scope.risk === 'high'">Changement important — review approfondie recommandée.</span>
-        <span v-else>Changement très large — prévoir plusieurs sessions de review.</span>
+        <span v-if="scope.risk === 'low'">{{ t('pr.intel.hintLow') }}</span>
+        <span v-else-if="scope.risk === 'medium'">{{ t('pr.intel.hintMedium') }}</span>
+        <span v-else-if="scope.risk === 'high'">{{ t('pr.intel.hintHigh') }}</span>
+        <span v-else>{{ t('pr.intel.hintCritical') }}</span>
       </div>
     </section>
 
@@ -261,14 +263,14 @@ watch(() => props.prDiffFiles, (files) => {
     <section class="pi-section">
       <div class="pi-section-header">
         <span class="pi-section-icon">🔥</span>
-        <span class="pi-section-title">Hotspot Analysis</span>
-        <span class="pi-badge pi-badge--info">historique git</span>
+        <span class="pi-section-title">{{ t('pr.intel.hotspotTitle') }}</span>
+        <span class="pi-badge pi-badge--info">{{ t('pr.intel.historyBadge') }}</span>
         <div class="pi-spacer" />
-        <span v-if="hotspotsLoading" class="pi-loading">Chargement…</span>
+        <span v-if="hotspotsLoading" class="pi-loading">{{ t('pr.intel.loading') }}</span>
       </div>
 
       <div v-if="topHotspots.length === 0 && !hotspotsLoading" class="pi-empty">
-        Aucun fichier de la PR n'a d'historique de merge-conflict.
+        {{ t('pr.intel.noHotspots') }}
       </div>
 
       <div v-if="topHotspots.length > 0" class="pi-hotspot-list">
@@ -281,12 +283,12 @@ watch(() => props.prDiffFiles, (files) => {
               :style="{ width: Math.min(100, h.score) + '%' }"
             />
           </div>
-          <span class="pi-hotspot-count">{{ h.mergeCount }} merge{{ h.mergeCount > 1 ? 's' : '' }}</span>
+          <span class="pi-hotspot-count">{{ t('pr.intel.mergeCount', h.mergeCount) }}</span>
         </div>
       </div>
 
       <div v-if="hotspots.length > 0 && topHotspots.length === 0" class="pi-empty">
-        ✅ Aucun fichier à risque dans cette PR.
+        {{ t('pr.intel.hotspotAllClean') }}
       </div>
     </section>
 
@@ -294,12 +296,12 @@ watch(() => props.prDiffFiles, (files) => {
     <section class="pi-section">
       <div class="pi-section-header">
         <span class="pi-section-icon">🤖</span>
-        <span class="pi-section-title">Suggestions de review</span>
-        <span class="pi-badge pi-badge--ai">Analyse statique</span>
+        <span class="pi-section-title">{{ t('pr.intel.suggestionsTitle') }}</span>
+        <span class="pi-badge pi-badge--ai">{{ t('pr.intel.staticBadge') }}</span>
       </div>
 
       <div v-if="aiFlags.length === 0" class="pi-empty">
-        ✅ Aucune anomalie détectée dans les patterns de code.
+        {{ t('pr.intel.noAnomalies') }}
       </div>
 
       <div v-else class="pi-ai-list">
@@ -324,13 +326,13 @@ watch(() => props.prDiffFiles, (files) => {
     <section class="pi-section">
       <div class="pi-section-header">
         <span class="pi-section-icon">📜</span>
-        <span class="pi-section-title">Historique de review</span>
+        <span class="pi-section-title">{{ t('pr.intel.historyTitle') }}</span>
         <div class="pi-spacer" />
-        <span v-if="fileHistoryLoading" class="pi-loading">Chargement…</span>
+        <span v-if="fileHistoryLoading" class="pi-loading">{{ t('pr.intel.loading') }}</span>
       </div>
 
       <div v-if="Object.keys(fileHistory).length === 0 && !fileHistoryLoading" class="pi-empty">
-        Aucun historique de review disponible pour ces fichiers.
+        {{ t('pr.intel.noHistory') }}
       </div>
 
       <div v-else class="pi-history-list">
@@ -340,11 +342,11 @@ watch(() => props.prDiffFiles, (files) => {
             <div class="pi-history-meta">
               <span class="pi-history-count">💬 {{ hist.reviewCommentCount }}</span>
               <span v-if="hist.reviewers.length" class="pi-history-reviewers">
-                par {{ hist.reviewers.slice(0, 3).join(', ') }}{{ hist.reviewers.length > 3 ? ` +${hist.reviewers.length - 3}` : '' }}
+                {{ t('pr.intel.historyBy', hist.reviewers.slice(0, 3).join(', ') + (hist.reviewers.length > 3 ? ` +${hist.reviewers.length - 3}` : '')) }}
               </span>
             </div>
             <div v-if="hist.lastComment" class="pi-history-last">
-              Dernier : <em>{{ hist.lastComment.body }}…</em>
+              {{ t('pr.intel.lastLabel') }} <em>{{ hist.lastComment.body }}…</em>
               <span v-if="hist.lastComment.pr_number" class="pi-history-pr">PR #{{ hist.lastComment.pr_number }}</span>
             </div>
           </div>
@@ -353,7 +355,7 @@ watch(() => props.prDiffFiles, (files) => {
           v-if="Object.values(fileHistory).every((h) => h.reviewCommentCount === 0)"
           class="pi-empty"
         >
-          ✅ Aucun de ces fichiers n'a été commenté dans les reviews précédentes.
+          {{ t('pr.intel.noCommentedBefore') }}
         </div>
       </div>
     </section>

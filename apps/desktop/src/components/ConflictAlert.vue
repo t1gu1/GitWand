@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { gitConflictCheck, type ConflictRisk } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   cwd: string;
@@ -36,10 +39,7 @@ watch(() => props.targetBranch, checkConflicts, { immediate: true });
   >
     <div class="conflict-alert-header">
       <span class="conflict-icon">⚠️</span>
-      <span>
-        <strong>{{ risk.overlappingFiles.length }}</strong> fichier{{ risk.overlappingFiles.length > 1 ? 's' : '' }}
-        modifié{{ risk.overlappingFiles.length > 1 ? 's' : '' }} sur les deux branches
-      </span>
+      <span>{{ t('conflict.overlap', risk.overlappingFiles.length) }}</span>
     </div>
     <ul class="conflict-files">
       <li v-for="file in risk.overlappingFiles" :key="file" class="conflict-file">
@@ -47,8 +47,8 @@ watch(() => props.targetBranch, checkConflicts, { immediate: true });
       </li>
     </ul>
     <div class="conflict-stats">
-      Branche courante : {{ risk.currentChanged }} fichier{{ risk.currentChanged > 1 ? 's' : '' }} modifié{{ risk.currentChanged > 1 ? 's' : '' }}
-      · {{ risk.branch }} : {{ risk.targetChanged }} fichier{{ risk.targetChanged > 1 ? 's' : '' }} modifié{{ risk.targetChanged > 1 ? 's' : '' }}
+      {{ t('conflict.currentChanged', risk.currentChanged) }}
+      · {{ t('conflict.targetChanged', risk.branch, risk.targetChanged) }}
     </div>
   </div>
 </template>

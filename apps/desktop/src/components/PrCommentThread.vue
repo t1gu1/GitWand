@@ -10,6 +10,9 @@
 import { ref, computed } from "vue";
 import type { PrReviewComment } from "../utils/backend";
 import { safeHtml } from "../composables/useSafeHtml";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   /** All comments in this thread, sorted oldest first. */
@@ -82,10 +85,11 @@ function applySuggestion(comment: PrReviewComment) {
 /** Very light renderer: code blocks, inline code, bold, links. */
 function renderBody(body: string): string {
   // Replace suggestion blocks with a styled box
+  const suggLabel = t("pr.comment.suggestionLabel");
   let html = body.replace(
     /```suggestion\r?\n([\s\S]*?)```/gm,
     (_, code) =>
-      `<div class="comment-suggestion"><div class="comment-suggestion-label">💡 Suggestion</div><pre class="comment-suggestion-code">${escHtml(code)}</pre></div>`,
+      `<div class="comment-suggestion"><div class="comment-suggestion-label">${escHtml(suggLabel)}</div><pre class="comment-suggestion-code">${escHtml(code)}</pre></div>`,
   );
   // Other fenced code blocks
   html = html.replace(
@@ -140,12 +144,12 @@ function timeAgo(dateStr: string): string {
             v-if="editingId !== comment.id"
             class="pct-action-btn"
             @click="startEdit(comment)"
-            title="Modifier"
+            :title="t('pr.comment.edit')"
           >✏️</button>
           <button
             class="pct-action-btn pct-action-btn--del"
             @click="emit('delete', comment.id)"
-            title="Supprimer"
+            :title="t('pr.comment.delete')"
           >🗑</button>
         </div>
       </div>
@@ -161,8 +165,8 @@ function timeAgo(dateStr: string): string {
           @keydown.escape="cancelEdit"
         />
         <div class="pct-edit-actions">
-          <button class="pct-cancel-btn" @click="cancelEdit">Annuler</button>
-          <button class="pct-submit-btn" @click="submitEdit" :disabled="!editText.trim()">Enregistrer</button>
+          <button class="pct-cancel-btn" @click="cancelEdit">{{ t('pr.comment.cancel') }}</button>
+          <button class="pct-submit-btn" @click="submitEdit" :disabled="!editText.trim()">{{ t('pr.comment.save') }}</button>
         </div>
       </div>
       <div v-else class="pct-body" v-html="safeHtml(renderBody(comment.body))" />
@@ -170,7 +174,7 @@ function timeAgo(dateStr: string): string {
       <!-- Apply suggestion button -->
       <div v-if="hasSuggestion(comment) && editingId !== comment.id" class="pct-suggestion-actions">
         <button class="pct-apply-btn" @click="applySuggestion(comment)">
-          ✅ Appliquer la suggestion
+          {{ t('pr.comment.applySuggestion') }}
         </button>
       </div>
     </div>
@@ -181,7 +185,7 @@ function timeAgo(dateStr: string): string {
         <textarea
           v-model="replyText"
           class="pct-textarea"
-          placeholder="Répondre… (Ctrl+Enter pour envoyer)"
+          :placeholder="t('pr.comment.replyPlaceholder')"
           rows="3"
           autofocus
           @keydown.ctrl.enter.prevent="submitReply"
@@ -189,12 +193,12 @@ function timeAgo(dateStr: string): string {
           @keydown.escape="showReply = false"
         />
         <div class="pct-compose-actions">
-          <button class="pct-cancel-btn" @click="showReply = false; replyText = ''">Annuler</button>
-          <button class="pct-submit-btn" @click="submitReply" :disabled="!replyText.trim()">Répondre</button>
+          <button class="pct-cancel-btn" @click="showReply = false; replyText = ''">{{ t('pr.comment.cancel') }}</button>
+          <button class="pct-submit-btn" @click="submitReply" :disabled="!replyText.trim()">{{ t('pr.comment.replyShort') }}</button>
         </div>
       </div>
       <button v-else class="pct-reply-trigger" @click="showReply = true">
-        💬 Répondre
+        {{ t('pr.comment.replyBtn') }}
       </button>
     </div>
   </div>

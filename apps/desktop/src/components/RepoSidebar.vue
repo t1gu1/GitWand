@@ -829,7 +829,7 @@ function formatActivityDate(dateStr: string): string {
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
         </svg>
-        <span>{{ ctxMenu.file.section === 'untracked' ? 'Supprimer le fichier' : 'Annuler les modifications' }}</span>
+        <span>{{ ctxMenu.file.section === 'untracked' ? t('sidebar.ctxDeleteFile') : t('sidebar.ctxDiscardChanges') }}</span>
       </button>
 
       <!-- Separator -->
@@ -859,7 +859,7 @@ function formatActivityDate(dateStr: string): string {
           <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
           <path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
-        <span>Ajouter à .gitignore</span>
+        <span>{{ t('sidebar.ctxAddToGitignore') }}</span>
       </button>
     </div>
   </Teleport>

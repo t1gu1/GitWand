@@ -364,7 +364,7 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
                 <textarea
                   v-model="composeText"
                   class="pid-textarea"
-                  placeholder="Ajouter un commentaire… (Ctrl+Enter pour envoyer)"
+                  :placeholder="t('pr.inline.composePlaceholder')"
                   rows="3"
                   autofocus
                   @keydown.ctrl.enter.prevent="submitCompose"
@@ -372,20 +372,20 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
                   @keydown.escape="closeCompose"
                 />
                 <div class="pid-compose-actions">
-                  <button class="pid-cancel-btn" @click="closeCompose">Annuler</button>
+                  <button class="pid-cancel-btn" @click="closeCompose">{{ t('pr.inline.cancel') }}</button>
                   <button
                     class="pid-review-btn"
                     :disabled="!composeText.trim()"
                     @click="submitToReview"
-                    :title="reviewDraftCount ? `Ajouter à la review (${reviewDraftCount} en attente)` : 'Ajouter à la review'"
+                    :title="reviewDraftCount ? t('pr.inline.addToReviewPending', reviewDraftCount) : t('pr.inline.addToReview')"
                   >
-                    {{ reviewDraftCount ? `+ Review (${reviewDraftCount})` : '+ Review' }}
+                    {{ reviewDraftCount ? t('pr.inline.reviewBtnCount', reviewDraftCount) : t('pr.inline.reviewBtn') }}
                   </button>
                   <button
                     class="pid-submit-btn"
                     :disabled="!composeText.trim()"
                     @click="submitCompose"
-                  >Commenter</button>
+                  >{{ t('pr.inline.commentBtn') }}</button>
                 </div>
               </div>
             </div>

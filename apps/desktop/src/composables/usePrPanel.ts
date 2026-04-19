@@ -42,6 +42,7 @@ import {
   type PrFileHistory,
 } from "../utils/backend";
 import { getPersistedDiffMode, type DiffMode } from "../utils/diffMode";
+import { t } from "./useI18n";
 
 export const PR_PANEL_KEY = Symbol("prPanel");
 
@@ -115,13 +116,13 @@ export function usePrPanel(cwd: Ref<string>) {
     const hasApproval = prReviews.value.some((r) => r.state === "APPROVED");
     const hasChangesRequested = prReviews.value.some((r) => r.state === "CHANGES_REQUESTED");
     if (checksOk && hasApproval && !hasChangesRequested) {
-      return { ready: true, reason: "Tous les checks sont verts et la PR est approuvée." };
+      return { ready: true, reason: t("pr.ready.ready") };
     }
     const reasons: string[] = [];
-    if (!checksOk) reasons.push("checks CI en échec");
-    if (!hasApproval) reasons.push("aucune approbation");
-    if (hasChangesRequested) reasons.push("modifications demandées");
-    return { ready: false, reason: `En attente : ${reasons.join(", ")}.` };
+    if (!checksOk) reasons.push(t("pr.ready.reasonChecksFailing"));
+    if (!hasApproval) reasons.push(t("pr.ready.reasonNoApproval"));
+    if (hasChangesRequested) reasons.push(t("pr.ready.reasonChangesRequested"));
+    return { ready: false, reason: t("pr.ready.waitingPrefix", reasons.join(", ")) };
   });
 
   const selectedDiff = computed<GitDiff | null>(() =>
@@ -292,7 +293,7 @@ export function usePrPanel(cwd: Ref<string>) {
         newPrDraft.value,
         newPrReviewers.value.slice(),
       );
-      success.value = `PR #${pr.number} créée`;
+      success.value = t("pr.success.prCreated", pr.number);
       showCreateForm.value = false;
       newPrTitle.value = ""; newPrBody.value = ""; newPrDraft.value = false;
       newPrReviewers.value = [];
@@ -304,7 +305,7 @@ export function usePrPanel(cwd: Ref<string>) {
   async function checkoutPr(pr: PullRequest) {
     try {
       await ghCheckoutPr(cwd.value, pr.number);
-      success.value = `Checkout PR #${pr.number}`;
+      success.value = t("pr.success.checkoutDone", pr.number);
     } catch (err: any) { error.value = err.message; }
   }
 
@@ -312,7 +313,7 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!mergingPr.value) return;
     try {
       await ghMergePr(cwd.value, mergingPr.value.number, mergeMethod.value);
-      success.value = `PR #${mergingPr.value.number} mergée !`;
+      success.value = t("pr.success.prMerged", mergingPr.value.number);
       mergingPr.value = null;
       await loadPrs();
     } catch (err: any) { error.value = err.message; }
@@ -354,7 +355,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   function handleApplySuggestion(suggestion: string, startLine: number | null, endLine: number | null) {
     navigator.clipboard?.writeText(suggestion).catch(() => {});
-    success.value = `Suggestion copiée (lignes ${startLine ?? "?"}–${endLine ?? "?"})`;
+    success.value = t("pr.success.suggestionCopied", startLine ?? "?", endLine ?? "?");
   }
 
   function handleAddToReview(params: {
@@ -367,7 +368,7 @@ export function usePrPanel(cwd: Ref<string>) {
       ...(params.start_side !== undefined ? { start_side: params.start_side } : {}),
       body: params.body,
     });
-    success.value = `Commentaire ajouté à la review (${draftReviewComments.value.length} en attente)`;
+    success.value = t("pr.success.commentAddedToReview", draftReviewComments.value.length);
   }
 
   async function handleSubmitReview(opts: {
@@ -387,7 +388,7 @@ export function usePrPanel(cwd: Ref<string>) {
       ]);
       prReviews.value = reviews;
       prComments.value = comments;
-      success.value = `Review soumise (${opts.event})`;
+      success.value = t("pr.success.reviewSubmitted", opts.event);
     } catch (err: any) {
       error.value = err.message;
     } finally {

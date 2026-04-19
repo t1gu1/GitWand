@@ -33,7 +33,7 @@ const stashMessage = ref("");
 const { isGenerating: isGeneratingMessage, generate: generateStashMessage } =
   useStashMessage();
 const ai = useAIProvider();
-const { locale, t } = useI18n();
+const { locale } = useI18n();
 
 async function loadStashes() {
   if (!props.cwd) return;
@@ -186,7 +186,7 @@ watch(() => props.cwd, loadStashes);
         v-model="stashMessage"
         type="text"
         class="stash-composer-input"
-        :placeholder="t('stash.composerPlaceholder')"
+        :placeholder="locale === 'fr' ? 'Message optionnel — laisse vide pour le label par défaut' : 'Optional message — leave empty for the default label'"
         maxlength="120"
         @keydown.enter.prevent="createStash"
         @keydown.esc.prevent="closeComposer"
@@ -196,16 +196,16 @@ watch(() => props.cwd, loadStashes);
         class="btn btn--ai btn--ai-solid btn-composer"
         :disabled="isGeneratingMessage"
         @click="suggestMessage"
-        :title="t('stash.aiSuggestTooltip')"
+        :title="locale === 'fr' ? 'Suggérer un message avec IA' : 'Suggest a message with AI'"
       >
         <span v-if="isGeneratingMessage">…</span>
-        <span v-else>✨ {{ t('stash.aiButton') }}</span>
+        <span v-else>✨ {{ locale === 'fr' ? 'IA' : 'AI' }}</span>
       </button>
       <button class="btn btn-composer btn-primary" @click="createStash">
-        {{ t('stash.createButton') }}
+        {{ locale === 'fr' ? 'Stasher' : 'Stash' }}
       </button>
       <button class="btn btn-composer btn-outline" @click="closeComposer">
-        {{ t('stash.cancelButton') }}
+        {{ locale === 'fr' ? 'Annuler' : 'Cancel' }}
       </button>
     </div>
 

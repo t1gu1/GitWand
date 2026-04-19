@@ -11,6 +11,9 @@
  */
 import { ref, computed } from "vue";
 import type { PendingReviewComment } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   prNumber: number;
@@ -41,11 +44,11 @@ const canSubmit = computed(() => {
   return true;
 });
 
-const eventLabel: Record<ReviewEvent, string> = {
-  APPROVE: "Approuver",
-  REQUEST_CHANGES: "Demander des modifications",
-  COMMENT: "Commenter",
-};
+const eventLabel = computed<Record<ReviewEvent, string>>(() => ({
+  APPROVE: t("pr.review.eventApprove"),
+  REQUEST_CHANGES: t("pr.review.eventRequestChanges"),
+  COMMENT: t("pr.review.eventComment"),
+}));
 
 const eventIcon: Record<ReviewEvent, string> = {
   APPROVE: "✅",
@@ -69,28 +72,25 @@ function handleKeydown(e: KeyboardEvent) {
 
 <template>
   <div class="prm-overlay" @click.self="emit('close')" @keydown="handleKeydown">
-    <div class="prm-modal" role="dialog" aria-modal="true" aria-label="Soumettre la review">
+    <div class="prm-modal" role="dialog" aria-modal="true" :aria-label="t('pr.review.modalAria')">
       <!-- Header -->
       <div class="prm-header">
-        <span class="prm-title">Review des modifications</span>
-        <button class="prm-close" @click="emit('close')" title="Fermer">✕</button>
+        <span class="prm-title">{{ t('pr.review.modalTitle') }}</span>
+        <button class="prm-close" @click="emit('close')" :title="t('pr.review.close')">✕</button>
       </div>
 
       <!-- Draft comments summary -->
       <div v-if="draftComments.length > 0" class="prm-drafts">
         <span class="prm-drafts-icon">💬</span>
-        <span>
-          {{ draftComments.length }} commentaire{{ draftComments.length > 1 ? 's' : '' }}
-          en attente seront inclus dans cette review
-        </span>
+        <span>{{ t('pr.review.draftsInfo', draftComments.length) }}</span>
       </div>
       <div v-else class="prm-drafts prm-drafts--empty">
-        Aucun commentaire inline — vous pouvez soumettre une review globale uniquement.
+        {{ t('pr.review.noDrafts') }}
       </div>
 
       <!-- Review type -->
       <div class="prm-section">
-        <div class="prm-section-label">Type de review</div>
+        <div class="prm-section-label">{{ t('pr.review.typeLabel') }}</div>
         <div class="prm-radio-group">
           <label
             v-for="ev in (['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as ReviewEvent[])"
@@ -113,19 +113,19 @@ function handleKeydown(e: KeyboardEvent) {
       <!-- Body -->
       <div class="prm-section">
         <div class="prm-section-label">
-          Message
-          <span v-if="reviewEvent === 'REQUEST_CHANGES'" class="prm-required">(obligatoire)</span>
-          <span v-else class="prm-optional">(optionnel)</span>
+          {{ t('pr.review.messageLabel') }}
+          <span v-if="reviewEvent === 'REQUEST_CHANGES'" class="prm-required">{{ t('pr.review.required') }}</span>
+          <span v-else class="prm-optional">{{ t('pr.review.optional') }}</span>
         </div>
         <textarea
           v-model="body"
           class="prm-textarea"
           rows="5"
           :placeholder="reviewEvent === 'APPROVE'
-            ? 'Excellent travail ! Approuvé.'
+            ? t('pr.review.placeholderApprove')
             : reviewEvent === 'REQUEST_CHANGES'
-              ? 'Décrivez les modifications demandées…'
-              : 'Laissez un commentaire général…'"
+              ? t('pr.review.placeholderRequestChanges')
+              : t('pr.review.placeholderComment')"
           @keydown.ctrl.enter.prevent="handleSubmit"
           @keydown.meta.enter.prevent="handleSubmit"
         />
@@ -133,14 +133,14 @@ function handleKeydown(e: KeyboardEvent) {
 
       <!-- Actions -->
       <div class="prm-footer">
-        <button class="prm-cancel-btn" @click="emit('close')">Annuler</button>
+        <button class="prm-cancel-btn" @click="emit('close')">{{ t('pr.review.cancel') }}</button>
         <button
           class="prm-submit-btn"
           :class="`prm-submit-btn--${reviewEvent.toLowerCase().replace('_', '-')}`"
           :disabled="!canSubmit"
           @click="handleSubmit"
         >
-          <span v-if="submitting">Envoi…</span>
+          <span v-if="submitting">{{ t('pr.review.submitting') }}</span>
           <span v-else>{{ eventIcon[reviewEvent] }} {{ eventLabel[reviewEvent] }}</span>
         </button>
       </div>

@@ -310,8 +310,8 @@ function shortHash(hash: string): string {
                 v-if="ai.isAvailable.value"
                 class="btn btn--ai btn--icon fhv-blame-explain"
                 :class="{ 'fhv-blame-explain--active': blameExplainHash === line.hashFull }"
-                :title="t('fileHistory.explainChange')"
-                :aria-label="t('fileHistory.explainChange')"
+                :title="locale === 'fr' ? 'Expliquer ce changement avec IA' : 'Explain this change with AI'"
+                :aria-label="locale === 'fr' ? 'Expliquer ce changement avec IA' : 'Explain this change with AI'"
                 @click.stop="requestBlameExplain(line.hashFull)"
               >✨</button>
               <span class="fhv-blame-author">{{ line.author }}</span>
@@ -330,14 +330,14 @@ function shortHash(hash: string): string {
       <div v-if="blameExplainHash" class="fhv-blame-explain-panel" role="status" aria-live="polite">
         <div class="fhv-blame-explain-head">
           <span class="fhv-blame-explain-title">
-            ✨ {{ t('fileHistory.whyThisChange') }}
+            ✨ {{ locale === 'fr' ? 'Pourquoi ce changement ?' : 'Why did this change?' }}
           </span>
           <button class="fhv-blame-explain-close" @click="closeBlameExplain" aria-label="Close">✕</button>
         </div>
         <div class="fhv-blame-explain-body">
           <span v-if="blameExplainError" class="fhv-blame-explain-error">{{ blameExplainError }}</span>
           <span v-else-if="isExplainingBlame && !blameExplainText">
-            {{ t('fileHistory.analyzingCommit') }}
+            {{ locale === 'fr' ? 'Analyse du commit en cours…' : 'Analysing commit…' }}
           </span>
           <span v-else>{{ blameExplainText }}</span>
         </div>

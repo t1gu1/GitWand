@@ -2,7 +2,6 @@ import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import type { RebaseTodoEntry } from "./useInteractiveRebase";
-import { t } from "./useI18n";
 
 /**
  * Asks the configured AI provider to group a rebase-todo list into
@@ -175,12 +174,14 @@ export function useSquashSuggestion() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(t("errors.noAiProvider"));
+        throw new Error(
+          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
+        );
       }
       if (entries.length < 2) {
-        throw new Error(t("errors.squashNeedsTwo"));
+        throw new Error("Au moins deux commits sont nécessaires pour suggérer un squash.");
       }
-      if (!cwd) throw new Error(t("errors.noRepoOpen"));
+      if (!cwd) throw new Error("Aucun repo ouvert (cwd vide).");
 
       // Fetch full bodies for all commits. Using a rare delimiter so we
       // can parse reliably even when bodies contain blank lines.
@@ -226,14 +227,16 @@ export function useSquashSuggestion() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error(t("errors.emptyAiResponse"));
+        throw new Error("Le provider IA n'a retourné aucune réponse.");
       }
 
       let suggestion: SquashSuggestion;
       try {
         suggestion = parseResponse(raw);
       } catch {
-        throw new Error(t("errors.aiResponseInvalidJson"));
+        throw new Error(
+          "La réponse du provider IA n'a pas pu être interprétée (JSON invalide).",
+        );
       }
 
       // Final sanity: every index must be in range.
