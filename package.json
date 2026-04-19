@@ -17,5 +17,10 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "hono": "^4.12.14"
+    }
   }
 }
