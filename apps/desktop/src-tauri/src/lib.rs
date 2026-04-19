@@ -629,12 +629,26 @@ struct ListDirResult {
 
 const SKIP_DIRS: &[&str] = &["node_modules", "__pycache__", ".Trash", "target"];
 
+/// Folder names that, when they appear as direct children of the user's
+/// home directory on macOS, are protected by TCC (Transparency, Consent,
+/// Control) and would trigger a permission prompt whenever we touch
+/// their contents — including a mere `.join(".git").exists()` probe.
+/// We skip the git-repo probe for these to avoid the prompt loop; the
+/// user can still navigate inside them and we'll probe children there.
+const MACOS_TCC_PROTECTED: &[&str] = &[
+    "Documents",
+    "Desktop",
+    "Downloads",
+    "Pictures",
+    "Movies",
+    "Music",
+    "Library",
+];
+
 #[tauri::command]
 fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
-    let home = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("/"))
-        .to_string_lossy()
-        .to_string();
+    let home_path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
+    let home = home_path.to_string_lossy().to_string();
 
     let dir_path = match &path {
         Some(p) if !p.is_empty() => {
@@ -645,7 +659,7 @@ fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
             };
             PathBuf::from(expanded)
         }
-        _ => PathBuf::from(&home),
+        _ => home_path.clone(),
     };
 
     let dir_path = dir_path
@@ -654,6 +668,14 @@ fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
 
     let entries = std::fs::read_dir(&dir_path)
         .map_err(|e| format!("Cannot read directory: {}", e))?;
+
+    // Is this the home directory? If so, we want to avoid probing
+    // inside TCC-protected subfolders on macOS (Documents/Desktop/...)
+    // because each probe triggers a system permission prompt.
+    let at_home = home_path
+        .canonicalize()
+        .map(|h| h == dir_path)
+        .unwrap_or(false);
 
     let mut dirs: Vec<DirEntry> = Vec::new();
 
@@ -679,7 +701,14 @@ fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
         }
 
         let full_path = entry.path();
-        let is_git_repo = full_path.join(".git").exists();
+
+        // Avoid probing `.git` inside TCC-protected folders at the home
+        // level on macOS — it would trigger a permission dialog each time.
+        let is_git_repo = if at_home && MACOS_TCC_PROTECTED.contains(&name.as_str()) {
+            false
+        } else {
+            full_path.join(".git").exists()
+        };
 
         dirs.push(DirEntry {
             name,
@@ -3112,7 +3141,7 @@ pub fn run() {
             // to bring GitWand to the foreground from anywhere.
             use tauri_plugin_global_shortcut::ShortcutState;
             let handle = app.handle().clone();
-            app.global_shortcut().on_shortcut("CmdOrCtrl+Shift+G", move |_app, shortcut, event| {
+            app.global_shortcut().on_shortcut("CmdOrCtrl+Shift+G", move |_app, _shortcut, event| {
                 if event.state == ShortcutState::Pressed {
                     // Show + focus the main window
                     if let Some(window) = handle.get_webview_window("main") {

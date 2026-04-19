@@ -286,6 +286,15 @@ const server = createServer(async (req, res) => {
     // GET /api/list-dir?path=/some/dir  — list directories for folder picker
     if (url.pathname === "/api/list-dir" && req.method === "GET") {
       const dirPath = resolve(url.searchParams.get("path") || homedir());
+      // Names that, at the home-directory level on macOS, live behind TCC
+      // gating — probing `<name>/.git` triggers a permission prompt that
+      // some unsigned/dev builds re-ask on every invocation. Mirror the
+      // Rust backend's guard so the dev server behaves consistently.
+      const MACOS_TCC_PROTECTED = new Set([
+        "Documents", "Desktop", "Downloads",
+        "Pictures", "Movies", "Music", "Library",
+      ]);
+      const atHome = dirPath === homedir();
       try {
         const entries = readdirSync(dirPath, { withFileTypes: true });
         const dirs = entries
@@ -301,6 +310,7 @@ const server = createServer(async (req, res) => {
             name: e.name,
             path: join(dirPath, e.name),
             isGitRepo: (() => {
+              if (atHome && MACOS_TCC_PROTECTED.has(e.name)) return false;
               try { statSync(join(dirPath, e.name, ".git")); return true; } catch { return false; }
             })(),
           }))

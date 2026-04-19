@@ -5,6 +5,13 @@ description = "GitWand Desktop — standalone merge conflict resolution"
 authors = ["Laurent Guitton <lb.guitton@gmail.com>"]
 license = "MIT"
 edition = "2021"
+# Disable Cargo's automatic bin discovery from `src/bin/`. The `parity-probe`
+# binary is declared explicitly below with `required-features = ["parity-probe"]`;
+# without this flag, Cargo also auto-discovers `src/bin/parity_probe.rs` as an
+# implicit bin target *without* the feature gate, which breaks the
+# `universal-apple-darwin` lipo step during the release build (the binary
+# would exist for one arch but not the other, depending on feature state).
+autobins = false
 
 [lib]
 name = "gitwand_desktop_lib"
