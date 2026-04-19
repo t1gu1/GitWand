@@ -107,3 +107,10 @@ export function useI18n() {
     setLocale,
   };
 }
+
+/**
+ * Standalone `t` — same function as `useI18n().t`, exported for use outside
+ * Vue components (composables, utilities) where you just need to translate a
+ * string. Reads the current singleton locale.
+ */
+export { t };

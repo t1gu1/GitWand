@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
+import { t } from "./useI18n";
 
 /**
  * "Why did this line change?" — given a commit hash and a file path,
@@ -113,12 +114,10 @@ export function useBlameContext() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
       if (!cwd || !hashFull || !filePath) {
-        throw new Error("Paramètres manquants (cwd, commit ou fichier).");
+        throw new Error(t("errors.missingParams"));
       }
 
       const [msgRes, diffRes, shortRes] = await Promise.all([
@@ -136,9 +135,7 @@ export function useBlameContext() {
       // That's fine — the LLM handles the mix.
       const fileDiff = clip((diffRes.stdout ?? "").trim(), maxDiffChars);
       if (!fileDiff) {
-        throw new Error(
-          "Aucun changement de ce commit sur ce fichier (le blame pointe peut-être vers un merge).",
-        );
+        throw new Error(t("errors.noFileChangesInCommit"));
       }
       const shortHash = (shortRes.stdout ?? "").trim() || hashFull.slice(0, 7);
 
@@ -147,7 +144,7 @@ export function useBlameContext() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       const clean = cleanExplanation(raw);
       if (clean) cache.set(cacheKey, clean);

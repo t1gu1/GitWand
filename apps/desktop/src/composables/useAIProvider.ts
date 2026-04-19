@@ -1,5 +1,6 @@
 import { ref, computed } from "vue";
 import { claudeCliPrompt } from "../utils/backend";
+import { t } from "./useI18n";
 
 /**
  * AI provider types matching SettingsPanel configuration.
@@ -316,7 +317,7 @@ export function useAIProvider() {
           rawResponse = await callOllama(s, systemPrompt, userPrompt);
           break;
         default:
-          throw new Error("Aucun provider IA configuré");
+          throw new Error(t("errors.noAiProviderShort"));
       }
 
       const suggestion = parseAIResponse(rawResponse);
@@ -350,7 +351,7 @@ export function useAIProvider() {
       case "ollama":
         return callOllama(s, systemPrompt, userPrompt);
       default:
-        throw new Error("Aucun provider IA configuré");
+        throw new Error(t("errors.noAiProviderShort"));
     }
   }
 

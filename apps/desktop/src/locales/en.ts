@@ -14,6 +14,7 @@
 const en = {
   // ─── Common ─────────────────────────────────────────────
   common: {
+    ai: "AI",
     cancel: "Cancel",
     close: "Close",
     confirm: "Confirm",
@@ -196,6 +197,7 @@ const en = {
     releaseNotesTitle: "Release notes generator",
     releaseNotesDesc: "Pick a reference range (tags or branches). GitWand analyses the commits and produces a Markdown changelog ready to paste.",
     releaseNotesFrom: "From",
+    releaseNotesFromPlaceholder: "e.g. v1.2.0",
     releaseNotesTo: "To",
     releaseNotesGenerate: "Generate",
     releaseNotesPlaceholder: "The changelog will appear here once generated.",
@@ -252,6 +254,7 @@ const en = {
     amendConfirm: "Amend commit",
     searchPlaceholder: "Filter (subject, author, hash\u2026) \u2014 Enter for AI search",
     searchAiHint: "AI search: type a plain-language question then Enter or ✨",
+    aiSearchResults: "AI search: {0} matching commit(s).",
   },
   commit: {
     summary: "Summary",
@@ -282,6 +285,12 @@ const en = {
     noBranch: "No branches found",
     previewMerge: "Preview merge",
     aiHint: "Suggest a name with AI (from your description or the current diff)",
+    switchRefusedDirty: "Switch refused: uncommitted changes are present.",
+    switchConfirmDirty: "Uncommitted changes will be lost. Continue anyway?",
+    switchStashTitle: "Stash before switching branch",
+    switchStashHint: "Your changes will be stashed, then restored after switching to \u00ab {0} \u00bb. Give it a label to find it later.",
+    switchStashPlaceholder: "Optional message (empty = default label)",
+    switchStashConfirm: "Stash & switch",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────
@@ -330,6 +339,8 @@ const en = {
     aiSquashHint: "Analyses commits to propose squash groups by intent.",
     aiSquashApplying: "Analysing\u2026",
     aiSquashApply: "Apply",
+    aiSquashEmpty: "The AI found nothing to squash \u2014 every commit has a distinct intent.",
+    aiSquashClose: "Close",
   },
 
   // ─── EmptyState ─────────────────────────────────────────
@@ -463,6 +474,63 @@ const en = {
     aiEnable: "Enable AI suggestions",
     aiEnableHint: "Proposes smart resolutions for complex conflicts (confidence < 60%)",
     aiPrivacyNote: "The AI analyzes the conflict context (base/ours/theirs, commit messages, file name) to propose a resolution. Your code is only sent to the selected provider. No suggestion is applied automatically.",
+    // AI tab — provider selector
+    aiProviderLabel: "Provider",
+    aiProviderClaude: "Claude (Anthropic API)",
+    aiProviderClaudeCli: "Claude Code CLI (Max/Pro subscription)",
+    aiProviderClaudeCliNotFound: " \u2014 not detected",
+    aiProviderOpenAiCompat: "OpenAI-compatible API",
+    aiProviderOllama: "Ollama (local)",
+    aiProviderOllamaNotFound: " \u2014 not detected",
+    // AI tab — Claude auth
+    aiAuthLabel: "Authentication",
+    aiAuthConnect: "Connect",
+    aiAuthApiKey: "API key",
+    aiAuthConnected: "Connected \u2014 {0}",
+    aiAuthDisconnect: "Disconnect",
+    aiConnectButton: "Connect with Claude",
+    aiConnectHint: "Opens the Anthropic console to create an API key",
+    aiConnectInstruction1: "1. Create or copy an API key from the Anthropic console",
+    aiConnectInstruction2: "2. Paste it below:",
+    aiConnectSave: "Save",
+    aiConnectCancel: "Cancel",
+    aiConnectSuccess: "Connected successfully!",
+    aiConnectRetry: "Try again",
+    aiConnectErrorEmpty: "Please paste your API key",
+    aiConnectErrorPrefix: "The key must start with sk-ant-\u2026",
+    aiApiKeyLabel: "Anthropic API key",
+    aiApiKeyAvailable: "Available on",
+    aiHideKey: "Hide",
+    aiShowKey: "Show",
+    // AI tab — model
+    aiModelLabel: "Model",
+    aiModelSonnet: "Claude Sonnet 4 (recommended)",
+    aiModelHaiku: "Claude Haiku 4.5 (fast)",
+    aiModelOpus: "Claude Opus 4 (premium)",
+    // AI tab — Claude CLI
+    aiCliStatus: "CLI status",
+    aiCliDetecting: "Detecting\u2026",
+    aiCliNotFound: "Binary",
+    aiCliNotFoundSuffix: "not found.",
+    aiCliInstallHint: "Install it with",
+    aiCliInstallHintSuffix: "then click Re-detect.",
+    aiCliRedetect: "Re-detect",
+    aiCliConnected: "Connected \u2014 {0}",
+    aiCliConnectedHint: "Calls will use your Claude Max/Pro subscription.",
+    aiCliNotAuthenticated: "CLI found but not authenticated.",
+    aiCliLoginHint: "Run `claude login` to sign in.",
+    aiCliLoginWaiting: "Waiting for login\u2026",
+    aiCliLoginButton: "Sign in (opens a terminal)",
+    aiCliInfoBox: "GitWand runs `claude -p` locally. No API key required: the session uses the authentication stored by Claude Code on your machine.",
+    // AI tab — OpenAI-compat
+    aiCompatEndpoint: "API endpoint",
+    aiCompatEndpointHint: "Compatible with OpenAI, Mistral, Groq, Azure, etc.",
+    aiCompatApiKey: "API key",
+    // AI tab — Ollama
+    aiOllamaUrl: "Ollama URL",
+    aiOllamaTest: "Test connection",
+    aiOllamaConnected: "Connected \u2014 {0} model(s) available",
+    aiOllamaNotConnected: "Not connected. Install Ollama at ollama.com",
     language: "Interface language",
     languageAuto: "Automatic (system)",
     commitMessageLang: "Commit message language",
@@ -534,6 +602,71 @@ const en = {
     aiRanked: "\u2728 Target picked by the AI (several commits touch these lines) \u2014 double-check before confirming.",
     aiAlternates: "Other candidates proposed:",
     noCandidateAiUnavailable: "The changes touch multiple commits. Enable an AI provider in Settings to get a ranked suggestion.",
+  },
+
+  // ─── MergeEditor inline AI actions ──────────────────────
+  mergeEditor: {
+    aiButton: "AI",
+    aiLoading: "AI\u2026",
+    aiErrorPrefix: "AI",
+    aiSuggestionLabel: "AI suggestion \u2014 review and adjust",
+    explainTooltip: "Explain this conflict in plain language",
+    explain: "Explain",
+    explainAnalyzing: "Analysing\u2026",
+    analyzingConflict: "Analysing conflict\u2026",
+  },
+
+  // ─── PR inline diff — AI review ─────────────────────────
+  prInline: {
+    aiCritiqueTooltip: "AI critique of this hunk",
+    aiCritiqueButton: "Review",
+    aiCritiqueAnalyzing: "Analysing hunk\u2026",
+  },
+
+  // ─── Stash manager ──────────────────────────────────────
+  stash: {
+    composerPlaceholder: "Optional message \u2014 leave empty for the default label",
+    aiSuggestTooltip: "Suggest a message with AI",
+    aiButton: "AI",
+    createButton: "Stash",
+    cancelButton: "Cancel",
+  },
+
+  // ─── File history + blame AI ────────────────────────────
+  fileHistory: {
+    explainChange: "Explain this change with AI",
+    whyThisChange: "Why did this change?",
+    analyzingCommit: "Analysing commit\u2026",
+  },
+
+  // ─── Shared error messages (surface as toasts) ─────────
+  errors: {
+    noAiProvider: "No AI provider configured. Open Settings to enable one.",
+    noAiProviderShort: "No AI provider configured.",
+    emptyAiResponse: "The AI provider returned no response.",
+    aiQueryRequired: "Type a query before running an AI search.",
+    aiSearchUnparsable: "The AI provider's response could not be parsed.",
+    aiBranchNameUnparsable: "The AI provider's response could not be converted into a valid branch name.",
+    aiSuggestionFallback: "AI suggestion",
+    aiSuggestionUnstructured: "AI suggestion (unstructured response)",
+    aiPrTitleBodyMissing: "The AI provider's response could not be parsed (title/body missing).",
+    noRepoOpen: "No repository open (cwd is empty).",
+    squashNeedsTwo: "At least two commits are required to suggest a squash.",
+    missingParams: "Missing parameters (cwd, commit, or file).",
+    noStagedChanges: "No staged changes \u2014 stage files before generating a message.",
+    noMessageToTransform: "No message to transform \u2014 generate one first.",
+    noMergePreview: "No merge preview to analyze.",
+    missingBranch: "Source or target branch is missing.",
+    missingRefs: "Both references (source and target) are required.",
+    emptyHunk: "Empty hunk \u2014 nothing to analyze.",
+    branchNameNeedInput: "Provide a description or open a repository \u2014 nothing to suggest otherwise.",
+    branchNameNoContext: "No description and no local changes \u2014 type a few words to guide the suggestion.",
+    sameRefs: "Both references are identical \u2014 no commits to include.",
+    noCommitsInRange: "No commits between {0} and {1} \u2014 nothing to describe.",
+    noFileChangesInCommit: "No changes for this file in this commit (the blame might point to a merge).",
+    aiResponseInvalidJson: "The AI provider's response could not be interpreted (invalid JSON).",
+    sameBranches: "Head and base branches are identical \u2014 no PR possible.",
+    noChangesToStash: "No local changes to stash \u2014 modify files before generating a message.",
   },
 } as const;
 

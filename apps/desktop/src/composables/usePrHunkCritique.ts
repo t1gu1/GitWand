@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import type { DiffHunk } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
+import { t } from "./useI18n";
 
 /**
  * Per-hunk AI code review: given one unified-diff hunk, asks the
@@ -115,12 +116,10 @@ export function usePrHunkCritique() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
       if (!hunk || !hunk.lines?.length) {
-        throw new Error("Hunk vide — rien à analyser.");
+        throw new Error(t("errors.emptyHunk"));
       }
 
       const systemPrompt = buildSystemPrompt(locale);
@@ -128,7 +127,7 @@ export function usePrHunkCritique() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       const parsed = extractJson(raw);
       if (!parsed) {

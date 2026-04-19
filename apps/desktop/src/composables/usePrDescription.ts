@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
+import { t } from "./useI18n";
 
 /**
  * Generates a structured Pull Request title + body from the commits
@@ -149,18 +150,14 @@ export function usePrDescription() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
-      if (!cwd) throw new Error("Aucun repo ouvert (cwd vide).");
+      if (!cwd) throw new Error(t("errors.noRepoOpen"));
       if (!headBranch || !baseBranch) {
-        throw new Error("Branche source ou cible manquante.");
+        throw new Error(t("errors.missingBranch"));
       }
       if (headBranch === baseBranch) {
-        throw new Error(
-          "La branche source et la branche cible sont identiques — aucune PR possible.",
-        );
+        throw new Error(t("errors.sameBranches"));
       }
 
       const range = `${baseBranch}..${headBranch}`;
@@ -193,9 +190,7 @@ export function usePrDescription() {
 
       const commits = (logRes.stdout ?? "").trim();
       if (!commits) {
-        throw new Error(
-          `Aucun commit entre ${baseBranch} et ${headBranch} — rien à décrire.`,
-        );
+        throw new Error(t("errors.noCommitsInRange", baseBranch, headBranch));
       }
       const diffstat = clip((statRes.stdout ?? "").trim(), maxStatChars);
 
@@ -204,7 +199,7 @@ export function usePrDescription() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
 
       const parsed = extractJson(raw);

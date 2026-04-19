@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
+import { t } from "./useI18n";
 
 /**
  * Generates commit messages from the currently staged diff.
@@ -125,15 +126,13 @@ export function useCommitMessage() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
 
       // Pull the staged diff + a short status summary via the existing
       // git_exec primitive — no new backend command needed.
       if (!cwd) {
-        throw new Error("Aucun repo ouvert (cwd vide).");
+        throw new Error(t("errors.noRepoOpen"));
       }
 
       let diffRes, statusRes;
@@ -158,7 +157,7 @@ export function useCommitMessage() {
 
       let diff = diffRes.stdout ?? "";
       if (diff.length === 0) {
-        throw new Error("Aucun changement stagé — stage des fichiers avant de générer un message.");
+        throw new Error(t("errors.noStagedChanges"));
       }
       if (diff.length > maxDiffChars) {
         diff = diff.slice(0, maxDiffChars) + "\n... (diff truncated)";
@@ -179,7 +178,7 @@ export function useCommitMessage() {
       // Use the provider's own free-form prompt entry point.
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       const message = cleanMessage(raw);
       lastMessage.value = message;
@@ -206,15 +205,15 @@ export function useCommitMessage() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error("Aucun provider IA configuré.");
+        throw new Error(t("errors.noAiProviderShort"));
       }
       if (!currentMessage.trim()) {
-        throw new Error("Aucun message à transformer — génère d'abord un message.");
+        throw new Error(t("errors.noMessageToTransform"));
       }
 
       const { system, user } = buildTransformPrompt(action, currentMessage, targetLocale);
       const raw = await ai.rawPrompt(system, user);
-      if (!raw) throw new Error("Le provider IA n'a retourné aucune réponse.");
+      if (!raw) throw new Error(t("errors.emptyAiResponse"));
 
       const message = cleanMessage(raw);
       lastMessage.value = message;

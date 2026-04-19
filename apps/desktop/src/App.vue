@@ -419,8 +419,7 @@ async function handleSwitchBranch(name: string) {
   }
 
   if (behavior === "refuse") {
-    repoError.value = t("branches.switchRefusedDirty" as any) ||
-      "Switch refusé : des changements non commités sont présents.";
+    repoError.value = t("branches.switchRefusedDirty");
     return;
   }
 
@@ -434,8 +433,7 @@ async function handleSwitchBranch(name: string) {
 
   if (behavior === "ask") {
     // Show a simple confirm — Vue dialog would be nicer but window.confirm is universal
-    const msg = t("branches.switchConfirmDirty" as any) ||
-      "Des changements non commités seront perdus. Continuer quand même ?";
+    const msg = t("branches.switchConfirmDirty");
     if (window.confirm(msg)) {
       await switchBranch(name);
     }
@@ -980,19 +978,17 @@ onUnmounted(() => {
     <div v-if="pendingSwitchBranch" class="switch-stash-overlay overlay-backdrop" @click.self="cancelSwitchStash">
       <div class="switch-stash-modal" role="dialog" aria-modal="true">
         <h3 class="switch-stash-title">
-          {{ uiLocale === 'fr' ? 'Stasher avant de changer de branche' : 'Stash before switching branch' }}
+          {{ t('branches.switchStashTitle') }}
         </h3>
         <p class="switch-stash-desc">
-          {{ uiLocale === 'fr'
-            ? `Tes changements seront mis de côté, puis restaurés après le switch vers « ${pendingSwitchBranch} ». Donne-lui un label pour le retrouver.`
-            : `Your changes will be stashed then restored after switching to "${pendingSwitchBranch}". Give it a label so you can find it.` }}
+          {{ t('branches.switchStashHint', pendingSwitchBranch) }}
         </p>
         <div class="switch-stash-row">
           <input
             v-model="switchStashMessage"
             type="text"
             class="switch-stash-input"
-            :placeholder="uiLocale === 'fr' ? 'Message optionnel (laisse vide pour le label par défaut)' : 'Optional message (empty = default label)'"
+            :placeholder="t('branches.switchStashPlaceholder')"
             maxlength="120"
             @keydown.enter.prevent="confirmSwitchStash"
             @keydown.esc.prevent="cancelSwitchStash"
@@ -1005,16 +1001,16 @@ onUnmounted(() => {
             @click="suggestSwitchStashMessage"
           >
             <span v-if="isGeneratingSwitchStashMessage">…</span>
-            <span v-else>✨ {{ uiLocale === 'fr' ? 'IA' : 'AI' }}</span>
+            <span v-else>✨ {{ t('common.ai') }}</span>
           </button>
         </div>
         <p v-if="switchStashAiError" class="switch-stash-error">{{ switchStashAiError }}</p>
         <div class="switch-stash-actions">
           <button type="button" class="switch-stash-cancel" @click="cancelSwitchStash">
-            {{ uiLocale === 'fr' ? 'Annuler' : 'Cancel' }}
+            {{ t('common.cancel') }}
           </button>
           <button type="button" class="switch-stash-confirm" @click="confirmSwitchStash">
-            {{ uiLocale === 'fr' ? 'Stasher &amp; changer' : 'Stash &amp; switch' }}
+            {{ t('branches.switchStashConfirm') }}
           </button>
         </div>
       </div>

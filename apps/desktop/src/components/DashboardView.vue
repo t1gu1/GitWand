@@ -934,7 +934,7 @@ watch(() => props.cwd, loadDashboard);
         <div class="rn-refs">
           <label class="rn-field">
             <span>{{ t('dashboard.releaseNotesFrom') }}</span>
-            <input v-model="releaseNotesFrom" type="text" class="rn-input mono" :placeholder="locale === 'fr' ? 'ex. v1.2.0' : 'e.g. v1.2.0'" />
+            <input v-model="releaseNotesFrom" type="text" class="rn-input mono" :placeholder="t('dashboard.releaseNotesFromPlaceholder')" />
           </label>
           <span class="rn-sep">..</span>
           <label class="rn-field">

@@ -58,7 +58,7 @@ function hl(content: string): string {
 // ─── AI hunk critique (Phase 1.3.1) ─────────────────────
 const ai = useAIProvider();
 const { isGenerating: isCritiquing, critique: critiqueHunk, lastError: critiqueAiError } = usePrHunkCritique();
-const { locale } = useI18n();
+const { locale, t } = useI18n();
 /** Per-hunk cache: hunkIdx → result (or null while loading). */
 const critiqueResults = ref<Record<number, HunkCritiqueResult | null>>({});
 /** Which hunk is currently being analysed (only one at a time). */
@@ -258,11 +258,11 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
             class="btn btn--ai pid-hunk-ai"
             :class="{ 'pid-hunk-ai--active': critiqueOpenIdx === hunkIdx }"
             :disabled="critiqueLoadingIdx === hunkIdx"
-            :title="locale === 'fr' ? 'Critique IA de ce hunk' : 'AI critique of this hunk'"
+            :title="t('prInline.aiCritiqueTooltip')"
             @click="requestHunkCritique(hunkIdx)"
           >
             <span v-if="critiqueLoadingIdx === hunkIdx">…</span>
-            <span v-else>✨ {{ locale === 'fr' ? 'Review' : 'Review' }}</span>
+            <span v-else>✨ {{ t('prInline.aiCritiqueButton') }}</span>
           </button>
         </div>
 
@@ -280,7 +280,7 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
           <span class="pid-critique-body">
             <span v-if="critiqueAiError && !critiqueResults[hunkIdx]" class="pid-critique-error">{{ critiqueAiError }}</span>
             <span v-else-if="critiqueLoadingIdx === hunkIdx && !critiqueResults[hunkIdx]">
-              {{ locale === 'fr' ? 'Analyse du hunk en cours…' : 'Analysing hunk…' }}
+              {{ t('prInline.aiCritiqueAnalyzing') }}
             </span>
             <template v-else-if="critiqueResults[hunkIdx]">
               <span class="pid-critique-verdict">{{ critiqueResults[hunkIdx]!.verdict }}</span>

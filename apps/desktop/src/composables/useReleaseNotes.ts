@@ -2,6 +2,7 @@ import { ref } from "vue";
 import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
+import { t } from "./useI18n";
 
 /**
  * Generate Keep-a-Changelog-style markdown release notes from the
@@ -117,18 +118,14 @@ export function useReleaseNotes() {
 
     try {
       if (!ai.isAvailable.value) {
-        throw new Error(
-          "Aucun provider IA configuré. Ouvre les paramètres pour en activer un.",
-        );
+        throw new Error(t("errors.noAiProvider"));
       }
-      if (!cwd) throw new Error("Aucun repo ouvert (cwd vide).");
+      if (!cwd) throw new Error(t("errors.noRepoOpen"));
       if (!fromRef.trim() || !toRef.trim()) {
-        throw new Error("Les deux références (source et cible) sont requises.");
+        throw new Error(t("errors.missingRefs"));
       }
       if (fromRef === toRef) {
-        throw new Error(
-          "Les deux références sont identiques — aucun commit à inclure.",
-        );
+        throw new Error(t("errors.sameRefs"));
       }
 
       const range = `${fromRef}..${toRef}`;
@@ -149,9 +146,7 @@ export function useReleaseNotes() {
 
       const commits = clip((logRes.stdout ?? "").trim(), maxCommitsChars);
       if (!commits) {
-        throw new Error(
-          `Aucun commit entre ${fromRef} et ${toRef} — rien à décrire.`,
-        );
+        throw new Error(t("errors.noCommitsInRange", fromRef, toRef));
       }
 
       const systemPrompt = buildSystemPrompt(locale);
@@ -159,7 +154,7 @@ export function useReleaseNotes() {
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
-        throw new Error("Le provider IA n'a retourné aucune réponse.");
+        throw new Error(t("errors.emptyAiResponse"));
       }
       const markdown = stripMarkdownFences(raw);
       lastMarkdown.value = markdown;
