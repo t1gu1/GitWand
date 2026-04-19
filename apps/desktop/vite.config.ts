@@ -2,7 +2,14 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ESM-safe replacement for `__dirname`. Required under Vite 6 +
+// `"type": "module"` in package.json: Vite 5 silently polyfilled
+// `__dirname` when compiling the config to `.mjs`; Vite 6 dropped that
+// shim, so `__dirname` throws `ReferenceError: __dirname is not defined`.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const pkg = JSON.parse(
   readFileSync(resolve(__dirname, "package.json"), "utf-8"),
