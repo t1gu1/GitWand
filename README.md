@@ -206,6 +206,8 @@ Every classification step is logged in a `DecisionTrace` for auditing and debugg
 
 ## CLI
 
+[![npm](https://img.shields.io/npm/v/@gitwand/cli?color=22c55e&label=%40gitwand%2Fcli)](https://www.npmjs.com/package/@gitwand/cli)
+
 ```bash
 # Use directly with npx
 npx @gitwand/cli resolve
@@ -308,6 +310,8 @@ The `pendingHunks` array gives AI agents and CI scripts everything they need to 
 
 ## MCP Server
 
+[![npm](https://img.shields.io/npm/v/@gitwand/mcp?color=22c55e&label=%40gitwand%2Fmcp)](https://www.npmjs.com/package/@gitwand/mcp)
+
 GitWand ships an MCP (Model Context Protocol) server that exposes its conflict resolution engine to AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
 
 ### Setup
@@ -319,10 +323,16 @@ Add this to your MCP client configuration (e.g. `claude_desktop_config.json` or 
   "mcpServers": {
     "gitwand": {
       "command": "npx",
-      "args": ["@gitwand/mcp", "--cwd", "/path/to/your/repo"]
+      "args": ["-y", "@gitwand/mcp"]
     }
   }
 }
+```
+
+The server defaults to the working directory of the client. To pin it to a specific repo, add `"--cwd", "/absolute/path/to/repo"` to the `args` array. With Claude Code, install in one line:
+
+```bash
+claude mcp add gitwand -- npx -y @gitwand/mcp
 ```
 
 ### Tools
@@ -516,14 +526,15 @@ GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference l
 - [x] Stop macOS 50× permission prompt loop — skip `.git` probe on TCC-protected home subfolders (Documents, Desktop, Downloads, Pictures, Movies, Music, Library)
 - [x] Composable error messages routed through i18n (`errors.*` keys across 5 locales)
 
-### Next — v1.6.0 — Visual diff & distribution
+### Next — v1.6.0 — Distribution & visual diff
 
-- [ ] Folder diff — compare two folders, branches, or commits
-- [ ] Image diff — side-by-side, blink, slider (PNG, JPEG, SVG, WebP, GIF)
-- [ ] Submodules & Git worktrees in the UI
-- [ ] MCP Registry submission (npm publish + official listing)
-- [ ] GitLab / Bitbucket integration
-- [ ] macOS notarization + Windows code signing
+Target: end of May 2026. Planned scope (see [PLAN-v1.6.md](./PLAN-v1.6.md) for specs):
+
+- [ ] **`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp` published to npm** + official MCP Registry listing
+- [ ] **Image diff** — side-by-side, overlay, blink, slider (PNG, JPEG, SVG, WebP, GIF); heatmap + AI alt-text (P1)
+- [ ] **Folder diff** — compare two folders, branches, or commits; AI summary per folder (P1)
+
+Deferred to v1.7: Submodules & Git worktrees, GitLab / Bitbucket integration, macOS notarization + Windows code signing.
 
 See [ROADMAP.md](./ROADMAP.md) for the full phased plan with competitive analysis.
 

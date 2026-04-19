@@ -1,15 +1,42 @@
 {
   "name": "@gitwand/mcp",
-  "version": "1.3.0",
-  "description": "GitWand MCP server — smart conflict resolution for AI agents",
+  "version": "1.6.0",
+  "description": "GitWand MCP server — smart Git conflict resolution for AI agents (Claude, Cursor, Windsurf, Claude Code)",
   "type": "module",
   "main": "dist/server.js",
   "bin": {
     "gitwand-mcp": "dist/server.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "git",
+    "merge",
+    "conflict",
+    "conflict-resolution",
+    "claude",
+    "claude-code",
+    "cursor",
+    "windsurf",
+    "ai-agent",
+    "gitwand"
+  ],
+  "homepage": "https://github.com/devlint/GitWand#mcp-server",
+  "bugs": {
+    "url": "https://github.com/devlint/GitWand/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devlint/GitWand.git",
+    "directory": "packages/mcp"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist"
@@ -22,5 +49,6 @@
     "@types/node": "^25.5.0",
     "typescript": "^5.4.0"
   },
+  "author": "Laurent Guitton <lb.guitton@gmail.com>",
   "license": "MIT"
 }

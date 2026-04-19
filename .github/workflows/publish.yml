@@ -1,0 +1,140 @@
+name: Publish npm packages
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (no actual publish)'
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+  id-token: write  # Required for npm provenance attestations
+
+jobs:
+  publish:
+    name: Publish @gitwand/{core,mcp,cli} to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build core (dependency of cli + mcp)
+        run: pnpm --filter @gitwand/core run build
+
+      - name: Build cli and mcp
+        run: |
+          pnpm --filter @gitwand/cli run build
+          pnpm --filter @gitwand/mcp run build
+
+      - name: Verify tag matches package.json versions
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          for pkg in core cli mcp; do
+            VER=$(node -p "require('./packages/${pkg}/package.json').version")
+            if [ "$VER" != "$TAG" ]; then
+              echo "::error::@gitwand/${pkg} version ${VER} does not match tag ${TAG}"
+              exit 1
+            fi
+          done
+          echo "All three packages match tag v${TAG}"
+
+      - name: Publish @gitwand/core
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${PKG}@${VER}" version >/dev/null 2>&1; then
+            echo "::notice::${PKG}@${VER} already on npm, skipping"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::DRY RUN — would publish ${PKG}@${VER}"
+            pnpm publish --access public --no-git-checks --dry-run
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+      - name: Publish @gitwand/cli
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${PKG}@${VER}" version >/dev/null 2>&1; then
+            echo "::notice::${PKG}@${VER} already on npm, skipping"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::DRY RUN — would publish ${PKG}@${VER}"
+            pnpm publish --access public --no-git-checks --dry-run
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+      - name: Publish @gitwand/mcp
+        working-directory: packages/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          PKG=$(node -p "require('./package.json').name")
+          VER=$(node -p "require('./package.json').version")
+          if npm view "${PKG}@${VER}" version >/dev/null 2>&1; then
+            echo "::notice::${PKG}@${VER} already on npm, skipping"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::DRY RUN — would publish ${PKG}@${VER}"
+            pnpm publish --access public --no-git-checks --dry-run
+          else
+            pnpm publish --access public --no-git-checks --provenance
+          fi
+
+  smoke-test:
+    name: Smoke test published CLI
+    needs: publish
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Wait for npm registry propagation
+        run: node -e "setTimeout(() => process.exit(0), 30000)"
+
+      - name: npx @gitwand/cli --help
+        shell: bash
+        run: npx -y @gitwand/cli@${GITHUB_REF_NAME#v} --help
+
+      - name: npx @gitwand/mcp --version (should not hang — we just probe it exists)
+        shell: bash
+        run: |
+          # MCP starts a stdio server; we just check the package resolves and can be invoked.
+          timeout 5s npx -y @gitwand/mcp@${GITHUB_REF_NAME#v} --cwd "$PWD" < /dev/null || test $? -eq 124

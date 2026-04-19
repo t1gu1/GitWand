@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.devlint/gitwand",
+  "description": "Smart Git merge conflict resolution for AI agents. GitWand classifies conflicts against a priority-ordered pattern registry (same-change, one-side-change, whitespace-only, non-overlapping, value-only, generated-file, and more) with a composite confidence score. The agent handles only the complex hunks; GitWand handles everything else.",
+  "version": "1.6.0",
+  "repository": {
+    "url": "https://github.com/devlint/GitWand",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@gitwand/mcp",
+      "version": "1.6.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ],
+  "$meta": {
+    "io.modelcontextprotocol.registry/publisher": {
+      "maintainer": "Laurent Guitton",
+      "contactUrl": "https://github.com/devlint"
+    }
+  }
+}
