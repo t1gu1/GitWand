@@ -4,7 +4,7 @@
  * Run : `pnpm --filter @gitwand/desktop test:parity`
  *
  * Prérequis : avoir compilé le probe Rust au moins une fois
- *   cargo build --features parity-probe --bin parity-probe
+ *   cargo build --example parity-probe
  * (cf. README.md dans ce dossier).
  *
  * Portée :

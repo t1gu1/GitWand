@@ -17,11 +17,16 @@
 //! en cas d'échec de la commande). Exit code 0 pour succès, 1 pour erreur de
 //! commande, 2 pour erreur d'invocation (args manquants, JSON invalide).
 //!
-//! Ce binaire n'est compilé qu'avec la feature `parity-probe` :
-//!   cargo build --features parity-probe --bin parity-probe
+//! Déclaré comme `[[example]]` dans `Cargo.toml` (pas `[[bin]]`) : tauri-bundler
+//! auto-découvre toutes les entrées `[[bin]]` et tente de les embarquer dans
+//! le bundle — même celles protégées par `required-features`. Les examples
+//! sont ignorés par tauri-bundler.
+//!
+//! Build :
+//!   cargo build --example parity-probe
 //!
 //! Le harness Node attend un binaire pré-compilé à un chemin connu, typiquement
-//! `target/debug/parity-probe` (surchargeable via `PARITY_PROBE` env var).
+//! `target/debug/examples/parity-probe` (surchargeable via `PARITY_PROBE` env var).
 
 // Les `_parity` sont des wrappers publics qui délèguent aux `#[tauri::command]`
 // privés de lib.rs. On ne peut pas importer les commandes directement : la

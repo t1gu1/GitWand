@@ -1,13 +1,13 @@
 /**
  * Wrapper autour du binaire Rust `parity-probe`.
  *
- * Le binaire est compilé séparément via :
- *     cargo build --features parity-probe --bin parity-probe
+ * Le binaire est compilé comme `[[example]]` via :
+ *     cargo build --example parity-probe
  *
- * Par défaut on cherche le binaire à `src-tauri/target/debug/parity-probe`,
- * relatif à ce fichier. L'env var `PARITY_PROBE` permet de surcharger le
- * chemin (utile pour pointer sur `target/release/...` ou un binaire pré-build
- * en CI).
+ * Par défaut on cherche le binaire à
+ * `src-tauri/target/debug/examples/parity-probe`, relatif à ce fichier.
+ * L'env var `PARITY_PROBE` permet de surcharger le chemin (utile pour pointer
+ * sur `target/release/examples/...` ou un binaire pré-build en CI).
  *
  * Le probe lit son JSON d'entrée sur stdin et écrit le résultat sur stdout.
  * On parse stdout en JSON — s'il contient une clé `error`, c'est que la
@@ -28,6 +28,7 @@ const DEFAULT_PROBE_PATH = join(
   "src-tauri",
   "target",
   "debug",
+  "examples",
   "parity-probe",
 );
 
@@ -49,7 +50,7 @@ export function runProbe(command, args) {
   if (!existsSync(bin)) {
     throw new Error(
       `parity-probe binary not found at ${bin}\n` +
-        "Build it first with: cargo build --features parity-probe --bin parity-probe\n" +
+        "Build it first with: cargo build --example parity-probe\n" +
         "Or set PARITY_PROBE=<path> to an already-built binary.",
     );
   }

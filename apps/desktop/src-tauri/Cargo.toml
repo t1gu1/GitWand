@@ -5,43 +5,28 @@ description = "GitWand Desktop — standalone merge conflict resolution"
 authors = ["Laurent Guitton <lb.guitton@gmail.com>"]
 license = "MIT"
 edition = "2021"
-# Disable Cargo's automatic bin discovery from `src/bin/`. The `parity-probe`
-# binary is declared explicitly below with `required-features = ["parity-probe"]`;
-# without this flag, Cargo also auto-discovers `src/bin/parity_probe.rs` as an
-# implicit bin target *without* the feature gate, which breaks the
-# `universal-apple-darwin` lipo step during the release build (the binary
-# would exist for one arch but not the other, depending on feature state).
-autobins = false
 
 [lib]
 name = "gitwand_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# ─── Main Tauri binary ───────────────────────────────────────
-#
-# With `autobins = false` above, Cargo no longer auto-discovers
-# `src/main.rs` — it must be declared explicitly here. The binary
-# name matches the package name (default Cargo behaviour) so the
-# tauri bundling pipeline finds the expected executable.
-[[bin]]
-name = "gitwand-desktop"
-path = "src/main.rs"
-
 # ─── Parity probe (P2.3) ─────────────────────────────────────
 #
-# Petit binaire de test qui expose les commandes Tauri critiques en CLI,
-# pour le harness de tests de parité Rust↔Node (`apps/desktop/tests/parity/`).
-# Gardé sous feature flag `parity-probe` pour qu'il ne soit pas embarqué
-# dans les builds de production.
+# Petit binaire de test qui expose les commandes Tauri critiques en CLI, pour
+# le harness de tests de parité Rust↔Node (`apps/desktop/tests/parity/`).
 #
-# Build : `cargo build --features parity-probe --bin parity-probe`
-[[bin]]
+# Déclaré comme `[[example]]` plutôt que `[[bin]]` : tauri-bundler découvre
+# automatiquement toutes les entrées `[[bin]]` d'un package et tente de les
+# bundler comme binaires externes — ce qui cassait la release v1.5.1 car
+# `parity_probe` n'est pas compilé dans la configuration de release normale.
+# Les examples ne sont pas touchés par tauri-bundler et ne sont pas construits
+# par défaut, donc pas besoin d'un feature flag.
+#
+# Build : `cargo build --example parity-probe`
+# Sortie : `target/debug/examples/parity-probe`
+[[example]]
 name = "parity-probe"
-path = "src/bin/parity_probe.rs"
-required-features = ["parity-probe"]
-
-[features]
-parity-probe = []
+path = "examples/parity_probe.rs"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

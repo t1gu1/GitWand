@@ -16,10 +16,16 @@ modif de `lib.rs`) :
 
 ```sh
 cd apps/desktop/src-tauri
-cargo build --features parity-probe --bin parity-probe
+cargo build --example parity-probe
 ```
 
-Le binaire sort à `apps/desktop/src-tauri/target/debug/parity-probe`.
+Le binaire sort à `apps/desktop/src-tauri/target/debug/examples/parity-probe`.
+
+> **Pourquoi un `[[example]]` et pas un `[[bin]]` ?** tauri-bundler
+> auto-découvre toutes les entrées `[[bin]]` d'un package et tente de les
+> embarquer comme binaires externes — même celles protégées par
+> `required-features`. Un `[[example]]` est invisible pour tauri-bundler
+> tout en restant un vrai binaire exécutable (cf. v1.5.1 release failure).
 
 Alternative : pointer sur un binaire pré-build via l'env var `PARITY_PROBE` :
 
@@ -61,7 +67,7 @@ Laisser la fn `git_foo` elle-même telle quelle (privée + `#[tauri::command]`).
 
 ### 2. Brancher le probe
 
-Dans `src-tauri/src/bin/parity_probe.rs`, ajouter une branche au `match` :
+Dans `src-tauri/examples/parity_probe.rs`, ajouter une branche au `match` :
 
 ```rust
 "git-foo" => {
@@ -71,7 +77,7 @@ Dans `src-tauri/src/bin/parity_probe.rs`, ajouter une branche au `match` :
 ```
 
 Où `FooInput` est un struct local au probe (pas besoin de pub) qui décrit
-les args JSON. Recompiler (`cargo build --features parity-probe ...`).
+les args JSON. Recompiler (`cargo build --example parity-probe`).
 
 ### 3. Écrire le test
 
@@ -127,5 +133,5 @@ côtés. On a préféré le modèle « probe stdio » parce que :
 
 1. Pas de port à gérer côté Rust (moins de flakiness parallèle).
 2. Chaque invocation est une exécution propre — pas de state inter-tests.
-3. Le binaire probe peut être feature-gated (`required-features`) et donc
-   absent du bundle Tauri livré, contrairement à un serveur qui pollue `lib.rs`.
+3. Le binaire probe est un `[[example]]` — jamais construit ni embarqué
+   par le bundle Tauri livré, contrairement à un serveur qui pollue `lib.rs`.

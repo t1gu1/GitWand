@@ -3101,13 +3101,13 @@ fn open_in_editor(cwd: String, path: String, editor: String) -> Result<(), Strin
 // to the function, and making the wrapped fn itself `pub` collides with that
 // helper's name in the macro namespace (E0255). So we keep the Tauri commands
 // private and expose tiny `pub fn <name>_parity` wrappers that the
-// `parity-probe` binary (see `src/bin/parity_probe.rs`) imports to run the
+// `parity-probe` example (see `examples/parity_probe.rs`) imports to run the
 // *same* code paths as the Tauri handler, without going through a Tauri
 // `Invoke`.
 //
-// Not gated behind the `parity-probe` feature on purpose: these are 3-line
-// wrappers that add no runtime cost, and keeping them always-compiled avoids
-// the "works with this feature, breaks without it" class of bugs.
+// These wrappers are always compiled — they're 3-line passthroughs with no
+// runtime cost, and keeping them unconditional avoids the "works with this
+// feature, breaks without it" class of bugs.
 
 pub fn git_status_parity(cwd: String) -> Result<GitStatus, String> {
     git_status(cwd)
