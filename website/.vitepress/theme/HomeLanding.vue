@@ -26,7 +26,7 @@ function setLocale(code: Locale) {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v1.5.0 · Open Source · MIT',
+    badge: 'v1.5.1 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
@@ -96,7 +96,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   en: {
-    badge: 'v1.5.0 · Open Source · MIT',
+    badge: 'v1.5.1 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
@@ -166,7 +166,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   es: {
-    badge: 'v1.5.0 · Open Source · MIT',
+    badge: 'v1.5.1 · Open Source · MIT',
     heroH1a: 'Git, sin',
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
@@ -236,7 +236,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'pt-BR': {
-    badge: 'v1.5.0 · Open Source · MIT',
+    badge: 'v1.5.1 · Open Source · MIT',
     heroH1a: 'Git, sem',
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
@@ -306,7 +306,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'zh-CN': {
-    badge: 'v1.5.0 · 开源 · MIT',
+    badge: 'v1.5.1 · 开源 · MIT',
     heroH1a: 'Git,告别',
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
