@@ -230,6 +230,29 @@ const ptBR: Locale = {
     selectHunk: "Selecionar hunk",
   },
 
+  // ─── ImageDiffViewer (v1.6.2) ───────────────────────────
+  imageDiff: {
+    old: "Antes",
+    new: "Depois",
+    absent: "(ausente)",
+    noOld: "Não existe nesta versão",
+    noNew: "Removida nesta versão",
+    loading: "Carregando imagem\u2026",
+    modeAria: "Modo de exibição",
+    modeSideBySide: "Lado a lado",
+    modeOverlay: "Sobreposição",
+    modeBlink: "Piscar",
+    modeSlider: "Controle deslizante",
+    overlaySliderAria: "Opacidade entre antes e depois",
+    sliderHandleAria: "Arraste para revelar antes / depois",
+    tooBig: "Imagem grande demais para exibir",
+    tooBigDetail: "Antes: {0}, Depois: {1}. Limite de 20 MB por lado.",
+    loadAnyway: "Carregar mesmo assim",
+    altOld: "Versão anterior da imagem",
+    altNew: "Nova versão da imagem",
+    shortcutHint: "Atalhos: 1 lado a lado \u00b7 2 sobreposição \u00b7 3 piscar \u00b7 4 deslizador",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "Histórico",

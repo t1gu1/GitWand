@@ -7,6 +7,7 @@ import EmptyState from "./components/EmptyState.vue";
 import FolderPicker from "./components/FolderPicker.vue";
 import RepoSidebar from "./components/RepoSidebar.vue";
 import DiffViewer from "./components/DiffViewer.vue";
+import ImageDiffViewer from "./components/ImageDiffViewer.vue";
 import CommitDiffViewer from "./components/CommitDiffViewer.vue";
 import FileHistoryViewer from "./components/FileHistoryViewer.vue";
 import CommitGraph from "./components/CommitGraph.vue";
@@ -23,6 +24,7 @@ import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
 import type { GitLogEntry } from "./utils/backend";
 import { getPersistedDiffMode, persistDiffMode, type DiffMode } from "./utils/diffMode";
+import { isImagePath } from "./utils/imagePath";
 import { useGitWand } from "./composables/useGitWand";
 import { useRepoTabs } from "./composables/useRepoTabs";
 import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
@@ -64,6 +66,7 @@ const {
   folderPath: repoFolderPath,
   status: repoStatus,
   selectedFilePath: repoSelectedFile,
+  selectedFileStaged: repoSelectedFileStaged,
   diff: repoDiff,
   log: repoLog,
   logScope,
@@ -865,6 +868,22 @@ onUnmounted(() => {
               :cwd="repoFolderPath"
               @close="closeFileHistory"
               @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }"
+            />
+            <!--
+              Image files (PNG, JPEG, WebP, GIF, SVG) get the ImageDiffViewer
+              branch; the line-based DiffViewer would hit its "binary file"
+              dead-end and show nothing useful.
+              - oldRev is always HEAD (what the file looked like before this change)
+              - newRev is ":0" (the staged index version) when viewing staged
+                changes, otherwise "" (the working tree on disk).
+            -->
+            <ImageDiffViewer
+              v-else-if="isImagePath(repoSelectedFile) && repoFolderPath && repoSelectedFile"
+              :cwd="repoFolderPath"
+              :file-path="repoSelectedFile"
+              old-rev="HEAD"
+              :new-rev="repoSelectedFileStaged ? ':0' : ''"
+              status="modified"
             />
             <DiffViewer
               v-else

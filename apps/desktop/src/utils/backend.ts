@@ -128,6 +128,62 @@ export async function writeFile(
   if (!res.ok) throw new Error(`Failed to write ${path}`);
 }
 
+/**
+ * Shape returned by `readFileAtRevision`. Bytes are base64-encoded to cross
+ * the IPC boundary without lossy JSON number-array serialization.
+ */
+export interface FileAtRevision {
+  /** Base64-encoded file bytes. Empty string when `absent` is true. */
+  bytesBase64: string;
+  /** Length in bytes of the decoded payload. */
+  byteLength: number;
+  /** MIME type guessed from the path extension. */
+  mime: string;
+  /** True when the file does not exist at the requested revision. */
+  absent: boolean;
+}
+
+/**
+ * Read the raw bytes of a file at a specific git revision (or the working tree).
+ *
+ * Introduced for the v1.6.2 image-diff pipeline. Accepts any file type — the
+ * caller decides how to decode. The path is always relative to `cwd`.
+ *
+ * - `rev === ""`  → read from disk (working tree, including modified/untracked)
+ * - `rev === ":0"` → staged version (index)
+ * - otherwise     → `git show <rev>:<path>` (HEAD, HEAD^, hash, branch, tag…)
+ *
+ * Returns `{ absent: true, bytesBase64: "" }` when the file does not exist at
+ * the requested revision (e.g. an added file that is absent from HEAD).
+ */
+export async function readFileAtRevision(
+  cwd: string,
+  rev: string,
+  path: string,
+): Promise<FileAtRevision> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<{
+      bytes_base64: string;
+      byte_length: number;
+      mime: string;
+      absent: boolean;
+    }>("read_file_at_revision", { cwd, rev, path });
+    return {
+      bytesBase64: raw.bytes_base64,
+      byteLength: raw.byte_length,
+      mime: raw.mime,
+      absent: raw.absent,
+    };
+  }
+  const res = await fetch(`${DEV_SERVER}/api/read-file-at-revision`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, rev, path }),
+  });
+  if (!res.ok) throw new Error(`Failed to read ${path} at rev ${rev || "(working tree)"}`);
+  return res.json();
+}
+
 // ─── Directory listing (for FolderPicker) ────────────────
 
 export interface DirEntry {

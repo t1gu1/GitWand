@@ -230,6 +230,29 @@ const zhCN: Locale = {
     selectHunk: "选择此段",
   },
 
+  // ─── ImageDiffViewer (v1.6.2) ───────────────────────────
+  imageDiff: {
+    old: "旧版",
+    new: "新版",
+    absent: "（不存在）",
+    noOld: "此版本不存在",
+    noNew: "此版本已删除",
+    loading: "正在加载图像\u2026",
+    modeAria: "显示模式",
+    modeSideBySide: "并排",
+    modeOverlay: "叠加",
+    modeBlink: "闪烁",
+    modeSlider: "滑块",
+    overlaySliderAria: "旧版与新版之间的不透明度",
+    sliderHandleAria: "拖动以显示旧版 / 新版",
+    tooBig: "图像过大，无法显示",
+    tooBigDetail: "旧版：{0}，新版：{1}。每侧限制 20 MB。",
+    loadAnyway: "仍然加载",
+    altOld: "旧版图像",
+    altNew: "新版图像",
+    shortcutHint: "快捷键：1 并排 \u00b7 2 叠加 \u00b7 3 闪烁 \u00b7 4 滑块",
+  },
+
   log: {
     title: "历史",
     noCommit: "没有提交",

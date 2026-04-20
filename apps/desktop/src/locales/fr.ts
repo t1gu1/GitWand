@@ -236,6 +236,29 @@ const fr: Locale = {
     selectHunk: "Sélectionner le bloc",
   },
 
+  // ─── ImageDiffViewer (v1.6.2) ───────────────────────────
+  imageDiff: {
+    old: "Avant",
+    new: "Après",
+    absent: "(absent)",
+    noOld: "Absent de cette version",
+    noNew: "Supprimé dans cette version",
+    loading: "Chargement de l\u2019image\u2026",
+    modeAria: "Mode d\u2019affichage",
+    modeSideBySide: "Côte à côte",
+    modeOverlay: "Superposition",
+    modeBlink: "Alternance",
+    modeSlider: "Curseur",
+    overlaySliderAria: "Opacité entre avant et après",
+    sliderHandleAria: "Glisser pour révéler avant / après",
+    tooBig: "Image trop grande pour être affichée",
+    tooBigDetail: "Avant : {0}, Après : {1}. Limite de 20 Mo par côté.",
+    loadAnyway: "Charger quand même",
+    altOld: "Version avant de l\u2019image",
+    altNew: "Version après de l\u2019image",
+    shortcutHint: "Raccourcis : 1 côte à côte \u00b7 2 superposition \u00b7 3 alternance \u00b7 4 curseur",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "Historique",

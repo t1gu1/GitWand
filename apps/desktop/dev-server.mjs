@@ -77,6 +77,25 @@ const GH = resolveBin("gh");
 const GIT = resolveBin("git");
 
 /**
+ * Guess a MIME type from a file extension. Mirrors the Rust `guess_mime_from_ext`
+ * helper. Keep the two lists in sync.
+ */
+function guessMimeFromExt(path) {
+  const m = path.toLowerCase().match(/\.([a-z0-9]+)$/);
+  const ext = m ? m[1] : "";
+  switch (ext) {
+    case "png": return "image/png";
+    case "jpg": case "jpeg": return "image/jpeg";
+    case "gif": return "image/gif";
+    case "webp": return "image/webp";
+    case "svg": return "image/svg+xml";
+    case "bmp": return "image/bmp";
+    case "ico": return "image/x-icon";
+    default: return "application/octet-stream";
+  }
+}
+
+/**
  * Environment passed when spawning the `claude` CLI. We strip API-key env
  * vars so the CLI falls back to the OAuth session (`claude login`) — same
  * rationale as the Rust backend's `strip_claude_auth_env`.
@@ -281,6 +300,64 @@ const server = createServer(async (req, res) => {
       catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
       writeFileSync(fullPath, content, "utf-8");
       return jsonResponse(req, res, { ok: true });
+    }
+
+    // POST /api/read-file-at-revision  { cwd, rev, path }
+    //
+    // Mirrors the Tauri `read_file_at_revision` command (v1.6.2 image diff).
+    // - rev === ""  → read working tree from disk
+    // - rev != ""  → git show <rev>:<path> as bytes
+    //
+    // Response: { bytesBase64, byteLength, mime, absent }.
+    if (url.pathname === "/api/read-file-at-revision" && req.method === "POST") {
+      const { cwd, rev, path } = await readBody(req);
+      if (!cwd || !cwd.trim()) return jsonResponse(req, res, { error: "cwd must not be empty" }, 400);
+      if (!path || !path.trim()) return jsonResponse(req, res, { error: "path must not be empty" }, 400);
+
+      const mime = guessMimeFromExt(path);
+
+      if (!rev || !rev.trim()) {
+        let fullPath;
+        try { fullPath = safeRepoPath(cwd, path); }
+        catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
+        try {
+          const bytes = readFileSync(fullPath);
+          return jsonResponse(req, res, {
+            bytesBase64: bytes.toString("base64"),
+            byteLength: bytes.length,
+            mime,
+            absent: false,
+          });
+        } catch (e) {
+          if (e.code === "ENOENT") {
+            return jsonResponse(req, res, { bytesBase64: "", byteLength: 0, mime, absent: true });
+          }
+          return jsonResponse(req, res, { error: `Failed to read ${path}: ${e.message}` }, 500);
+        }
+      }
+
+      // git show <rev>:<path> — bytes
+      const spec = `${rev}:${path}`;
+      try {
+        const bytes = execFileSync(GIT, ["show", spec], { cwd, stdio: ["ignore", "pipe", "pipe"] });
+        return jsonResponse(req, res, {
+          bytesBase64: bytes.toString("base64"),
+          byteLength: bytes.length,
+          mime,
+          absent: false,
+        });
+      } catch (e) {
+        const stderr = e.stderr ? e.stderr.toString() : "";
+        if (
+          stderr.includes("exists on disk, but not in") ||
+          stderr.includes("does not exist") ||
+          stderr.includes("unknown revision") ||
+          stderr.includes("Path ")
+        ) {
+          return jsonResponse(req, res, { bytesBase64: "", byteLength: 0, mime, absent: true });
+        }
+        return jsonResponse(req, res, { error: `git show ${spec} failed: ${stderr.trim() || e.message}` }, 500);
+      }
     }
 
     // GET /api/list-dir?path=/some/dir  — list directories for folder picker
@@ -2349,6 +2426,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/conflicted-files?cwd=<path>`);
   console.log(`    POST /api/read-file   { cwd, path }`);
   console.log(`    POST /api/write-file  { cwd, path, content }`);
+  console.log(`    POST /api/read-file-at-revision  { cwd, rev, path }`);
   console.log(`    POST /api/read-gitwandrc  { cwd }`);
   console.log(`    GET  /api/list-dir?path=<path>`);
   console.log(`    GET  /api/git-status?cwd=<path>`);

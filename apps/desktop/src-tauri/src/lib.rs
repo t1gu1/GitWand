@@ -610,6 +610,113 @@ fn write_file(cwd: String, path: String, content: String) -> Result<(), String> 
     std::fs::write(&full, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
 
+/// Return the raw bytes of a file at a specific git revision (or the working tree).
+///
+/// Used by the image-diff pipeline (v1.6.2) to fetch the "old" and "new" versions
+/// of a binary file without needing a temporary checkout. Supports any file type;
+/// the caller is responsible for handling the bytes (decode image, compute hash…).
+///
+/// Arguments:
+/// - `rev`  — a git rev (`HEAD`, `HEAD^`, a hash, a branch name, `":0"` for the
+///            index). If empty, the file is read from disk (working tree).
+/// - `path` — path relative to `cwd`.
+///
+/// Returns a struct with base64-encoded bytes, byte length, and MIME guess.
+#[derive(Serialize)]
+struct FileAtRevision {
+    bytes_base64: String,
+    byte_length: usize,
+    mime: String,
+    /// True when the file is absent at the requested revision (returns empty bytes).
+    absent: bool,
+}
+
+fn guess_mime_from_ext(path: &str) -> &'static str {
+    let ext = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        _ => "application/octet-stream",
+    }
+}
+
+#[tauri::command]
+fn read_file_at_revision(
+    cwd: String,
+    rev: String,
+    path: String,
+) -> Result<FileAtRevision, String> {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+
+    let mime = guess_mime_from_ext(&path).to_string();
+
+    // Working tree read (rev empty) — go through the safe_repo_path helper.
+    if rev.trim().is_empty() {
+        let full = safe_repo_path(&cwd, &path)?;
+        match std::fs::read(&full) {
+            Ok(bytes) => Ok(FileAtRevision {
+                byte_length: bytes.len(),
+                bytes_base64: STANDARD.encode(&bytes),
+                mime,
+                absent: false,
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(FileAtRevision {
+                bytes_base64: String::new(),
+                byte_length: 0,
+                mime,
+                absent: true,
+            }),
+            Err(e) => Err(format!("Failed to read {}: {}", path, e)),
+        }
+    } else {
+        // Revision read — shell out to `git show <rev>:<path>`.
+        // `current_dir(cwd)` keeps git confined to the repo.
+        if cwd.trim().is_empty() {
+            return Err("cwd must not be empty".to_string());
+        }
+        let spec = format!("{}:{}", rev, path);
+        let output = std::process::Command::new(git_binary())
+            .args(["show", &spec])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to run git show: {}", e))?;
+
+        if !output.status.success() {
+            // Missing file at that revision → treat as absent (not an error).
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("exists on disk, but not in")
+                || stderr.contains("does not exist")
+                || stderr.contains("unknown revision")
+                || stderr.contains("Path")
+            {
+                return Ok(FileAtRevision {
+                    bytes_base64: String::new(),
+                    byte_length: 0,
+                    mime,
+                    absent: true,
+                });
+            }
+            return Err(format!("git show {} failed: {}", spec, stderr.trim()));
+        }
+
+        Ok(FileAtRevision {
+            byte_length: output.stdout.len(),
+            bytes_base64: STANDARD.encode(&output.stdout),
+            mime,
+            absent: false,
+        })
+    }
+}
+
 // ─── Directory listing (for FolderPicker) ──────────────────
 
 #[derive(Serialize)]
@@ -3159,6 +3266,7 @@ pub fn run() {
             get_conflicted_files,
             read_file,
             write_file,
+            read_file_at_revision,
             list_dir,
             git_status,
             git_diff,

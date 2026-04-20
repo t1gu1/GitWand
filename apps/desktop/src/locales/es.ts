@@ -229,6 +229,29 @@ const es: Locale = {
     selectHunk: "Seleccionar hunk",
   },
 
+  // ─── ImageDiffViewer (v1.6.2) ───────────────────────────
+  imageDiff: {
+    old: "Antes",
+    new: "Después",
+    absent: "(ausente)",
+    noOld: "No existe en esta versión",
+    noNew: "Eliminada en esta versión",
+    loading: "Cargando imagen\u2026",
+    modeAria: "Modo de visualización",
+    modeSideBySide: "Lado a lado",
+    modeOverlay: "Superposición",
+    modeBlink: "Parpadeo",
+    modeSlider: "Deslizador",
+    overlaySliderAria: "Opacidad entre antes y después",
+    sliderHandleAria: "Arrastra para revelar antes / después",
+    tooBig: "Imagen demasiado grande para mostrar",
+    tooBigDetail: "Antes: {0}, Después: {1}. Límite de 20 MB por lado.",
+    loadAnyway: "Cargar igualmente",
+    altOld: "Versión anterior de la imagen",
+    altNew: "Nueva versión de la imagen",
+    shortcutHint: "Atajos: 1 lado a lado \u00b7 2 superposición \u00b7 3 parpadeo \u00b7 4 deslizador",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "Historial",

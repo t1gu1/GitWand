@@ -243,6 +243,29 @@ const en = {
     selectHunk: "Select hunk",
   },
 
+  // ─── ImageDiffViewer (v1.6.2) ───────────────────────────
+  imageDiff: {
+    old: "Old",
+    new: "New",
+    absent: "(absent)",
+    noOld: "Not in this version",
+    noNew: "Deleted in this version",
+    loading: "Loading image\u2026",
+    modeAria: "Display mode",
+    modeSideBySide: "Side by side",
+    modeOverlay: "Overlay",
+    modeBlink: "Blink",
+    modeSlider: "Slider",
+    overlaySliderAria: "Opacity between old and new version",
+    sliderHandleAria: "Drag to reveal old vs. new",
+    tooBig: "Image too large to display",
+    tooBigDetail: "Old: {0}, New: {1}. Limit is 20 MB per side.",
+    loadAnyway: "Load anyway",
+    altOld: "Old version of image",
+    altNew: "New version of image",
+    shortcutHint: "Shortcuts: 1 side-by-side \u00b7 2 overlay \u00b7 3 blink \u00b7 4 slider",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "History",
