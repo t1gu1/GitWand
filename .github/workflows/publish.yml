@@ -44,6 +44,7 @@ jobs:
           pnpm --filter @gitwand/mcp run build
 
       - name: Verify tag matches package.json versions
+        if: github.event_name == 'push'
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           for pkg in core cli mcp; do
