@@ -140,13 +140,18 @@ jobs:
           VER="${GITHUB_REF_NAME#v}"
           # MCP starts a stdio server; we just check the package resolves and can be invoked.
           # Portable timeout via node — macOS/Windows runners don't ship GNU `timeout`.
+          # We track `killed` so that a SIGTERM-induced non-zero exit code is not treated as failure.
           node -e "
             const { spawn } = require('child_process');
             const c = spawn('npx', ['-y', '@gitwand/mcp@${VER}', '--cwd', process.cwd()], {
               stdio: ['ignore', 'inherit', 'inherit'],
               shell: process.platform === 'win32',
             });
+            let killed = false;
             c.on('error', (e) => { console.error(e); process.exit(1); });
-            c.on('exit', (code) => process.exit(code === null || code === 0 ? 0 : 1));
-            setTimeout(() => c.kill(), 5000);
+            c.on('exit', (code) => {
+              if (killed) { process.exit(0); }
+              process.exit(code === null || code === 0 ? 0 : 1);
+            });
+            setTimeout(() => { killed = true; c.kill(); }, 5000);
           "
