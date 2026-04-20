@@ -48,6 +48,7 @@ export default defineConfig({
           items: [
             { text: 'All articles', link: '/blog/' },
             { text: 'Worktrees, submodules & auto-update', link: '/blog/worktrees-submodules-auto-update' },
+            { text: 'Why I built another Git client', link: '/blog/why-i-built-another-git-client' },
             { text: 'Automatic merge conflict resolution', link: '/blog/automatic-merge-conflict-resolution' },
           ],
         },
