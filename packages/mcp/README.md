@@ -1,6 +1,7 @@
 # @gitwand/mcp
 
 [![npm](https://img.shields.io/npm/v/@gitwand/mcp?color=22c55e)](https://www.npmjs.com/package/@gitwand/mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-listed-22c55e)](https://registry.modelcontextprotocol.io/?search=gitwand)
 [![License](https://img.shields.io/badge/license-MIT-8B5CF6)](../../LICENSE)
 
 **MCP server that lets AI agents resolve Git merge conflicts automatically.**

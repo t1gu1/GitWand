@@ -311,6 +311,7 @@ The `pendingHunks` array gives AI agents and CI scripts everything they need to 
 ## MCP Server
 
 [![npm](https://img.shields.io/npm/v/@gitwand/mcp?color=22c55e&label=%40gitwand%2Fmcp)](https://www.npmjs.com/package/@gitwand/mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP%20Registry-listed-22c55e)](https://registry.modelcontextprotocol.io/?search=gitwand)
 
 GitWand ships an MCP (Model Context Protocol) server that exposes its conflict resolution engine to AI agents — Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
 
@@ -530,7 +531,7 @@ GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference l
 
 Target: end of May 2026. Planned scope (see [PLAN-v1.6.md](./PLAN-v1.6.md) for specs):
 
-- [ ] **`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp` published to npm** + official MCP Registry listing
+- [x] **`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp` published to npm** + listed on the official [MCP Registry](https://registry.modelcontextprotocol.io/?search=gitwand) as `io.github.devlint/gitwand` (shipped 2026-04-20 — see CHANGELOG for 1.6.1)
 - [ ] **Image diff** — side-by-side, overlay, blink, slider (PNG, JPEG, SVG, WebP, GIF); heatmap + AI alt-text (P1)
 - [ ] **Folder diff** — compare two folders, branches, or commits; AI summary per folder (P1)
 
