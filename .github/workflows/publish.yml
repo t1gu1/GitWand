@@ -134,8 +134,19 @@ jobs:
         shell: bash
         run: npx -y @gitwand/cli@${GITHUB_REF_NAME#v} --help
 
-      - name: npx @gitwand/mcp --version (should not hang — we just probe it exists)
+      - name: Probe @gitwand/mcp (stdio server — killed after 5s)
         shell: bash
         run: |
+          VER="${GITHUB_REF_NAME#v}"
           # MCP starts a stdio server; we just check the package resolves and can be invoked.
-          timeout 5s npx -y @gitwand/mcp@${GITHUB_REF_NAME#v} --cwd "$PWD" < /dev/null || test $? -eq 124
+          # Portable timeout via node — macOS/Windows runners don't ship GNU `timeout`.
+          node -e "
+            const { spawn } = require('child_process');
+            const c = spawn('npx', ['-y', '@gitwand/mcp@${VER}', '--cwd', process.cwd()], {
+              stdio: ['ignore', 'inherit', 'inherit'],
+              shell: process.platform === 'win32',
+            });
+            c.on('error', (e) => { console.error(e); process.exit(1); });
+            c.on('exit', (code) => process.exit(code === null || code === 0 ? 0 : 1));
+            setTimeout(() => c.kill(), 5000);
+          "
