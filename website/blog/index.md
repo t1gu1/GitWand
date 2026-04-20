@@ -11,6 +11,12 @@ title: Blog
     <p class="blog-excerpt">How I added Git worktree and submodule management to a Tauri desktop app, and fixed four silent bugs that were keeping auto-update from ever working.</p>
     <span class="blog-read">Read article →</span>
   </a>
+  <a href="/GitWand/blog/why-i-built-another-git-client" class="blog-card">
+    <div class="blog-meta">Apr 20, 2026 · 8 min read</div>
+    <h2 class="blog-title">Why I built another Git client</h2>
+    <p class="blog-excerpt">There are already a dozen Git GUIs. Here's what was missing from all of them — and why I spent a year building GitWand anyway.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/GitWand/blog/automatic-merge-conflict-resolution" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 10 min read</div>
     <h2 class="blog-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h2>
