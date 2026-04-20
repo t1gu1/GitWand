@@ -162,7 +162,7 @@ onMounted(() => {
         <select v-model="formBranch" class="wt-select">
           <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
           <option
-            v-for="b in branches.filter(b => !b.is_remote)"
+            v-for="b in branches.filter(b => !b.isRemote)"
             :key="b.name"
             :value="b.name"
           >{{ b.name }}</option>
