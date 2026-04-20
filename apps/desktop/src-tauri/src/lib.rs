@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
@@ -715,6 +716,358 @@ fn read_file_at_revision(
             absent: false,
         })
     }
+}
+
+// ─── Folder diff (v1.6.3) ──────────────────────────────────
+//
+// Builds an aggregated folder tree from a git diff between two revisions.
+// Stats (additions/deletions/files_changed) are propagated up from files to
+// their ancestor folders. Renames are detected via `--find-renames` and
+// collapsed onto the new path (old path surfaced as `old_path` on the node).
+//
+// The shape is a single root node whose `children` hold the top-level
+// folders/files of the diff — the frontend renders that root's children
+// directly.
+
+#[derive(Serialize, Default, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FolderDiffNode {
+    /// Full repo-relative path for this node ("" for the synthetic root).
+    path: String,
+    /// Last path segment ("" for the root).
+    name: String,
+    /// "folder" or "file".
+    kind: String,
+    /// For files: single-letter status from `git diff --name-status`
+    /// (A/M/D/R/C/T). None for folders or the root.
+    status: Option<String>,
+    /// For renames/copies: original path before the rename.
+    old_path: Option<String>,
+    /// Aggregate count of files with changes (1 for a file node,
+    /// sum of descendant files for a folder).
+    files_changed: u32,
+    /// Aggregate added lines (0 for binary files).
+    additions: u32,
+    /// Aggregate deleted lines (0 for binary files).
+    deletions: u32,
+    /// True for binary files (numstat reports `-\t-` for binary diffs).
+    binary: bool,
+    /// Child entries, sorted folders-first then alphabetical by name.
+    children: Vec<FolderDiffNode>,
+}
+
+struct RawFileChange {
+    new_path: String,
+    old_path: Option<String>,
+    status: String,
+    additions: u32,
+    deletions: u32,
+    binary: bool,
+}
+
+/// Parse `git diff -z --name-status --find-renames` output.
+///
+/// Format (null-separated tokens):
+///   M\0path\0         — added/modified/deleted/type-changed
+///   A\0path\0
+///   D\0path\0
+///   T\0path\0
+///   R100\0old\0new\0  — rename or copy, with a similarity score
+///   C80\0old\0new\0
+fn parse_name_status_z(s: &str) -> Vec<(String, String, Option<String>)> {
+    let tokens: Vec<&str> = s.split('\0').filter(|t| !t.is_empty()).collect();
+    let mut result: Vec<(String, String, Option<String>)> = Vec::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let status_full = tokens[i];
+        let letter = status_full.chars().next().unwrap_or('M').to_ascii_uppercase();
+        if letter == 'R' || letter == 'C' {
+            if i + 2 < tokens.len() {
+                let old = tokens[i + 1].to_string();
+                let new_path = tokens[i + 2].to_string();
+                result.push((new_path, letter.to_string(), Some(old)));
+                i += 3;
+            } else {
+                break;
+            }
+        } else {
+            if i + 1 < tokens.len() {
+                let new_path = tokens[i + 1].to_string();
+                result.push((new_path, letter.to_string(), None));
+                i += 2;
+            } else {
+                break;
+            }
+        }
+    }
+    result
+}
+
+/// Parse `git diff -z --numstat --find-renames` output.
+///
+/// Format:
+///   N\tM\tpath\0                 — non-rename (binary uses "-\t-")
+///   N\tM\t\0old_path\0new_path\0 — rename/copy header (empty path after
+///                                  the second tab)
+///
+/// Returns a map keyed by the new path.
+fn parse_numstat_z(s: &str) -> HashMap<String, (u32, u32, bool)> {
+    // Keep empties in place so we can detect the rename sentinel; split_terminator
+    // would swallow the trailing empty after the last \0.
+    let tokens: Vec<&str> = s.split('\0').collect();
+    let mut result: HashMap<String, (u32, u32, bool)> = HashMap::new();
+    let mut i = 0;
+    while i < tokens.len() {
+        let head = tokens[i];
+        if head.is_empty() {
+            i += 1;
+            continue;
+        }
+        let parts: Vec<&str> = head.splitn(3, '\t').collect();
+        if parts.len() < 2 {
+            i += 1;
+            continue;
+        }
+        let adds_str = parts[0];
+        let dels_str = parts[1];
+        let binary = adds_str == "-" && dels_str == "-";
+        let additions: u32 = if binary { 0 } else { adds_str.parse().unwrap_or(0) };
+        let deletions: u32 = if binary { 0 } else { dels_str.parse().unwrap_or(0) };
+        let path_part = if parts.len() >= 3 { parts[2] } else { "" };
+        if path_part.is_empty() {
+            // Rename header: consume the next two non-empty tokens as old/new.
+            let mut j = i + 1;
+            let mut collected: Vec<&str> = Vec::new();
+            while j < tokens.len() && collected.len() < 2 {
+                if !tokens[j].is_empty() {
+                    collected.push(tokens[j]);
+                }
+                j += 1;
+            }
+            if collected.len() == 2 {
+                result.insert(collected[1].to_string(), (additions, deletions, binary));
+                i = j;
+            } else {
+                break;
+            }
+        } else {
+            result.insert(path_part.to_string(), (additions, deletions, binary));
+            i += 1;
+        }
+    }
+    result
+}
+
+/// Build the git argv for a ref comparison.
+///
+/// Semantics:
+/// - both empty            → `diff HEAD`              (working tree vs HEAD)
+/// - ref_a set, ref_b empty → `diff <ref_a>`           (working tree vs ref_a)
+/// - both set              → `diff <ref_a> <ref_b>`   (ref_b relative to ref_a)
+fn folder_diff_args(ref_a: &str, ref_b: &str) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+    let a = ref_a.trim();
+    let b = ref_b.trim();
+    if a.is_empty() && b.is_empty() {
+        args.push("HEAD".to_string());
+    } else if b.is_empty() {
+        args.push(a.to_string());
+    } else {
+        args.push(a.to_string());
+        args.push(b.to_string());
+    }
+    args
+}
+
+/// Recursively sort children: folders before files, then alphabetical by name.
+fn sort_node(node: &mut FolderDiffNode) {
+    node.children.sort_by(|a, b| {
+        let a_is_folder = a.kind == "folder";
+        let b_is_folder = b.kind == "folder";
+        match (a_is_folder, b_is_folder) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+    for c in node.children.iter_mut() {
+        sort_node(c);
+    }
+}
+
+/// Recursive tree-walker that inserts a file change.
+///
+/// On each call we update the aggregates on `node` (one hop's worth),
+/// then recurse into (or create) the child for `segments[0]`. When
+/// `segments` is empty we've arrived at the file node itself and can
+/// stamp the file-specific fields.
+///
+/// Using recursion instead of a mutable cursor loop avoids the classic
+/// "reborrow-into-own-field" pattern that's brittle under the borrow
+/// checker for tree mutations.
+fn insert_segments(
+    node: &mut FolderDiffNode,
+    segments: &[&str],
+    depth: usize,
+    total_segments: usize,
+    path_so_far: &str,
+    change: &RawFileChange,
+) {
+    // Every node on the path (including the synthetic root) aggregates
+    // this change. File nodes override `files_changed` below.
+    node.files_changed = node.files_changed.saturating_add(1);
+    node.additions = node.additions.saturating_add(change.additions);
+    node.deletions = node.deletions.saturating_add(change.deletions);
+
+    if segments.is_empty() {
+        // We've arrived at the leaf (file) — set file-specific fields.
+        // Guard against an empty path (shouldn't happen in practice, but
+        // don't mutate the synthetic root's kind in that case).
+        if depth > 0 {
+            node.status = Some(change.status.clone());
+            node.old_path = change.old_path.clone();
+            node.binary = change.binary;
+            // A file's files_changed is 1 by definition.
+            node.files_changed = 1;
+        }
+        return;
+    }
+
+    let seg = segments[0];
+    let remaining = &segments[1..];
+    let is_last_seg = remaining.is_empty();
+
+    let full_path = if path_so_far.is_empty() {
+        seg.to_string()
+    } else {
+        format!("{}/{}", path_so_far, seg)
+    };
+
+    let idx = match node.children.iter().position(|c| c.name == seg) {
+        Some(i) => i,
+        None => {
+            node.children.push(FolderDiffNode {
+                path: full_path.clone(),
+                name: seg.to_string(),
+                kind: if is_last_seg { "file".to_string() } else { "folder".to_string() },
+                status: None,
+                old_path: None,
+                files_changed: 0,
+                additions: 0,
+                deletions: 0,
+                binary: false,
+                children: Vec::new(),
+            });
+            node.children.len() - 1
+        }
+    };
+
+    // Tail-recurse into the child; Rust's borrow checker is happy because
+    // we hand it a fresh `&mut` to a single child each call.
+    let _ = total_segments;
+    insert_segments(
+        &mut node.children[idx],
+        remaining,
+        depth + 1,
+        total_segments,
+        &full_path,
+        change,
+    );
+}
+
+/// Public entry: insert a file change, starting from the synthetic root.
+fn insert_change(root: &mut FolderDiffNode, change: &RawFileChange) {
+    let segments: Vec<&str> = change.new_path.split('/').filter(|s| !s.is_empty()).collect();
+    if segments.is_empty() {
+        return;
+    }
+    let total = segments.len();
+    insert_segments(root, &segments, 0, total, "", change);
+}
+
+#[tauri::command]
+fn folder_diff(cwd: String, ref_a: String, ref_b: String) -> Result<FolderDiffNode, String> {
+    if cwd.trim().is_empty() {
+        return Err("cwd must not be empty".to_string());
+    }
+
+    let refs = folder_diff_args(&ref_a, &ref_b);
+
+    // --- name-status (to recover the status letter + rename old path) ---
+    let mut ns_args: Vec<String> = vec![
+        "diff".to_string(),
+        "-z".to_string(),
+        "--name-status".to_string(),
+        "--find-renames".to_string(),
+    ];
+    ns_args.extend(refs.iter().cloned());
+    let ns_output = std::process::Command::new(git_binary())
+        .args(&ns_args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git diff --name-status: {}", e))?;
+    if !ns_output.status.success() {
+        let stderr = String::from_utf8_lossy(&ns_output.stderr);
+        return Err(format!("git diff --name-status failed: {}", stderr.trim()));
+    }
+    let ns_text = String::from_utf8_lossy(&ns_output.stdout).to_string();
+    let name_status = parse_name_status_z(&ns_text);
+
+    // --- numstat (to recover line counts + binary flag) ---
+    let mut numstat_args: Vec<String> = vec![
+        "diff".to_string(),
+        "-z".to_string(),
+        "--numstat".to_string(),
+        "--find-renames".to_string(),
+    ];
+    numstat_args.extend(refs.iter().cloned());
+    let ns2_output = std::process::Command::new(git_binary())
+        .args(&numstat_args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git diff --numstat: {}", e))?;
+    if !ns2_output.status.success() {
+        let stderr = String::from_utf8_lossy(&ns2_output.stderr);
+        return Err(format!("git diff --numstat failed: {}", stderr.trim()));
+    }
+    let numstat_text = String::from_utf8_lossy(&ns2_output.stdout).to_string();
+    let numstat = parse_numstat_z(&numstat_text);
+
+    // --- Merge into raw changes (key = new_path) ---
+    let mut changes: Vec<RawFileChange> = Vec::with_capacity(name_status.len());
+    for (new_path, status, old_path) in name_status.into_iter() {
+        let (additions, deletions, binary) = numstat
+            .get(&new_path)
+            .copied()
+            .unwrap_or((0, 0, false));
+        changes.push(RawFileChange {
+            new_path,
+            old_path,
+            status,
+            additions,
+            deletions,
+            binary,
+        });
+    }
+
+    // --- Build tree ---
+    let mut root = FolderDiffNode {
+        path: String::new(),
+        name: String::new(),
+        kind: "folder".to_string(),
+        status: None,
+        old_path: None,
+        files_changed: 0,
+        additions: 0,
+        deletions: 0,
+        binary: false,
+        children: Vec::new(),
+    };
+    for change in changes.iter() {
+        insert_change(&mut root, change);
+    }
+    sort_node(&mut root);
+    Ok(root)
 }
 
 // ─── Directory listing (for FolderPicker) ──────────────────
@@ -3267,6 +3620,7 @@ pub fn run() {
             read_file,
             write_file,
             read_file_at_revision,
+            folder_diff,
             list_dir,
             git_status,
             git_diff,

@@ -184,6 +184,70 @@ export async function readFileAtRevision(
   return res.json();
 }
 
+// ─── Folder diff (v1.6.3) ────────────────────────────────
+
+/**
+ * One node in the folder diff tree. The root is a synthetic folder whose
+ * `children` are the top-level changed paths (folders or files) — callers
+ * render `root.children` directly.
+ */
+export interface FolderDiffNode {
+  /** Repo-relative path, "" for the root. */
+  path: string;
+  /** Last path segment, "" for the root. */
+  name: string;
+  /** "folder" or "file". */
+  kind: "folder" | "file";
+  /** Status letter for files (A/M/D/R/C/T). `null` for folders and the root. */
+  status: string | null;
+  /** For renamed/copied files: original path before the rename. */
+  oldPath: string | null;
+  /** Aggregate changed-file count (1 for a file, sum of descendants for a folder). */
+  filesChanged: number;
+  /** Aggregate added lines (0 for binary files). */
+  additions: number;
+  /** Aggregate deleted lines (0 for binary files). */
+  deletions: number;
+  /** True when the file reports as binary in `git diff --numstat`. */
+  binary: boolean;
+  /** Child entries, pre-sorted folders-first then alphabetical by name. */
+  children: FolderDiffNode[];
+}
+
+/**
+ * Get the folder-aggregated diff tree between two git revisions.
+ *
+ * Ref semantics:
+ * - `refA === "" && refB === ""` → working tree vs HEAD (default diff flow)
+ * - `refA` set, `refB === ""`    → working tree vs refA
+ * - both set                     → refB relative to refA (`git diff refA refB`)
+ *
+ * The returned tree has stats (additions, deletions, filesChanged) propagated
+ * up from each changed file to every ancestor folder. Renames are detected
+ * via `--find-renames` and attached to the new path's node with `oldPath` set.
+ */
+export async function folderDiff(
+  cwd: string,
+  refA: string,
+  refB: string,
+): Promise<FolderDiffNode> {
+  if (isTauri()) {
+    // Rust struct already serializes with rename_all = "camelCase", so no
+    // field translation is needed here — the shape matches FolderDiffNode.
+    return await tauriInvoke<FolderDiffNode>("folder_diff", { cwd, refA, refB });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/folder-diff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, refA, refB }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`folder_diff failed: ${body || res.statusText}`);
+  }
+  return res.json();
+}
+
 // ─── Directory listing (for FolderPicker) ────────────────
 
 export interface DirEntry {

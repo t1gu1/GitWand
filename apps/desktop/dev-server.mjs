@@ -360,6 +360,167 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/folder-diff  { cwd, refA, refB }
+    //
+    // Mirrors the Tauri `folder_diff` command (v1.6.3 folder diff).
+    // Aggregates file changes from `git diff -z --numstat/--name-status
+    // --find-renames` into a recursive folder tree with adds/dels/files_changed
+    // propagated up to every ancestor.
+    //
+    // Ref semantics:
+    //   - both empty          → `git diff HEAD`           (working tree vs HEAD)
+    //   - refA set, refB empty → `git diff <refA>`          (working tree vs refA)
+    //   - both set            → `git diff <refA> <refB>`  (refB relative to refA)
+    //
+    // Response: single root FolderDiffNode with camelCase keys to match the
+    // Tauri struct's `rename_all = "camelCase"` serialization.
+    if (url.pathname === "/api/folder-diff" && req.method === "POST") {
+      const { cwd, refA, refB } = await readBody(req);
+      if (!cwd || !cwd.trim()) return jsonResponse(req, res, { error: "cwd must not be empty" }, 400);
+
+      const refs = [];
+      const a = (refA || "").trim();
+      const b = (refB || "").trim();
+      if (!a && !b) refs.push("HEAD");
+      else if (!b) refs.push(a);
+      else { refs.push(a); refs.push(b); }
+
+      const runDiff = (kind) => {
+        const args = ["diff", "-z", kind, "--find-renames", ...refs];
+        try {
+          return execFileSync(GIT, args, { cwd, stdio: ["ignore", "pipe", "pipe"] }).toString("utf8");
+        } catch (e) {
+          const stderr = e.stderr ? e.stderr.toString() : e.message;
+          throw new Error(`git diff ${kind} failed: ${stderr.trim()}`);
+        }
+      };
+
+      let nameStatusText, numstatText;
+      try {
+        nameStatusText = runDiff("--name-status");
+        numstatText = runDiff("--numstat");
+      } catch (e) {
+        return jsonResponse(req, res, { error: e.message }, 500);
+      }
+
+      // Parse `--name-status -z` → list of { newPath, status, oldPath? }
+      const parseNameStatus = (s) => {
+        const tokens = s.split("\0").filter((t) => t.length > 0);
+        const out = [];
+        let i = 0;
+        while (i < tokens.length) {
+          const statusFull = tokens[i];
+          const letter = (statusFull.charAt(0) || "M").toUpperCase();
+          if (letter === "R" || letter === "C") {
+            if (i + 2 < tokens.length) {
+              out.push({ newPath: tokens[i + 2], status: letter, oldPath: tokens[i + 1] });
+              i += 3;
+            } else break;
+          } else {
+            if (i + 1 < tokens.length) {
+              out.push({ newPath: tokens[i + 1], status: letter, oldPath: null });
+              i += 2;
+            } else break;
+          }
+        }
+        return out;
+      };
+
+      // Parse `--numstat -z` → Map<newPath, { additions, deletions, binary }>
+      const parseNumstat = (s) => {
+        const tokens = s.split("\0");
+        const out = new Map();
+        let i = 0;
+        while (i < tokens.length) {
+          const head = tokens[i];
+          if (!head) { i += 1; continue; }
+          const parts = head.split("\t");
+          if (parts.length < 2) { i += 1; continue; }
+          const addsStr = parts[0];
+          const delsStr = parts[1];
+          const binary = addsStr === "-" && delsStr === "-";
+          const additions = binary ? 0 : Number.parseInt(addsStr, 10) || 0;
+          const deletions = binary ? 0 : Number.parseInt(delsStr, 10) || 0;
+          const pathPart = parts.length >= 3 ? parts.slice(2).join("\t") : "";
+          if (!pathPart) {
+            // Rename header: consume next two non-empty tokens as old/new.
+            let j = i + 1;
+            const collected = [];
+            while (j < tokens.length && collected.length < 2) {
+              if (tokens[j]) collected.push(tokens[j]);
+              j += 1;
+            }
+            if (collected.length === 2) {
+              out.set(collected[1], { additions, deletions, binary });
+              i = j;
+            } else break;
+          } else {
+            out.set(pathPart, { additions, deletions, binary });
+            i += 1;
+          }
+        }
+        return out;
+      };
+
+      const nameStatus = parseNameStatus(nameStatusText);
+      const numstat = parseNumstat(numstatText);
+
+      const makeNode = (path, name, kind) => ({
+        path, name, kind,
+        status: null, oldPath: null,
+        filesChanged: 0, additions: 0, deletions: 0,
+        binary: false, children: [],
+      });
+
+      const root = makeNode("", "", "folder");
+
+      for (const entry of nameStatus) {
+        const stats = numstat.get(entry.newPath) || { additions: 0, deletions: 0, binary: false };
+        const segments = entry.newPath.split("/");
+        if (segments.length === 0) continue;
+
+        root.filesChanged += 1;
+        root.additions += stats.additions;
+        root.deletions += stats.deletions;
+
+        let cursor = root;
+        for (let idx = 0; idx < segments.length; idx++) {
+          const seg = segments[idx];
+          const isLast = idx === segments.length - 1;
+          const fullPath = segments.slice(0, idx + 1).join("/");
+          let child = cursor.children.find((c) => c.name === seg);
+          if (!child) {
+            child = makeNode(fullPath, seg, isLast ? "file" : "folder");
+            cursor.children.push(child);
+          }
+          child.filesChanged += 1;
+          child.additions += stats.additions;
+          child.deletions += stats.deletions;
+          if (isLast) {
+            child.status = entry.status;
+            child.oldPath = entry.oldPath;
+            child.binary = stats.binary;
+            child.filesChanged = 1; // file's own count
+          }
+          cursor = child;
+        }
+      }
+
+      // Sort: folders before files, then alphabetical.
+      const sortNode = (node) => {
+        node.children.sort((a, b) => {
+          const af = a.kind === "folder";
+          const bf = b.kind === "folder";
+          if (af !== bf) return af ? -1 : 1;
+          return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+        });
+        for (const c of node.children) sortNode(c);
+      };
+      sortNode(root);
+
+      return jsonResponse(req, res, root);
+    }
+
     // GET /api/list-dir?path=/some/dir  — list directories for folder picker
     if (url.pathname === "/api/list-dir" && req.method === "GET") {
       const dirPath = resolve(url.searchParams.get("path") || homedir());
@@ -2427,6 +2588,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    POST /api/read-file   { cwd, path }`);
   console.log(`    POST /api/write-file  { cwd, path, content }`);
   console.log(`    POST /api/read-file-at-revision  { cwd, rev, path }`);
+  console.log(`    POST /api/folder-diff  { cwd, refA, refB }`);
   console.log(`    POST /api/read-gitwandrc  { cwd }`);
   console.log(`    GET  /api/list-dir?path=<path>`);
   console.log(`    GET  /api/git-status?cwd=<path>`);
