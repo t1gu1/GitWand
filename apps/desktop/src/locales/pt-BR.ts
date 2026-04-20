@@ -253,6 +253,27 @@ const ptBR: Locale = {
     shortcutHint: "Atalhos: 1 lado a lado \u00b7 2 sobreposição \u00b7 3 piscar \u00b7 4 deslizador",
   },
 
+  // ─── FolderDiffTree (v1.6.3) ───────────────────────────
+  folderDiff: {
+    title: "Pastas",
+    treeAria: "Árvore de diferenças de pastas",
+    clearFilter: "Limpar filtro de pasta",
+    noChanges: "Sem alterações",
+    filesSingular: "{0} arquivo",
+    filesPlural: "{0} arquivos",
+    binary: "binário",
+    renamedFrom: "Renomeado de {0}",
+    statusAdded: "Adicionado",
+    statusModified: "Modificado",
+    statusDeleted: "Excluído",
+    statusRenamed: "Renomeado",
+    statusCopied: "Copiado",
+    statusTypeChanged: "Tipo alterado",
+    viewFlat: "Mudar para lista plana",
+    viewTree: "Mudar para árvore de pastas",
+    resizeHandle: "Arrastar para redimensionar · clique duplo para redefinir",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "Histórico",

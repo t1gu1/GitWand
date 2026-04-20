@@ -252,6 +252,27 @@ const es: Locale = {
     shortcutHint: "Atajos: 1 lado a lado \u00b7 2 superposición \u00b7 3 parpadeo \u00b7 4 deslizador",
   },
 
+  // ─── FolderDiffTree (v1.6.3) ───────────────────────────
+  folderDiff: {
+    title: "Carpetas",
+    treeAria: "Árbol de diferencias de carpetas",
+    clearFilter: "Borrar filtro de carpeta",
+    noChanges: "Sin cambios",
+    filesSingular: "{0} archivo",
+    filesPlural: "{0} archivos",
+    binary: "binario",
+    renamedFrom: "Renombrado desde {0}",
+    statusAdded: "Añadido",
+    statusModified: "Modificado",
+    statusDeleted: "Eliminado",
+    statusRenamed: "Renombrado",
+    statusCopied: "Copiado",
+    statusTypeChanged: "Tipo cambiado",
+    viewFlat: "Cambiar a lista plana",
+    viewTree: "Cambiar a árbol de carpetas",
+    resizeHandle: "Arrastrar para redimensionar · doble clic para restablecer",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "Historial",

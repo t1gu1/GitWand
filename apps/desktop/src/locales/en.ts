@@ -266,6 +266,27 @@ const en = {
     shortcutHint: "Shortcuts: 1 side-by-side \u00b7 2 overlay \u00b7 3 blink \u00b7 4 slider",
   },
 
+  // ─── FolderDiffTree (v1.6.3) ───────────────────────────
+  folderDiff: {
+    title: "Folders",
+    treeAria: "Folder diff tree",
+    clearFilter: "Clear folder filter",
+    noChanges: "No changes",
+    filesSingular: "{0} file",
+    filesPlural: "{0} files",
+    binary: "binary",
+    renamedFrom: "Renamed from {0}",
+    statusAdded: "Added",
+    statusModified: "Modified",
+    statusDeleted: "Deleted",
+    statusRenamed: "Renamed",
+    statusCopied: "Copied",
+    statusTypeChanged: "Type changed",
+    viewFlat: "Switch to flat list",
+    viewTree: "Switch to folder tree",
+    resizeHandle: "Drag to resize · double-click to reset",
+  },
+
   // ─── CommitLog ──────────────────────────────────────────
   log: {
     title: "History",

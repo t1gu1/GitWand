@@ -253,6 +253,27 @@ const zhCN: Locale = {
     shortcutHint: "快捷键：1 并排 \u00b7 2 叠加 \u00b7 3 闪烁 \u00b7 4 滑块",
   },
 
+  // ─── FolderDiffTree (v1.6.3) ───────────────────────────
+  folderDiff: {
+    title: "文件夹",
+    treeAria: "文件夹差异树",
+    clearFilter: "清除文件夹筛选",
+    noChanges: "无更改",
+    filesSingular: "{0} 个文件",
+    filesPlural: "{0} 个文件",
+    binary: "二进制",
+    renamedFrom: "从 {0} 重命名",
+    statusAdded: "已添加",
+    statusModified: "已修改",
+    statusDeleted: "已删除",
+    statusRenamed: "已重命名",
+    statusCopied: "已复制",
+    statusTypeChanged: "类型已更改",
+    viewFlat: "切换到扁平列表",
+    viewTree: "切换到文件夹树",
+    resizeHandle: "拖动以调整大小 · 双击以重置",
+  },
+
   log: {
     title: "历史",
     noCommit: "没有提交",
