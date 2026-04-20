@@ -10,15 +10,30 @@ The [MCP Registry](https://registry.modelcontextprotocol.io/) indexes MCP server
 
 ## One-time CLI setup
 
-The publisher CLI is built from the registry repo (there's no npm distribution of it yet):
+The publisher CLI ships as a pre-built binary. Pick one of the following:
+
+### Homebrew (macOS/Linux, recommended)
 
 ```bash
-# Anywhere outside this repo:
+brew install mcp-publisher
+mcp-publisher --help
+```
+
+### Pre-built binary (no package manager)
+
+```bash
+curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+sudo mv mcp-publisher /usr/local/bin/
+mcp-publisher --help
+```
+
+### Build from source (requires Go)
+
+```bash
 git clone https://github.com/modelcontextprotocol/registry.git mcp-registry
 cd mcp-registry
 make publisher
-# Binary is at ./bin/mcp-publisher — copy somewhere on PATH or call by full path.
-./bin/mcp-publisher --help
+# Binary is at ./bin/mcp-publisher
 ```
 
 ## Publishing GitWand
