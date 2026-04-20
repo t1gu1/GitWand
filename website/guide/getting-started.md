@@ -76,7 +76,7 @@ The extension activates automatically when it detects conflict markers in your f
 GitWand exposes its engine as an MCP server for Claude Code, Claude Desktop, Cursor, Windsurf, and any MCP-compatible client.
 
 ```bash
-npx @gitwand/mcp
+npx -y @gitwand/mcp
 ```
 
 Add to your MCP client configuration:

@@ -62,6 +62,33 @@ A separate **DAG graph view** renders the full branch topology as an SVG with la
 - Hunk navigation (prev/next)
 - Double-column line numbers
 
+## Image Diff Viewer (v1.6)
+
+Binary image files in a commit diff render side-by-side instead of the opaque "Binary file changed" line. Four comparison modes are available via a toggle:
+
+| Mode | What it does |
+|------|--------------|
+| Side-by-side | Before / after with dimension + size metadata overlay |
+| Overlay | Stacked images with an opacity slider |
+| Blink | Alternates between the two images to reveal pixel-level deltas |
+| Slider | Draggable reveal between before and after |
+
+Supported formats: **PNG, JPG, WebP, GIF, SVG**. GIFs get an "animated" badge. SVGs render as raster (so you see the actual image) — the text diff remains available via the file history. Images larger than 20 MB per side are skipped with an explicit notice to keep the viewer snappy.
+
+Under the hood, a new `read_file_at_revision(path, rev)` backend command (available in both the Rust/Tauri and Node dev-server paths) fetches file bytes at any git revision, so the viewer can compare `HEAD^` vs `HEAD`, across branches, stashes, or arbitrary refs.
+
+## Folder Tree in Commit Diff (v1.6)
+
+The file list on the right of the commit diff has a **flat ↔ tree** toggle. Tree mode collapses deeply-nested changes into an expandable folder tree with per-folder aggregates (files changed, additions, deletions), making a 200-file commit navigable at a glance.
+
+- Click any folder to **filter the list** down to its descendants
+- Breadcrumb at the top surfaces the active filter with a clear (×) button
+- Sidebar is **resizable** — drag its left edge, or double-click to reset. Width is clamped 180–600 px and persisted across sessions
+- Keyboard navigation throughout (arrow keys, Enter, Esc)
+- Available in all five UI locales
+
+The backing `folder_diff` backend command (Rust/Tauri + Node dev-server + TypeScript wrapper) builds the aggregated tree.
+
 ## File History & Blame
 
 - Full file history with `git log --follow`

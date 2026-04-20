@@ -9,7 +9,7 @@ The server runs over **stdio** and requires no API keys or network access. It wo
 Use directly via npx (no install needed):
 
 ```bash
-npx @gitwand/mcp
+npx -y @gitwand/mcp
 ```
 
 Or install globally:
@@ -17,6 +17,14 @@ Or install globally:
 ```bash
 npm install -g @gitwand/mcp
 ```
+
+Or register with Claude Code in a single command:
+
+```bash
+claude mcp add gitwand -- npx -y @gitwand/mcp
+```
+
+`@gitwand/mcp` is listed in the [MCP Registry](https://registry.modelcontextprotocol.io) and ships with npm [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) — you can verify that every release was built from the public `devlint/GitWand` repo in CI.
 
 ## Configuration
 

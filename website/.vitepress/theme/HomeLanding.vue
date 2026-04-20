@@ -56,6 +56,12 @@ const i18n: Record<Locale, any> = {
     featAIMergeDesc: 'Explication de conflit en langage naturel, résumé IA du risque avant rebase/merge, squash sémantique en rebase interactif.',
     featAIFlow: 'AI commit & history',
     featAIFlowDesc: 'Messages de commit et de stash générés, Absorb classé sémantiquement, blame contextuel et release notes depuis git log.',
+    featImgDiff: 'Diff d\'images visuel',
+    featImgDiffDesc: 'Comparez les PNG, JPG, WebP, GIF et SVG côte à côte, en overlay, en blink ou avec un slider. Fini « Binary file changed ».',
+    featFolderTree: 'Diff en arbre de dossiers',
+    featFolderTreeDesc: 'Bascule plat ↔ arbre dans la liste des fichiers avec totaux par dossier, filtrage au clic et sidebar redimensionnable persistée.',
+    featMcp: 'Serveur MCP',
+    featMcpDesc: 'Exposez GitWand à Claude, Cursor, Windsurf et tout client MCP. Une commande : npx -y @gitwand/mcp. Publié avec provenance.',
     conflictTitle: 'Les conflits de merge, résolus automatiquement',
     conflictSub: 'GitWand analyse la sémantique du code, pas seulement les lignes. Il choisit la bonne résolution à votre place.',
     conflictBefore: 'Avant — conflit brut',
@@ -126,6 +132,12 @@ const i18n: Record<Locale, any> = {
     featAIMergeDesc: 'Plain-English conflict explanation, AI risk summary before rebase/merge, semantic squash in interactive rebase.',
     featAIFlow: 'AI commit & history',
     featAIFlowDesc: 'Generated commit and stash messages, semantically-ranked Absorb, blame context and release notes from git log.',
+    featImgDiff: 'Visual image diffs',
+    featImgDiffDesc: 'Compare PNG, JPG, WebP, GIF, and SVG changes side-by-side, overlayed, blinked, or with a reveal slider. No more "Binary file changed".',
+    featFolderTree: 'Folder tree diff',
+    featFolderTreeDesc: 'Flat ↔ tree toggle in the commit file list with per-folder aggregates, click-to-filter, and a resizable sidebar that remembers its width.',
+    featMcp: 'MCP server',
+    featMcpDesc: 'Expose GitWand to Claude, Cursor, Windsurf, and any MCP client. One command: npx -y @gitwand/mcp. Published with provenance.',
     conflictTitle: 'Merge conflicts, resolved automatically',
     conflictSub: 'GitWand analyzes code semantics, not just lines. It picks the right resolution for you.',
     conflictBefore: 'Before — raw conflict',
@@ -196,6 +208,12 @@ const i18n: Record<Locale, any> = {
     featAIMergeDesc: 'Explicación de conflictos en lenguaje natural, resumen de riesgo por IA antes de rebase/merge y squash semántico en rebase interactivo.',
     featAIFlow: 'Commits e historial con IA',
     featAIFlowDesc: 'Mensajes de commit y stash generados, Absorb ordenado semánticamente, contexto de blame y release notes a partir de git log.',
+    featImgDiff: 'Diff visual de imágenes',
+    featImgDiffDesc: 'Compara cambios en PNG, JPG, WebP, GIF y SVG lado a lado, superpuestos, parpadeando o con un slider. Se acabó el «Binary file changed».',
+    featFolderTree: 'Diff en árbol de carpetas',
+    featFolderTreeDesc: 'Alterna plano ↔ árbol en la lista de archivos del commit, con totales por carpeta, filtrado al clic y barra lateral redimensionable persistida.',
+    featMcp: 'Servidor MCP',
+    featMcpDesc: 'Expón GitWand a Claude, Cursor, Windsurf y cualquier cliente MCP. Un comando: npx -y @gitwand/mcp. Publicado con attestations de procedencia.',
     conflictTitle: 'Conflictos de merge, resueltos automáticamente',
     conflictSub: 'GitWand analiza la semántica del código, no solo las líneas. Elige la resolución correcta por ti.',
     conflictBefore: 'Antes — conflicto en bruto',
@@ -266,6 +284,12 @@ const i18n: Record<Locale, any> = {
     featAIMergeDesc: 'Explicação de conflito em linguagem natural, resumo de risco por IA antes de rebase/merge e squash semântico no rebase interativo.',
     featAIFlow: 'Commits e histórico com IA',
     featAIFlowDesc: 'Mensagens de commit e stash geradas, Absorb ordenado semanticamente, contexto de blame e release notes a partir do git log.',
+    featImgDiff: 'Diff visual de imagens',
+    featImgDiffDesc: 'Compare mudanças em PNG, JPG, WebP, GIF e SVG lado a lado, sobrepostas, piscando ou com um slider. Chega de «Binary file changed».',
+    featFolderTree: 'Diff em árvore de pastas',
+    featFolderTreeDesc: 'Alterne plano ↔ árvore na lista de arquivos do commit, com totais por pasta, filtro ao clicar e sidebar redimensionável persistida.',
+    featMcp: 'Servidor MCP',
+    featMcpDesc: 'Exponha o GitWand ao Claude, Cursor, Windsurf e qualquer cliente MCP. Um comando: npx -y @gitwand/mcp. Publicado com atestados de proveniência.',
     conflictTitle: 'Conflitos de merge, resolvidos automaticamente',
     conflictSub: 'GitWand analisa a semântica do código, não apenas as linhas. Ele escolhe a resolução certa por você.',
     conflictBefore: 'Antes — conflito bruto',
@@ -336,6 +360,12 @@ const i18n: Record<Locale, any> = {
     featAIMergeDesc: '用自然语言解释冲突,在 rebase/merge 前给出 AI 风险摘要,并在交互式 rebase 中进行语义 squash。',
     featAIFlow: 'AI 提交与历史',
     featAIFlowDesc: '生成 commit 与 stash 信息、按语义排序的 Absorb、blame 上下文,以及基于 git log 的发布说明。',
+    featImgDiff: '图像 diff 查看器',
+    featImgDiffDesc: '以并排、叠加、闪烁或滑动方式比较 PNG、JPG、WebP、GIF、SVG 的变化。告别「Binary file changed」。',
+    featFolderTree: '文件夹树状 diff',
+    featFolderTreeDesc: '提交文件列表中平铺 ↔ 树状切换,按文件夹聚合统计、点击过滤,侧边栏宽度可调且持久保存。',
+    featMcp: 'MCP 服务器',
+    featMcpDesc: '将 GitWand 暴露给 Claude、Cursor、Windsurf 等 MCP 客户端。一条命令:npx -y @gitwand/mcp。附带 provenance 签名发布。',
     conflictTitle: '合并冲突,自动解决',
     conflictSub: 'GitWand 分析代码语义,而不仅仅是文本行。它为你挑选正确的解决方案。',
     conflictBefore: '之前 — 原始冲突',
@@ -532,6 +562,30 @@ const t = computed(() => i18n[locale.value])
             </div>
             <h3>{{ t.featAIFlow }}</h3>
             <p>{{ t.featAIFlowDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg>
+            </div>
+            <h3>{{ t.featImgDiff }}</h3>
+            <p>{{ t.featImgDiffDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5a1 1 0 011-1h4l2 2h10a1 1 0 011 1v2H3V5z" stroke="#7C3AED" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 9h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z" stroke="#7C3AED" stroke-width="1.8"/><path d="M7 13h4M7 17h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featFolderTree }}</h3>
+            <p>{{ t.featFolderTreeDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22v-5M9 7V3M15 7V3M5 11V9a2 2 0 012-2h10a2 2 0 012 2v2a5 5 0 01-5 5h-4a5 5 0 01-5-5z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>{{ t.featMcp }}</h3>
+            <p>{{ t.featMcpDesc }}</p>
           </div>
 
         </div>
@@ -1398,6 +1452,9 @@ const t = computed(() => i18n[locale.value])
   padding: 80px 0;
   background: var(--gw-bg-2);
   border-top: 1px solid var(--gw-border-soft);
+}
+.platforms-section .section-title {
+  margin-bottom: 48px;
 }
 .platforms-grid {
   display: flex;
