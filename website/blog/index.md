@@ -5,6 +5,12 @@ title: Blog
 # Blog
 
 <div class="blog-list">
+  <a href="/GitWand/blog/worktrees-submodules-auto-update" class="blog-card">
+    <div class="blog-meta">Apr 20, 2026 · 8 min read</div>
+    <h2 class="blog-title">Worktrees, submodules, and a broken auto-updater: what went into GitWand v1.6.3</h2>
+    <p class="blog-excerpt">How I added Git worktree and submodule management to a Tauri desktop app, and fixed four silent bugs that were keeping auto-update from ever working.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/GitWand/blog/automatic-merge-conflict-resolution" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 10 min read</div>
     <h2 class="blog-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h2>
@@ -22,7 +28,7 @@ title: Blog
   padding: 1.75rem 2rem;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
-  text-decoration: none;
+  text-decoration: none !important;
   color: inherit;
   transition: border-color 0.2s, background 0.2s;
   margin-bottom: 1.25rem;
@@ -55,5 +61,8 @@ title: Blog
   font-size: 0.85rem;
   color: var(--vp-c-brand-1);
   font-weight: 500;
+}
+.blog-read:hover {
+  text-decoration: underline;
 }
 </style>

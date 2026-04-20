@@ -47,6 +47,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'Worktrees, submodules & auto-update', link: '/blog/worktrees-submodules-auto-update' },
             { text: 'Automatic merge conflict resolution', link: '/blog/automatic-merge-conflict-resolution' },
           ],
         },
