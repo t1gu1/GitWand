@@ -222,34 +222,29 @@ Patch de release correctif : ship le bundle universel macOS qui échouait au bui
 - Migration des messages d'erreur des composables IA (`useCommitMessage`, `useBranchName`, `useReleaseNotes`, `useStashMessage`, `usePrDescription`, `useSquashSuggestion`, `usePrHunkCritique`, `useBlameContext`, `useMergeRisk`, `useCommitSearch`, `useHunkExplanation`, `useAIProvider`) vers le namespace `errors.*` déjà peuplé dans les 5 locales
 - Export du helper `t` standalone depuis `useI18n` pour traduire depuis des modules non-composant
 
----
+### v1.6.1 — Folder diff + MCP Registry & npm ✅
 
-## Next — v1.6.0 — Visual diff & distribution
+- Folder tree view in commit diff (flat ↔ tree toggle, per-folder aggregates, resizable sidebar, keyboard navigation)
+- `@gitwand/mcp`, `@gitwand/cli`, `@gitwand/core` published on npm
+- `io.github.devlint/gitwand` indexed on the official MCP Registry
 
-### 1.6.1 — Folder diff
-
-- Comparer deux dossiers, branches ou commits — arbre récursif avec indicateurs ajouté/supprimé/modifié
-- Filtrage par type de fichier, pattern glob, type de changement
-- Résumé IA des changements de dossier (réutilise la plomberie v1.3)
-
-### 1.6.2 — Image diff (différenciateur fort)
+### v1.6.2 — Image diff ✅
 
 - Comparaison visuelle : side-by-side, overlay, blink, slider split
 - Formats : PNG, JPEG, SVG, WebP, GIF
-- Heatmap des zones modifiées, métadonnées (taille, dimensions, profil couleur)
-- Description IA des changements visuels (alt text, zones d'attention)
+- Métadonnées (taille, dimensions, profil couleur), badge animated pour GIF
+- Backend `read_file_at_revision` (Rust + dev-server + TS)
 
-### 1.6.3 — Submodules & Worktrees
+### v1.6.3 — Submodules & Worktrees ✅
 
-- Initialiser, mettre à jour, naviguer dans les submodules depuis l'UI
-- Git worktrees : créer, lister, supprimer — chaque worktree dans un onglet
-- Checkout rapide via worktree sans switcher
+- Worktree manager : créer, lister, supprimer — chaque worktree dans un onglet
+- Checkout rapide via worktree : bouton ⧉ sur chaque branche, ouvre le manager pré-rempli
+- Submodule panel : liste avec statuts, init & update, open-in-tab, add — banner warning si non-init
+- Auto-update fixes : `createUpdaterArtifacts`, permissions capabilities, signatures réelles dans le manifest
 
-### 1.6.4 — MCP Registry & npm publish
+---
 
-- Publier `@gitwand/mcp` sur npm
-- Soumettre au MCP Registry officiel
-- Publier `@gitwand/cli` sur npm
+## Next — v1.7.0
 
 ---
 

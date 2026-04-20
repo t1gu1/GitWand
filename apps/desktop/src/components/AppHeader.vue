@@ -50,6 +50,8 @@ const emit = defineEmits<{
   loadBranches: [];
   undoPerformed: [];
   openRebase: [];
+  openWorktrees: [branch?: string];
+  openSubmodules: [];
 }>();
 
 // ─── Recent repos popover (Phase 8.4) ────────────────
@@ -504,6 +506,19 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                       </button>
                       <button
                         v-if="!branch.isCurrent"
+                        class="bp-item-worktree"
+                        @click.stop="emit('openWorktrees', branch.name); closeBranchPopover();"
+                        :title="t('worktree.openInWorktreeTabTooltip')"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                          <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                          <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                          <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                        </svg>
+                      </button>
+                      <button
+                        v-if="!branch.isCurrent"
                         class="bp-item-delete"
                         @click.stop="emit('deleteBranch', branch.name)"
                         :title="t('branches.deleteLabel')"
@@ -669,6 +684,36 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             </div>
           </div>
         </div>
+
+        <!-- Worktrees (v1.6.3) -->
+        <button
+          class="btn btn--sync"
+          @click="emit('openWorktrees')"
+          :title="t('worktree.title')"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('worktree.title') }}</span>
+        </button>
+
+        <!-- Submodules (v1.6.3) -->
+        <button
+          class="btn btn--sync"
+          @click="emit('openSubmodules')"
+          :title="t('submodule.title')"
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="3" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <circle cx="3" cy="13" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <circle cx="13" cy="13" r="2" stroke="currentColor" stroke-width="1.3" fill="none"/>
+            <path d="M8 5v4M8 9l-3.5 2.5M8 9l3.5 2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('submodule.title') }}</span>
+        </button>
 
         <!-- Rebase interactif (Phase 1.2.1) -->
         <button

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-04-20
+
+### Added
+
+- **Worktree manager** — create, list, and remove Git worktrees from a dedicated overlay panel (header button "Worktrees"). Each worktree shows its branch, HEAD SHA, path, and status badges (main / locked / bare). "Open in tab" opens any worktree as a first-class repo tab — enabling parallel work on two branches without stashing or switching. "Prune" cleans up stale administrative files. The "New worktree" form lets you check out an existing branch or create a new one directly at the worktree.
+- **Quick worktree from branch list** — every non-current branch in the branch popover now has a worktree shortcut button (⧉ icon). Clicking it opens the worktree manager with the branch pre-selected and the creation form pre-filled, so the "open this branch in a new tab without touching my working tree" flow is two clicks total.
+- **Submodule panel** — new "Submodules" header button opens an overlay listing all submodules declared in `.gitmodules`, with live status badges (clean / modified / not initialized). "Init & Update all" runs `git submodule update --init --recursive`. "Open in tab" opens any initialized submodule as a standalone repo tab. "Add submodule" form (URL + local path). An inline warning banner counts uninitialized submodules and doubles as a one-click init trigger.
+- **Auto-update infrastructure fixes** — `createUpdaterArtifacts: true` in `tauri.conf.json` (was missing, preventing `.sig` file generation); `updater:default`, `process:default`, `process:allow-restart` permissions added to `capabilities/default.json`; updater endpoint simplified to static `latest.json`; `release.yml` now downloads the `tauri-action`-generated manifest (with real cryptographic signatures) instead of hand-crafting one with empty signature fields.
+- **i18n** — all new strings translated across all 5 locales: `en`, `fr`, `es`, `pt-BR`, `zh-CN`.
+
+### Changed
+
+- `tauri.conf.json` updater endpoint: `{{target}}/{{arch}}/{{current_version}}` → `latest.json` (static GitHub Pages, no dynamic server needed).
+
 ## [1.6.2] - 2026-04-20
 
 ### Added

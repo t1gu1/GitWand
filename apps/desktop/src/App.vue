@@ -19,6 +19,8 @@ import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
 import StashManager from "./components/StashManager.vue";
+import WorktreeManager from "./components/WorktreeManager.vue";
+import SubmodulePanel from "./components/SubmodulePanel.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -456,6 +458,13 @@ const showRebase = ref(false);
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
 
+// ─── Worktree manager panel ──────────────────────────────
+const showWorktrees = ref(false);
+const pendingWorktreeBranch = ref<string | undefined>(undefined);
+
+// ─── Submodule panel ─────────────────────────────────────
+const showSubmodules = ref(false);
+
 // ─── Stash-and-switch modal (Phase 1.3.3) ──────────────
 const pendingSwitchBranch = ref<string | null>(null);
 const switchStashMessage = ref("");
@@ -752,6 +761,8 @@ onUnmounted(() => {
       @load-branches="loadBranches"
       @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
+      @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
+      @open-submodules="showSubmodules = true"
     />
 
     <div class="app-body">
@@ -989,6 +1000,30 @@ onUnmounted(() => {
           :cwd="repoFolderPath"
           @close="showStash = false"
           @refresh="repoRefresh()"
+        />
+      </div>
+    </div>
+
+    <!-- Worktree manager overlay -->
+    <div v-if="showWorktrees && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showWorktrees = false">
+      <div class="stash-overlay-body">
+        <WorktreeManager
+          :cwd="repoFolderPath"
+          :branches="branches"
+          :suggested-branch="pendingWorktreeBranch"
+          @close="showWorktrees = false; pendingWorktreeBranch = undefined;"
+          @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; }"
+        />
+      </div>
+    </div>
+
+    <!-- Submodule panel overlay -->
+    <div v-if="showSubmodules && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showSubmodules = false">
+      <div class="stash-overlay-body">
+        <SubmodulePanel
+          :cwd="repoFolderPath"
+          @close="showSubmodules = false"
+          @open-tab="(path) => { openTab(path); showSubmodules = false; }"
         />
       </div>
     </div>

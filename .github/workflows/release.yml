@@ -99,22 +99,14 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Generate update.json for Tauri updater
+      - name: Download update manifest from release (contains real signatures)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.ref_name }}"
-          BASE="https://github.com/devlint/GitWand/releases/download/${VERSION}"
-          cat > update.json <<EOF
-          {
-            "version": "${VERSION}",
-            "notes": "See https://github.com/devlint/GitWand/releases/tag/${VERSION}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "darwin-universal": { "url": "${BASE}/GitWand_${VERSION#v}_universal.dmg.tar.gz", "signature": "" },
-              "linux-x86_64":     { "url": "${BASE}/git-wand_${VERSION#v}_amd64.AppImage.tar.gz", "signature": "" },
-              "windows-x86_64":   { "url": "${BASE}/GitWand_${VERSION#v}_x64-setup.nsis.zip",    "signature": "" }
-            }
-          }
-          EOF
+          gh release download ${{ github.ref_name }} \
+            --pattern "latest.json" \
+            --output update.json \
+            --repo ${{ github.repository }}
           mkdir -p website/public/update
           cp update.json website/public/update/latest.json
 

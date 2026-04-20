@@ -790,6 +790,23 @@ const t = computed(() => i18n[locale.value])
     </section>
 
     <!-- ══════════════════════════════════════
+         BLOG TEASER
+    ══════════════════════════════════════ -->
+    <section class="blog-teaser-section">
+      <div class="section-inner">
+        <div class="blog-teaser-header">
+          <span class="blog-teaser-label">From the blog</span>
+        </div>
+        <a href="/GitWand/blog/automatic-merge-conflict-resolution" class="blog-teaser-card">
+          <div class="blog-teaser-meta">Apr 20, 2026 · 10 min read</div>
+          <h3 class="blog-teaser-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h3>
+          <p class="blog-teaser-excerpt">Pattern-based engine that auto-resolves trivial Git merge conflicts using classification, composite confidence scoring, and format-aware resolvers for JSON and Markdown.</p>
+          <span class="blog-teaser-cta">Read article →</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
          FINAL CTA
     ══════════════════════════════════════ -->
     <section class="cta-section">
@@ -1731,6 +1748,63 @@ const t = computed(() => i18n[locale.value])
   font-size: 14px;
   color: var(--gw-text-muted);
   line-height: 1.75;
+}
+
+/* ───────────────────────────────────────────
+   BLOG TEASER
+─────────────────────────────────────────── */
+.blog-teaser-section {
+  padding: 64px 24px;
+  border-top: 1px solid var(--gw-border);
+}
+.blog-teaser-header {
+  margin-bottom: 1.5rem;
+}
+.blog-teaser-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gw-purple);
+  font-family: var(--vp-font-family-mono, monospace);
+}
+.blog-teaser-card {
+  display: block;
+  padding: 1.75rem 2rem;
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s, background 0.2s;
+  max-width: 760px;
+}
+.blog-teaser-card:hover {
+  border-color: var(--gw-purple);
+  background: var(--gw-surface);
+}
+.blog-teaser-meta {
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  margin-bottom: 0.5rem;
+  font-family: var(--vp-font-family-mono, monospace);
+}
+.blog-teaser-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 0.6rem;
+  line-height: 1.45;
+  color: var(--gw-text);
+}
+.blog-teaser-excerpt {
+  font-size: 0.875rem;
+  color: var(--gw-text-muted);
+  margin: 0 0 1rem;
+  line-height: 1.65;
+}
+.blog-teaser-cta {
+  font-size: 0.85rem;
+  color: var(--gw-purple);
+  font-weight: 500;
 }
 
 /* ───────────────────────────────────────────

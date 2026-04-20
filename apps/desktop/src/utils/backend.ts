@@ -2077,6 +2077,146 @@ export async function previewMerge(
   return [];
 }
 
+// ─── Worktrees ──────────────────────────────────────────
+
+export interface WorktreeEntry {
+  path: string;
+  branch: string;
+  head: string;
+  is_main: boolean;
+  is_locked: boolean;
+  is_bare: boolean;
+}
+
+/** List all git worktrees for the given repo. */
+export async function gitWorktreeList(cwd: string): Promise<WorktreeEntry[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorktreeEntry[]>("git_worktree_list", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-worktree-list?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to list worktrees: ${res.status}`);
+  return res.json();
+}
+
+/** Add a new worktree. Pass `newBranch` to create a new branch at the worktree. */
+export async function gitWorktreeAdd(
+  cwd: string,
+  path: string,
+  branch: string,
+  newBranch?: string,
+): Promise<WorktreeEntry> {
+  if (isTauri()) {
+    return tauriInvoke<WorktreeEntry>("git_worktree_add", {
+      cwd,
+      path,
+      branch,
+      new_branch: newBranch ?? null,
+    });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-worktree-add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, path, branch, new_branch: newBranch ?? null }),
+  });
+  if (!res.ok) throw new Error(`Failed to add worktree: ${res.status}`);
+  return res.json();
+}
+
+/** Remove a worktree. Set `force` to true to discard uncommitted changes. */
+export async function gitWorktreeRemove(cwd: string, path: string, force?: boolean): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_worktree_remove", { cwd, path, force: force ?? false });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-worktree-remove`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, path, force: force ?? false }),
+  });
+  if (!res.ok) throw new Error(`Failed to remove worktree: ${res.status}`);
+}
+
+/** Prune stale worktree administrative files. */
+export async function gitWorktreePrune(cwd: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_worktree_prune", { cwd });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-worktree-prune`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) throw new Error(`Failed to prune worktrees: ${res.status}`);
+}
+
+// ─── Submodules ──────────────────────────────────────────
+
+export interface SubmoduleEntry {
+  path: string;
+  url: string;
+  sha: string;
+  branch: string | null;
+  /** "clean" | "modified" | "uninitialized" */
+  status: "clean" | "modified" | "uninitialized";
+}
+
+/** List all submodules declared in .gitmodules with their live status. */
+export async function gitSubmoduleList(cwd: string): Promise<SubmoduleEntry[]> {
+  if (isTauri()) {
+    return tauriInvoke<SubmoduleEntry[]>("git_submodule_list", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-submodule-list?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to list submodules: ${res.status}`);
+  return res.json();
+}
+
+/** Run `git submodule init`. */
+export async function gitSubmoduleInit(cwd: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_submodule_init", { cwd });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-submodule-init`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) throw new Error(`Failed to init submodules: ${res.status}`);
+}
+
+/** Run `git submodule update`, optionally with --init and --recursive. */
+export async function gitSubmoduleUpdate(
+  cwd: string,
+  init: boolean,
+  recursive: boolean,
+): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_submodule_update", { cwd, init, recursive });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-submodule-update`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, init, recursive }),
+  });
+  if (!res.ok) throw new Error(`Failed to update submodules: ${res.status}`);
+}
+
+/** Add a new submodule. */
+export async function gitSubmoduleAdd(cwd: string, url: string, path: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_submodule_add", { cwd, url, path });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-submodule-add`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, url, path }),
+  });
+  if (!res.ok) throw new Error(`Failed to add submodule: ${res.status}`);
+}
+
 // ─── Updater ────────────────────────────────────────────
 
 /**

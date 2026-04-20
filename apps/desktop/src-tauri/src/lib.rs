@@ -3338,6 +3338,342 @@ fn resolve_claude_binary() -> Option<String> {
     None
 }
 
+// ─── Worktrees ────────────────────────────────────────────────
+
+#[derive(serde::Serialize, Clone)]
+pub struct WorktreeEntry {
+    pub path: String,
+    pub branch: String,
+    pub head: String,
+    pub is_main: bool,
+    pub is_locked: bool,
+    pub is_bare: bool,
+}
+
+/// List all git worktrees via `git worktree list --porcelain`.
+#[tauri::command]
+fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["worktree", "list", "--porcelain"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to list worktrees: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree list failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut entries: Vec<WorktreeEntry> = Vec::new();
+    let mut current: Option<WorktreeEntry> = None;
+    let mut is_first = true;
+
+    for line in stdout.lines() {
+        if line.starts_with("worktree ") {
+            // Flush previous entry
+            if let Some(e) = current.take() {
+                entries.push(e);
+            }
+            let path = line["worktree ".len()..].to_string();
+            current = Some(WorktreeEntry {
+                path,
+                branch: String::new(),
+                head: String::new(),
+                is_main: is_first,
+                is_locked: false,
+                is_bare: false,
+            });
+            is_first = false;
+        } else if let Some(ref mut e) = current {
+            if line.starts_with("HEAD ") {
+                e.head = line["HEAD ".len()..].to_string();
+            } else if line.starts_with("branch ") {
+                // "refs/heads/main" → "main"
+                let full = &line["branch ".len()..];
+                e.branch = full.strip_prefix("refs/heads/").unwrap_or(full).to_string();
+            } else if line == "bare" {
+                e.is_bare = true;
+            } else if line.starts_with("locked") {
+                e.is_locked = true;
+            } else if line == "detached" {
+                e.branch = "(detached HEAD)".to_string();
+            }
+        }
+    }
+    // Flush last entry
+    if let Some(e) = current {
+        entries.push(e);
+    }
+
+    Ok(entries)
+}
+
+/// Add a new worktree. Creates `new_branch` if provided, otherwise checks out
+/// the existing `branch`.
+#[tauri::command]
+fn git_worktree_add(
+    cwd: String,
+    path: String,
+    branch: String,
+    new_branch: Option<String>,
+) -> Result<WorktreeEntry, String> {
+    let mut cmd = std::process::Command::new(git_binary());
+    cmd.arg("worktree").arg("add").arg(&path);
+
+    if let Some(ref nb) = new_branch {
+        cmd.arg("-b").arg(nb).arg(&branch);
+    } else {
+        cmd.arg(&branch);
+    }
+
+    let output = cmd
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to add worktree: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let resolved_branch = new_branch.as_deref().unwrap_or(&branch).to_string();
+    Ok(WorktreeEntry {
+        path,
+        branch: resolved_branch,
+        head: String::new(),
+        is_main: false,
+        is_locked: false,
+        is_bare: false,
+    })
+}
+
+/// Remove a worktree. Pass `force = true` to remove even with local changes.
+#[tauri::command]
+fn git_worktree_remove(cwd: String, path: String, force: Option<bool>) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(git_binary());
+    cmd.arg("worktree").arg("remove");
+    if force.unwrap_or(false) {
+        cmd.arg("--force");
+    }
+    cmd.arg(&path);
+
+    let output = cmd
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to remove worktree: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree remove failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Prune stale worktree administrative files.
+#[tauri::command]
+fn git_worktree_prune(cwd: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["worktree", "prune"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to prune worktrees: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree prune failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+// ─── Submodules ───────────────────────────────────────────────
+
+#[derive(serde::Serialize, Clone)]
+pub struct SubmoduleEntry {
+    pub path: String,
+    pub url: String,
+    pub sha: String,
+    pub branch: Option<String>,
+    /// "clean" | "modified" | "uninitialized"
+    pub status: String,
+}
+
+/// List all submodules declared in .gitmodules, enriched with live status.
+/// Returns an empty Vec if the repo has no submodules.
+#[tauri::command]
+fn git_submodule_list(cwd: String) -> Result<Vec<SubmoduleEntry>, String> {
+    // Fast-exit if .gitmodules does not exist
+    let gitmodules = std::path::Path::new(&cwd).join(".gitmodules");
+    if !gitmodules.exists() {
+        return Ok(Vec::new());
+    }
+
+    // Get URLs and optional branch from git config
+    let cfg_out = std::process::Command::new(git_binary())
+        .args(["config", "--file", ".gitmodules", "--list"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to read .gitmodules: {}", e))?;
+
+    // Build path → (url, branch) map
+    let mut url_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut branch_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+    if cfg_out.status.success() {
+        for line in String::from_utf8_lossy(&cfg_out.stdout).lines() {
+            // submodule.<name>.url=<val>  or  submodule.<name>.path=<val>
+            if let Some(eq) = line.find('=') {
+                let key = &line[..eq];
+                let val = &line[eq + 1..];
+                if key.ends_with(".url") {
+                    // We'll re-key by path after, for now store by name
+                    let name = key
+                        .strip_prefix("submodule.")
+                        .and_then(|s| s.strip_suffix(".url"))
+                        .unwrap_or(key);
+                    url_map.insert(name.to_string(), val.to_string());
+                } else if key.ends_with(".branch") {
+                    let name = key
+                        .strip_prefix("submodule.")
+                        .and_then(|s| s.strip_suffix(".branch"))
+                        .unwrap_or(key);
+                    branch_map.insert(name.to_string(), val.to_string());
+                }
+            }
+        }
+    }
+
+    // Build path→name map from .gitmodules (submodule.<name>.path=<path>)
+    let mut path_to_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if cfg_out.status.success() {
+        for line in String::from_utf8_lossy(&cfg_out.stdout).lines() {
+            if let Some(eq) = line.find('=') {
+                let key = &line[..eq];
+                let val = &line[eq + 1..];
+                if key.ends_with(".path") {
+                    let name = key
+                        .strip_prefix("submodule.")
+                        .and_then(|s| s.strip_suffix(".path"))
+                        .unwrap_or(key);
+                    path_to_name.insert(val.to_string(), name.to_string());
+                }
+            }
+        }
+    }
+
+    // `git submodule status` — one line per submodule:
+    //   ' <sha> <path> (<describe>)'  → initialized, clean
+    //   '+<sha> <path> (<describe>)'  → initialized, modified (different SHA)
+    //   '-<sha> <path>'               → not initialized
+    //   'U<sha> <path>'               → merge conflict
+    let status_out = std::process::Command::new(git_binary())
+        .args(["submodule", "status"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to get submodule status: {}", e))?;
+
+    let mut entries: Vec<SubmoduleEntry> = Vec::new();
+
+    for line in String::from_utf8_lossy(&status_out.stdout).lines() {
+        if line.len() < 42 {
+            continue;
+        }
+        let prefix = &line[..1];
+        let rest = &line[1..];
+        let mut parts = rest.splitn(2, ' ');
+        let sha = parts.next().unwrap_or("").to_string();
+        let path_and_rest = parts.next().unwrap_or("");
+        // path may be followed by " (<describe>)"
+        let path = path_and_rest
+            .split_once(' ')
+            .map(|(p, _)| p)
+            .unwrap_or(path_and_rest)
+            .to_string();
+
+        let status = match prefix {
+            "-" => "uninitialized",
+            "+" => "modified",
+            _ => "clean",
+        }
+        .to_string();
+
+        let name = path_to_name.get(&path).cloned().unwrap_or_else(|| path.clone());
+        let url = url_map.get(&name).cloned().unwrap_or_default();
+        let branch = branch_map.get(&name).cloned();
+
+        entries.push(SubmoduleEntry { path, url, sha, branch, status });
+    }
+
+    Ok(entries)
+}
+
+/// Run `git submodule init` to register submodule config in the local .git/config.
+#[tauri::command]
+fn git_submodule_init(cwd: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["submodule", "init"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to init submodules: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git submodule init failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Run `git submodule update`, optionally with --init and --recursive.
+#[tauri::command]
+fn git_submodule_update(cwd: String, init: bool, recursive: bool) -> Result<(), String> {
+    let mut cmd = std::process::Command::new(git_binary());
+    cmd.arg("submodule").arg("update");
+    if init {
+        cmd.arg("--init");
+    }
+    if recursive {
+        cmd.arg("--recursive");
+    }
+
+    let output = cmd
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to update submodules: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git submodule update failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Add a new submodule at `path` pointing at `url`.
+#[tauri::command]
+fn git_submodule_add(cwd: String, url: String, path: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["submodule", "add", &url, &path])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to add submodule: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git submodule add failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
     let binary = match resolve_claude_binary() {
@@ -3673,6 +4009,14 @@ pub fn run() {
             detect_claude_cli,
             claude_cli_prompt,
             claude_cli_login,
+            git_worktree_list,
+            git_worktree_add,
+            git_worktree_remove,
+            git_worktree_prune,
+            git_submodule_list,
+            git_submodule_init,
+            git_submodule_update,
+            git_submodule_add,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

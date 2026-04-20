@@ -15,6 +15,7 @@ export default defineConfig({
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/core-api' },
+      { text: 'Blog', link: '/blog/' },
     ],
 
     sidebar: {
@@ -38,6 +39,15 @@ export default defineConfig({
             { text: 'Core API', link: '/reference/core-api' },
             { text: 'Configuration', link: '/reference/config' },
             { text: 'CLI Commands', link: '/reference/cli-commands' },
+          ],
+        },
+      ],
+      '/blog/': [
+        {
+          text: 'Blog',
+          items: [
+            { text: 'All articles', link: '/blog/' },
+            { text: 'Automatic merge conflict resolution', link: '/blog/automatic-merge-conflict-resolution' },
           ],
         },
       ],

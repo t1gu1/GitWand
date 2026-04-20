@@ -2570,6 +2570,163 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ─── Worktrees ──────────────────────────────────────────────
+
+    // GET /api/git-worktree-list?cwd=<path>
+    if (url.pathname === "/api/git-worktree-list" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const raw = execSync("git worktree list --porcelain", { cwd, encoding: "utf-8" });
+        const entries = [];
+        let current = null;
+        let isFirst = true;
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("worktree ")) {
+            if (current) entries.push(current);
+            current = { path: line.slice("worktree ".length), branch: "", head: "", is_main: isFirst, is_locked: false, is_bare: false };
+            isFirst = false;
+          } else if (current) {
+            if (line.startsWith("HEAD ")) current.head = line.slice("HEAD ".length);
+            else if (line.startsWith("branch ")) {
+              const full = line.slice("branch ".length);
+              current.branch = full.startsWith("refs/heads/") ? full.slice("refs/heads/".length) : full;
+            } else if (line === "bare") current.is_bare = true;
+            else if (line.startsWith("locked")) current.is_locked = true;
+            else if (line === "detached") current.branch = "(detached HEAD)";
+          }
+        }
+        if (current) entries.push(current);
+        return jsonResponse(req, res, entries);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-worktree-add  { cwd, path, branch, new_branch? }
+    if (url.pathname === "/api/git-worktree-add" && req.method === "POST") {
+      try {
+        const { cwd, path: wtPath, branch, new_branch } = await readBody(req);
+        const resolvedCwd = resolve(cwd);
+        let cmd = `git worktree add "${wtPath}"`;
+        if (new_branch) cmd += ` -b "${new_branch}" "${branch}"`;
+        else cmd += ` "${branch}"`;
+        execSync(cmd, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        const resolvedBranch = new_branch || branch;
+        return jsonResponse(req, res, { path: wtPath, branch: resolvedBranch, head: "", is_main: false, is_locked: false, is_bare: false });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-worktree-remove  { cwd, path, force? }
+    if (url.pathname === "/api/git-worktree-remove" && req.method === "POST") {
+      try {
+        const { cwd, path: wtPath, force } = await readBody(req);
+        const resolvedCwd = resolve(cwd);
+        const forceFlag = force ? "--force " : "";
+        execSync(`git worktree remove ${forceFlag}"${wtPath}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-worktree-prune  { cwd }
+    if (url.pathname === "/api/git-worktree-prune" && req.method === "POST") {
+      try {
+        const { cwd } = await readBody(req);
+        execSync("git worktree prune", { cwd: resolve(cwd), encoding: "utf-8" });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // ─── Submodules ─────────────────────────────────────────────
+
+    // GET /api/git-submodule-list?cwd=<path>
+    if (url.pathname === "/api/git-submodule-list" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const gitmodulesPath = join(cwd, ".gitmodules");
+        if (!existsSync(gitmodulesPath)) return jsonResponse(req, res, []);
+
+        // Parse .gitmodules via git config
+        const cfgRaw = execSync("git config --file .gitmodules --list", { cwd, encoding: "utf-8" });
+        const urlMap = {};
+        const branchMap = {};
+        const pathToName = {};
+        for (const line of cfgRaw.split("\n")) {
+          const eq = line.indexOf("=");
+          if (eq === -1) continue;
+          const key = line.slice(0, eq);
+          const val = line.slice(eq + 1);
+          const nameMatch = key.match(/^submodule\.(.+)\.(\w+)$/);
+          if (!nameMatch) continue;
+          const [, name, prop] = nameMatch;
+          if (prop === "url") urlMap[name] = val;
+          else if (prop === "branch") branchMap[name] = val;
+          else if (prop === "path") pathToName[val] = name;
+        }
+
+        // Parse git submodule status
+        let statusRaw = "";
+        try { statusRaw = execSync("git submodule status", { cwd, encoding: "utf-8" }); } catch { /* no submodules inited */ }
+        const entries = [];
+        for (const line of statusRaw.split("\n")) {
+          if (line.length < 42) continue;
+          const prefix = line[0];
+          const rest = line.slice(1);
+          const spaceIdx = rest.indexOf(" ");
+          const sha = rest.slice(0, spaceIdx);
+          const pathAndRest = rest.slice(spaceIdx + 1);
+          const subPath = pathAndRest.split(" ")[0];
+          const status = prefix === "-" ? "uninitialized" : prefix === "+" ? "modified" : "clean";
+          const name = pathToName[subPath] || subPath;
+          entries.push({ path: subPath, url: urlMap[name] || "", sha, branch: branchMap[name] || null, status });
+        }
+        return jsonResponse(req, res, entries);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-submodule-init  { cwd }
+    if (url.pathname === "/api/git-submodule-init" && req.method === "POST") {
+      try {
+        const { cwd } = await readBody(req);
+        execSync("git submodule init", { cwd: resolve(cwd), encoding: "utf-8" });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-submodule-update  { cwd, init, recursive }
+    if (url.pathname === "/api/git-submodule-update" && req.method === "POST") {
+      try {
+        const { cwd, init, recursive } = await readBody(req);
+        let cmd = "git submodule update";
+        if (init) cmd += " --init";
+        if (recursive) cmd += " --recursive";
+        execSync(cmd, { cwd: resolve(cwd), encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-submodule-add  { cwd, url, path }
+    if (url.pathname === "/api/git-submodule-add" && req.method === "POST") {
+      try {
+        const { cwd, url: smUrl, path: smPath } = await readBody(req);
+        execSync(`git submodule add "${smUrl}" "${smPath}"`, { cwd: resolve(cwd), encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);
