@@ -26,7 +26,7 @@ function setLocale(code: Locale) {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v1.6.2 · Open Source · MIT',
+    badge: 'v1.6.3 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
@@ -60,6 +60,10 @@ const i18n: Record<Locale, any> = {
     featImgDiffDesc: 'Comparez les PNG, JPG, WebP, GIF et SVG côte à côte, en overlay, en blink ou avec un slider. Fini « Binary file changed ».',
     featFolderTree: 'Diff en arbre de dossiers',
     featFolderTreeDesc: 'Bascule plat ↔ arbre dans la liste des fichiers avec totaux par dossier, filtrage au clic et sidebar redimensionnable persistée.',
+    featWorktrees: 'Git Worktrees',
+    featWorktreesDesc: 'Travaillez sur plusieurs branches simultanément sans stasher. Chaque worktree s\'ouvre comme un onglet. Créez-en depuis la liste des branches en un clic.',
+    featSubmodules: 'Gestion des sous-modules',
+    featSubmodulesDesc: 'Listez, initialisez et mettez à jour les sous-modules Git avec badges de statut. Ajoutez-en et ouvrez-les en onglet depuis le panneau.',
     featMcp: 'Serveur MCP',
     featMcpDesc: 'Exposez GitWand à Claude, Cursor, Windsurf et tout client MCP. Une commande : npx -y @gitwand/mcp. Publié avec provenance.',
     conflictTitle: 'Les conflits de merge, résolus automatiquement',
@@ -102,7 +106,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   en: {
-    badge: 'v1.6.2 · Open Source · MIT',
+    badge: 'v1.6.3 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
@@ -136,6 +140,10 @@ const i18n: Record<Locale, any> = {
     featImgDiffDesc: 'Compare PNG, JPG, WebP, GIF, and SVG changes side-by-side, overlayed, blinked, or with a reveal slider. No more "Binary file changed".',
     featFolderTree: 'Folder tree diff',
     featFolderTreeDesc: 'Flat ↔ tree toggle in the commit file list with per-folder aggregates, click-to-filter, and a resizable sidebar that remembers its width.',
+    featWorktrees: 'Git Worktrees',
+    featWorktreesDesc: 'Work on multiple branches simultaneously without stashing. Each worktree opens as a tab. Create one from the branch list with one click.',
+    featSubmodules: 'Submodule management',
+    featSubmodulesDesc: 'List, initialize, and update Git submodules with status badges. Add submodules and open them as tabs directly from the panel.',
     featMcp: 'MCP server',
     featMcpDesc: 'Expose GitWand to Claude, Cursor, Windsurf, and any MCP client. One command: npx -y @gitwand/mcp. Published with provenance.',
     conflictTitle: 'Merge conflicts, resolved automatically',
@@ -178,7 +186,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   es: {
-    badge: 'v1.6.2 · Open Source · MIT',
+    badge: 'v1.6.3 · Open Source · MIT',
     heroH1a: 'Git, sin',
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
@@ -212,6 +220,10 @@ const i18n: Record<Locale, any> = {
     featImgDiffDesc: 'Compara cambios en PNG, JPG, WebP, GIF y SVG lado a lado, superpuestos, parpadeando o con un slider. Se acabó el «Binary file changed».',
     featFolderTree: 'Diff en árbol de carpetas',
     featFolderTreeDesc: 'Alterna plano ↔ árbol en la lista de archivos del commit, con totales por carpeta, filtrado al clic y barra lateral redimensionable persistida.',
+    featWorktrees: 'Git Worktrees',
+    featWorktreesDesc: 'Trabaja en varias ramas simultáneamente sin hacer stash. Cada worktree se abre como pestaña. Créalo desde la lista de ramas con un clic.',
+    featSubmodules: 'Gestión de submódulos',
+    featSubmodulesDesc: 'Lista, inicializa y actualiza submódulos Git con insignias de estado. Añade submódulos y ábrelos como pestañas desde el panel.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Expón GitWand a Claude, Cursor, Windsurf y cualquier cliente MCP. Un comando: npx -y @gitwand/mcp. Publicado con attestations de procedencia.',
     conflictTitle: 'Conflictos de merge, resueltos automáticamente',
@@ -254,7 +266,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'pt-BR': {
-    badge: 'v1.6.2 · Open Source · MIT',
+    badge: 'v1.6.3 · Open Source · MIT',
     heroH1a: 'Git, sem',
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
@@ -288,6 +300,10 @@ const i18n: Record<Locale, any> = {
     featImgDiffDesc: 'Compare mudanças em PNG, JPG, WebP, GIF e SVG lado a lado, sobrepostas, piscando ou com um slider. Chega de «Binary file changed».',
     featFolderTree: 'Diff em árvore de pastas',
     featFolderTreeDesc: 'Alterne plano ↔ árvore na lista de arquivos do commit, com totais por pasta, filtro ao clicar e sidebar redimensionável persistida.',
+    featWorktrees: 'Git Worktrees',
+    featWorktreesDesc: 'Trabalhe em várias branches simultaneamente sem fazer stash. Cada worktree abre como aba. Crie a partir da lista de branches com um clique.',
+    featSubmodules: 'Gerenciamento de submódulos',
+    featSubmodulesDesc: 'Liste, inicialize e atualize submódulos Git com badges de status. Adicione submódulos e abra-os como abas diretamente do painel.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Exponha o GitWand ao Claude, Cursor, Windsurf e qualquer cliente MCP. Um comando: npx -y @gitwand/mcp. Publicado com atestados de proveniência.',
     conflictTitle: 'Conflitos de merge, resolvidos automaticamente',
@@ -330,7 +346,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'zh-CN': {
-    badge: 'v1.6.2 · 开源 · MIT',
+    badge: 'v1.6.3 · 开源 · MIT',
     heroH1a: 'Git,告别',
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
@@ -364,6 +380,10 @@ const i18n: Record<Locale, any> = {
     featImgDiffDesc: '以并排、叠加、闪烁或滑动方式比较 PNG、JPG、WebP、GIF、SVG 的变化。告别「Binary file changed」。',
     featFolderTree: '文件夹树状 diff',
     featFolderTreeDesc: '提交文件列表中平铺 ↔ 树状切换,按文件夹聚合统计、点击过滤,侧边栏宽度可调且持久保存。',
+    featWorktrees: 'Git 工作树',
+    featWorktreesDesc: '无需 stash 即可同时处理多个分支。每个工作树可直接作为标签页打开。在分支列表中一键创建。',
+    featSubmodules: '子模块管理',
+    featSubmodulesDesc: '列出、初始化并更新 Git 子模块,带状态标记。从面板中添加子模块并直接以标签页形式打开。',
     featMcp: 'MCP 服务器',
     featMcpDesc: '将 GitWand 暴露给 Claude、Cursor、Windsurf 等 MCP 客户端。一条命令:npx -y @gitwand/mcp。附带 provenance 签名发布。',
     conflictTitle: '合并冲突,自动解决',
@@ -578,6 +598,22 @@ const t = computed(() => i18n[locale.value])
             </div>
             <h3>{{ t.featFolderTree }}</h3>
             <p>{{ t.featFolderTreeDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8h2M6 12h2M6 16h2M17 8h1M17 12h1M17 16h1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featWorktrees }}</h3>
+            <p>{{ t.featWorktreesDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6.5 9v3.5a1 1 0 001 1h9a1 1 0 001-1V9" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><rect x="8" y="14" width="8" height="8" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/></svg>
+            </div>
+            <h3>{{ t.featSubmodules }}</h3>
+            <p>{{ t.featSubmodulesDesc }}</p>
           </div>
 
           <div class="feat-card">
