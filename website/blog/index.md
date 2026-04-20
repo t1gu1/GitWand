@@ -5,19 +5,19 @@ title: Blog
 # Blog
 
 <div class="blog-list">
-  <a href="/GitWand/blog/worktrees-submodules-auto-update" class="blog-card">
+  <a href="/blog/worktrees-submodules-auto-update" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 8 min read</div>
     <h2 class="blog-title">Worktrees, submodules, and a broken auto-updater: what went into GitWand v1.6.3</h2>
     <p class="blog-excerpt">How I added Git worktree and submodule management to a Tauri desktop app, and fixed four silent bugs that were keeping auto-update from ever working.</p>
     <span class="blog-read">Read article →</span>
   </a>
-  <a href="/GitWand/blog/why-i-built-another-git-client" class="blog-card">
+  <a href="/blog/why-i-built-another-git-client" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 8 min read</div>
     <h2 class="blog-title">Why I built another Git client</h2>
     <p class="blog-excerpt">There are already a dozen Git GUIs. Here's what was missing from all of them — and why I spent a year building GitWand anyway.</p>
     <span class="blog-read">Read article →</span>
   </a>
-  <a href="/GitWand/blog/automatic-merge-conflict-resolution" class="blog-card">
+  <a href="/blog/automatic-merge-conflict-resolution" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 10 min read</div>
     <h2 class="blog-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h2>
     <p class="blog-excerpt">Pattern-based engine that auto-resolves trivial Git merge conflicts using classification, composite confidence scoring, and format-aware resolvers for JSON and Markdown.</p>

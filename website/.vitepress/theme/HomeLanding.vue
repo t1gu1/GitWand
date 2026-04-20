@@ -449,7 +449,7 @@ const t = computed(() => i18n[locale.value])
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
               {{ t.download }}
             </a>
-            <a href="/GitWand/guide/getting-started" class="btn-ghost">
+            <a href="/guide/getting-started" class="btn-ghost">
               {{ t.docs }}
             </a>
           </div>
@@ -707,7 +707,7 @@ const t = computed(() => i18n[locale.value])
                 <span class="llm-chip">Continue</span>
               </div>
             </div>
-            <a href="/GitWand/guide/mcp" class="llm-docs-link">{{ t.llmDocs }}</a>
+            <a href="/guide/mcp" class="llm-docs-link">{{ t.llmDocs }}</a>
           </div>
         </div>
       </div>
@@ -797,7 +797,7 @@ const t = computed(() => i18n[locale.value])
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/GitWand/blog/automatic-merge-conflict-resolution" class="blog-teaser-card">
+        <a href="/blog/automatic-merge-conflict-resolution" class="blog-teaser-card">
           <div class="blog-teaser-meta">Apr 20, 2026 · 10 min read</div>
           <h3 class="blog-teaser-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h3>
           <p class="blog-teaser-excerpt">Pattern-based engine that auto-resolves trivial Git merge conflicts using classification, composite confidence scoring, and format-aware resolvers for JSON and Markdown.</p>

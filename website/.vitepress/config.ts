@@ -3,10 +3,10 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'GitWand',
   description: "Git's magic wand — smart conflict resolution & native Git client",
-  base: '/GitWand/',
+  base: '/',
 
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/GitWand/favicon.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
   ],
 
   themeConfig: {
