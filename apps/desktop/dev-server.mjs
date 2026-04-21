@@ -1009,6 +1009,35 @@ const server = createServer(async (req, res) => {
           );
         }
 
+        // 2b. Precondition: HEAD must be a non-merge commit. `git reset --mixed
+        // HEAD^` on a merge would silently follow the first-parent only and
+        // drop the second parent from history — flattening the merge. Refuse.
+        const parentsLine = execSync("git rev-list --parents -n 1 HEAD", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        }).trim();
+        // Format: "<sha> <parent1> [<parent2> …]"
+        const parentCount = Math.max(0, parentsLine.split(/\s+/).length - 1);
+        if (parentCount === 0) {
+          return jsonResponse(
+            req,
+            res,
+            { error: "Cannot split the root commit — it has no parent to reset onto." },
+            400,
+          );
+        }
+        if (parentCount > 1) {
+          return jsonResponse(
+            req,
+            res,
+            {
+              error:
+                "Cannot split a merge commit — splitting would flatten the merge and drop one of its parents from history.",
+            },
+            400,
+          );
+        }
+
         // 3. Undo HEAD, changes become unstaged
         execFileSync("git", ["reset", "--mixed", "HEAD^"], {
           cwd: resolvedCwd,
@@ -1017,6 +1046,13 @@ const server = createServer(async (req, res) => {
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
+
+      // On failure we dump the patch we fed to `git apply` — a failed apply
+      // reports a single line of stderr, so the patch content is the only
+      // way to diagnose format regressions (phantom context lines, missing
+      // `new file mode`, etc.). Written lazily inside the catch branch below
+      // so the happy path stays silent.
+      let debugPatchPath = null;
 
       try {
         // 4. Stage first patch
@@ -1056,7 +1092,23 @@ const server = createServer(async (req, res) => {
       } catch (err) {
         rollback();
         const detail = err.stderr?.toString().trim() || err.stdout?.toString().trim() || err.message;
-        return jsonResponse(req, res, { error: detail }, 500);
+        try {
+          const { writeFileSync, mkdirSync } = await import("node:fs");
+          const { tmpdir } = await import("node:os");
+          const { join } = await import("node:path");
+          const dir = join(tmpdir(), "gitwand-split-debug");
+          mkdirSync(dir, { recursive: true });
+          debugPatchPath = join(dir, `patch-${Date.now()}.diff`);
+          writeFileSync(debugPatchPath, firstPatch, "utf-8");
+        } catch {
+          // Best effort — don't mask the real error with a dump failure.
+        }
+        console.error(
+          `[split-commit] apply failed: ${detail}\n` +
+          `  patch kept at: ${debugPatchPath ?? "(not saved)"}\n` +
+          `  head was: ${originalSha ?? "?"}`,
+        );
+        return jsonResponse(req, res, { error: detail, debugPatchPath }, 500);
       }
     }
 
@@ -1218,12 +1270,20 @@ const server = createServer(async (req, res) => {
             } else if (line.startsWith("-") && !line.startsWith("---")) {
               currentHunk.lines.push({ type: "delete", content: line.substring(1), oldLineNo, newLineNo: null });
               oldLineNo++;
-            } else if (!line.startsWith("\\")) {
-              const content = line.length > 0 ? line.substring(1) : "";
-              currentHunk.lines.push({ type: "context", content, oldLineNo, newLineNo });
+            } else if (line.startsWith(" ")) {
+              // Real context line: space + content (possibly empty). An empty
+              // source-line renders as " " (length 1), not "" (length 0) — the
+              // truly-empty strings produced by split("\n") on the blank
+              // separator between diff sections are NOT context. Treating them
+              // as context adds a phantom line that corrupts the hunk counts
+              // and makes `git apply` reject the patch (with e.g. "new file X
+              // depends on old contents" for a purely-additive hunk).
+              currentHunk.lines.push({ type: "context", content: line.substring(1), oldLineNo, newLineNo });
               oldLineNo++;
               newLineNo++;
             }
+            // else: skip. Covers "" blank separators, "\ No newline at end of
+            // file" markers, and anything else that isn't a real hunk line.
           }
         }
         if (currentHunk) hunks.push(currentHunk);
@@ -1314,17 +1374,39 @@ const server = createServer(async (req, res) => {
         let currentHunks = [];
         let oldLineNo = 0;
         let newLineNo = 0;
+        // File-level extended header state — see Rust `git_show` for rationale.
+        // The frontend's patchBuilder needs to know whether a file was added
+        // (uses /dev/null as source) or deleted (uses /dev/null as target) or
+        // the `git apply --cached` during a split will fail.
+        let currentStatus = null;
+        let currentOldPath = null;
 
         for (const line of stdout.split("\n")) {
           if (line.startsWith("diff --git ")) {
             if (currentHunk) currentHunks.push(currentHunk);
             currentHunk = null;
             if (currentPath) {
-              diffs.push({ path: currentPath, hunks: currentHunks });
+              diffs.push({
+                path: currentPath,
+                hunks: currentHunks,
+                ...(currentStatus ? { status: currentStatus } : {}),
+                ...(currentOldPath ? { oldPath: currentOldPath } : {}),
+              });
               currentHunks = [];
             }
+            currentStatus = null;
+            currentOldPath = null;
             const parts = line.split(" b/");
             currentPath = parts.length >= 2 ? parts[1] : null;
+          } else if (line.startsWith("new file mode")) {
+            currentStatus = "added";
+          } else if (line.startsWith("deleted file mode")) {
+            currentStatus = "deleted";
+          } else if (line.startsWith("rename from ")) {
+            currentStatus = "renamed";
+            currentOldPath = line.substring("rename from ".length);
+          } else if (line.startsWith("rename to ") && !currentStatus) {
+            currentStatus = "renamed";
           } else if (line.startsWith("@@")) {
             if (currentHunk) currentHunks.push(currentHunk);
 
@@ -1344,17 +1426,32 @@ const server = createServer(async (req, res) => {
             } else if (line.startsWith("-") && !line.startsWith("---")) {
               currentHunk.lines.push({ type: "delete", content: line.substring(1), oldLineNo, newLineNo: null });
               oldLineNo++;
-            } else if (!line.startsWith("\\")) {
-              const content = line.length > 0 ? line.substring(1) : "";
-              currentHunk.lines.push({ type: "context", content, oldLineNo, newLineNo });
+            } else if (line.startsWith(" ")) {
+              // Real context line: space + content (possibly empty). An empty
+              // source-line renders as " " (length 1), not "" (length 0) — the
+              // truly-empty strings produced by split("\n") on the blank
+              // separator between diff sections are NOT context. Treating them
+              // as context adds a phantom line that corrupts the hunk counts
+              // and makes `git apply` reject the patch (with e.g. "new file X
+              // depends on old contents" for a purely-additive hunk).
+              currentHunk.lines.push({ type: "context", content: line.substring(1), oldLineNo, newLineNo });
               oldLineNo++;
               newLineNo++;
             }
+            // else: skip. Covers "" blank separators, "\ No newline at end of
+            // file" markers, and anything else that isn't a real hunk line.
           }
         }
 
         if (currentHunk) currentHunks.push(currentHunk);
-        if (currentPath) diffs.push({ path: currentPath, hunks: currentHunks });
+        if (currentPath) {
+          diffs.push({
+            path: currentPath,
+            hunks: currentHunks,
+            ...(currentStatus ? { status: currentStatus } : {}),
+            ...(currentOldPath ? { oldPath: currentOldPath } : {}),
+          });
+        }
 
         return jsonResponse(req, res, diffs);
       } catch (err) {

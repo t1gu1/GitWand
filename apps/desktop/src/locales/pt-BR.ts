@@ -388,6 +388,7 @@ const ptBR: Locale = {
     loading: "Carregando diffs…",
     errorTitle: "A divisão falhou",
     errorNotHead: "Somente HEAD pode ser dividido a partir do log. Use o rebase interativo para dividir um commit anterior.",
+    errorMergeCommit: "Não é possível dividir um commit de merge — isso aplainaria o merge e removeria um de seus pais do histórico.",
     firstMessageLabel: "Mensagem do primeiro commit",
     firstMessageHint: "O commit mais antigo — contém os hunks selecionados.",
     firstMessagePlaceholder: "ex. refactor: extrair utilitário",
@@ -399,6 +400,11 @@ const ptBR: Locale = {
     cancel: "Cancelar",
     confirm: "Dividir",
     splitting: "Dividindo…",
+    filesCount: "{0} arquivos",
+    expandAll: "Expandir tudo",
+    collapseAll: "Recolher tudo",
+    hunksCount: "{0} hunks",
+    linesSelectedSuffix: "selecionadas",
   },
 
   // ─── EmptyState ─────────────────────────────────────────

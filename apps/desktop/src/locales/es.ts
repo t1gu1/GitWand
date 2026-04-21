@@ -387,6 +387,7 @@ const es: Locale = {
     loading: "Cargando diffs…",
     errorTitle: "La división falló",
     errorNotHead: "Sólo se puede dividir HEAD desde el registro. Usa un rebase interactivo para dividir un commit anterior.",
+    errorMergeCommit: "No se puede dividir un commit de fusión — hacerlo aplanaría la fusión y eliminaría uno de sus padres del historial.",
     firstMessageLabel: "Mensaje del primer commit",
     firstMessageHint: "El commit anterior — contiene los hunks seleccionados.",
     firstMessagePlaceholder: "p. ej. refactor: extraer utilidad",
@@ -398,6 +399,11 @@ const es: Locale = {
     cancel: "Cancelar",
     confirm: "Dividir",
     splitting: "Dividiendo…",
+    filesCount: "{0} archivos",
+    expandAll: "Expandir todo",
+    collapseAll: "Contraer todo",
+    hunksCount: "{0} hunks",
+    linesSelectedSuffix: "seleccionadas",
   },
 
   // ─── EmptyState ─────────────────────────────────────────

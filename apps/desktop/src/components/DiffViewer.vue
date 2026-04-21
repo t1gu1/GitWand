@@ -16,6 +16,13 @@ const props = defineProps<{
   diffMode: DiffMode;
   /** Enable line/hunk selection for partial staging */
   selectable?: boolean;
+  /**
+   * Optional seed for the internal selection state. Hosts like SplitCommitModal
+   * that mount/unmount the viewer (e.g. when collapsing/expanding a file row)
+   * pass the previously emitted selection here so it survives the remount.
+   * Plain DiffViewer usage can leave this unset — selection starts empty.
+   */
+  initialSelection?: LineSelection;
 }>();
 
 const emit = defineEmits<{
@@ -178,8 +185,22 @@ function prevHunk() { goToHunk(currentHunkIdx.value - 1); }
 function nextHunk() { goToHunk(currentHunkIdx.value + 1); }
 
 // ─── Partial staging: line/hunk selection ───────────────
-/** Track which lines are selected: hunkIdx → Set of line indices */
-const lineSelection = ref<LineSelection>(new Map());
+/**
+ * Track which lines are selected: hunkIdx → Set of line indices.
+ * Seeded from `initialSelection` prop so hosts that unmount/remount the
+ * viewer (SplitCommitModal's collapsible rows) can preserve user picks.
+ * We deep-clone so the viewer's internal mutations never leak back into
+ * the host's Map via shared references.
+ */
+function cloneSelection(src: LineSelection | undefined): LineSelection {
+  const copy: LineSelection = new Map();
+  if (!src) return copy;
+  for (const [hunkIdx, lines] of src.entries()) {
+    copy.set(hunkIdx, new Set(lines));
+  }
+  return copy;
+}
+const lineSelection = ref<LineSelection>(cloneSelection(props.initialSelection));
 
 /** Is a specific line selected? */
 function isLineSelected(hunkIdx: number, lineIdx: number): boolean {

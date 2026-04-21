@@ -231,7 +231,7 @@ export function useInteractiveRebase() {
     cwd: string,
     base: string,
     entries: RebaseTodoEntry[],
-  ): Promise<{ success: boolean; error?: string; conflict?: boolean }> {
+  ): Promise<{ success: boolean; error?: string; conflict?: boolean; inProgress?: boolean }> {
     isRunning.value = true;
     error.value = null;
 
@@ -270,21 +270,23 @@ export function useInteractiveRebase() {
       if (data.error) throw new Error(data.error);
       if (data.conflict) {
         await detectRebaseState(cwd);
-        return { success: true, conflict: true };
+        return { success: true, conflict: true, inProgress: true };
       }
       // Even when the backend reports success, the rebase may still be in
       // progress — `edit` (and our synthetic `split`) halts exit with code 0
       // on the git side, so the backend can't distinguish them from a fully
       // completed rebase. Check rebase state here: if it's still in progress,
-      // treat the same as a conflict halt so the UI stays on the progress
-      // banner and the pending-split lookup has something to match.
+      // surface that to the caller so the UI stays on the progress banner
+      // and the pending-split lookup has something to match. `conflict` is
+      // reserved for merge conflicts; the broader "rebase not finished" signal
+      // is `inProgress`.
       const state = await detectRebaseState(cwd);
       if (state?.inProgress) {
-        return { success: true, conflict: state.hasConflict };
+        return { success: true, conflict: state.hasConflict, inProgress: true };
       }
       progress.value = null;
       clearPendingSplits();
-      return { success: true };
+      return { success: true, inProgress: false };
     } catch (err: any) {
       error.value = err.message;
       return { success: false, error: err.message };
@@ -295,7 +297,7 @@ export function useInteractiveRebase() {
 
   // ── Continue / Abort / Skip ───────────────────────────────
 
-  async function rebaseContinue(cwd: string): Promise<{ success: boolean; conflict?: boolean; error?: string }> {
+  async function rebaseContinue(cwd: string): Promise<{ success: boolean; conflict?: boolean; error?: string; inProgress?: boolean }> {
     isRunning.value = true;
     error.value = null;
     try {
@@ -307,19 +309,20 @@ export function useInteractiveRebase() {
       if (result.exitCode !== 0) {
         if (result.stderr.includes("CONFLICT") || result.stderr.includes("could not apply")) {
           await detectRebaseState(cwd);
-          return { success: true, conflict: true };
+          return { success: true, conflict: true, inProgress: true };
         }
         throw new Error(result.stderr || "rebase --continue failed");
       }
       // Even on exit-0 the rebase may have hit another halt (next `edit`/`split`).
-      // Probe state and surface the halt the same way we'd surface a conflict.
+      // Probe state and surface the halt via `inProgress` — `conflict` remains
+      // reserved for merge-conflict halts specifically.
       const state = await detectRebaseState(cwd);
       if (state?.inProgress) {
-        return { success: true, conflict: state.hasConflict };
+        return { success: true, conflict: state.hasConflict, inProgress: true };
       }
       progress.value = null;
       clearPendingSplits();
-      return { success: true };
+      return { success: true, inProgress: false };
     } catch (err: any) {
       error.value = err.message;
       return { success: false, error: err.message };
@@ -344,7 +347,7 @@ export function useInteractiveRebase() {
     }
   }
 
-  async function rebaseSkip(cwd: string): Promise<{ success: boolean; conflict?: boolean; error?: string }> {
+  async function rebaseSkip(cwd: string): Promise<{ success: boolean; conflict?: boolean; error?: string; inProgress?: boolean }> {
     isRunning.value = true;
     error.value = null;
     try {
@@ -352,18 +355,18 @@ export function useInteractiveRebase() {
       if (result.exitCode !== 0) {
         if (result.stderr.includes("CONFLICT") || result.stderr.includes("could not apply")) {
           await detectRebaseState(cwd);
-          return { success: true, conflict: true };
+          return { success: true, conflict: true, inProgress: true };
         }
         throw new Error(result.stderr || "rebase --skip failed");
       }
       // Skip may land on another halt (edit/split on the next commit).
       const state = await detectRebaseState(cwd);
       if (state?.inProgress) {
-        return { success: true, conflict: state.hasConflict };
+        return { success: true, conflict: state.hasConflict, inProgress: true };
       }
       progress.value = null;
       clearPendingSplits();
-      return { success: true };
+      return { success: true, inProgress: false };
     } catch (err: any) {
       error.value = err.message;
       return { success: false, error: err.message };

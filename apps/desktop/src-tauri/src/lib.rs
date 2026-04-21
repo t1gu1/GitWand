@@ -375,6 +375,16 @@ struct DiffHunk {
 struct GitDiff {
     path: String,
     hunks: Vec<DiffHunk>,
+    /// File-level status as reported by the diff extended header
+    /// ("new file mode", "deleted file mode", "rename from/to"). Defaults to
+    /// "modified" for a plain diff with no such extended line.
+    /// The frontend needs this to build a valid `git apply` patch when
+    /// splitting a commit: new files must use `--- /dev/null` rather than
+    /// `--- a/<path>` or the apply fails with "does not exist in index".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", rename = "oldPath")]
+    old_path: Option<String>,
 }
 
 #[tauri::command]
@@ -461,13 +471,15 @@ fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDiff, String> 
                     new_line_no: None,
                 });
                 old_line_no += 1;
-            } else if !line.starts_with('\\') {
-                // context line
-                let content = if line.is_empty() {
-                    "".to_string()
-                } else {
-                    line[1..].to_string()
-                };
+            } else if line.starts_with(' ') {
+                // Real context line: space + content (possibly empty). An
+                // empty source line renders as " " (length 1), not "" — blank
+                // separator lines produced by `lines()` between diff sections
+                // are NOT context. Treating them as context adds a phantom
+                // line that corrupts hunk counts and breaks patches built
+                // from this diff (e.g. `git apply` rejecting a new-file split
+                // with "new file X depends on old contents").
+                let content = line[1..].to_string();
                 hunk.lines.push(DiffLine {
                     r#type: "context".to_string(),
                     content,
@@ -488,6 +500,8 @@ fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDiff, String> 
     Ok(GitDiff {
         path,
         hunks,
+        status: None,
+        old_path: None,
     })
 }
 
@@ -1380,6 +1394,38 @@ fn git_split_commit(
         }
     }
 
+    // Precondition: HEAD must be a non-merge commit. `git reset --mixed HEAD^`
+    // on a merge would silently follow the first-parent only and drop the
+    // second parent from history — flattening the merge. Refuse outright.
+    {
+        let output = std::process::Command::new(git_binary())
+            .args(["rev-list", "--parents", "-n", "1", "HEAD"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to read HEAD parents: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git rev-list failed: {}", stderr));
+        }
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Output format: "<sha> <parent1> [<parent2> …]" — one commit per line.
+        let tokens: Vec<&str> = stdout.split_whitespace().collect();
+        let parent_count = tokens.len().saturating_sub(1);
+        if parent_count == 0 {
+            return Err(
+                "Cannot split the root commit — it has no parent to reset onto."
+                    .to_string(),
+            );
+        }
+        if parent_count > 1 {
+            return Err(
+                "Cannot split a merge commit — splitting would flatten the merge \
+                 and drop one of its parents from history."
+                    .to_string(),
+            );
+        }
+    }
+
     // Step 2: reset --mixed HEAD^ — changes from the commit become unstaged
     {
         let output = std::process::Command::new(git_binary())
@@ -1697,6 +1743,10 @@ fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
     let mut old_line_no = 0;
     let mut new_line_no = 0;
     let mut current_hunks: Vec<DiffHunk> = Vec::new();
+    // Extended-header state tracked per file, captured before any @@ hunk and
+    // flushed alongside the file's hunks when the next `diff --git` appears.
+    let mut current_status: Option<String> = None;
+    let mut current_old_path: Option<String> = None;
 
     for line in stdout.lines() {
         if line.starts_with("diff --git ") {
@@ -1708,13 +1758,28 @@ fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
                 diffs.push(GitDiff {
                     path,
                     hunks: std::mem::take(&mut current_hunks),
+                    status: current_status.take(),
+                    old_path: current_old_path.take(),
                 });
             }
+            current_status = None;
+            current_old_path = None;
 
             // Extract file path from "diff --git a/path b/path"
             let parts: Vec<&str> = line.split(" b/").collect();
             if parts.len() >= 2 {
                 current_path = Some(parts[1].to_string());
+            }
+        } else if line.starts_with("new file mode") {
+            current_status = Some("added".to_string());
+        } else if line.starts_with("deleted file mode") {
+            current_status = Some("deleted".to_string());
+        } else if let Some(rest) = line.strip_prefix("rename from ") {
+            current_status = Some("renamed".to_string());
+            current_old_path = Some(rest.to_string());
+        } else if line.starts_with("rename to ") {
+            if current_status.is_none() {
+                current_status = Some("renamed".to_string());
             }
         } else if line.starts_with("@@") {
             if let Some(hunk) = current_hunk.take() {
@@ -1775,15 +1840,16 @@ fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
                     new_line_no: None,
                 });
                 old_line_no += 1;
-            } else if !line.starts_with('\\') {
-                let content = if line.is_empty() {
-                    "".to_string()
-                } else {
-                    line[1..].to_string()
-                };
+            } else if line.starts_with(' ') {
+                // Only accept lines that start with a literal space as context.
+                // Empty strings (from split on blank separator lines or trailing
+                // EOF newline) must NOT be classified as context — doing so adds
+                // a phantom zero-length context line to the hunk, which makes
+                // `git apply` reject the patch with "depends on old contents"
+                // for new-file hunks (header becomes `-0,1` instead of `-0,0`).
                 hunk.lines.push(DiffLine {
                     r#type: "context".to_string(),
-                    content,
+                    content: line[1..].to_string(),
                     old_line_no: Some(old_line_no),
                     new_line_no: Some(new_line_no),
                 });
@@ -1801,6 +1867,8 @@ fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
         diffs.push(GitDiff {
             path,
             hunks: current_hunks,
+            status: current_status.take(),
+            old_path: current_old_path.take(),
         });
     }
 

@@ -217,15 +217,20 @@ async function startRebase() {
     baseInput.value,
     rebase.todoEntries.value,
   );
-  if (result.success && !result.conflict) {
+  // Only close when the rebase is fully finished. A halt on `edit` or our
+  // synthetic `split` returns `success: true, conflict: false` because it's
+  // not a merge conflict — but the rebase is mid-flight. `inProgress` is the
+  // authoritative "is the rebase still running" signal.
+  if (result.success && !result.inProgress) {
     emit("done");
   }
-  // If conflict, the progress state will be detected and UI adapts
+  // Otherwise, the progress banner stays visible and the UI adapts
+  // (conflict UI, or "Split this commit…" button for pending-split halts).
 }
 
 async function doContinue() {
   const result = await rebase.rebaseContinue(props.cwd);
-  if (result.success && !result.conflict) {
+  if (result.success && !result.inProgress) {
     emit("done");
   }
 }
@@ -237,7 +242,7 @@ async function doAbort() {
 
 async function doSkip() {
   const result = await rebase.rebaseSkip(props.cwd);
-  if (result.success && !result.conflict) {
+  if (result.success && !result.inProgress) {
     emit("done");
   }
 }
@@ -267,7 +272,10 @@ async function handleSplitAtHead() {
     async () => {
       resolvePendingSplit(pending.fullHash);
       const result = await rebase.rebaseContinue(props.cwd);
-      if (result.success && !result.conflict) {
+      // Close the editor only when the rebase is fully finished. If another
+      // halt follows (another edit/split, or a conflict), `inProgress` stays
+      // true and the progress banner remains visible with the right affordances.
+      if (result.success && !result.inProgress) {
         emit("done");
       }
     },

@@ -33,6 +33,14 @@ export interface SplittableCommit {
   message: string;
   /** Commit body (may be empty), appended to message for commit B. */
   body?: string;
+  /**
+   * Parent commit hashes. When provided, the composable refuses to open for
+   * merge commits (parents.length > 1) — splitting a merge would silently
+   * drop one of its parents. When omitted (e.g. rebase edit-stop flow where
+   * the pending-split entry doesn't track parents), the backend enforces
+   * the same check as a fallback, surfacing an error.
+   */
+  parents?: string[];
 }
 
 /** Per-file selection state: filePath → LineSelection (hunkIdx → Set<lineIdx>). */
@@ -85,6 +93,15 @@ export function useSplitCommit() {
     targetCommit: SplittableCommit,
     onAfterSplit?: AfterSplitCallback,
   ): Promise<void> {
+    // Refuse merge commits up-front when parent info is available. This is a
+    // nicer UX than waiting for the backend to reject after the modal opens;
+    // the backend still enforces it as a last line of defense for callers
+    // that don't carry parents (rebase edit-stop flow).
+    if (targetCommit.parents && targetCommit.parents.length > 1) {
+      error.value =
+        "Cannot split a merge commit — splitting would flatten the merge and drop one of its parents from history.";
+      return;
+    }
     cwd.value = repoCwd;
     commit.value = targetCommit;
     diffs.value = [];

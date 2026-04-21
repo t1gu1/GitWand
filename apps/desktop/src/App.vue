@@ -355,10 +355,19 @@ async function handleSplitCommitRequest(entry: GitLogEntry) {
     repoError.value = t("splitCommit.errorNotHead");
     return;
   }
+  // Refuse merge commits — splitting would flatten the merge and drop a
+  // parent. The composable also guards on parents, but surfacing the error
+  // at the app shell level means the user sees a repoError banner instead
+  // of an orphan modal with an error slot.
+  if ((entry.parents?.length ?? 0) > 1) {
+    repoError.value = t("splitCommit.errorMergeCommit");
+    return;
+  }
   await splitCommit.openFor(cwd, {
     hash: entry.hashFull,
     message: entry.message,
     body: entry.body,
+    parents: entry.parents,
   });
 }
 

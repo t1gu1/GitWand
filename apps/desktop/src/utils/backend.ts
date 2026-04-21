@@ -373,6 +373,17 @@ export interface DiffHunk {
 export interface GitDiff {
   path: string;
   hunks: DiffHunk[];
+  /**
+   * File-level status as reported by the diff's extended header
+   * (`new file mode`, `deleted file mode`, `rename from/to`). Absent for a
+   * plain in-place modification. Used by `patchBuilder` to emit the correct
+   * `--- a/<path>` vs `--- /dev/null` header — a new file's patch must use
+   * `/dev/null` as source or `git apply --cached` fails with "does not
+   * exist in index" during a commit split.
+   */
+  status?: "added" | "modified" | "deleted" | "renamed";
+  /** Original path for renames. */
+  oldPath?: string;
   /** True when the "file" is actually a new untracked directory */
   isDirectory?: boolean;
   /** List of new files inside the directory (when isDirectory=true) */
@@ -800,6 +811,8 @@ export async function getGitShow(cwd: string, hash: string): Promise<GitDiff[]> 
             new_line_no?: number;
           }>;
         }>;
+        status?: string;
+        oldPath?: string;
       }>
     >("git_show", { cwd, hash });
 
@@ -818,6 +831,8 @@ export async function getGitShow(cwd: string, hash: string): Promise<GitDiff[]> 
           newLineNo: l.new_line_no,
         })),
       })),
+      status: d.status as GitDiff["status"],
+      oldPath: d.oldPath,
     }));
   }
 

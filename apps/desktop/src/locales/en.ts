@@ -401,6 +401,7 @@ const en = {
     loading: "Loading diffs\u2026",
     errorTitle: "Split failed",
     errorNotHead: "Only HEAD can be split from the log. Use interactive rebase to split a past commit.",
+    errorMergeCommit: "Cannot split a merge commit \u2014 splitting would flatten the merge and drop one of its parents from history.",
     firstMessageLabel: "First commit message",
     firstMessageHint: "The earlier commit \u2014 contains the hunks you selected.",
     firstMessagePlaceholder: "e.g. refactor: extract helper",
@@ -412,6 +413,11 @@ const en = {
     cancel: "Cancel",
     confirm: "Split",
     splitting: "Splitting\u2026",
+    filesCount: "{0} files",
+    expandAll: "Expand all",
+    collapseAll: "Collapse all",
+    hunksCount: "{0} hunks",
+    linesSelectedSuffix: "selected",
   },
 
   // ─── EmptyState ─────────────────────────────────────────

@@ -383,6 +383,7 @@ const zhCN: Locale = {
     loading: "正在加载差异…",
     errorTitle: "拆分失败",
     errorNotHead: "只能从日志拆分 HEAD。要拆分更早的提交，请使用交互式变基。",
+    errorMergeCommit: "无法拆分合并提交 — 这样做会扁平化合并并从历史中移除其中一个父提交。",
     firstMessageLabel: "第一个提交的信息",
     firstMessageHint: "较早的提交 — 包含你选择的代码块。",
     firstMessagePlaceholder: "例如：refactor: 抽取工具函数",
@@ -394,6 +395,11 @@ const zhCN: Locale = {
     cancel: "取消",
     confirm: "拆分",
     splitting: "正在拆分…",
+    filesCount: "{0} 个文件",
+    expandAll: "全部展开",
+    collapseAll: "全部收起",
+    hunksCount: "{0} 个代码块",
+    linesSelectedSuffix: "已选择",
   },
 
   empty: {

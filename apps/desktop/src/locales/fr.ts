@@ -394,6 +394,7 @@ const fr: Locale = {
     loading: "Chargement des diffs\u2026",
     errorTitle: "\u00c9chec de la scission",
     errorNotHead: "Seul HEAD peut \u00eatre scind\u00e9 depuis le journal. Utilisez le rebase interactif pour scinder un commit plus ancien.",
+    errorMergeCommit: "Impossible de scinder un commit de fusion \u2014 cela aplatirait la fusion et supprimerait un de ses parents de l'historique.",
     firstMessageLabel: "Message du premier commit",
     firstMessageHint: "Le commit le plus ancien \u2014 contient les hunks s\u00e9lectionn\u00e9s.",
     firstMessagePlaceholder: "ex. refactor: extraire un utilitaire",
@@ -405,6 +406,11 @@ const fr: Locale = {
     cancel: "Annuler",
     confirm: "Scinder",
     splitting: "Scission en cours\u2026",
+    filesCount: "{0} fichiers",
+    expandAll: "Tout d\u00e9plier",
+    collapseAll: "Tout replier",
+    hunksCount: "{0} hunks",
+    linesSelectedSuffix: "s\u00e9lectionn\u00e9es",
   },
 
   // ─── EmptyState ─────────────────────────────────────────

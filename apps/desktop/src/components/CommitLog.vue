@@ -64,9 +64,20 @@ function closeCommitContextMenu() {
 
 function onCtxSplit() {
   if (!ctxMenu.value.entry) return;
+  if (isCtxEntryMerge.value) return; // gated below; double-check as belt-and-suspenders
   emit("splitCommit", ctxMenu.value.entry);
   closeCommitContextMenu();
 }
+
+/**
+ * True when the commit under the context menu is a merge (>1 parent).
+ * Splitting a merge would silently drop a parent; we disable the action
+ * with an explanatory tooltip rather than hide it so users still discover
+ * the feature exists.
+ */
+const isCtxEntryMerge = computed(
+  () => (ctxMenu.value.entry?.parents?.length ?? 0) > 1,
+);
 
 onMounted(() => {
   window.addEventListener("click", closeCommitContextMenu);
@@ -310,7 +321,10 @@ function authorColor(name: string): string {
       >
         <li
           class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryMerge }"
           role="menuitem"
+          :aria-disabled="isCtxEntryMerge ? 'true' : 'false'"
+          :title="isCtxEntryMerge ? t('splitCommit.errorMergeCommit') : undefined"
           @click="onCtxSplit"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -641,5 +655,14 @@ function authorColor(name: string): string {
 .commit-ctx-menu-item svg {
   color: var(--color-text-muted);
   flex-shrink: 0;
+}
+
+.commit-ctx-menu-item--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.commit-ctx-menu-item--disabled:hover {
+  background: transparent;
 }
 </style>

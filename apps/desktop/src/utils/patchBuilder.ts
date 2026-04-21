@@ -40,14 +40,36 @@ export function buildPatch(
 
   if (patchHunks.length === 0) return null;
 
-  // Build complete patch
-  const header = [
-    `diff --git a/${path} b/${path}`,
-    `--- a/${path}`,
-    `+++ b/${path}`,
-  ].join("\n");
+  // Build complete patch. The extended header (`new file mode` / `deleted
+  // file mode`) and the `---`/`+++` anchors have to match the file-level
+  // status — `git apply --cached` enforces this: applying a new-file patch
+  // with `--- a/<path>` to an index that doesn't contain `<path>` fails with
+  // "does not exist in index". Status is resolved from `diff.status` which
+  // the `git show` parser derives from the same extended-header lines.
+  const status = diff.status ?? "modified";
+  const headerLines: string[] = [`diff --git a/${path} b/${path}`];
 
-  return header + "\n" + patchHunks.join("\n") + "\n";
+  if (status === "added") {
+    headerLines.push("new file mode 100644");
+    headerLines.push("--- /dev/null");
+    headerLines.push(`+++ b/${path}`);
+  } else if (status === "deleted") {
+    headerLines.push("deleted file mode 100644");
+    headerLines.push(`--- a/${path}`);
+    headerLines.push("+++ /dev/null");
+  } else if (status === "renamed" && diff.oldPath) {
+    // Rare inside a split-commit flow but harmless to support. A rename with
+    // in-place edits uses the old path as source anchor.
+    headerLines.push(`rename from ${diff.oldPath}`);
+    headerLines.push(`rename to ${path}`);
+    headerLines.push(`--- a/${diff.oldPath}`);
+    headerLines.push(`+++ b/${path}`);
+  } else {
+    headerLines.push(`--- a/${path}`);
+    headerLines.push(`+++ b/${path}`);
+  }
+
+  return headerLines.join("\n") + "\n" + patchHunks.join("\n") + "\n";
 }
 
 /**
