@@ -127,7 +127,7 @@ interface GitDiff {
 
 The interactive rebase editor used to close itself when `rebase.startRebase()` returned `{ success: true, conflict: false }`. That's correct for a clean rebase that runs to completion. It's wrong for an `edit` halt — or, as of v1.7, a synthetic `split` halt.
 
-`git rebase -i` exits with code 0 when it halts on `edit` ("stopped at <commit>, amend or run `git rebase --continue`"). No error, no conflict marker, no merge trouble. Same exit shape as "fully done". The backend can't tell them apart from the exit code.
+`git rebase -i` exits with code 0 when it halts on `edit` ("stopped at `<commit>`, amend or run `git rebase --continue`"). No error, no conflict marker, no merge trouble. Same exit shape as "fully done". The backend can't tell them apart from the exit code.
 
 So the editor dismissed itself mid-rebase. The progress banner disappeared. The user was left wondering what had happened.
 
