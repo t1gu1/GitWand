@@ -26,7 +26,7 @@ function setLocale(code: Locale) {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v1.6.3 · Open Source · MIT',
+    badge: 'v1.7.0 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
@@ -64,6 +64,8 @@ const i18n: Record<Locale, any> = {
     featWorktreesDesc: 'Travaillez sur plusieurs branches simultanément sans stasher. Chaque worktree s\'ouvre comme un onglet. Créez-en depuis la liste des branches en un clic.',
     featSubmodules: 'Gestion des sous-modules',
     featSubmodulesDesc: 'Listez, initialisez et mettez à jour les sous-modules Git avec badges de statut. Ajoutez-en et ouvrez-les en onglet depuis le panneau.',
+    featSplitCommit: 'Split de commit par hunks',
+    featSplitCommitDesc: 'Découpez un commit en deux via sélection fichier-par-fichier et ligne-par-ligne. Protège contre les merge commits, préserve votre sélection au collapse/expand, supporte ajouts/suppressions/renommages.',
     featMcp: 'Serveur MCP',
     featMcpDesc: 'Exposez GitWand à Claude, Cursor, Windsurf et tout client MCP. Une commande : npx -y @gitwand/mcp. Publié avec provenance.',
     conflictTitle: 'Les conflits de merge, résolus automatiquement',
@@ -106,7 +108,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   en: {
-    badge: 'v1.6.3 · Open Source · MIT',
+    badge: 'v1.7.0 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
@@ -144,6 +146,8 @@ const i18n: Record<Locale, any> = {
     featWorktreesDesc: 'Work on multiple branches simultaneously without stashing. Each worktree opens as a tab. Create one from the branch list with one click.',
     featSubmodules: 'Submodule management',
     featSubmodulesDesc: 'List, initialize, and update Git submodules with status badges. Add submodules and open them as tabs directly from the panel.',
+    featSplitCommit: 'Split a commit by hunks',
+    featSplitCommitDesc: 'Break a commit in two by picking files and lines. Blocks merge commits, preserves your selection across collapse/expand, and handles added/deleted/renamed files.',
     featMcp: 'MCP server',
     featMcpDesc: 'Expose GitWand to Claude, Cursor, Windsurf, and any MCP client. One command: npx -y @gitwand/mcp. Published with provenance.',
     conflictTitle: 'Merge conflicts, resolved automatically',
@@ -186,7 +190,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   es: {
-    badge: 'v1.6.3 · Open Source · MIT',
+    badge: 'v1.7.0 · Open Source · MIT',
     heroH1a: 'Git, sin',
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
@@ -224,6 +228,8 @@ const i18n: Record<Locale, any> = {
     featWorktreesDesc: 'Trabaja en varias ramas simultáneamente sin hacer stash. Cada worktree se abre como pestaña. Créalo desde la lista de ramas con un clic.',
     featSubmodules: 'Gestión de submódulos',
     featSubmodulesDesc: 'Lista, inicializa y actualiza submódulos Git con insignias de estado. Añade submódulos y ábrelos como pestañas desde el panel.',
+    featSplitCommit: 'Dividir un commit por hunks',
+    featSplitCommitDesc: 'Divide un commit en dos seleccionando archivos y líneas. Bloquea commits de merge, conserva tu selección al contraer/expandir y soporta archivos añadidos, eliminados o renombrados.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Expón GitWand a Claude, Cursor, Windsurf y cualquier cliente MCP. Un comando: npx -y @gitwand/mcp. Publicado con attestations de procedencia.',
     conflictTitle: 'Conflictos de merge, resueltos automáticamente',
@@ -266,7 +272,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'pt-BR': {
-    badge: 'v1.6.3 · Open Source · MIT',
+    badge: 'v1.7.0 · Open Source · MIT',
     heroH1a: 'Git, sem',
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
@@ -304,6 +310,8 @@ const i18n: Record<Locale, any> = {
     featWorktreesDesc: 'Trabalhe em várias branches simultaneamente sem fazer stash. Cada worktree abre como aba. Crie a partir da lista de branches com um clique.',
     featSubmodules: 'Gerenciamento de submódulos',
     featSubmodulesDesc: 'Liste, inicialize e atualize submódulos Git com badges de status. Adicione submódulos e abra-os como abas diretamente do painel.',
+    featSplitCommit: 'Dividir commit por hunks',
+    featSplitCommitDesc: 'Divida um commit em dois selecionando arquivos e linhas. Bloqueia merge commits, preserva sua seleção ao colapsar/expandir e suporta arquivos adicionados, excluídos ou renomeados.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Exponha o GitWand ao Claude, Cursor, Windsurf e qualquer cliente MCP. Um comando: npx -y @gitwand/mcp. Publicado com atestados de proveniência.',
     conflictTitle: 'Conflitos de merge, resolvidos automaticamente',
@@ -346,7 +354,7 @@ const i18n: Record<Locale, any> = {
     ],
   },
   'zh-CN': {
-    badge: 'v1.6.3 · 开源 · MIT',
+    badge: 'v1.7.0 · 开源 · MIT',
     heroH1a: 'Git,告别',
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
@@ -384,6 +392,8 @@ const i18n: Record<Locale, any> = {
     featWorktreesDesc: '无需 stash 即可同时处理多个分支。每个工作树可直接作为标签页打开。在分支列表中一键创建。',
     featSubmodules: '子模块管理',
     featSubmodulesDesc: '列出、初始化并更新 Git 子模块,带状态标记。从面板中添加子模块并直接以标签页形式打开。',
+    featSplitCommit: '按 hunk 拆分提交',
+    featSplitCommitDesc: '通过选择文件和行将一次提交拆分为两次。阻止合并提交,在折叠/展开时保留选择,支持新增、删除、重命名文件。',
     featMcp: 'MCP 服务器',
     featMcpDesc: '将 GitWand 暴露给 Claude、Cursor、Windsurf 等 MCP 客户端。一条命令:npx -y @gitwand/mcp。附带 provenance 签名发布。',
     conflictTitle: '合并冲突,自动解决',
@@ -614,6 +624,14 @@ const t = computed(() => i18n[locale.value])
             </div>
             <h3>{{ t.featSubmodules }}</h3>
             <p>{{ t.featSubmodulesDesc }}</p>
+          </div>
+
+          <div class="feat-card">
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5V16" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featSplitCommit }}</h3>
+            <p>{{ t.featSplitCommitDesc }}</p>
           </div>
 
           <div class="feat-card">

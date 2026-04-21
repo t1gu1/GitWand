@@ -122,7 +122,7 @@ A few things humbled me during this build.
 
 ## Where things stand
 
-GitWand is at v1.6.2. It covers the full daily Git workflow — changes, history, branches, push/pull, cherry-pick, stash, interactive rebase, amend, PR review with inline comments and CI checks — plus the conflict resolution engine, the merge preview, the CLI, the MCP server, and a VS Code extension.
+GitWand is at v1.7.0. It covers the full daily Git workflow — changes, history, branches, push/pull, cherry-pick, stash, interactive rebase, amend, split commits by hunks, PR review with inline comments and CI checks — plus the conflict resolution engine, the merge preview, the CLI, the MCP server, and a VS Code extension.
 
 322 tests passing. MIT licensed. Available for macOS, Linux, and Windows.
 

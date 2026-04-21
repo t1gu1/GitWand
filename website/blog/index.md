@@ -5,6 +5,12 @@ title: Blog
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/split-commit-by-hunks" class="blog-card">
+    <div class="blog-meta">Apr 21, 2026 · 9 min read</div>
+    <h2 class="blog-title">Splitting a commit by hunks: what went into GitWand v1.7.0</h2>
+    <p class="blog-excerpt">How I added a hunk-level commit splitter to GitWand, why merge commits needed a hard block, and the patch-header bug that only surfaced on file creations.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/worktrees-submodules-auto-update" class="blog-card">
     <div class="blog-meta">Apr 20, 2026 · 8 min read</div>
     <h2 class="blog-title">Worktrees, submodules, and a broken auto-updater: what went into GitWand v1.6.3</h2>

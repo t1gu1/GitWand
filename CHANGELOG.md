@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-04-21
+
+### Added
+
+- **Split commit by hunks** — a new "Split this commit…" entry in the commit log's context menu opens a dedicated modal that lets you break a single commit in two by picking individual lines across files. Each file shows as a collapsible summary row (chevron, short name, path, +/- stats, hunk count, selected-lines badge); click to expand the full diff and pick lines to keep in the first commit. The rest of the changes flow into the second commit automatically. Selections persist across collapse/expand. Large commits (> 3 files) get a "Expand all / Collapse all" toolbar. A new `git_split_commit` backend primitive ships in both the Rust/Tauri (`lib.rs`) and Node (`dev-server.mjs`) paths with full parity, plus a TypeScript wrapper (`gitSplitCommit`) and a `useSplitCommit` composable.
+- **Split integrated into interactive rebase** — pick a commit in the rebase editor and switch its action to `split` (alongside `pick`, `edit`, `squash`, `fixup`, `drop`). The rebase halts at that commit via a synthetic `edit` step, the split modal opens with the commit preloaded, and after you confirm the split the rebase resumes. The progress banner now stays up on `edit` / synthetic-`split` halts (they exit 0 with no conflict, which used to wrongly close the editor).
+- **Merge-commit guard (defense in depth)** — splitting a merge commit would silently drop the second parent and flatten history. The guard blocks the operation at every entry point: Rust backend (`git_split_commit`), Node dev-server, TypeScript composable, the `App.vue` dispatcher, and the context-menu entry in `CommitLog.vue` (disabled with tooltip). Error message translated across all 5 locales.
+- **Correct patch headers for added / deleted / renamed files** — `GitDiff` now carries `status` (`added | modified | deleted | renamed`) and `oldPath` from `git_show`. `patchBuilder` emits the matching extended header (`new file mode` + `--- /dev/null`, `deleted file mode` + `+++ /dev/null`, or `rename from/to`) so `git apply --cached` stops failing with "does not exist in index" when the split touches a file creation or deletion.
+- **i18n** — 6 new strings for the split flow (`errorMergeCommit`, `filesCount`, `expandAll`, `collapseAll`, `hunksCount`, `linesSelectedSuffix`) translated across all 5 locales: `en`, `fr`, `es`, `pt-BR`, `zh-CN`.
+
+### Changed
+
+- Rebase-result types (`startRebase`, `rebaseContinue`, `rebaseSkip`) now carry an explicit `inProgress` flag. `conflict` is reserved for merge conflicts; `inProgress` is the authoritative "rebase still running" signal so UI callers stop conflating the two.
+- `@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp`, `@gitwand/desktop`, and `gitwand-website` bumped to `1.7.0`. `@gitwand/mcp` server-reported handshake version and `packages/mcp/server.json` (MCP Registry manifest) aligned to `1.7.0`.
+
+### Fixed
+
+- `git_show` parser: the final context-line detection site (line 1811) still used `!starts_with('\\')` instead of `starts_with(' ')`, which misclassified empty strings as context lines. Matches the fix previously applied in the primary diff parser.
+
 ## [1.6.3] - 2026-04-20
 
 ### Added

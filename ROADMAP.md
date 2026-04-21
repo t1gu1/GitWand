@@ -242,14 +242,30 @@ Patch de release correctif : ship le bundle universel macOS qui échouait au bui
 - Submodule panel : liste avec statuts, init & update, open-in-tab, add — banner warning si non-init
 - Auto-update fixes : `createUpdaterArtifacts`, permissions capabilities, signatures réelles dans le manifest
 
+### v1.7.0 — Split commit par hunks ✅
+
+Premier jalon de l'alignement Git 2.54. Découpe d'un commit en deux via sélection ligne-à-ligne, intégré à l'interactive rebase.
+
+**Split commit**
+- Nouveau primitif backend `git_split_commit` (3 couches : Rust, dev-server, wrapper TS + composable `useSplitCommit`)
+- Modale dédiée avec lignes repliées par défaut (résumé : chevron, nom court, chemin, +/−, hunks, sélection). Clic pour déplier. Sélection préservée au collapse/expand via prop `initialSelection` sur `DiffViewer`. Toolbar "Tout déplier / Tout replier" si > 3 fichiers
+- Entrée "Split this commit…" dans le menu contextuel du log + action `split` dans l'interactive rebase (halt synthétique via `edit`, modale préchargée, reprise du rebase à la confirmation)
+
+**Guards & correctness**
+- Blocage des merge commits à toutes les entrées (Rust, dev-server, TS, App.vue, menu contextuel désactivé avec tooltip). Raison : `git reset --mixed HEAD^` sur un merge largue silencieusement le second parent et aplatit l'historique
+- En-têtes de patch corrects pour fichiers ajoutés / supprimés / renommés (`GitDiff.status` + `oldPath` propagés depuis `git_show`, `patchBuilder` émet `new file mode` + `--- /dev/null`, `deleted file mode` + `+++ /dev/null`, ou `rename from/to`) — corrige `git apply --cached` qui échouait sur les créations/suppressions
+- Types de retour rebase : nouveau flag `inProgress` authoritative pour "rebase en cours", `conflict` réservé strictement aux conflits de merge. L'éditeur ne se ferme plus par erreur sur un halt `edit` / `split` synthétique
+
+**i18n**
+- 6 clés pour le flux split (`errorMergeCommit`, `filesCount`, `expandAll`, `collapseAll`, `hunksCount`, `linesSelectedSuffix`) traduites dans les 5 locales (en, fr, es, pt-BR, zh-CN)
+
 ---
 
-## Next — v1.7.0 — Alignement Git 2.54
+## Next — v1.8.0 — Suite alignement Git 2.54
 
-Exploitation des primitifs introduits par Git 2.53 / 2.54. Toutes les features qui ne nécessitent que du wrapping de commande + UI — pas de changement de philosophie.
+Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changement de philosophie.
 
 **Rebase & commits**
-- Split commit (hunk-picker, inspiré de `git history split`) — découpe un commit en deux via sélection de hunks, réutilise `patchBuilder.ts`. Complément léger à l'interactive rebase de v1.2.1
 - Trailer-aware commits / rebase (`git rebase --trailer`, `git interpret-trailers`) — toggles "Signed-off-by" / "Reviewed-by" dans l'éditeur de message + option rebase interactif. Revoir la décision d'exclusion des trailers dans `useCommitMessage.ts`
 
 **Blame & log**

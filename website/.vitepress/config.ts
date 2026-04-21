@@ -47,6 +47,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'Splitting a commit by hunks (v1.7.0)', link: '/blog/split-commit-by-hunks' },
             { text: 'Worktrees, submodules & auto-update', link: '/blog/worktrees-submodules-auto-update' },
             { text: 'Why I built another Git client', link: '/blog/why-i-built-another-git-client' },
             { text: 'Automatic merge conflict resolution', link: '/blog/automatic-merge-conflict-resolution' },
