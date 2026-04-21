@@ -54,6 +54,8 @@ const emit = defineEmits<{
   "update:commitDescription": [value: string];
   selectCommit: [hash: string];
   editCommit: [entry: GitLogEntry];
+  /** User picked "Split commit..." from the commit-item context menu. */
+  splitCommit: [entry: GitLogEntry];
   /** Change the log scope toggle (current branch vs all refs). */
   "update:logScope": [scope: "current" | "all"];
   /** Toggle the author filter (all commits vs mine only). */
@@ -703,6 +705,7 @@ function formatActivityDate(dateStr: string): string {
         :needs-publish="needsPublish"
         @select-commit="(hash: string) => emit('selectCommit', hash)"
         @edit-commit="(entry) => emit('editCommit', entry)"
+        @split-commit="(entry) => emit('splitCommit', entry)"
       />
     </div>
 

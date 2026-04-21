@@ -19,7 +19,17 @@ const DEV_SERVER = "http://localhost:3001";
 
 // ─── Types ──────────────────────────────────────────────────
 
-export type RebaseAction = "pick" | "reword" | "squash" | "fixup" | "edit" | "drop";
+/**
+ * Rebase actions.
+ *
+ * Note: `split` is a GitWand-only synthetic action. Git itself has no native
+ * "split" verb — we serialize it as `edit` in the todo file and record the
+ * commit's full SHA in the module-level `pendingSplits` set. When the rebase
+ * halts at such a commit, the UI offers a "Split this commit…" action that
+ * opens the `SplitCommitModal` via `useSplitCommit()` — same workflow as a
+ * HEAD split from the log context menu.
+ */
+export type RebaseAction = "pick" | "reword" | "squash" | "fixup" | "edit" | "drop" | "split";
 
 export interface RebaseTodoEntry {
   action: RebaseAction;
@@ -48,6 +58,60 @@ export interface RebaseProgress {
   hasConflict: boolean;
   /** Branch name being rebased. */
   headName: string;
+}
+
+// ─── Module-level state for the `split` action ─────────────
+//
+// `split` is a GitWand-only synthetic action — the rebase todo file serializes
+// it as `edit`, and we keep track of which commits were originally marked for
+// splitting in this module-level map so that the UI can, when the rebase halts
+// at such a commit, offer the "Split this commit…" action that drives
+// `useSplitCommit()`.
+//
+// The map is keyed by full SHA and stores the original entry (for its message
+// and body). It's intentionally module-level so that multiple callers of
+// `useInteractiveRebase()` (e.g. the rebase editor + the top-level app shell
+// watching for halts) can observe the same state.
+
+interface PendingSplit {
+  fullHash: string;
+  shortHash: string;
+  message: string;
+}
+
+const pendingSplits = ref<Map<string, PendingSplit>>(new Map());
+
+/**
+ * Returns the pending-split entry matching the rebase's current halted commit,
+ * or null if the halt is not on a split-marked commit. Matches on prefix since
+ * `progress.currentHash` is truncated to 7 chars.
+ */
+export function getPendingSplitAtHead(
+  progress: RebaseProgress | null,
+): PendingSplit | null {
+  if (!progress || !progress.inProgress || !progress.currentHash) return null;
+  for (const entry of pendingSplits.value.values()) {
+    if (entry.fullHash.startsWith(progress.currentHash) ||
+        entry.shortHash === progress.currentHash) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/** Clear the pending-split set (e.g. after abort or completion). */
+export function clearPendingSplits(): void {
+  pendingSplits.value = new Map();
+}
+
+/**
+ * Remove a specific pending split (e.g. after the user has completed the split
+ * for that commit). The rebase-continue step happens separately.
+ */
+export function resolvePendingSplit(fullHash: string): void {
+  const next = new Map(pendingSplits.value);
+  next.delete(fullHash);
+  pendingSplits.value = next;
 }
 
 // ─── Composable ─────────────────────────────────────────────
@@ -171,7 +235,23 @@ export function useInteractiveRebase() {
     isRunning.value = true;
     error.value = null;
 
-    const todoLines = entries.map((e) => `${e.action} ${e.hash} ${e.message}`);
+    // `split` is a GitWand-only action — git's sequencer understands only the
+    // six built-in verbs, so we serialize `split` as `edit` and remember which
+    // commits were originally marked for splitting. When the rebase halts on
+    // an edit, the UI can cross-reference this set to offer the split modal.
+    const nextPending = new Map<string, PendingSplit>();
+    const todoLines = entries.map((e) => {
+      if (e.action === "split") {
+        nextPending.set(e.fullHash, {
+          fullHash: e.fullHash,
+          shortHash: e.hash,
+          message: e.message,
+        });
+        return `edit ${e.hash} ${e.message}`;
+      }
+      return `${e.action} ${e.hash} ${e.message}`;
+    });
+    pendingSplits.value = nextPending;
 
     try {
       // Both Tauri and dev-server use the same endpoint pattern.
@@ -192,7 +272,18 @@ export function useInteractiveRebase() {
         await detectRebaseState(cwd);
         return { success: true, conflict: true };
       }
+      // Even when the backend reports success, the rebase may still be in
+      // progress — `edit` (and our synthetic `split`) halts exit with code 0
+      // on the git side, so the backend can't distinguish them from a fully
+      // completed rebase. Check rebase state here: if it's still in progress,
+      // treat the same as a conflict halt so the UI stays on the progress
+      // banner and the pending-split lookup has something to match.
+      const state = await detectRebaseState(cwd);
+      if (state?.inProgress) {
+        return { success: true, conflict: state.hasConflict };
+      }
       progress.value = null;
+      clearPendingSplits();
       return { success: true };
     } catch (err: any) {
       error.value = err.message;
@@ -220,7 +311,14 @@ export function useInteractiveRebase() {
         }
         throw new Error(result.stderr || "rebase --continue failed");
       }
+      // Even on exit-0 the rebase may have hit another halt (next `edit`/`split`).
+      // Probe state and surface the halt the same way we'd surface a conflict.
+      const state = await detectRebaseState(cwd);
+      if (state?.inProgress) {
+        return { success: true, conflict: state.hasConflict };
+      }
       progress.value = null;
+      clearPendingSplits();
       return { success: true };
     } catch (err: any) {
       error.value = err.message;
@@ -238,6 +336,7 @@ export function useInteractiveRebase() {
       if (result.exitCode !== 0) throw new Error(result.stderr || "rebase --abort failed");
       progress.value = null;
       todoEntries.value = [];
+      clearPendingSplits();
     } catch (err: any) {
       error.value = err.message;
     } finally {
@@ -257,7 +356,13 @@ export function useInteractiveRebase() {
         }
         throw new Error(result.stderr || "rebase --skip failed");
       }
+      // Skip may land on another halt (edit/split on the next commit).
+      const state = await detectRebaseState(cwd);
+      if (state?.inProgress) {
+        return { success: true, conflict: state.hasConflict };
+      }
       progress.value = null;
+      clearPendingSplits();
       return { success: true };
     } catch (err: any) {
       error.value = err.message;

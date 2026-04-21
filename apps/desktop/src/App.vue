@@ -17,6 +17,7 @@ import PrCreateView from "./components/PrCreateView.vue";
 import DashboardView from "./components/DashboardView.vue";
 import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import MergeSuccessModal from "./components/MergeSuccessModal.vue";
+import SplitCommitModal from "./components/SplitCommitModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
 import StashManager from "./components/StashManager.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
@@ -24,6 +25,7 @@ import SubmodulePanel from "./components/SubmodulePanel.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
+import { useSplitCommit } from "./composables/useSplitCommit";
 import type { GitLogEntry } from "./utils/backend";
 import { getPersistedDiffMode, persistDiffMode, type DiffMode } from "./utils/diffMode";
 import { isImagePath } from "./utils/imagePath";
@@ -330,6 +332,52 @@ function handleEditCommit(entry: GitLogEntry) {
 async function handleAmendConfirm(summary: string, description: string) {
   editingCommit.value = null;
   await doAmendCommit(summary, description);
+}
+
+// ─── Split commit modal ─────────────────────────────────
+const splitCommit = useSplitCommit();
+
+/**
+ * Open the split-commit modal for the commit the user right-clicked in the log.
+ * Only supports splitting HEAD — the precondition is that the clicked commit
+ * IS HEAD of the current branch. We verify here rather than leave it to the
+ * backend so the user gets an immediate, actionable error before the modal
+ * even opens.
+ */
+async function handleSplitCommitRequest(entry: GitLogEntry) {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  // Check: only allow splitting the top commit of the log (HEAD). Splitting
+  // a past commit requires an interactive rebase edit-stop and is triggered
+  // via the rebase editor, not the log context menu.
+  const isHead = repoLog.value.length > 0 && repoLog.value[0].hashFull === entry.hashFull;
+  if (!isHead) {
+    repoError.value = t("splitCommit.errorNotHead");
+    return;
+  }
+  await splitCommit.openFor(cwd, {
+    hash: entry.hashFull,
+    message: entry.message,
+    body: entry.body,
+  });
+}
+
+/**
+ * Called after `git_split_commit` succeeds — refresh whatever view the user
+ * is currently on so the two new commits show up. The modal closes itself
+ * via the composable's `confirm()` before emitting this event.
+ */
+async function handleSplitCompleted(_hashes: { firstHash: string; secondHash: string }) {
+  if (viewMode.value === "history" || viewMode.value === "graph") {
+    await loadLog();
+  }
+  // Refresh branches too — if we split the HEAD commit on a branch tip,
+  // the branch's resolved SHA will have changed.
+  loadBranches();
+}
+
+function handleSplitClose() {
+  // No-op — the composable already reset its own state on cancel.
 }
 
 // ─── Folder opening ─────────────────────────────────────
@@ -800,6 +848,7 @@ onUnmounted(() => {
           @update:commit-description="(val) => commitDescription = val"
           @select-commit="selectCommit"
           @edit-commit="handleEditCommit"
+          @split-commit="handleSplitCommitRequest"
           @update:log-scope="setLogScope"
           @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
@@ -967,6 +1016,13 @@ onUnmounted(() => {
       v-if="showMergeSuccess"
       @close="onMergeSuccessClose"
       @push="onMergeSuccessPush"
+    />
+
+    <!-- Split commit modal (driven by the useSplitCommit composable's
+         module-level state — mounting once here is sufficient) -->
+    <SplitCommitModal
+      @split-completed="handleSplitCompleted"
+      @close="handleSplitClose"
     />
 
     <!-- Success toast -->

@@ -244,7 +244,20 @@ Patch de release correctif : ship le bundle universel macOS qui échouait au bui
 
 ---
 
-## Next — v1.7.0
+## Next — v1.7.0 — Alignement Git 2.54
+
+Exploitation des primitifs introduits par Git 2.53 / 2.54. Toutes les features qui ne nécessitent que du wrapping de commande + UI — pas de changement de philosophie.
+
+**Rebase & commits**
+- Split commit (hunk-picker, inspiré de `git history split`) — découpe un commit en deux via sélection de hunks, réutilise `patchBuilder.ts`. Complément léger à l'interactive rebase de v1.2.1
+- Trailer-aware commits / rebase (`git rebase --trailer`, `git interpret-trailers`) — toggles "Signed-off-by" / "Reviewed-by" dans l'éditeur de message + option rebase interactif. Revoir la décision d'exclusion des trailers dans `useCommitMessage.ts`
+
+**Blame & log**
+- Choix de l'algorithme de diff pour blame (`git blame --diff-algorithm=histogram|patience|minimal|myers`) — exposé dans Settings, applicable à `useBlameContext.ts`
+- File history line-range + pickaxe (`git log -L` combiné à `-S` / `-G`) — recherche de symbole dans la plage d'une fonction, rendue possible par le refactor 2.54 qui route `-L` dans le pipeline diff standard
+
+**Status & forks**
+- Workflow triangulaire : comparaison double (upstream + push remote) via `status.compareBranches = @{upstream} @{push}`, badge ahead/behind séparé pour les forks — cohérent avec le positionnement "GitHub Desktop alternative"
 
 ---
 
@@ -257,6 +270,13 @@ Patch de release correctif : ship le bundle universel macOS qui échouait au bui
 - Multi-compte GitHub/GitLab (personnel + pro)
 - Draft PR convert depuis l'app
 
+### Hooks manager
+
+- Panneau "Hooks" : liste (`git hook list`), enable / disable (`hook.<name>.enabled`)
+- Création de hooks en config (format `[hook "name"] event/command` Git 2.54), avec multiple hooks par event
+- Partage cross-repo via `~/.gitconfig` (vs copie dans chaque `$GIT_DIR/hooks`)
+- Cohérent avec la philosophie "rendre visuel ce que le terminal cache"
+
 ### Distribution & signing
 
 - Signature macOS (notarization Apple)
@@ -266,7 +286,7 @@ Patch de release correctif : ship le bundle universel macOS qui échouait au bui
 
 ### Performance à grande échelle
 
-- Partial clone / sparse checkout pour monorepos massifs
+- Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
 - Pagination lazy du log sur repos 100k+ commits
 - Background indexing pour la recherche dans les commits
 

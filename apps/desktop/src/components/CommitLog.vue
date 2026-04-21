@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import type { GitLogEntry } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
@@ -31,7 +31,57 @@ const effectiveAhead = computed(() =>
 const emit = defineEmits<{
   selectCommit: [hash: string];
   editCommit: [entry: GitLogEntry];
+  /** User picked "Split commit..." from the commit-item context menu. */
+  splitCommit: [entry: GitLogEntry];
 }>();
+
+// ─── Context menu on commit items ─────────────────────────
+// Right-click on a commit opens a small menu with the "Split commit…" action.
+// The actual split workflow is owned by the host (App.vue); here we only
+// surface the user intent via the `splitCommit` emit.
+interface CommitCtxMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  entry: GitLogEntry | null;
+  /** Index in the displayed list — used to restrict some actions to HEAD. */
+  idx: number;
+}
+const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
+
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+  e.preventDefault();
+  e.stopPropagation();
+  // Select the commit first — the user expects the diff view to reflect what
+  // they right-clicked on.
+  emit("selectCommit", entry.hashFull);
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+}
+
+function closeCommitContextMenu() {
+  ctxMenu.value.visible = false;
+}
+
+function onCtxSplit() {
+  if (!ctxMenu.value.entry) return;
+  emit("splitCommit", ctxMenu.value.entry);
+  closeCommitContextMenu();
+}
+
+onMounted(() => {
+  window.addEventListener("click", closeCommitContextMenu);
+  window.addEventListener("contextmenu", closeCommitContextMenu, { capture: false });
+  window.addEventListener("keydown", onCtxKey);
+});
+onUnmounted(() => {
+  window.removeEventListener("click", closeCommitContextMenu);
+  window.removeEventListener("contextmenu", closeCommitContextMenu, { capture: false } as EventListenerOptions);
+  window.removeEventListener("keydown", onCtxKey);
+});
+
+function onCtxKey(e: KeyboardEvent) {
+  if (e.key === "Escape") closeCommitContextMenu();
+}
 
 // ─── Search (Phase 1.3.4) ─────────────────────────────────
 const ai = useAIProvider();
@@ -206,6 +256,7 @@ function authorColor(name: string): string {
             'commit-item--unpushed': isUnpushed(entry),
           }"
           @click="emit('selectCommit', entry.hashFull)"
+          @contextmenu="openCommitContextMenu($event, entry, idx)"
           tabindex="0"
           @keydown.enter="emit('selectCommit', entry.hashFull)"
         >
@@ -246,6 +297,29 @@ function authorColor(name: string): string {
     <div class="log-empty" v-else>
       <span class="muted">{{ t('log.noCommit') }}</span>
     </div>
+
+    <!-- Context menu for commit items (right-click) -->
+    <Teleport to="body">
+      <ul
+        v-if="ctxMenu.visible"
+        class="commit-ctx-menu"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+        role="menu"
+        @click.stop
+        @contextmenu.prevent
+      >
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxSplit"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2v5m0 0l-3-3m3 3l3-3M3 10h10M5 14h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('splitCommit.contextMenuAction') }}</span>
+        </li>
+      </ul>
+    </Teleport>
   </div>
 </template>
 
@@ -530,5 +604,42 @@ function authorColor(name: string): string {
   font-size: var(--font-size-xs);
   color: var(--color-accent);
   line-height: 1.3;
+}
+</style>
+
+<style>
+/* Teleported menu — unscoped so the styles apply after mounting to <body>. */
+.commit-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, 0 8px 20px rgba(0, 0, 0, 0.18));
+  font-size: var(--font-size-sm);
+}
+
+.commit-ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.commit-ctx-menu-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-ctx-menu-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 </style>

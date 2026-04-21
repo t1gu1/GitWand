@@ -27,6 +27,12 @@ const emit = defineEmits<{
   "stage-patch": [patch: string];
   /** Emitted when user clicks a file inside a new untracked directory */
   "select-dir-file": [path: string];
+  /**
+   * Emitted whenever the per-hunk/line selection changes. Used by hosts
+   * (like SplitCommitModal) that need to observe selection without needing
+   * a "stage" action — they compute the partial patch on demand instead.
+   */
+  "selection-change": [selection: LineSelection];
 }>();
 
 const hasContent = computed(() => {
@@ -188,6 +194,7 @@ function toggleLine(hunkIdx: number, lineIdx: number) {
   if (lines.has(lineIdx)) lines.delete(lineIdx); else lines.add(lineIdx);
   if (lines.size === 0) sel.delete(hunkIdx); else sel.set(hunkIdx, lines);
   lineSelection.value = sel;
+  emit("selection-change", lineSelection.value);
 }
 
 /** Toggle all change lines in a hunk */
@@ -207,6 +214,7 @@ function toggleHunk(hunkIdx: number) {
     sel.set(hunkIdx, new Set(changeIndices));
   }
   lineSelection.value = sel;
+  emit("selection-change", lineSelection.value);
 }
 
 /** Is the whole hunk selected? */
@@ -252,7 +260,10 @@ function stageSelected() {
 }
 
 /** Clear selection when diff changes */
-watch(() => props.diff, () => { lineSelection.value = new Map(); });
+watch(() => props.diff, () => {
+  lineSelection.value = new Map();
+  emit("selection-change", lineSelection.value);
+});
 
 // ─── Collapse unchanged: split long context runs ────────
 const CONTEXT_VISIBLE = 3; // lines to show before/after changes

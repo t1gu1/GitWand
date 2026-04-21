@@ -962,6 +962,104 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/git-split-commit  { cwd, firstPatch, firstMessage, secondMessage }
+    // Splits HEAD commit into two. Requires clean working tree.
+    // Workflow: reset --mixed HEAD^ → apply firstPatch → commit firstMessage
+    //         → add -A . → commit secondMessage
+    // On any failure, rolls back to the original HEAD via git reset --hard.
+    if (url.pathname === "/api/git-split-commit" && req.method === "POST") {
+      const { cwd, firstPatch, firstMessage, secondMessage } = await readBody(req);
+      if (!cwd || !firstPatch || !firstMessage || !secondMessage) {
+        return jsonResponse(req, res, { error: "Missing cwd, firstPatch, firstMessage, or secondMessage" }, 400);
+      }
+      const resolvedCwd = resolve(cwd);
+      let originalSha = null;
+      const rollback = () => {
+        if (!originalSha) return;
+        try {
+          execFileSync("git", ["reset", "--hard", originalSha], {
+            cwd: resolvedCwd,
+            encoding: "utf-8",
+          });
+        } catch {
+          // best-effort
+        }
+      };
+      try {
+        // 1. Save original HEAD
+        originalSha = execSync("git rev-parse HEAD", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        }).trim();
+
+        // 2. Precondition: clean working tree
+        const status = execSync("git status --porcelain", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        if (status.trim().length > 0) {
+          return jsonResponse(
+            req,
+            res,
+            {
+              error:
+                "Working tree must be clean before splitting a commit — commit, stash, or discard your changes first.",
+            },
+            400,
+          );
+        }
+
+        // 3. Undo HEAD, changes become unstaged
+        execFileSync("git", ["reset", "--mixed", "HEAD^"], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+
+      try {
+        // 4. Stage first patch
+        execSync("git apply --cached --unidiff-zero -", {
+          cwd: resolvedCwd,
+          input: firstPatch,
+          encoding: "utf-8",
+        });
+
+        // 5. Commit A
+        execFileSync("git", ["commit", "-m", firstMessage], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        const firstHash = execSync("git rev-parse --short HEAD", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        }).trim();
+
+        // 6. Stage everything remaining (working tree ↔ index = inverse of firstPatch)
+        execFileSync("git", ["add", "-A", "."], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+
+        // 7. Commit B
+        execFileSync("git", ["commit", "-m", secondMessage], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        const secondHash = execSync("git rev-parse --short HEAD", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        }).trim();
+
+        return jsonResponse(req, res, { firstHash, secondHash });
+      } catch (err) {
+        rollback();
+        const detail = err.stderr?.toString().trim() || err.stdout?.toString().trim() || err.message;
+        return jsonResponse(req, res, { error: detail }, 500);
+      }
+    }
+
     // POST /api/git-push  { cwd, setUpstream? }
     if (url.pathname === "/api/git-push" && req.method === "POST") {
       const { cwd, setUpstream } = await readBody(req);

@@ -1311,6 +1311,199 @@ fn git_amend_commit(cwd: String, message: String) -> Result<String, String> {
     Ok(hash)
 }
 
+// ─── Git split commit ────────────────────────────────────────
+
+#[derive(Serialize)]
+struct GitSplitCommitResult {
+    first_hash: String,
+    second_hash: String,
+}
+
+/// Split the HEAD commit into two commits.
+///
+/// Expects a clean working tree on entry (no unstaged/untracked changes).
+/// Workflow:
+///   1. Save original HEAD SHA for rollback
+///   2. `git reset --mixed HEAD^` — undo the commit, changes become unstaged
+///   3. `git apply --cached --unidiff-zero` with `first_patch` — stage selected hunks
+///   4. `git commit -m first_message` — create commit A (new parent)
+///   5. `git add -A .` — stage everything remaining (the inverse of first_patch)
+///   6. `git commit -m second_message` — create commit B (remaining changes)
+///
+/// On any failure after step 2, `git reset --hard <original_sha>` restores state.
+/// When called from a rebase-edit-stop context, the rebase state is preserved:
+/// caller is expected to run `git rebase --continue` afterwards.
+#[tauri::command]
+fn git_split_commit(
+    cwd: String,
+    first_patch: String,
+    first_message: String,
+    second_message: String,
+) -> Result<GitSplitCommitResult, String> {
+    // Step 1: save original HEAD SHA for rollback
+    let original_sha = {
+        let output = std::process::Command::new(git_binary())
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to read HEAD: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git rev-parse HEAD failed: {}", stderr));
+        }
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+
+    // Helper: rollback on failure. Best-effort — we surface the original error.
+    let rollback = |cwd: &str, sha: &str| {
+        let _ = std::process::Command::new(git_binary())
+            .args(["reset", "--hard", sha])
+            .current_dir(cwd)
+            .output();
+    };
+
+    // Precondition: working tree must be clean. Otherwise reset --mixed HEAD^
+    // would blend unstaged changes with the commit being split.
+    {
+        let output = std::process::Command::new(git_binary())
+            .args(["status", "--porcelain"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to read status: {}", e))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        if !stdout.trim().is_empty() {
+            return Err(
+                "Working tree must be clean before splitting a commit — \
+                 commit, stash, or discard your changes first."
+                    .to_string(),
+            );
+        }
+    }
+
+    // Step 2: reset --mixed HEAD^ — changes from the commit become unstaged
+    {
+        let output = std::process::Command::new(git_binary())
+            .args(["reset", "--mixed", "HEAD^"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to run git reset: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "git reset --mixed HEAD^ failed (does the commit have a parent?): {}",
+                stderr
+            ));
+        }
+    }
+
+    // Step 3: stage the first patch (selected hunks)
+    {
+        let mut cmd = std::process::Command::new(git_binary());
+        cmd.args(["apply", "--cached", "--unidiff-zero", "-"])
+            .current_dir(&cwd)
+            .stdin(std::process::Stdio::piped());
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => {
+                rollback(&cwd, &original_sha);
+                return Err(format!("Failed to run git apply: {}", e));
+            }
+        };
+        if let Some(ref mut stdin) = child.stdin {
+            use std::io::Write;
+            if let Err(e) = stdin.write_all(first_patch.as_bytes()) {
+                rollback(&cwd, &original_sha);
+                return Err(format!("Failed to write patch: {}", e));
+            }
+        }
+        let output = match child.wait_with_output() {
+            Ok(o) => o,
+            Err(e) => {
+                rollback(&cwd, &original_sha);
+                return Err(format!("Failed to wait for git apply: {}", e));
+            }
+        };
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            rollback(&cwd, &original_sha);
+            return Err(format!(
+                "git apply failed while staging first patch: {}",
+                stderr
+            ));
+        }
+    }
+
+    // Step 4: create commit A
+    let first_hash = {
+        let output = std::process::Command::new(git_binary())
+            .args(["commit", "-m", &first_message])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| {
+                rollback(&cwd, &original_sha);
+                format!("Failed to run git commit (first): {}", e)
+            })?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            rollback(&cwd, &original_sha);
+            return Err(format!("git commit failed (first): {}", stderr));
+        }
+        let hash_output = std::process::Command::new(git_binary())
+            .args(["rev-parse", "--short", "HEAD"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to read first hash: {}", e))?;
+        String::from_utf8_lossy(&hash_output.stdout).trim().to_string()
+    };
+
+    // Step 5: stage everything remaining (working tree ↔ index = inverse of first_patch)
+    {
+        let output = std::process::Command::new(git_binary())
+            .args(["add", "-A", "."])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| {
+                rollback(&cwd, &original_sha);
+                format!("Failed to run git add: {}", e)
+            })?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            rollback(&cwd, &original_sha);
+            return Err(format!("git add -A failed: {}", stderr));
+        }
+    }
+
+    // Step 6: create commit B with the remaining hunks
+    let second_hash = {
+        let output = std::process::Command::new(git_binary())
+            .args(["commit", "-m", &second_message])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| {
+                rollback(&cwd, &original_sha);
+                format!("Failed to run git commit (second): {}", e)
+            })?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // If step 6 fails (e.g. empty commit), roll back all the way
+            // so caller sees the repo unchanged rather than a half-split.
+            rollback(&cwd, &original_sha);
+            return Err(format!("git commit failed (second): {}", stderr));
+        }
+        let hash_output = std::process::Command::new(git_binary())
+            .args(["rev-parse", "--short", "HEAD"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to read second hash: {}", e))?;
+        String::from_utf8_lossy(&hash_output.stdout).trim().to_string()
+    };
+
+    Ok(GitSplitCommitResult {
+        first_hash,
+        second_hash,
+    })
+}
+
 // ─── Git push / pull ─────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -3967,6 +4160,7 @@ pub fn run() {
             git_unstage_patch,
             git_commit,
             git_amend_commit,
+            git_split_commit,
             git_push,
             git_pull,
             git_fetch,

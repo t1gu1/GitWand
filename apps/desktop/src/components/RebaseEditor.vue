@@ -3,9 +3,12 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 import {
   useInteractiveRebase,
+  getPendingSplitAtHead,
+  resolvePendingSplit,
   type RebaseTodoEntry,
   type RebaseAction,
 } from "../composables/useInteractiveRebase";
+import { useSplitCommit } from "../composables/useSplitCommit";
 import { getGitBranches, type GitBranch } from "../utils/backend";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useSquashSuggestion, type SquashSuggestion } from "../composables/useSquashSuggestion";
@@ -131,7 +134,7 @@ function onDragEnd() {
 }
 
 // ─── Actions ─────────────────────────────────────────────────
-const actions: RebaseAction[] = ["pick", "reword", "squash", "fixup", "edit", "drop"];
+const actions: RebaseAction[] = ["pick", "reword", "squash", "fixup", "edit", "split", "drop"];
 
 const actionDescriptions: Record<RebaseAction, { fr: string; en: string }> = {
   pick:    { fr: "Garder tel quel",               en: "Keep as is" },
@@ -139,6 +142,7 @@ const actionDescriptions: Record<RebaseAction, { fr: string; en: string }> = {
   squash:  { fr: "Fusionner (garder les messages)", en: "Merge (keep messages)" },
   fixup:   { fr: "Fusionner (ignorer le message)", en: "Merge (discard message)" },
   edit:    { fr: "S\u2019arr\u00eater pour modifier", en: "Pause to edit" },
+  split:   { fr: "Scinder en deux commits",       en: "Split into two commits" },
   drop:    { fr: "Supprimer le commit",            en: "Remove commit" },
 };
 
@@ -238,6 +242,38 @@ async function doSkip() {
   }
 }
 
+// ─── Split-at-halt integration ────────────────────────────────
+//
+// When the user marked a commit as `split` in the todo, the rebase halts on
+// that commit as a regular `edit` stop. The composable's `pendingSplits` map
+// remembers the intent — here we surface a prominent action that opens the
+// `SplitCommitModal`. After a successful split, we auto-resume the rebase via
+// `rebase.rebaseContinue()`, which is the natural next step (the user did ask
+// for the commit to be split, not just paused on).
+const splitCommit = useSplitCommit();
+
+/** The commit currently halted on, IF it was originally marked for split. */
+const pendingSplitAtHead = computed(() =>
+  getPendingSplitAtHead(rebase.progress.value),
+);
+
+async function handleSplitAtHead() {
+  const pending = pendingSplitAtHead.value;
+  if (!pending) return;
+  await splitCommit.openFor(
+    props.cwd,
+    { hash: pending.fullHash, message: pending.message },
+    // Post-split hook: clear the pending entry, then continue the rebase.
+    async () => {
+      resolvePendingSplit(pending.fullHash);
+      const result = await rebase.rebaseContinue(props.cwd);
+      if (result.success && !result.conflict) {
+        emit("done");
+      }
+    },
+  );
+}
+
 // ─── Init on open ────────────────────────────────────────────
 onMounted(async () => {
   await Promise.all([
@@ -254,6 +290,7 @@ function actionClass(action: RebaseAction): string {
     squash: "rb-action--squash",
     fixup: "rb-action--fixup",
     edit: "rb-action--edit",
+    split: "rb-action--split",
     drop: "rb-action--drop",
   };
   return map[action];
@@ -317,7 +354,23 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
       <!-- In-progress actions -->
       <div v-if="rebase.progress.value?.inProgress" class="rb-progress-actions">
-        <button class="rb-btn rb-btn--primary" @click="doContinue" :disabled="rebase.isRunning.value">
+        <!-- Split-at-halt: shown only when the current halted commit was originally
+             marked for `split`. Takes precedence over the Continue button so the
+             user knows the intended workflow. -->
+        <button
+          v-if="pendingSplitAtHead"
+          class="rb-btn rb-btn--primary rb-btn--split"
+          @click="handleSplitAtHead"
+          :disabled="rebase.isRunning.value || splitCommit.busy.value"
+        >
+          ✂️ {{ t('rebase.splitThisCommit') }}
+        </button>
+        <button
+          class="rb-btn"
+          :class="pendingSplitAtHead ? 'rb-btn--secondary' : 'rb-btn--primary'"
+          @click="doContinue"
+          :disabled="rebase.isRunning.value"
+        >
           {{ t('rebase.continue') }}
         </button>
         <button class="rb-btn rb-btn--secondary" @click="doSkip" :disabled="rebase.isRunning.value">
@@ -897,6 +950,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   background: rgba(56, 132, 255, 0.15);
   color: #3884ff;
 }
+.rb-action--split {
+  background: rgba(139, 92, 246, 0.15);
+  color: var(--color-accent, #8b5cf6);
+}
 .rb-action--drop {
   background: rgba(218, 54, 51, 0.15);
   color: var(--color-danger, #da3633);
@@ -954,6 +1011,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-action-menu-dot.rb-action--squash { background: #da821a; }
 .rb-action-menu-dot.rb-action--fixup { background: #828282; }
 .rb-action-menu-dot.rb-action--edit { background: #3884ff; }
+.rb-action-menu-dot.rb-action--split { background: var(--color-accent, #8b5cf6); }
 .rb-action-menu-dot.rb-action--drop { background: var(--color-danger, #da3633); }
 
 .rb-action-menu-name {
@@ -1068,6 +1126,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-legend-dot.rb-action--squash { background: #da821a; }
 .rb-legend-dot.rb-action--fixup { background: #828282; }
 .rb-legend-dot.rb-action--edit { background: #3884ff; }
+.rb-legend-dot.rb-action--split { background: var(--color-accent, #8b5cf6); }
 .rb-legend-dot.rb-action--drop { background: var(--color-danger, #da3633); }
 
 .rb-legend-name {

@@ -622,6 +622,55 @@ export async function gitAmendCommit(cwd: string, message: string): Promise<stri
   return data.hash;
 }
 
+export interface GitSplitCommitResult {
+  firstHash: string;
+  secondHash: string;
+}
+
+/**
+ * Split the HEAD commit into two commits by sequencing:
+ *   reset --mixed HEAD^ → apply --cached (firstPatch) → commit (firstMessage)
+ *                       → add -A . → commit (secondMessage)
+ *
+ * Requires a clean working tree. On any failure, rolls back to the original
+ * HEAD via `git reset --hard` (best-effort).
+ *
+ * Works in both standalone (split HEAD directly) and rebase-edit-stop contexts.
+ * In a rebase edit-stop, the caller is expected to run `git rebase --continue`
+ * after a successful split.
+ *
+ * @param firstPatch  Unified diff of the hunks that should land in the FIRST
+ *                    (new parent) commit. The remaining hunks land in the
+ *                    second commit via `git add -A .`.
+ * @param firstMessage Message for the first commit (often user-authored, empty by default).
+ * @param secondMessage Message for the second commit (usually the original commit message).
+ */
+export async function gitSplitCommit(
+  cwd: string,
+  firstPatch: string,
+  firstMessage: string,
+  secondMessage: string,
+): Promise<GitSplitCommitResult> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<{ first_hash: string; second_hash: string }>(
+      "git_split_commit",
+      { cwd, firstPatch, firstMessage, secondMessage },
+    );
+    return { firstHash: raw.first_hash, secondHash: raw.second_hash };
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-split-commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, firstPatch, firstMessage, secondMessage }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to split commit: ${res.status}`);
+  }
+  const data = await res.json();
+  return { firstHash: data.firstHash, secondHash: data.secondHash };
+}
+
 // ─── Git push / pull ──────────────────────────────────────────
 
 export interface GitPushPullResult {
