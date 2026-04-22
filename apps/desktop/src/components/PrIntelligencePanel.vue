@@ -2,15 +2,22 @@
 /**
  * PrIntelligencePanel.vue — Phase 9.4
  *
- * The "🧠 Intelligence" tab for PR review.
+ * The "Intelligence" tab for PR review.
  * Shows:
  *  1. Conflict prediction (git merge-tree analysis)
  *  2. Review scope (risk level, % codebase touched)
  *  3. Hotspot analysis (files with high merge-conflict history)
  *  4. AI review suggestions (complex hunks, detected statically)
  *  5. File review history (who reviewed what in this file before)
+ *
+ * Visual language aligns with PrDetailView:
+ *  - Section icons in accent-soft tiles (no emojis)
+ *  - Stat cards mirror .pdv-stat (icon tile + uppercase label + big value,
+ *    radial hover gradient, subtle lift)
+ *  - Severity is carried by `border-left` color on list rows + inline SVGs
+ *  - Respects prefers-reduced-motion
  */
-import { ref, computed, watch } from "vue";
+import { computed, watch } from "vue";
 import type {
   PrConflictPreview,
   PrHotspot,
@@ -86,6 +93,13 @@ const topHotspots = computed(() =>
     .slice(0, 5),
 );
 
+/** Bucket a hotspot score into a severity tier for icon + bar colour. */
+function hotspotTier(score: number): "high" | "medium" | "low" {
+  if (score > 50) return "high";
+  if (score > 20) return "medium";
+  return "low";
+}
+
 // ─── AI suggestion detection (static analysis) ───────────
 interface AiFlag {
   file: string;
@@ -146,18 +160,35 @@ watch(() => props.prDiffFiles, (files) => {
 
     <!-- ── Conflict Prediction ────────────────────────────── -->
     <section class="pi-section">
-      <div class="pi-section-header">
-        <span class="pi-section-icon">🔀</span>
-        <span class="pi-section-title">{{ t('pr.intel.conflictTitle') }}</span>
+      <header class="pi-section-header">
+        <span class="pi-section-icon" aria-hidden="true">
+          <!-- git merge / branches -->
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="4" cy="3.5" r="1.5" />
+            <circle cx="12" cy="3.5" r="1.5" />
+            <circle cx="8" cy="12.5" r="1.5" />
+            <path d="M4 5v2.5a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V5" />
+            <path d="M8 9.5v1.5" />
+          </svg>
+        </span>
+        <h3 class="pi-section-title">{{ t('pr.intel.conflictTitle') }}</h3>
         <span class="pi-badge pi-badge--info">git merge-tree</span>
         <div class="pi-spacer" />
         <button
           v-if="!conflictPreview && !conflictLoading"
           class="pi-action-btn"
           @click="emit('load-conflict-preview')"
-        >{{ t('pr.intel.analyze') }}</button>
-        <span v-if="conflictLoading" class="pi-loading">{{ t('pr.intel.analyzing') }}</span>
-      </div>
+        >
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 4l8 4-8 4V4z" />
+          </svg>
+          {{ t('pr.intel.analyze') }}
+        </button>
+        <span v-if="conflictLoading" class="pi-loading">
+          <span class="pi-dot-spinner" aria-hidden="true"></span>
+          {{ t('pr.intel.analyzing') }}
+        </span>
+      </header>
 
       <div v-if="conflictError" class="pi-msg pi-msg--error">{{ conflictError }}</div>
 
@@ -166,12 +197,21 @@ watch(() => props.prDiffFiles, (files) => {
       </div>
 
       <template v-if="conflictPreview">
-        <!-- Summary pill -->
+        <!-- Summary banner -->
         <div
-          class="pi-conflict-summary"
-          :class="conflictPreview.conflictingFiles.length > 0 ? 'pi-conflict-summary--bad' : 'pi-conflict-summary--ok'"
+          class="pi-banner"
+          :class="conflictPreview.conflictingFiles.length > 0 ? 'pi-banner--bad' : 'pi-banner--ok'"
         >
-          {{ conflictPreview.summary }}
+          <span class="pi-banner-icon" aria-hidden="true">
+            <svg v-if="conflictPreview.conflictingFiles.length > 0" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 2l6.5 11h-13z" />
+              <path d="M8 7v3M8 12v.01" />
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8l3.5 3.5L13 5" />
+            </svg>
+          </span>
+          <span>{{ conflictPreview.summary }}</span>
         </div>
 
         <div v-if="conflictPreview.overlappingFiles.length > 0" class="pi-conflict-detail">
@@ -183,8 +223,35 @@ watch(() => props.prDiffFiles, (files) => {
               class="pi-file-row"
               :class="conflictPreview.conflictingFiles.includes(f) ? 'pi-file-row--conflict' : 'pi-file-row--overlap'"
             >
-              <span class="pi-file-icon">
-                {{ conflictPreview.conflictingFiles.includes(f) ? '⚠️' : '⚡' }}
+              <span class="pi-file-icon" aria-hidden="true">
+                <!-- ! triangle for conflict, zap for overlap -->
+                <svg
+                  v-if="conflictPreview.conflictingFiles.includes(f)"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M8 2l6.5 11h-13z" />
+                  <path d="M8 7v3M8 12v.01" />
+                </svg>
+                <svg
+                  v-else
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M9 2L3 9h4l-1 5 6-7H8z" />
+                </svg>
               </span>
               <span class="pi-file-name mono">{{ f }}</span>
               <span class="pi-file-label">
@@ -210,34 +277,62 @@ watch(() => props.prDiffFiles, (files) => {
 
     <!-- ── Review Scope ───────────────────────────────────── -->
     <section class="pi-section">
-      <div class="pi-section-header">
-        <span class="pi-section-icon">📐</span>
-        <span class="pi-section-title">{{ t('pr.intel.scopeTitle') }}</span>
+      <header class="pi-section-header">
+        <span class="pi-section-icon" aria-hidden="true">
+          <!-- ruler / scope -->
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="5" width="12" height="6" rx="1" />
+            <path d="M5 5v2M8 5v3M11 5v2" />
+          </svg>
+        </span>
+        <h3 class="pi-section-title">{{ t('pr.intel.scopeTitle') }}</h3>
         <span
           class="pi-badge pi-badge--risk"
           :style="{ background: scope.riskColor + '28', color: scope.riskColor, borderColor: scope.riskColor + '70' }"
         >{{ scope.riskLabel }}</span>
-      </div>
+      </header>
 
       <div class="pi-scope-grid">
-        <div class="pi-scope-card">
-          <div class="pi-scope-value">{{ scope.changedFiles }}</div>
-          <div class="pi-scope-label">{{ t('pr.intel.scopeFiles') }}</div>
+        <div class="pi-stat">
+          <span class="pi-stat-icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5z" />
+              <path d="M10 2v3h3" />
+            </svg>
+          </span>
+          <span class="pi-stat-label">{{ t('pr.intel.scopeFiles') }}</span>
+          <span class="pi-stat-value">{{ scope.changedFiles }}</span>
         </div>
-        <div class="pi-scope-card">
-          <div class="pi-scope-value">
+        <div class="pi-stat">
+          <span class="pi-stat-icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </span>
+          <span class="pi-stat-label">{{ t('pr.intel.scopeLines') }}</span>
+          <span class="pi-stat-value pi-stat-diff">
             <span class="pi-add">+{{ scope.additions }}</span>
-            <span class="pi-del"> -{{ scope.deletions }}</span>
-          </div>
-          <div class="pi-scope-label">{{ t('pr.intel.scopeLines') }}</div>
+            <span class="pi-del">−{{ scope.deletions }}</span>
+          </span>
         </div>
-        <div v-if="scope.pct !== null" class="pi-scope-card">
-          <div class="pi-scope-value">{{ scope.pct }}%</div>
-          <div class="pi-scope-label">{{ t('pr.intel.scopePct') }}</div>
+        <div v-if="scope.pct !== null" class="pi-stat">
+          <span class="pi-stat-icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 4v4l2.5 1.5" />
+            </svg>
+          </span>
+          <span class="pi-stat-label">{{ t('pr.intel.scopePct') }}</span>
+          <span class="pi-stat-value">{{ scope.pct }}%</span>
         </div>
-        <div class="pi-scope-card">
-          <div class="pi-scope-value">{{ scope.totalLines }}</div>
-          <div class="pi-scope-label">{{ t('pr.intel.scopeTotal') }}</div>
+        <div class="pi-stat">
+          <span class="pi-stat-icon" aria-hidden="true">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 4h12M2 8h12M2 12h8" />
+            </svg>
+          </span>
+          <span class="pi-stat-label">{{ t('pr.intel.scopeTotal') }}</span>
+          <span class="pi-stat-value">{{ scope.totalLines }}</span>
         </div>
       </div>
 
@@ -251,37 +346,87 @@ watch(() => props.prDiffFiles, (files) => {
           }"
         />
       </div>
-      <div class="pi-risk-hint">
+      <p class="pi-risk-hint">
         <span v-if="scope.risk === 'low'">{{ t('pr.intel.hintLow') }}</span>
         <span v-else-if="scope.risk === 'medium'">{{ t('pr.intel.hintMedium') }}</span>
         <span v-else-if="scope.risk === 'high'">{{ t('pr.intel.hintHigh') }}</span>
         <span v-else>{{ t('pr.intel.hintCritical') }}</span>
-      </div>
+      </p>
     </section>
 
     <!-- ── Hotspot Analysis ───────────────────────────────── -->
     <section class="pi-section">
-      <div class="pi-section-header">
-        <span class="pi-section-icon">🔥</span>
-        <span class="pi-section-title">{{ t('pr.intel.hotspotTitle') }}</span>
+      <header class="pi-section-header">
+        <span class="pi-section-icon" aria-hidden="true">
+          <!-- flame -->
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+            <path d="M8 1.5c.5 2 2.5 3 2.5 5 0 .7-.3 1.3-.8 1.8 1.5 0 3 1.2 3 3.2C12.7 13.5 10.5 15 8 15s-4.7-1.5-4.7-3.5c0-1.7 1.2-2.5 2-3.5.7-.9.7-2 .4-3 1.3.5 2 1.5 2 2.5.3-2 1-3.5.3-6z" />
+          </svg>
+        </span>
+        <h3 class="pi-section-title">{{ t('pr.intel.hotspotTitle') }}</h3>
         <span class="pi-badge pi-badge--info">{{ t('pr.intel.historyBadge') }}</span>
         <div class="pi-spacer" />
-        <span v-if="hotspotsLoading" class="pi-loading">{{ t('pr.intel.loading') }}</span>
-      </div>
+        <span v-if="hotspotsLoading" class="pi-loading">
+          <span class="pi-dot-spinner" aria-hidden="true"></span>
+          {{ t('pr.intel.loading') }}
+        </span>
+      </header>
 
       <div v-if="topHotspots.length === 0 && !hotspotsLoading" class="pi-empty">
         {{ t('pr.intel.noHotspots') }}
       </div>
 
       <div v-if="topHotspots.length > 0" class="pi-hotspot-list">
-        <div v-for="h in topHotspots" :key="h.path" class="pi-hotspot-row">
-          <span class="pi-hotspot-fire">{{ h.score > 50 ? '🔥' : h.score > 20 ? '⚡' : '📄' }}</span>
+        <div
+          v-for="h in topHotspots"
+          :key="h.path"
+          class="pi-hotspot-row"
+          :class="`pi-hotspot-row--${hotspotTier(h.score)}`"
+        >
+          <span class="pi-hotspot-icon" aria-hidden="true">
+            <svg
+              v-if="hotspotTier(h.score) === 'high'"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            >
+              <path d="M8 1.5c.5 2 2.5 3 2.5 5 0 .7-.3 1.3-.8 1.8 1.5 0 3 1.2 3 3.2C12.7 13.5 10.5 15 8 15s-4.7-1.5-4.7-3.5c0-1.7 1.2-2.5 2-3.5.7-.9.7-2 .4-3 1.3.5 2 1.5 2 2.5.3-2 1-3.5.3-6z" />
+            </svg>
+            <svg
+              v-else-if="hotspotTier(h.score) === 'medium'"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 2L3 9h4l-1 5 6-7H8z" />
+            </svg>
+            <svg
+              v-else
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5z" />
+              <path d="M10 2v3h3" />
+            </svg>
+          </span>
           <span class="pi-hotspot-name mono">{{ h.path.split('/').pop() }}</span>
           <div class="pi-hotspot-bar-track">
-            <div
-              class="pi-hotspot-bar-fill"
-              :style="{ width: Math.min(100, h.score) + '%' }"
-            />
+            <div class="pi-hotspot-bar-fill" :style="{ width: Math.min(100, h.score) + '%' }" />
           </div>
           <span class="pi-hotspot-count">{{ t('pr.intel.mergeCount', h.mergeCount) }}</span>
         </div>
@@ -294,11 +439,17 @@ watch(() => props.prDiffFiles, (files) => {
 
     <!-- ── AI Review Suggestions ──────────────────────────── -->
     <section class="pi-section">
-      <div class="pi-section-header">
-        <span class="pi-section-icon">🤖</span>
-        <span class="pi-section-title">{{ t('pr.intel.suggestionsTitle') }}</span>
+      <header class="pi-section-header">
+        <span class="pi-section-icon pi-section-icon--ai" aria-hidden="true">
+          <!-- sparkle cluster (matches tab icon) -->
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6.5 2l1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1z" />
+            <path d="M11.5 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" />
+          </svg>
+        </span>
+        <h3 class="pi-section-title">{{ t('pr.intel.suggestionsTitle') }}</h3>
         <span class="pi-badge pi-badge--ai">{{ t('pr.intel.staticBadge') }}</span>
-      </div>
+      </header>
 
       <div v-if="aiFlags.length === 0" class="pi-empty">
         {{ t('pr.intel.noAnomalies') }}
@@ -311,8 +462,50 @@ watch(() => props.prDiffFiles, (files) => {
           class="pi-ai-row"
           :class="`pi-ai-row--${flag.severity}`"
         >
-          <span class="pi-ai-icon">
-            {{ flag.severity === 'error' ? '🚨' : flag.severity === 'warn' ? '⚠️' : 'ℹ️' }}
+          <span class="pi-ai-icon" aria-hidden="true">
+            <!-- siren for error, triangle-bang for warn, info-circle for info -->
+            <svg
+              v-if="flag.severity === 'error'"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 5v4M8 11v.01" />
+            </svg>
+            <svg
+              v-else-if="flag.severity === 'warn'"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M8 2l6.5 11h-13z" />
+              <path d="M8 7v3M8 12v.01" />
+            </svg>
+            <svg
+              v-else
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="8" cy="8" r="6" />
+              <path d="M8 7v4M8 5v.01" />
+            </svg>
           </span>
           <div class="pi-ai-content">
             <span class="pi-ai-file mono">{{ flag.file.split('/').pop() }}</span>
@@ -324,12 +517,21 @@ watch(() => props.prDiffFiles, (files) => {
 
     <!-- ── File Review History ─────────────────────────────── -->
     <section class="pi-section">
-      <div class="pi-section-header">
-        <span class="pi-section-icon">📜</span>
-        <span class="pi-section-title">{{ t('pr.intel.historyTitle') }}</span>
+      <header class="pi-section-header">
+        <span class="pi-section-icon" aria-hidden="true">
+          <!-- clock / history -->
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="8" r="6" />
+            <path d="M8 4.5V8l2.5 1.5" />
+          </svg>
+        </span>
+        <h3 class="pi-section-title">{{ t('pr.intel.historyTitle') }}</h3>
         <div class="pi-spacer" />
-        <span v-if="fileHistoryLoading" class="pi-loading">{{ t('pr.intel.loading') }}</span>
-      </div>
+        <span v-if="fileHistoryLoading" class="pi-loading">
+          <span class="pi-dot-spinner" aria-hidden="true"></span>
+          {{ t('pr.intel.loading') }}
+        </span>
+      </header>
 
       <div v-if="Object.keys(fileHistory).length === 0 && !fileHistoryLoading" class="pi-empty">
         {{ t('pr.intel.noHistory') }}
@@ -340,7 +542,12 @@ watch(() => props.prDiffFiles, (files) => {
           <div v-if="hist.reviewCommentCount > 0" class="pi-history-row">
             <div class="pi-history-file mono">{{ String(filePath).split('/').pop() }}</div>
             <div class="pi-history-meta">
-              <span class="pi-history-count">💬 {{ hist.reviewCommentCount }}</span>
+              <span class="pi-history-count">
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 8c0 3-3 5.5-6 5.5-.7 0-1.4-.1-2-.3L3 14l.7-2.8A5.5 5.5 0 0 1 2 8c0-3 3-5.5 6-5.5S14 5 14 8z" />
+                </svg>
+                {{ hist.reviewCommentCount }}
+              </span>
               <span v-if="hist.reviewers.length" class="pi-history-reviewers">
                 {{ t('pr.intel.historyBy', hist.reviewers.slice(0, 3).join(', ') + (hist.reviewers.length > 3 ? ` +${hist.reviewers.length - 3}` : '')) }}
               </span>
@@ -364,17 +571,22 @@ watch(() => props.prDiffFiles, (files) => {
 </template>
 
 <style scoped>
+/* ─── Shell ──────────────────────────────────────────────── */
 .pi-root {
   display: flex;
   flex-direction: column;
   gap: 0;
   overflow-y: auto;
   height: 100%;
+  background: var(--color-bg);
 }
 
-/* Sections */
+/* ─── Section frame ──────────────────────────────────────── */
 .pi-section {
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
   border-bottom: 1px solid var(--color-border);
 }
 .pi-section:last-child { border-bottom: none; }
@@ -382,224 +594,525 @@ watch(() => props.prDiffFiles, (files) => {
 .pi-section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
-.pi-section-icon { font-size: 15px; }
-.pi-section-title { font-size: 13px; font-weight: 700; color: var(--color-text); letter-spacing: -0.01em; }
+.pi-section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.pi-section-icon--ai {
+  background: linear-gradient(135deg, var(--color-accent-soft), rgba(217, 70, 239, 0.18));
+}
+
+.pi-section-title {
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  letter-spacing: -0.005em;
+}
+
 .pi-spacer { flex: 1; }
 
+/* ─── Badges ─────────────────────────────────────────────── */
 .pi-badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
   border: 1px solid;
+  line-height: 1.5;
+  white-space: nowrap;
 }
 .pi-badge--info {
   background: var(--color-info-soft);
   color: var(--color-info);
-  border-color: var(--color-info);
+  border-color: transparent;
 }
 .pi-badge--ai {
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  border-color: var(--color-accent);
+  border-color: transparent;
 }
 
+/* ─── Inline helpers ─────────────────────────────────────── */
 .pi-empty {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-style: italic;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
 }
 
-.pi-loading { font-size: 11px; color: var(--color-text-muted); }
+.pi-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.pi-dot-spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: pi-spin 0.8s linear infinite;
+}
+@keyframes pi-spin { to { transform: rotate(360deg); } }
 
 .pi-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: inherit;
   background: var(--color-accent);
-  border: none;
-  border-radius: 5px;
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
   color: var(--color-accent-text);
-  font-size: 11px;
-  font-weight: 600;
-  padding: 3px 12px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: var(--space-2) var(--space-4);
   cursor: pointer;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
-.pi-action-btn:hover { filter: brightness(1.1); }
+.pi-action-btn:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.22), 0 0 0 3px var(--color-accent-soft);
+  transform: translateY(-1px);
+}
+.pi-action-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
 
 .pi-msg--error {
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--color-danger);
-  padding: 4px 0;
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
 }
 
 .pi-subsection-label {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
-  margin-bottom: 6px;
-  font-weight: 600;
+  margin-bottom: var(--space-3);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
-/* Conflict prediction */
-.pi-conflict-summary {
+/* ─── Conflict banner ───────────────────────────────────── */
+.pi-banner {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-bottom: 10px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  border: 1px solid;
+  align-self: flex-start;
 }
-.pi-conflict-summary--ok {
+.pi-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pi-banner--ok {
   background: var(--color-success-soft);
-  border: 1px solid var(--color-success);
+  border-color: var(--color-success);
   color: var(--color-success);
 }
-.pi-conflict-summary--bad {
+.pi-banner--bad {
   background: var(--color-danger-soft);
-  border: 1px solid var(--color-danger);
+  border-color: var(--color-danger);
   color: var(--color-danger);
 }
 
-.pi-conflict-detail { margin-bottom: 10px; }
+.pi-conflict-detail { display: flex; flex-direction: column; }
 
-.pi-file-list { display: flex; flex-direction: column; gap: 3px; }
-.pi-file-list--compact { flex-direction: row; flex-wrap: wrap; gap: 4px; }
+/* ─── File list rows (conflict / overlap) ────────────────── */
+.pi-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pi-file-list--compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
 
 .pi-file-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 5px;
-  font-size: 12px;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  padding-left: calc(var(--space-4) + 1px);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-text-muted);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.pi-file-row:hover {
   background: var(--color-bg-tertiary);
 }
-.pi-file-row--conflict { border-left: 2px solid var(--color-danger); }
-.pi-file-row--overlap { border-left: 2px solid var(--color-warning); }
-.pi-file-icon { font-size: 13px; }
-.pi-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pi-file-label { font-size: 10px; color: var(--color-text-muted); white-space: nowrap; flex-shrink: 0; }
+.pi-file-row--conflict {
+  border-left-color: var(--color-danger);
+}
+.pi-file-row--conflict .pi-file-icon { color: var(--color-danger); }
+.pi-file-row--overlap {
+  border-left-color: var(--color-warning);
+}
+.pi-file-row--overlap .pi-file-icon { color: var(--color-warning); }
+
+.pi-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pi-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+}
+.pi-file-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .pi-chip {
-  font-size: 11px;
-  padding: 2px 7px;
-  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   white-space: nowrap;
+  font-family: var(--font-mono);
 }
-.pi-chip--clean { color: var(--color-success); border-color: var(--color-success); }
-.pi-chip--more { color: var(--color-accent); }
+.pi-chip--clean {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+.pi-chip--more {
+  color: var(--color-accent);
+  border-color: transparent;
+  background: var(--color-accent-soft);
+  font-family: inherit;
+  font-weight: var(--font-weight-semibold);
+}
 
-/* Scope */
+/* ─── Scope (stat-cards + risk bar) ──────────────────────── */
 .pi-scope-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
 }
 
-.pi-scope-card {
-  background: var(--color-bg-tertiary);
+.pi-stat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: 7px;
-  padding: 8px 10px;
-  text-align: center;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
-.pi-scope-value { font-size: 16px; font-weight: 700; color: var(--color-text); margin-bottom: 2px; }
-.pi-scope-label { font-size: 10px; color: var(--color-text-muted); text-transform: uppercase; }
+.pi-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 100% at 100% 0%, var(--color-accent-soft), transparent 50%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  pointer-events: none;
+}
+.pi-stat:hover {
+  border-color: var(--color-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+.pi-stat:hover::before { opacity: 0.35; }
+
+.pi-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.pi-stat-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pi-stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.pi-stat-diff { font-family: var(--font-mono); font-size: var(--font-size-md); }
 .pi-add { color: var(--color-success); }
 .pi-del { color: var(--color-danger); }
 
 .pi-risk-bar-track {
-  height: 4px;
+  height: 6px;
   background: var(--color-bg-tertiary);
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
-  margin-bottom: 5px;
 }
 .pi-risk-bar-fill {
   height: 100%;
-  border-radius: 2px;
-  transition: width 0.4s ease;
+  border-radius: var(--radius-pill);
+  transition: width 0.4s ease, background 0.3s ease;
 }
-.pi-risk-hint { font-size: 11px; color: var(--color-text-muted); font-style: italic; }
+.pi-risk-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
 
-/* Hotspots */
-.pi-hotspot-list { display: flex; flex-direction: column; gap: 5px; }
+/* ─── Hotspots ──────────────────────────────────────────── */
+.pi-hotspot-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 .pi-hotspot-row {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-4) + 1px);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-size-xs);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
-.pi-hotspot-fire { font-size: 14px; flex-shrink: 0; }
-.pi-hotspot-name { width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-text); flex-shrink: 0; }
+.pi-hotspot-row:hover { background: var(--color-bg-tertiary); }
+
+.pi-hotspot-row--high { border-left-color: var(--color-danger); }
+.pi-hotspot-row--high .pi-hotspot-icon { color: var(--color-danger); }
+.pi-hotspot-row--high .pi-hotspot-bar-fill { background: var(--color-danger); }
+
+.pi-hotspot-row--medium { border-left-color: var(--color-warning); }
+.pi-hotspot-row--medium .pi-hotspot-icon { color: var(--color-warning); }
+.pi-hotspot-row--medium .pi-hotspot-bar-fill { background: var(--color-warning); }
+
+.pi-hotspot-row--low { border-left-color: var(--color-border-strong); }
+.pi-hotspot-row--low .pi-hotspot-icon { color: var(--color-text-muted); }
+.pi-hotspot-row--low .pi-hotspot-bar-fill { background: var(--color-text-muted); }
+
+.pi-hotspot-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.pi-hotspot-name {
+  width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text);
+  flex-shrink: 0;
+  font-weight: var(--font-weight-medium);
+}
 .pi-hotspot-bar-track {
   flex: 1;
   height: 5px;
   background: var(--color-bg-tertiary);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
+  min-width: 60px;
 }
 .pi-hotspot-bar-fill {
   height: 100%;
-  background: var(--color-warning);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
 }
-.pi-hotspot-count { font-size: 11px; color: var(--color-text-muted); white-space: nowrap; width: 70px; text-align: right; flex-shrink: 0; }
+.pi-hotspot-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  width: 70px;
+  text-align: right;
+  flex-shrink: 0;
+}
 
-/* AI flags */
-.pi-ai-list { display: flex; flex-direction: column; gap: 5px; }
+/* ─── AI flags ───────────────────────────────────────────── */
+.pi-ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 .pi-ai-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 6px;
-  border-left: 3px solid;
-  background: var(--color-bg-tertiary);
-  font-size: 12px;
-}
-.pi-ai-row--error { border-color: var(--color-danger); }
-.pi-ai-row--warn { border-color: var(--color-warning); }
-.pi-ai-row--info { border-color: var(--color-info); }
-.pi-ai-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
-.pi-ai-content { display: flex; flex-direction: column; gap: 2px; }
-.pi-ai-file { font-weight: 600; color: var(--color-text); font-size: 11px; }
-.pi-ai-reason { color: var(--color-text); line-height: 1.4; }
-
-/* File history */
-.pi-history-list { display: flex; flex-direction: column; gap: 6px; }
-.pi-history-row {
-  padding: 7px 10px;
-  background: var(--color-bg-tertiary);
-  border-radius: 6px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  padding-left: calc(var(--space-4) + 1px);
   border: 1px solid var(--color-border);
-  font-size: 12px;
+  border-left: 3px solid var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
-.pi-history-file { font-weight: 600; color: var(--color-text); margin-bottom: 2px; }
-.pi-history-meta { display: flex; gap: 8px; align-items: center; color: var(--color-text-muted); }
-.pi-history-count { color: var(--color-accent); font-weight: 600; }
-.pi-history-reviewers { font-size: 11px; }
+.pi-ai-row:hover { background: var(--color-bg-tertiary); }
+
+.pi-ai-row--error { border-left-color: var(--color-danger); }
+.pi-ai-row--error .pi-ai-icon { color: var(--color-danger); }
+.pi-ai-row--warn { border-left-color: var(--color-warning); }
+.pi-ai-row--warn .pi-ai-icon { color: var(--color-warning); }
+.pi-ai-row--info { border-left-color: var(--color-info); }
+.pi-ai-row--info .pi-ai-icon { color: var(--color-info); }
+
+.pi-ai-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.pi-ai-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pi-ai-file {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+}
+.pi-ai-reason {
+  color: var(--color-text);
+  line-height: var(--line-height-snug);
+  font-size: var(--font-size-sm);
+}
+
+/* ─── File history ──────────────────────────────────────── */
+.pi-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.pi-history-row {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+.pi-history-row:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-tertiary);
+}
+.pi-history-file {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  margin-bottom: 2px;
+  font-size: var(--font-size-xs);
+}
+.pi-history-meta {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.pi-history-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+.pi-history-reviewers {
+  font-size: var(--font-size-xs);
+}
 .pi-history-last {
-  margin-top: 4px;
-  font-size: 11px;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .pi-history-pr {
-  margin-left: 6px;
+  margin-left: var(--space-3);
   color: var(--color-accent);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+}
+
+.mono { font-family: var(--font-mono); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pi-stat,
+  .pi-action-btn,
+  .pi-risk-bar-fill,
+  .pi-file-row,
+  .pi-hotspot-row,
+  .pi-ai-row,
+  .pi-history-row {
+    transition: none;
+  }
+  .pi-stat:hover,
+  .pi-action-btn:hover {
+    transform: none;
+  }
+  .pi-dot-spinner { animation: none; }
 }
 </style>

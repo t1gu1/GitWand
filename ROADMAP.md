@@ -272,6 +272,25 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 - Choix de l'algorithme de diff pour blame (`git blame --diff-algorithm=histogram|patience|minimal|myers`) — exposé dans Settings, applicable à `useBlameContext.ts`
 - File history line-range + pickaxe (`git log -L` combiné à `-S` / `-G`) — recherche de symbole dans la plage d'une fonction, rendue possible par le refactor 2.54 qui route `-L` dans le pipeline diff standard
 
+**Log — menu contextuel commit**
+Clic droit sur un commit dans le `CommitLog` — aujourd'hui une seule entrée ("Split this commit…"). Étendre vers un menu complet, chaque action câblée sur un primitif backend existant quand possible, sinon un nouveau wrapper 3 couches (Rust + dev-server + TS). Garde-fous systématiques pour les merge commits et le HEAD détaché, cohérents avec le pattern déjà posé pour `split`.
+- **Checkout commit** (`git checkout <sha>`) — passe en HEAD détaché, modale d'avertissement explicite + proposition directe "Créer une branche ici". Désactivé si working tree dirty (propose stash)
+- **Reset to commit** — sous-menu `--soft` / `--mixed` / `--hard` avec explications visuelles de ce qui change (HEAD, index, working tree), confirmation forte sur `--hard`. Bloqué si pas sur une branche locale
+- **Revert commit** (`git revert <sha>`) — crée un commit inverse (non destructif, safe sur branche partagée). Support merge commits via `-m 1`. Éditeur de message pré-rempli, résolution de conflit si besoin via le merge editor existant
+- **Create branch from commit** (`git branch <name> <sha>` + checkout optionnel) — input inline avec validation de nom (réutilise la logique `useBranchName`)
+- **Tag this commit** — raccourci vers la modale de création de tag (voir section Tags ci-dessus), pré-remplie avec le SHA
+- **Cherry-pick onto current branch** — raccourci vers le flux existant `CherryPickPanel`, pré-sélection du commit cliqué
+- **Amend** — surface l'action d'amend existante dans le menu contextuel (uniquement si le commit = HEAD et working tree propre)
+- **Copy SHA** — short (7) / full — sous-menu, écrit dans le presse-papier via `navigator.clipboard`
+- **Copy commit message** — summary seul ou summary + description
+- **View on GitHub / GitLab / Bitbucket** — ouvre `<remote-url>/commit/<sha>` via `tauri-plugin-opener`, détection du forge depuis `git remote get-url origin` (même helper que pour les PR)
+- **Compare with…** — sous-menu : working tree, HEAD, another commit (picker) — ouvre `DiffViewer` entre les deux refs
+
+Garde-fous partagés :
+- Merge commits : grisés avec tooltip pour `split`, `reset --hard` (déjà posé), `amend` ; `revert` autorisé avec `-m 1`
+- Commit non pushé vs pushé : warning sur les opérations destructives (reset, amend) quand le commit est déjà sur le remote
+- HEAD détaché : les actions branch-aware (reset, amend, revert) proposent d'abord "créer une branche ici"
+
 **Status & forks**
 - Workflow triangulaire : comparaison double (upstream + push remote) via `status.compareBranches = @{upstream} @{push}`, badge ahead/behind séparé pour les forks — cohérent avec le positionnement "GitHub Desktop alternative"
 

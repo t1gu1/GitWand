@@ -4,11 +4,16 @@
  *
  * Full PR detail rendered in <main> when viewMode === "prs".
  * Injects the shared usePrPanel composable. No modal wrapper — fills the main area.
+ *
+ * Visual language:
+ * - Large PR title with number badge, author avatar + branch path in the hero
+ * - Action cluster (Checkout / Merger / GitHub) using the design system .btn tokens
+ * - Stat cards refined with icons + gradient hover
+ * - Polished tabs with animation + count badges
  */
-import { inject } from "vue";
+import { computed, inject, ref } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
-import { safeHtml } from "../composables/useSafeHtml";
-import type { CICheck } from "../utils/backend";
+import { renderMarkdown } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
@@ -24,21 +29,69 @@ const emit = defineEmits<{
 const p = inject<PrPanelState>(PR_PANEL_KEY)!;
 
 function openInBrowser(url: string) { window.open(url, "_blank"); }
+
+/** Author initials for the avatar disk. */
+function authorInitials(author: string): string {
+  if (!author) return "?";
+  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
+  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+/** Deterministic hue from the author name so the avatar keeps a stable color. */
+function authorHue(author: string): number {
+  if (!author) return 260;
+  let h = 0;
+  for (let i = 0; i < author.length; i++) {
+    h = (h * 31 + author.charCodeAt(i)) >>> 0;
+  }
+  return h % 360;
+}
+
+const avatarStyle = computed(() => {
+  const author = p.prDetail.value?.author ?? "";
+  const hue = authorHue(author);
+  return {
+    background: `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`,
+  };
+});
+
+const isOpenPr = computed(() => {
+  const s = p.selectedPr.value?.state;
+  return s === "OPEN" || s === "open";
+});
+
+/** Local UI state for the PR description's formatted / raw switch. */
+const descriptionTab = ref<"formatted" | "raw">("formatted");
 </script>
 
 <template>
   <div class="pdv-root">
     <!-- Merge dialog -->
     <div v-if="p.mergingPr.value" class="pdv-merge-dialog">
-      <p>{{ t('pr.detail.mergePromptPrefix') }} <strong>#{{ p.mergingPr.value.number }}</strong> — {{ p.mergingPr.value.title }}</p>
+      <p class="pdv-merge-prompt">
+        {{ t('pr.detail.mergePromptPrefix') }}
+        <strong>#{{ p.mergingPr.value.number }}</strong>
+        <span class="pdv-merge-title">— {{ p.mergingPr.value.title }}</span>
+      </p>
       <div class="pdv-merge-options">
-        <label><input type="radio" v-model="p.mergeMethod.value" value="merge" /> {{ t('pr.detail.mergeMethodMerge') }}</label>
-        <label><input type="radio" v-model="p.mergeMethod.value" value="squash" /> {{ t('pr.detail.mergeMethodSquash') }}</label>
-        <label><input type="radio" v-model="p.mergeMethod.value" value="rebase" /> {{ t('pr.detail.mergeMethodRebase') }}</label>
+        <label class="pdv-merge-opt">
+          <input type="radio" v-model="p.mergeMethod.value" value="merge" />
+          <span>{{ t('pr.detail.mergeMethodMerge') }}</span>
+        </label>
+        <label class="pdv-merge-opt">
+          <input type="radio" v-model="p.mergeMethod.value" value="squash" />
+          <span>{{ t('pr.detail.mergeMethodSquash') }}</span>
+        </label>
+        <label class="pdv-merge-opt">
+          <input type="radio" v-model="p.mergeMethod.value" value="rebase" />
+          <span>{{ t('pr.detail.mergeMethodRebase') }}</span>
+        </label>
       </div>
       <div class="pdv-merge-actions">
-        <button class="eco-btn eco-btn--primary" @click="p.mergePr">{{ t('pr.detail.merge') }}</button>
-        <button class="eco-btn" @click="p.mergingPr.value = null">{{ t('pr.detail.cancel') }}</button>
+        <button class="pdv-btn pdv-btn--primary" @click="p.mergePr">{{ t('pr.detail.merge') }}</button>
+        <button class="pdv-btn" @click="p.mergingPr.value = null">{{ t('pr.detail.cancel') }}</button>
       </div>
     </div>
 
@@ -48,16 +101,21 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 
     <!-- Empty state -->
     <div v-if="!p.selectedPr.value" class="pdv-empty">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.25">
-        <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>
-        <path d="M6 9v6M18 15V9a3 3 0 0 0-3-3H9"/>
-      </svg>
-      <span>{{ t('pr.detail.emptySelect') }}</span>
+      <div class="pdv-empty-illustration" aria-hidden="true">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <circle cx="18" cy="18" r="3" />
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M6 9v6M18 15V9a3 3 0 0 0-3-3H9" />
+        </svg>
+      </div>
+      <span class="pdv-empty-label">{{ t('pr.detail.emptySelect') }}</span>
     </div>
 
     <!-- Detail loading -->
     <div v-else-if="p.detailLoading.value && !p.prDetail.value" class="pdv-empty">
-      {{ t('pr.detail.loading') }}
+      <div class="pdv-spinner" aria-hidden="true"></div>
+      <span class="pdv-empty-label">{{ t('pr.detail.loading') }}</span>
     </div>
 
     <!-- Detail error -->
@@ -67,56 +125,162 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 
     <!-- Detail content -->
     <template v-else-if="p.prDetail.value">
-      <!-- Header bar -->
-      <div class="pdv-header">
-        <div class="pdv-header-main">
-          <span class="pdv-pr-num">#{{ p.prDetail.value.number }}</span>
-          <span class="pdv-pr-title">{{ p.prDetail.value.title }}</span>
+      <!-- Hero header -->
+      <header class="pdv-hero">
+        <div class="pdv-hero-top">
+          <div class="pdv-hero-title">
+            <span class="pdv-pr-num">#{{ p.prDetail.value.number }}</span>
+            <h1 class="pdv-pr-title">{{ p.prDetail.value.title }}</h1>
+          </div>
+          <div class="pdv-hero-actions">
+            <button class="pdv-btn" @click="p.checkoutPr(p.selectedPr.value!)">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 8h10M8 3l5 5-5 5" />
+              </svg>
+              <span>{{ t('pr.detail.checkout') }}</span>
+            </button>
+            <button
+              v-if="isOpenPr"
+              class="pdv-btn pdv-btn--primary"
+              @click="p.mergingPr.value = p.selectedPr.value"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="4" cy="4" r="2" />
+                <circle cx="4" cy="12" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <path d="M4 6v4" />
+                <path d="M4 12a8 8 0 0 0 8-8" />
+              </svg>
+              <span>{{ t('pr.detail.merge') }}</span>
+            </button>
+            <button class="pdv-btn pdv-btn--ghost" @click="openInBrowser(p.prDetail.value.url)" title="GitHub">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              <span>GitHub</span>
+            </button>
+          </div>
         </div>
-        <div class="pdv-header-meta">
-          <span>{{ p.prDetail.value.author }}</span>
-          <span class="mono">{{ p.prDetail.value.branch }} → {{ p.prDetail.value.base }}</span>
-          <span>{{ p.timeAgo(p.prDetail.value.createdAt) }}</span>
-          <span v-if="p.prDetail.value.mergedAt">{{ t('pr.detail.mergedAgo', p.timeAgo(p.prDetail.value.mergedAt)) }}</span>
+
+        <div class="pdv-hero-meta">
+          <span class="pdv-author">
+            <span class="pdv-avatar" :style="avatarStyle" aria-hidden="true">{{ authorInitials(p.prDetail.value.author) }}</span>
+            <span class="pdv-author-name">{{ p.prDetail.value.author }}</span>
+          </span>
+          <span class="pdv-meta-sep" aria-hidden="true">·</span>
+          <span class="pdv-branch-path">
+            <span class="pdv-branch mono">{{ p.prDetail.value.branch }}</span>
+            <svg class="pdv-branch-arrow" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
+            <span class="pdv-branch mono">{{ p.prDetail.value.base }}</span>
+          </span>
+          <span class="pdv-meta-sep" aria-hidden="true">·</span>
+          <span class="pdv-time">{{ p.timeAgo(p.prDetail.value.createdAt) }}</span>
+          <span v-if="p.prDetail.value.mergedAt" class="pdv-merged-ago">
+            {{ t('pr.detail.mergedAgo', p.timeAgo(p.prDetail.value.mergedAt)) }}
+          </span>
         </div>
-        <div class="pdv-header-actions">
-          <button
-            class="eco-btn eco-btn--xs"
-            @click="p.checkoutPr(p.selectedPr.value!)"
-          >{{ t('pr.detail.checkout') }}</button>
-          <button
-            v-if="p.selectedPr.value?.state === 'OPEN' || p.selectedPr.value?.state === 'open'"
-            class="eco-btn eco-btn--xs eco-btn--primary"
-            @click="p.mergingPr.value = p.selectedPr.value"
-          >{{ t('pr.detail.merge') }}</button>
-          <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url)">↗ GitHub</button>
-        </div>
-      </div>
+      </header>
 
       <!-- Tabs -->
-      <div class="pdv-tabs">
-        <button :class="['pdv-tab', { active: p.detailTab.value === 'info' }]" @click="p.detailTab.value = 'info'">{{ t('pr.detail.tabInfo') }}</button>
-        <button :class="['pdv-tab', { active: p.detailTab.value === 'diff' }]" @click="p.detailTab.value = 'diff'">
+      <nav class="pdv-tabs" :aria-label="t('pr.detail.tabInfo')">
+        <button
+          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'info' }]"
+          @click="p.detailTab.value = 'info'"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+            <circle cx="8" cy="8" r="6" />
+            <path d="M8 7v4M8 5v.01" stroke-linecap="round" />
+          </svg>
+          {{ t('pr.detail.tabInfo') }}
+        </button>
+        <button
+          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'diff' }]"
+          @click="p.detailTab.value = 'diff'"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 2v6a3 3 0 0 0 3 3h3" />
+            <path d="M11 5V3h2v2zM11 14v-2h2v2z" />
+          </svg>
           {{ t('pr.detail.tabDiff') }}
           <span v-if="p.prDetail.value.changedFiles" class="pdv-tab-count">{{ p.prDetail.value.changedFiles }}</span>
-          <span v-if="p.commentCount.value" class="pdv-tab-count pdv-tab-count--comment">💬{{ p.commentCount.value }}</span>
+          <span v-if="p.commentCount.value" class="pdv-tab-count pdv-tab-count--accent" :title="t('pr.detail.description')">
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M14 8c0 3-3 5.5-6 5.5-.7 0-1.4-.1-2-.3L3 14l.7-2.8A5.5 5.5 0 0 1 2 8c0-3 3-5.5 6-5.5S14 5 14 8z" />
+            </svg>
+            {{ p.commentCount.value }}
+          </span>
         </button>
-        <button :class="['pdv-tab', { active: p.detailTab.value === 'checks' }]" @click="p.detailTab.value = 'checks'">
-          {{ p.checksIcon(p.prDetail.value.checksStatus) }} {{ t('pr.detail.tabCi') }}
+        <button
+          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'checks' }]"
+          @click="p.detailTab.value = 'checks'"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M1.5 8h2.5l1.5-4 3 9 2-6 1.5 3h3" />
+          </svg>
+          {{ t('pr.detail.tabCi') }}
+          <span
+            v-if="p.prDetail.value.checksStatus"
+            class="pdv-tab-emoji pdv-tab-emoji--sm"
+            :title="p.prDetail.value.checksStatus"
+          >{{ p.checksIcon(p.prDetail.value.checksStatus) }}</span>
           <span v-if="p.prChecks.value.length" class="pdv-tab-count">{{ p.prChecks.value.length }}</span>
         </button>
-        <button :class="['pdv-tab', { active: p.detailTab.value === 'intelligence' }]" @click="p.detailTab.value = 'intelligence'">
+        <button
+          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'intelligence' }]"
+          @click="p.detailTab.value = 'intelligence'"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6.5 2l1 2.8 2.8 1-2.8 1-1 2.8-1-2.8-2.8-1 2.8-1z" />
+            <path d="M11.5 9l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z" />
+          </svg>
           {{ t('pr.detail.tabIntelligence') }}
         </button>
         <div class="pdv-tab-spacer" />
         <button
-          class="eco-btn eco-btn--xs pdv-review-btn"
-          :class="p.draftReviewComments.value.length ? 'eco-btn--primary' : ''"
+          class="pdv-review-btn"
+          :class="{ 'pdv-review-btn--primary': p.draftReviewComments.value.length }"
           @click="p.showReviewModal.value = true"
+          :title="t('pr.detail.reviewBtn')"
         >
-          {{ p.draftReviewComments.value.length ? t('pr.detail.reviewBtnWithCount', p.draftReviewComments.value.length) : t('pr.detail.reviewBtn') }}
+          <svg
+            v-if="!p.draftReviewComments.value.length"
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M11 2l3 3-8 8H3v-3z" />
+            <path d="M10 3l3 3" />
+          </svg>
+          <svg
+            v-else
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M2.5 8l3 3 7-7" />
+          </svg>
+          <span class="pdv-review-btn-label">{{ t('pr.detail.reviewBtn') }}</span>
+          <span
+            v-if="p.draftReviewComments.value.length"
+            class="pdv-review-count"
+            :aria-label="String(p.draftReviewComments.value.length)"
+          >{{ p.draftReviewComments.value.length }}</span>
         </button>
-      </div>
+      </nav>
 
       <!-- Tab content -->
       <div class="pdv-content">
@@ -129,60 +293,145 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
             class="pdv-readiness"
             :class="p.mergeReadiness.value.ready ? 'pdv-readiness--ok' : 'pdv-readiness--wait'"
           >
-            <span>{{ p.mergeReadiness.value.ready ? '✅' : '⏳' }}</span>
-            <span>{{ p.mergeReadiness.value.reason }}</span>
+            <span class="pdv-readiness-icon">{{ p.mergeReadiness.value.ready ? '✅' : '⏳' }}</span>
+            <span class="pdv-readiness-text">{{ p.mergeReadiness.value.reason }}</span>
           </div>
 
+          <!-- Stat cards -->
           <div class="pdv-stats-grid">
             <div class="pdv-stat">
+              <span class="pdv-stat-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="4" cy="4" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <path d="M4 6v4a4 4 0 0 0 4 4" />
+                </svg>
+              </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statMerge') }}</span>
-              <span>{{ p.mergeableIcon(p.prDetail.value.mergeable) }} {{ p.prDetail.value.mergeable }}</span>
-            </div>
-            <div class="pdv-stat">
-              <span class="pdv-stat-label">{{ t('pr.detail.statFiles') }}</span>
-              <span>{{ p.prDetail.value.changedFiles }}</span>
-            </div>
-            <div class="pdv-stat">
-              <span class="pdv-stat-label">{{ t('pr.detail.statDiff') }}</span>
-              <span>
-                <span class="pdv-add">+{{ p.prDetail.value.additions }}</span>
-                <span class="pdv-del"> -{{ p.prDetail.value.deletions }}</span>
+              <span class="pdv-stat-value">
+                <span class="pdv-stat-emoji">{{ p.mergeableIcon(p.prDetail.value.mergeable) }}</span>
+                {{ p.prDetail.value.mergeable }}
               </span>
             </div>
+
             <div class="pdv-stat">
+              <span class="pdv-stat-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5z" />
+                  <path d="M10 2v3h3" />
+                </svg>
+              </span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statFiles') }}</span>
+              <span class="pdv-stat-value">{{ p.prDetail.value.changedFiles }}</span>
+            </div>
+
+            <div class="pdv-stat">
+              <span class="pdv-stat-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                  <path d="M8 3v10M3 8h10" />
+                </svg>
+              </span>
+              <span class="pdv-stat-label">{{ t('pr.detail.statDiff') }}</span>
+              <span class="pdv-stat-value pdv-stat-diff">
+                <span class="pdv-add">+{{ p.prDetail.value.additions }}</span>
+                <span class="pdv-del">−{{ p.prDetail.value.deletions }}</span>
+              </span>
+            </div>
+
+            <div class="pdv-stat">
+              <span class="pdv-stat-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 8c0 3-3 5.5-6 5.5-.7 0-1.4-.1-2-.3L3 14l.7-2.8A5.5 5.5 0 0 1 2 8c0-3 3-5.5 6-5.5S14 5 14 8z" />
+                </svg>
+              </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statComments') }}</span>
-              <span>{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
+              <span class="pdv-stat-value">{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
             </div>
           </div>
 
-          <div v-if="p.prDetail.value.reviewers.length" class="pdv-section">
-            <span class="pdv-section-label">{{ t('pr.detail.reviewers') }}</span>
+          <!-- Reviewers -->
+          <section v-if="p.prDetail.value.reviewers.length" class="pdv-section">
+            <h2 class="pdv-section-label">{{ t('pr.detail.reviewers') }}</h2>
             <div class="pdv-chips">
-              <span v-for="r in p.prDetail.value.reviewers" :key="r" class="pdv-chip">{{ r }}</span>
+              <span v-for="r in p.prDetail.value.reviewers" :key="r" class="pdv-chip pdv-chip--reviewer">
+                <span class="pdv-chip-avatar" :style="{ background: `hsl(${authorHue(r)} 65% 55%)` }" aria-hidden="true">
+                  {{ authorInitials(r) }}
+                </span>
+                {{ r }}
+              </span>
             </div>
-          </div>
+          </section>
 
-          <div v-if="p.prDetail.value.labels.length" class="pdv-section">
-            <span class="pdv-section-label">{{ t('pr.detail.labels') }}</span>
+          <!-- Labels -->
+          <section v-if="p.prDetail.value.labels.length" class="pdv-section">
+            <h2 class="pdv-section-label">{{ t('pr.detail.labels') }}</h2>
             <div class="pdv-chips">
-              <span v-for="l in p.prDetail.value.labels" :key="l" class="pdv-chip">{{ l }}</span>
+              <span v-for="l in p.prDetail.value.labels" :key="l" class="pdv-chip pdv-chip--label">{{ l }}</span>
             </div>
-          </div>
+          </section>
 
-          <div class="pdv-section-label">{{ t('pr.detail.description') }}</div>
-          <div v-if="p.prDetail.value.body" class="pdv-body-text" v-html="safeHtml(p.renderBody(p.prDetail.value.body))" />
-          <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
+          <!-- Description -->
+          <section class="pdv-section pdv-section--desc">
+            <div class="pdv-desc-head">
+              <h2 class="pdv-section-label">{{ t('pr.detail.description') }}</h2>
+              <div v-if="p.prDetail.value.body" class="pdv-desc-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  class="pdv-desc-tab"
+                  :class="{ 'pdv-desc-tab--active': descriptionTab === 'formatted' }"
+                  :aria-selected="descriptionTab === 'formatted'"
+                  @click="descriptionTab = 'formatted'"
+                >
+                  {{ t('dashboard.formatted') }}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  class="pdv-desc-tab"
+                  :class="{ 'pdv-desc-tab--active': descriptionTab === 'raw' }"
+                  :aria-selected="descriptionTab === 'raw'"
+                  @click="descriptionTab = 'raw'"
+                >
+                  {{ t('dashboard.raw') }}
+                </button>
+              </div>
+            </div>
+            <div v-if="p.prDetail.value.body" class="pdv-desc-body">
+              <div
+                v-if="descriptionTab === 'formatted'"
+                class="pdv-body-formatted"
+                v-html="renderMarkdown(p.prDetail.value.body)"
+              />
+              <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
+            </div>
+            <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
+          </section>
 
+          <!-- Secondary links -->
           <div class="pdv-links">
-            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/commits')">{{ t('pr.detail.linkCommits') }}</button>
-            <button class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/files')">{{ t('pr.detail.linkFiles') }}</button>
-            <button v-if="p.prDetail.value.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(p.prDetail.value.url + '/checks')">{{ t('pr.detail.linkCi') }}</button>
+            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/commits')">
+              {{ t('pr.detail.linkCommits') }}
+            </button>
+            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/files')">
+              {{ t('pr.detail.linkFiles') }}
+            </button>
+            <button
+              v-if="p.prDetail.value.checksStatus"
+              class="pdv-btn pdv-btn--ghost pdv-btn--sm"
+              @click="openInBrowser(p.prDetail.value.url + '/checks')"
+            >
+              {{ t('pr.detail.linkCi') }}
+            </button>
           </div>
         </div>
 
         <!-- Diff tab -->
         <div v-else-if="p.detailTab.value === 'diff'" class="pdv-body pdv-diff-body">
-          <div v-if="p.detailLoading.value && !p.prDiffFiles.value.length" class="pdv-loading">{{ t('pr.detail.loadingDiff') }}</div>
+          <div v-if="p.detailLoading.value && !p.prDiffFiles.value.length" class="pdv-loading">
+            <div class="pdv-spinner" aria-hidden="true"></div>
+            <span>{{ t('pr.detail.loadingDiff') }}</span>
+          </div>
           <template v-else-if="p.prDiffFiles.value.length">
             <!-- File sidebar -->
             <div class="pdv-diff-sidebar">
@@ -190,7 +439,7 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
               <button
                 v-for="file in p.prDiffFiles.value"
                 :key="file.path"
-                :class="['pdv-diff-file', { active: p.selectedDiffFile.value === file.path }]"
+                :class="['pdv-diff-file', { 'pdv-diff-file--active': p.selectedDiffFile.value === file.path }]"
                 @click="p.selectedDiffFile.value = file.path"
               >
                 <div class="pdv-diff-file-top">
@@ -232,7 +481,7 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
               <span class="pdv-check-icon">{{ p.checkIcon(c) }}</span>
               <span class="pdv-check-name">{{ c.name }}</span>
               <span class="pdv-check-state">{{ c.conclusion || c.state }}</span>
-              <button v-if="c.detailsUrl" class="eco-btn eco-btn--xs" @click="openInBrowser(c.detailsUrl)">↗</button>
+              <button v-if="c.detailsUrl" class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(c.detailsUrl)">↗</button>
             </div>
           </div>
         </div>
@@ -272,6 +521,7 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 </template>
 
 <style scoped>
+/* ─── Shell ──────────────────────────────────────────────── */
 .pdv-root {
   display: flex;
   flex-direction: column;
@@ -280,130 +530,366 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
   background: var(--color-bg);
 }
 
-/* Merge dialog */
+/* ─── Merge dialog ───────────────────────────────────────── */
 .pdv-merge-dialog {
-  padding: 12px 16px;
+  padding: var(--space-5) var(--space-7);
   border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(180deg, var(--color-bg-secondary), var(--color-bg-tertiary));
+  flex-shrink: 0;
+}
+.pdv-merge-prompt {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-snug);
+}
+.pdv-merge-title {
+  color: var(--color-text-muted);
+}
+.pdv-merge-options {
+  display: flex;
+  gap: var(--space-6);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+.pdv-merge-opt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.pdv-merge-opt:hover {
   background: var(--color-bg-tertiary);
-  flex-shrink: 0;
 }
-.pdv-merge-dialog p { margin: 0 0 8px; font-size: 13px; }
-.pdv-merge-options { display: flex; gap: 16px; margin-bottom: 10px; }
-.pdv-merge-options label { font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-.pdv-merge-actions { display: flex; gap: 6px; }
+.pdv-merge-actions {
+  display: flex;
+  gap: var(--space-3);
+}
 
-/* Messages */
+/* ─── Messages ───────────────────────────────────────────── */
 .pdv-msg {
-  font-size: 12px;
-  padding: 6px 16px;
+  font-size: var(--font-size-base);
+  padding: var(--space-4) var(--space-7);
   flex-shrink: 0;
+  line-height: var(--line-height-snug);
 }
-.pdv-msg--error { color: var(--color-danger); background: var(--color-danger-soft); }
-.pdv-msg--success { color: var(--color-success); background: var(--color-success-soft); cursor: pointer; }
-.pdv-msg--full { padding: 16px; font-size: 13px; }
+.pdv-msg--error {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-bottom: 1px solid var(--color-danger);
+}
+.pdv-msg--success {
+  color: var(--color-success);
+  background: var(--color-success-soft);
+  border-bottom: 1px solid var(--color-success);
+  cursor: pointer;
+}
+.pdv-msg--full {
+  padding: var(--space-7);
+  font-size: var(--font-size-md);
+}
 
-/* Empty state */
+/* ─── Empty state ────────────────────────────────────────── */
 .pdv-empty {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: var(--space-5);
   color: var(--color-text-muted);
-  font-size: 14px;
+  font-size: var(--font-size-md);
+}
+.pdv-empty-illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--color-accent-soft), transparent 70%);
+  color: var(--color-accent);
+  opacity: 0.6;
+}
+.pdv-empty-label {
+  font-size: var(--font-size-md);
 }
 
-/* Header bar */
-.pdv-header {
+.pdv-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: pdv-spin 0.8s linear infinite;
+}
+
+@keyframes pdv-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Hero header ────────────────────────────────────────── */
+.pdv-hero {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 20px 10px;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-7) var(--space-5);
   border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(180deg, var(--color-bg-secondary), var(--color-bg));
   flex-shrink: 0;
-  background: var(--color-bg-secondary);
 }
 
-.pdv-header-main {
+.pdv-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.pdv-hero-title {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
+  min-width: 0;
+  flex: 1;
 }
 
 .pdv-pr-num {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
   color: var(--color-accent);
-  font-family: monospace;
+  font-family: var(--font-mono);
   flex-shrink: 0;
+  padding: 2px var(--space-3);
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
 }
 
 .pdv-pr-title {
-  font-size: 16px;
-  font-weight: 700;
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text);
-  line-height: 1.3;
+  line-height: var(--line-height-snug);
+  word-break: break-word;
 }
 
-.pdv-header-meta {
+.pdv-hero-actions {
   display: flex;
-  gap: 10px;
-  font-size: 12px;
+  gap: var(--space-3);
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.pdv-hero-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-base);
   color: var(--color-text-muted);
   flex-wrap: wrap;
 }
 
-.pdv-header-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 4px;
+.pdv-author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-/* Tabs */
+.pdv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 9px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.pdv-author-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.pdv-meta-sep {
+  color: var(--color-text-subtle);
+}
+
+.pdv-branch-path {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.pdv-branch {
+  padding: 1px var(--space-3);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.pdv-branch-arrow {
+  color: var(--color-text-subtle);
+}
+
+.pdv-merged-ago {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ─── Tabs ───────────────────────────────────────────────── */
 .pdv-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 12px;
+  gap: 0;
+  padding: 0 var(--space-5);
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
   flex-shrink: 0;
 }
 
 .pdv-tab {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 8px 12px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   white-space: nowrap;
   margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  position: relative;
 }
-.pdv-tab:hover { color: var(--color-text); }
-.pdv-tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
+
+.pdv-tab:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.pdv-tab--active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.pdv-tab-emoji {
+  font-size: var(--font-size-md);
+  line-height: 1;
+}
+.pdv-tab-emoji--sm {
+  font-size: var(--font-size-sm);
+  opacity: 0.9;
+}
 
 .pdv-tab-count {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--font-size-xs);
+  padding: 1px var(--space-3);
+  border-radius: var(--radius-pill);
   background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.5;
 }
-.pdv-tab-count--comment { background: var(--color-accent-soft); color: var(--color-accent); }
 
-.pdv-tab-spacer { flex: 1; }
-.pdv-review-btn { margin: 4px 0; font-weight: 600; }
+.pdv-tab-count--accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
 
-/* Content area */
+.pdv-tab-spacer {
+  flex: 1;
+}
+
+.pdv-review-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 var(--space-3) var(--space-3);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-family: inherit;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1.4;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.pdv-review-btn:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.14);
+}
+.pdv-review-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.pdv-review-btn-label {
+  line-height: 1.4;
+}
+.pdv-review-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent-text);
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-pill);
+  line-height: 1;
+}
+
+.pdv-review-btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0 var(--color-accent-soft);
+}
+.pdv-review-btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24), 0 0 0 3px var(--color-accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdv-review-btn,
+  .pdv-review-btn:hover,
+  .pdv-review-btn:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ─── Content area ───────────────────────────────────────── */
 .pdv-content {
   flex: 1;
   overflow: hidden;
@@ -414,92 +900,369 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 .pdv-body {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 20px;
+  padding: var(--space-6) var(--space-7);
 }
 
-/* Info tab */
-.pdv-info { display: flex; flex-direction: column; gap: 14px; }
+/* ─── Info tab ───────────────────────────────────────────── */
+.pdv-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
 
 .pdv-readiness {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-snug);
 }
-.pdv-readiness--ok { background: var(--color-success-soft); border: 1px solid var(--color-success); color: var(--color-success); }
-.pdv-readiness--wait { background: var(--color-warning-soft); border: 1px solid var(--color-warning); color: var(--color-warning); font-weight: 600; }
+.pdv-readiness-icon {
+  font-size: var(--font-size-lg);
+  flex-shrink: 0;
+}
+.pdv-readiness--ok {
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success);
+  color: var(--color-success);
+}
+.pdv-readiness--wait {
+  background: var(--color-warning-soft);
+  border: 1px solid var(--color-warning);
+  color: var(--color-warning);
+  font-weight: var(--font-weight-semibold);
+}
 
+/* Stats grid */
 .pdv-stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
 }
 
 .pdv-stat {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-}
-.pdv-stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.pdv-add { color: var(--color-success); font-weight: 600; }
-.pdv-del { color: var(--color-danger); font-weight: 600; }
-
-.pdv-section { display: flex; flex-direction: column; gap: 6px; }
-.pdv-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.pdv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.pdv-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-}
-
-.pdv-body-text {
-  font-size: 13px;
-  color: var(--color-text);
-  line-height: 1.6;
+  gap: var(--space-2);
+  padding: var(--space-5);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  overflow: hidden;
 }
 
-.pdv-muted { font-size: 12px; color: var(--color-text-muted); font-style: italic; }
+.pdv-stat::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 100% at 100% 0%, var(--color-accent-soft), transparent 50%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  pointer-events: none;
+}
 
-.pdv-links { display: flex; gap: 6px; }
+.pdv-stat:hover {
+  border-color: var(--color-border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.pdv-stat:hover::before {
+  opacity: 0.4;
+}
+
+.pdv-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.pdv-stat-label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pdv-stat-value {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.pdv-stat-emoji {
+  font-size: var(--font-size-md);
+}
+
+.pdv-stat-diff {
+  font-family: var(--font-mono);
+}
+
+.pdv-add { color: var(--color-success); font-weight: var(--font-weight-bold); }
+.pdv-del { color: var(--color-danger); font-weight: var(--font-weight-bold); }
+
+/* Sections (reviewers, labels, description) */
+.pdv-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pdv-section-label {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pdv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.pdv-chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.pdv-chip--reviewer {
+  gap: var(--space-3);
+  padding-left: var(--space-2);
+}
+
+.pdv-chip-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 8px;
+  font-weight: var(--font-weight-bold);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+.pdv-chip--label {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: transparent;
+}
+
+/* Description head: section label + formatted/raw segmented pill */
+.pdv-section--desc {
+  gap: var(--space-3);
+}
+.pdv-desc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.pdv-desc-tabs {
+  display: inline-flex;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 2px;
+}
+.pdv-desc-tab {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  font-family: inherit;
+  padding: 2px var(--space-4);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  line-height: 1.6;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.pdv-desc-tab:hover {
+  color: var(--color-text);
+}
+.pdv-desc-tab--active {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.pdv-desc-body {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pdv-body-formatted {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  line-height: var(--line-height-normal);
+  padding: var(--space-5) var(--space-6);
+  word-break: break-word;
+}
+
+/* Markdown primitives inside the PR description. Mirrors the README
+   renderer so `renderMarkdown()` output is styled consistently. */
+.pdv-body-formatted :deep(h1),
+.pdv-body-formatted :deep(h2),
+.pdv-body-formatted :deep(h3),
+.pdv-body-formatted :deep(h4),
+.pdv-body-formatted :deep(h5),
+.pdv-body-formatted :deep(h6) {
+  margin: var(--space-5) 0 var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  color: var(--color-text);
+}
+.pdv-body-formatted :deep(h1) {
+  font-size: var(--font-size-xl);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  margin-top: 0;
+}
+.pdv-body-formatted :deep(h2) {
+  font-size: var(--font-size-lg);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.pdv-body-formatted :deep(h3) { font-size: var(--font-size-md); }
+.pdv-body-formatted :deep(p) { margin: 0 0 var(--space-3) 0; }
+.pdv-body-formatted :deep(p:last-child) { margin-bottom: 0; }
+.pdv-body-formatted :deep(ul),
+.pdv-body-formatted :deep(ol) {
+  margin: 0 0 var(--space-3) 0;
+  padding-left: var(--space-6);
+}
+.pdv-body-formatted :deep(li) { margin-bottom: var(--space-2); }
+.pdv-body-formatted :deep(strong) { font-weight: var(--font-weight-semibold); }
+.pdv-body-formatted :deep(.md-code-block) {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+  overflow-x: auto;
+  margin: 0 0 var(--space-3) 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.pdv-body-formatted :deep(.md-inline-code),
+.pdv-body-formatted :deep(code),
+.pdv-body-formatted :deep(.pr-code) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+.pdv-body-formatted :deep(.md-link) {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+.pdv-body-formatted :deep(.md-link:hover) { text-decoration: underline; }
+.pdv-body-formatted :deep(.md-blockquote) {
+  border-left: 3px solid var(--color-accent-soft);
+  padding-left: var(--space-5);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-3) 0;
+}
+.pdv-body-formatted :deep(.md-hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-5) 0;
+}
+.pdv-body-formatted :deep(.md-table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 var(--space-4) 0;
+  font-size: var(--font-size-sm);
+}
+.pdv-body-formatted :deep(.md-table th),
+.pdv-body-formatted :deep(.md-table td) {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+}
+.pdv-body-formatted :deep(.md-table th) {
+  background: var(--color-bg-tertiary);
+  font-weight: var(--font-weight-semibold);
+}
+.pdv-body-formatted :deep(img),
+.pdv-body-formatted :deep(.md-img) {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+}
+
+.pdv-body-raw {
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-bg);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+.pdv-body-raw code { font-family: inherit; }
+
+.pdv-muted {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+}
+
+.pdv-links {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
 
 .pdv-loading {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  gap: var(--space-4);
+  font-size: var(--font-size-md);
   color: var(--color-text-muted);
-  padding: 24px;
+  padding: var(--space-8);
 }
 
-/* Diff tab */
+/* ─── Diff tab ───────────────────────────────────────────── */
 .pdv-diff-body {
   display: flex;
   padding: 0;
@@ -508,109 +1271,204 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
 }
 
 .pdv-diff-sidebar {
-  width: 220px;
-  min-width: 180px;
+  width: 240px;
+  min-width: 200px;
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 6px 4px;
+  padding: var(--space-4);
   background: var(--color-bg-secondary);
 }
 
 .pdv-diff-count {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  padding: 4px 8px 6px;
+  padding: var(--space-2) var(--space-3) var(--space-4);
 }
 
 .pdv-diff-file {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding: 5px 8px;
-  border-radius: 5px;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
   cursor: pointer;
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
   color: var(--color-text);
   width: 100%;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
 }
-.pdv-diff-file:hover { background: var(--color-bg-tertiary); }
-.pdv-diff-file.active { background: var(--color-accent-soft); border-color: var(--color-accent); }
+.pdv-diff-file:hover {
+  background: var(--color-bg-tertiary);
+}
+.pdv-diff-file--active {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+}
 
-.pdv-diff-file-top { display: flex; align-items: center; gap: 4px; overflow: hidden; }
-.pdv-diff-file-name { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
-.pdv-diff-file-comments { font-size: 10px; color: var(--color-accent); flex-shrink: 0; }
-.pdv-diff-file-path { font-size: 10px; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdv-diff-file-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow: hidden;
+}
+.pdv-diff-file-name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+.pdv-diff-file-comments {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.pdv-diff-file-path {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-.pdv-diff-viewer { flex: 1; overflow: auto; }
+.pdv-diff-viewer {
+  flex: 1;
+  overflow: auto;
+}
 
-/* CI tab */
+/* ─── CI tab ─────────────────────────────────────────────── */
 .pdv-checks-body { overflow-y: auto; }
-.pdv-checks { display: flex; flex-direction: column; gap: 4px; }
+.pdv-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
 .pdv-check {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-fast);
 }
-.pdv-check-icon { font-size: 14px; flex-shrink: 0; }
-.pdv-check-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pdv-check-state { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; }
+.pdv-check:hover {
+  border-color: var(--color-border-strong);
+}
+.pdv-check-icon {
+  font-size: var(--font-size-lg);
+  flex-shrink: 0;
+}
+.pdv-check-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-medium);
+}
+.pdv-check-state {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-semibold);
+}
 
-/* Intelligence tab */
+/* ─── Intelligence tab ───────────────────────────────────── */
 .pdv-intelligence-body {
   padding: 0;
   overflow: hidden;
   flex: 1;
 }
 
-/* ── Action buttons (eco-btn) ─────────────────────────── */
-.eco-btn {
+/* ─── Action buttons ─────────────────────────────────────── */
+.pdv-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 600;
-  border-radius: 6px;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: var(--color-bg-tertiary);
   color: var(--color-text);
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-  line-height: 1.4;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  line-height: var(--line-height-snug);
 }
-.eco-btn:hover {
+.pdv-btn:hover {
   background: var(--color-bg);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
-.eco-btn--xs {
-  padding: 3px 9px;
-  font-size: 11px;
-  border-radius: 5px;
+.pdv-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
-.eco-btn--primary {
+
+.pdv-btn--sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.pdv-btn--primary {
   background: var(--color-accent);
   border-color: var(--color-accent);
   color: var(--color-accent-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 0 0 0 var(--color-accent-soft);
 }
-.eco-btn--primary:hover {
-  background: var(--color-accent-hover, color-mix(in srgb, var(--color-accent) 85%, #000));
-  border-color: var(--color-accent-hover, var(--color-accent));
+.pdv-btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
   color: var(--color-accent-text);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24), 0 0 0 3px var(--color-accent-soft);
+}
+
+.pdv-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-muted);
+}
+.pdv-btn--ghost:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdv-btn,
+  .pdv-stat,
+  .pdv-tab {
+    transition: none;
+  }
+  .pdv-btn:hover,
+  .pdv-stat:hover {
+    transform: none;
+  }
+  .pdv-spinner {
+    animation: none;
+  }
 }
 </style>

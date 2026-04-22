@@ -371,10 +371,20 @@ function removeReviewer(name: string) {
   <div class="pcv-root" @keydown="onKeydown">
     <div class="pcv-container">
 
-      <!-- Header (no close button; footer has Annuler) -->
-      <header class="pcv-header">
-        <h1 class="pcv-title">{{ t("pr.create.title") }}</h1>
-        <p class="pcv-subtitle">{{ t("pr.create.subtitle") }}</p>
+      <!-- Hero header -->
+      <header class="pcv-hero">
+        <div class="pcv-hero-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="18" r="3" />
+            <circle cx="6" cy="6" r="3" />
+            <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+            <line x1="6" y1="9" x2="6" y2="21" />
+          </svg>
+        </div>
+        <div class="pcv-hero-text">
+          <h1 class="pcv-title">{{ t("pr.create.title") }}</h1>
+          <p class="pcv-subtitle">{{ t("pr.create.subtitle") }}</p>
+        </div>
       </header>
 
       <!-- Messages -->
@@ -418,14 +428,17 @@ function removeReviewer(name: string) {
           <button
             v-if="ai.isAvailable.value"
             type="button"
-            class="btn btn--ai"
+            class="pcv-ai-btn"
             :disabled="isGeneratingPrDescription || baseIsSameAsHead"
             :title="t('pr.create.aiHint')"
             @click="generateWithAI"
           >
-            <span v-if="isGeneratingPrDescription">… {{ t('pr.create.aiGenerating') }}</span>
+            <span v-if="isGeneratingPrDescription" class="pcv-ai-label">
+              <span class="pcv-spinner pcv-spinner--sm" aria-hidden="true"></span>
+              {{ t('pr.create.aiGenerating') }}
+            </span>
             <span v-else class="pcv-ai-label">
-              <AiSparkle :size="14" />
+              <AiSparkle :size="13" />
               {{ t('pr.create.aiGenerate') }}
             </span>
           </button>
@@ -452,13 +465,15 @@ function removeReviewer(name: string) {
           <label class="pcv-label" for="pcv-body-input">{{ t("pr.create.bodyLabel") }}</label>
           <div class="pcv-templates">
             <span class="pcv-template-label">{{ t("pr.create.templateLabel") }}</span>
-            <button
-              v-for="tpl in templates"
-              :key="tpl.key"
-              type="button"
-              class="pcv-tpl-btn"
-              @click="applyTemplate(tpl)"
-            >{{ tpl.label }}</button>
+            <div class="pcv-tpl-group" role="group">
+              <button
+                v-for="tpl in templates"
+                :key="tpl.key"
+                type="button"
+                class="pcv-tpl-btn"
+                @click="applyTemplate(tpl)"
+              >{{ tpl.label }}</button>
+            </div>
           </div>
         </div>
 
@@ -595,8 +610,16 @@ function removeReviewer(name: string) {
 
       <!-- Options -->
       <section class="pcv-section">
-        <label class="pcv-check">
+        <label class="pcv-check" :class="{ 'pcv-check--active': p.newPrDraft.value }">
           <input type="checkbox" v-model="p.newPrDraft.value" />
+          <span class="pcv-check-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18" />
+              <path d="M3 12h18" />
+              <path d="M3 18h12" />
+              <circle cx="19" cy="18" r="2" />
+            </svg>
+          </span>
           <div class="pcv-check-text">
             <span class="pcv-check-title">{{ t("pr.create.draftLabel") }}</span>
             <span class="pcv-check-hint">{{ t("pr.create.draftHint") }}</span>
@@ -616,6 +639,12 @@ function removeReviewer(name: string) {
           :title="t('common.ctrlEnter')"
         >
           <span v-if="p.isCreating.value" class="pcv-spinner" aria-hidden="true"></span>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="18" r="3" />
+            <circle cx="6" cy="6" r="3" />
+            <path d="M13 6h3a2 2 0 0 1 2 2v7" />
+            <line x1="6" y1="9" x2="6" y2="21" />
+          </svg>
           <span>{{ p.isCreating.value ? t("pr.create.submitting") : (p.newPrDraft.value ? t("pr.create.submitDraft") : t("pr.create.submit")) }}</span>
         </button>
       </footer>
@@ -664,23 +693,43 @@ function removeReviewer(name: string) {
   padding: var(--space-9) var(--space-9) var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: var(--space-9);
+  gap: var(--space-8);
   min-height: 100%;
   box-sizing: border-box;
 }
 
-/* ─── Header ─────────────────────────────────────────── */
-.pcv-header {
+/* ─── Hero header ────────────────────────────────────── */
+.pcv-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
   padding-bottom: var(--space-6);
   border-bottom: 1px solid var(--color-border);
+}
+.pcv-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+.pcv-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 .pcv-title {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
-  margin: 0 0 var(--space-3) 0;
+  margin: 0;
   color: var(--color-text);
-  letter-spacing: -0.01em;
-  line-height: 1.2;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
 }
 .pcv-subtitle {
   margin: 0;
@@ -729,7 +778,7 @@ function removeReviewer(name: string) {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-bg);
@@ -747,11 +796,25 @@ function removeReviewer(name: string) {
   background: var(--color-danger-soft);
 }
 .pcv-branch-role {
-  font-size: var(--font-size-xs);
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  font-size: 10px;
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   color: var(--color-text-muted);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+}
+.pcv-branch--from .pcv-branch-role {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+.pcv-branch--to .pcv-branch-role {
+  color: var(--color-success);
+  background: var(--color-success-soft);
 }
 .pcv-branch-name {
   font-size: var(--font-size-md);
@@ -760,6 +823,7 @@ function removeReviewer(name: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: var(--space-2) 0;
 }
 .pcv-branch-select {
   background: var(--color-bg-secondary);
@@ -777,10 +841,10 @@ function removeReviewer(name: string) {
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 .pcv-arrow {
-  color: var(--color-text-muted);
+  color: var(--color-text-subtle);
   align-self: center;
   flex-shrink: 0;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 /* ─── Inputs ─────────────────────────────────────────── */
@@ -830,7 +894,7 @@ function removeReviewer(name: string) {
   font-weight: var(--font-weight-bold);
 }
 
-/* ─── Templates ──────────────────────────────────────── */
+/* ─── Templates (segmented pill group) ──────────────── */
 .pcv-templates {
   display: flex;
   align-items: center;
@@ -842,22 +906,63 @@ function removeReviewer(name: string) {
   color: var(--color-text-muted);
   font-weight: var(--font-weight-medium);
 }
+.pcv-tpl-group {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
 .pcv-tpl-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  padding: 5px var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.pcv-tpl-btn:hover {
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* ─── AI generate pill (ghost → accent) ─────────────── */
+.pcv-ai-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-4);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  padding: var(--space-2) var(--space-5);
+  font-weight: var(--font-weight-semibold);
+  font-family: inherit;
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+  line-height: 1.4;
+  transition: color var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
 }
-
-.pcv-tpl-btn:hover {
+.pcv-ai-btn:hover:not(:disabled) {
   color: var(--color-accent);
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+.pcv-ai-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pcv-spinner--sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
 }
 
 /* ─── Editor chrome (RTE) ────────────────────────────── */
@@ -1166,33 +1271,55 @@ function removeReviewer(name: string) {
   font-style: italic;
 }
 
-/* ─── Options ────────────────────────────────────────── */
+/* ─── Options (draft card) ──────────────────────────── */
 .pcv-check {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   background: var(--color-bg);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .pcv-check:hover {
   background: var(--color-bg-tertiary);
-  border-color: var(--color-text-muted);
+  border-color: var(--color-border-strong);
+}
+.pcv-check--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
 }
 .pcv-check input[type="checkbox"] {
-  margin-top: 3px;
   flex-shrink: 0;
   width: 16px;
   height: 16px;
   accent-color: var(--color-accent);
+  margin: 0;
+}
+.pcv-check-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.pcv-check--active .pcv-check-icon {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
 }
 .pcv-check-text {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 2px;
+  min-width: 0;
 }
 .pcv-check-title {
   font-size: var(--font-size-md);
@@ -1233,30 +1360,54 @@ function removeReviewer(name: string) {
 .pcv-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-7);
+  padding: var(--space-3) var(--space-6);
+  min-height: 36px;
   border-radius: var(--radius-md);
-  font-size: var(--font-size-md);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  font-family: inherit;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), filter var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .pcv-btn--ghost {
-  background: transparent;
+  background: var(--color-bg);
   color: var(--color-text-muted);
   border-color: var(--color-border);
 }
 .pcv-btn--ghost:hover:not(:disabled) {
   color: var(--color-text);
   background: var(--color-bg-tertiary);
+  border-color: var(--color-border-strong);
 }
 .pcv-btn--primary {
   background: var(--color-accent);
   color: var(--color-accent-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0 var(--color-accent-soft);
 }
-.pcv-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
+.pcv-btn--primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 0 3px var(--color-accent-soft);
+  transform: translateY(-1px);
+}
+.pcv-btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+}
 .pcv-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pcv-btn,
+  .pcv-btn--primary:hover,
+  .pcv-btn--primary:active {
+    transition: none;
+    transform: none;
+  }
+  .pcv-spinner {
+    animation: none;
+  }
+}
 
 .pcv-spinner {
   width: 12px; height: 12px;
