@@ -23,6 +23,7 @@ import {
   gitCreateBranch,
   gitSwitchBranch,
   gitDeleteBranch,
+  gitRenameBranch,
   gitCherryPick,
   gitCherryPickAbort,
   gitCherryPickContinue,
@@ -336,6 +337,34 @@ export function useGitRepo() {
     // Start lightweight status polling to detect external changes
     lastStatusSnapshot = ""; // Reset so first poll picks up current state
     startStatusPoll();
+  }
+
+  /**
+   * Close the currently-open repository and reset all derived state so
+   * the app returns to its empty/landing screen.
+   *
+   * This is called when the last repo tab is closed (see App.vue's
+   * `activeTabId` watcher). We also stop the auto-fetch and status-poll
+   * intervals — leaving them running on a null folderPath is harmless
+   * but wasteful.
+   */
+  function closeRepo() {
+    stopAutoFetch();
+    stopStatusPoll();
+    folderPath.value = null;
+    status.value = null;
+    selectedFilePath.value = null;
+    selectedFileStaged.value = false;
+    diff.value = null;
+    log.value = [];
+    selectedCommitHash.value = null;
+    commitDiffs.value = [];
+    branches.value = [];
+    error.value = null;
+    successMessage.value = null;
+    // Don't reset commit draft / viewMode — keeping them lets the user
+    // reopen a repo without losing their in-progress commit message and
+    // keeps the default view (dashboard) they expect.
   }
 
   /**
@@ -847,6 +876,22 @@ export function useGitRepo() {
     }
   }
 
+  async function renameBranch(oldName: string, newName: string) {
+    if (!folderPath.value) return;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) return;
+    try {
+      await gitRenameBranch(folderPath.value, oldName, trimmed);
+      await loadBranches();
+      // If we just renamed the current branch, refresh status so branchDisplay updates.
+      if (status.value?.branch === oldName) {
+        await loadStatus(folderPath.value);
+      }
+    } catch (err: any) {
+      error.value = `rename branch: ${err.message}`;
+    }
+  }
+
   // ─── Discard ────────────────────────────────────────────
 
   async function discardFiles(paths: string[], untracked = false) {
@@ -887,6 +932,7 @@ export function useGitRepo() {
     isCommitting,
     isPushing,
     isPulling,
+    isFetching,
     lastCommitHash,
     branches,
     branchesLoading,
@@ -912,6 +958,7 @@ export function useGitRepo() {
     behindCount,
     // Actions
     openRepo,
+    closeRepo,
     refresh,
     selectFile,
     loadLog,
@@ -927,6 +974,7 @@ export function useGitRepo() {
     amendCommit,
     push,
     pull,
+    fetch: fetchRemote,
     mergeBranch,
     mergeContinue,
     abortMerge,
@@ -937,6 +985,7 @@ export function useGitRepo() {
     createBranch,
     switchBranch,
     deleteBranch,
+    renameBranch,
     // Cherry-pick (Phase 8.2)
     isCherryPicking,
     cherryPick,

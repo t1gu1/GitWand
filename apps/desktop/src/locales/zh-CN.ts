@@ -81,6 +81,58 @@ const zhCN: Locale = {
     mergeAborted: "合并已中止",
     resolveConflicts: "请先解决冲突",
     abortMerge: "中止合并",
+    // Search trigger
+    searchTooltip: "\u641c\u7d22 (\u2318K)",
+    searchAriaLabel: "\u6253\u5f00\u641c\u7d22",
+    searchInputPlaceholder: "\u641c\u7d22\u5206\u652f\u3001\u63d0\u4ea4\u6216\u64cd\u4f5c\u2026",
+    // \u547d\u4ee4\u9762\u677f
+    paletteSectionBranches: "\u5206\u652f",
+    paletteSectionCommits: "\u6700\u8fd1\u63d0\u4ea4",
+    paletteSectionActions: "\u64cd\u4f5c",
+    paletteNoResults: "\u65e0\u7ed3\u679c",
+    paletteNewTab: "\u65b0\u6807\u7b7e\u9875",
+    paletteFetch: "Fetch",
+    paletteViewDashboard: "\u89c6\u56fe\uff1a\u4eea\u8868\u76d8",
+    paletteViewChanges: "\u89c6\u56fe\uff1a\u66f4\u6539",
+    paletteViewLog: "\u89c6\u56fe\uff1a\u5386\u53f2",
+    paletteViewGraph: "\u89c6\u56fe\uff1a\u56fe\u8868",
+  },
+
+  // ─── Sync split button (header primary action) ─────────
+  syncAction: {
+    sync: "\u540c\u6b65",
+    pushN: "\u63a8\u9001 {0} \u4e2a\u63d0\u4ea4",
+    pushOne: "\u63a8\u9001 1 \u4e2a\u63d0\u4ea4",
+    pullN: "\u62c9\u53d6 {0} \u4e2a\u63d0\u4ea4",
+    pullOne: "\u62c9\u53d6 1 \u4e2a\u63d0\u4ea4",
+    publish: "\u53d1\u5e03\u5206\u652f",
+    fetch: "Fetch",
+    rebaseOntoRemote: "\u53d8\u57fa\u5230\u8fdc\u7a0b",
+    mergeRemote: "\u5408\u5e76\u8fdc\u7a0b",
+    upToDate: "\u5df2\u662f\u6700\u65b0",
+    tooltipClean: "\u5df2\u662f\u6700\u65b0 \u2014 \u70b9\u51fb\u6293\u53d6",
+    tooltipDiverged: "\u5df2\u5206\u5c90 \u2014 \u8bf7\u9009\u62e9\u6574\u5408\u65b9\u5f0f",
+  },
+
+  // ─── Branch menu (header dropdown) ─────────────────────
+  branchMenu: {
+    title: "\u5206\u652f",
+    mergeInto: "\u5408\u5e76\u5230\u5f53\u524d\u5206\u652f\u2026",
+    rebaseOnto: "\u5c06\u5f53\u524d\u5206\u652f\u53d8\u57fa\u5230\u2026",
+    rename: "\u91cd\u547d\u540d\u5206\u652f\u2026",
+    deleteLabel: "\u5220\u9664\u5206\u652f\u2026",
+    rewind: "\u56de\u6eaf\u2026",
+    advanced: "\u9ad8\u7ea7",
+    renamePromptTitle: "\u91cd\u547d\u540d\u5206\u652f",
+    renamePromptLabel: "\u4e3a \u00ab {0} \u00bb \u8f93\u5165\u65b0\u540d\u79f0",
+    renamePlaceholder: "new-branch-name",
+    renameModalConfirm: "\u91cd\u547d\u540d",
+    deleteConfirm: "\u5220\u9664\u5206\u652f \u00ab {0} \u00bb \uff1f",
+    deleteModalTitle: "\u5220\u9664\u5206\u652f",
+    deleteModalWarning: "\u672c\u5730\u5206\u652f \u00ab {0} \u00bb \u5c06\u88ab\u6c38\u4e45\u5220\u9664\u3002\u672a\u5b58\u5728\u4e8e\u5176\u4ed6\u5206\u652f\u6216\u672a\u63a8\u9001\u5230\u8fdc\u7a0b\u7684\u63d0\u4ea4\u5c06\u4e22\u5931\u3002",
+    deleteModalGuardLabel: "\u8bf7\u8f93\u5165\u5206\u652f\u540d\u79f0\u4ee5\u786e\u8ba4",
+    deleteModalGuardPlaceholder: "\u8f93\u5165 \u00ab {0} \u00bb",
+    deleteModalConfirm: "\u5220\u9664\u5206\u652f",
   },
 
   sidebar: {

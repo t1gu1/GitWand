@@ -1548,6 +1548,19 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/git-rename-branch  { cwd, oldName, newName }
+    if (url.pathname === "/api/git-rename-branch" && req.method === "POST") {
+      const { cwd, oldName, newName } = await readBody(req);
+      if (!cwd || !oldName || !newName) return jsonResponse(req, res, { error: "Missing cwd, oldName or newName" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execSync(`git branch -m "${oldName}" "${newName}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // POST /api/git-stash  { cwd, message? }
     if (url.pathname === "/api/git-stash" && req.method === "POST") {
       const { cwd, message } = await readBody(req);

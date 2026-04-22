@@ -1158,6 +1158,23 @@ export async function gitDeleteBranch(cwd: string, name: string, force: boolean 
   if (!res.ok) throw new Error(`Failed to delete branch: ${res.status}`);
 }
 
+/**
+ * Rename a branch (git branch -m oldName newName).
+ * Works whether oldName is the current branch or another local branch.
+ */
+export async function gitRenameBranch(cwd: string, oldName: string, newName: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_rename_branch", { cwd, oldName, newName });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-rename-branch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, oldName, newName }),
+  });
+  if (!res.ok) throw new Error(`Failed to rename branch: ${res.status}`);
+}
+
 // ─── Conflict Prevention (Phase 8.1) ───────────────────────
 
 export interface ConflictRisk {

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, provide } from "vue";
 import AppHeader from "./components/AppHeader.vue";
-import RepoTabBar from "./components/RepoTabBar.vue";
 import MergeEditor from "./components/MergeEditor.vue";
 import EmptyState from "./components/EmptyState.vue";
 import FolderPicker from "./components/FolderPicker.vue";
@@ -22,6 +21,10 @@ import RebaseEditor from "./components/RebaseEditor.vue";
 import StashManager from "./components/StashManager.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
 import SubmodulePanel from "./components/SubmodulePanel.vue";
+import SearchPalette from "./components/header/SearchPalette.vue";
+import type { PaletteAction } from "./components/header/SearchPalette.vue";
+import BranchRenameModal from "./components/header/BranchRenameModal.vue";
+import BranchDeleteModal from "./components/header/BranchDeleteModal.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -98,7 +101,9 @@ const {
   behindCount,
   isPushing,
   isPulling,
+  isFetching,
   openRepo,
+  closeRepo,
   refresh: repoRefresh,
   selectFile: repoSelectFile,
   loadLog,
@@ -113,6 +118,7 @@ const {
   amendCommit: doAmendCommit,
   push: doPush,
   pull: doPull,
+  fetch: doFetch,
   mergeBranch: doMerge,
   mergeContinue: doMergeContinue,
   abortMerge: doAbortMerge,
@@ -129,6 +135,7 @@ const {
   createBranch,
   switchBranch,
   deleteBranch,
+  renameBranch: doRenameBranch,
 } = useGitRepo();
 
 // ─── PR panel (shared state via provide/inject) ──────────
@@ -149,15 +156,38 @@ const {
 // If the user is currently on the history/graph view, also reload the log —
 // otherwise the log would stay empty (openRepo clears it but doesn't refetch,
 // and the viewMode watcher only fires on actual mode changes).
-watch(activeTabId, async () => {
-  const tab = repoTabs.value.find((t) => t.id === activeTabId.value);
-  if (tab && tab.path !== repoFolderPath.value) {
-    await openRepo(tab.path);
-    if (viewMode.value === "history" || viewMode.value === "graph") {
-      await loadLog();
+//
+// When the last tab closes, `activeTabId` flips to null: close the repo so
+// the main area reverts to EmptyState. Without this, the previously-loaded
+// repo's state would linger (hasRepo stays true) and the user would still
+// see its files/log even though no tab is active.
+//
+// `immediate: true` is how tab restore ties into the app boot: `useRepoTabs`
+// hydrates `tabs` + `activeTabId` from localStorage at module load, so by
+// the time this watcher registers there's already an active id waiting.
+// Firing the callback immediately means the hydrated repo gets opened
+// automatically — without it, tabs would appear in the strip but the main
+// area would sit on EmptyState until the user clicks one. The handler is
+// idempotent (checks `tab.path !== repoFolderPath.value` before calling
+// `openRepo`, and only calls `closeRepo` when something is open), so
+// running on boot is safe.
+watch(
+  activeTabId,
+  async (id) => {
+    if (id === null) {
+      if (repoFolderPath.value) closeRepo();
+      return;
     }
-  }
-});
+    const tab = repoTabs.value.find((t) => t.id === id);
+    if (tab && tab.path !== repoFolderPath.value) {
+      await openRepo(tab.path);
+      if (viewMode.value === "history" || viewMode.value === "graph") {
+        await loadLog();
+      }
+    }
+  },
+  { immediate: true },
+);
 
 // ─── Computed state ─────────────────────────────────────
 const hasFiles = computed(() => repoFiles.value.length > 0);
@@ -506,6 +536,190 @@ async function handleSwitchBranch(name: string) {
   await switchBranch(name);
 }
 
+// ─── Sync-split button handlers (Phase 5) ─────────────────
+//
+// The header's SyncSplitButton is state-aware: computeSyncAction picks a
+// primary action based on ahead/behind/needsPublish and can also surface
+// "sync / fetch / rebase-onto-remote / merge-remote" from its dropdown.
+// Each of those maps to a single handler here so the header stays a
+// dumb composition — no git logic in components.
+//
+// NOTE: We don't have a dedicated `rebaseOntoRemote` / `mergeRemote`
+// backend. Those are pull variants:
+//   - rebaseOntoRemote → doPull(true)  (git pull --rebase)
+//   - mergeRemote      → doPull(false) (git pull --no-rebase)
+// This sidesteps the need for a new backend surface and Just Works™.
+
+/**
+ * Diverged-state primary action: pull (respecting user's pull mode) then
+ * push. Kept in App.vue so the toast / error plumbing stays one layer up.
+ */
+async function doSync() {
+  await doPull(pullMode.value === "rebase");
+  // Only push if pull succeeded and there are local commits to push.
+  if (!repoError.value && canPush.value) {
+    await doPush();
+  }
+}
+
+/** Publish a branch that doesn't yet have an upstream — same as push(). */
+async function doPublish() {
+  await doPush();
+}
+
+/** Dropdown "Rebase onto origin" — explicit rebase pull. */
+async function doRebaseOntoRemote() {
+  await doPull(true);
+}
+
+/** Dropdown "Merge origin into current" — explicit merge pull. */
+async function doMergeRemote() {
+  await doPull(false);
+}
+
+// ─── Current-branch rename / delete modals ───────────────
+//
+// Both are raised from BranchMenu → AppHeader. Modal confirms are the
+// ones that actually call into git, so they live in App.vue where the
+// composable handlers (doRenameBranch / deleteBranch) are in scope. We
+// keep the `current-branch delete` separate from BranchSelector's
+// per-branch delete: the selector already isolates the target in its
+// popover, whereas the header action needs the type-name guard because
+// it's always one click from a busy toolbar.
+const showBranchRenameModal = ref(false);
+const showBranchDeleteModal = ref(false);
+
+async function onBranchRenameConfirm(oldName: string, newName: string) {
+  // Identical to the BranchSelector rename path, just routed from the
+  // modal. `doRenameBranch` handles the backend call, upstream update,
+  // and status refresh.
+  await doRenameBranch(oldName, newName);
+}
+
+async function onBranchDeleteConfirm(name: string) {
+  // Reuse the same `deleteBranch` path the per-item BranchSelector
+  // delete uses — the modal's guard is additive, not a replacement for
+  // the backend's unmerged-work check.
+  await deleteBranch(name);
+}
+
+// ─── Command palette (Cmd/Ctrl+K) ────────────────────────
+//
+// Owned here rather than inside AppHeader so every action has direct
+// access to the same handlers (doPush, doSync, viewMode, showSettings…)
+// the rest of the shell already uses. The palette is a dumb renderer:
+// parent feeds it branches/commits/actions and routes emitted events to
+// the matching handler. SearchPalette auto-closes on activate by
+// emitting `close`, so handlers don't have to flip the ref themselves.
+const showSearchPalette = ref(false);
+
+/**
+ * Open the palette. Triggered from the header SearchTrigger (which owns
+ * the Cmd/Ctrl+K shortcut). Kick off lazy loads for branches and the log
+ * if they're empty — otherwise the first-time user would open a palette
+ * with only actions in it.
+ */
+function handleOpenSearch() {
+  if (hasRepo.value) {
+    if (branches.value.length === 0) loadBranches();
+    if (repoLog.value.length === 0) loadLog();
+  }
+  showSearchPalette.value = true;
+}
+
+/**
+ * Curated list of app-level actions exposed through the palette.
+ * Labels are localized; gating (e.g., push only when there's something
+ * to push, sync only when diverged) happens here so the palette itself
+ * stays a dumb renderer. Order roughly follows "how often will the user
+ * want this?" — remote sync first, views next, overlays last.
+ */
+const paletteActions = computed<PaletteAction[]>(() => {
+  const out: PaletteAction[] = [];
+
+  // With no repo open, the palette is essentially useless — offer the
+  // one action that actually makes sense: open a folder.
+  if (!hasRepo.value) {
+    out.push({ id: "new-tab", label: t("header.paletteNewTab") });
+    return out;
+  }
+
+  // Remote sync — only one primary action is offered at a time, matching
+  // what SyncSplitButton does in the header.
+  if (needsPublish.value) {
+    out.push({ id: "push", label: t("header.publish"), hint: t("header.publishTooltip") });
+  } else if (canPush.value && canPull.value) {
+    out.push({ id: "sync", label: t("header.sync"), hint: t("header.syncTooltip") });
+  } else if (canPush.value) {
+    out.push({ id: "push", label: t("header.push") });
+  } else if (canPull.value) {
+    out.push({ id: "pull", label: t("header.pull") });
+  }
+  out.push({ id: "fetch", label: t("header.paletteFetch") });
+
+  // View switchers — quick jumps between the four main modes.
+  out.push(
+    { id: "view-dashboard", label: t("header.paletteViewDashboard") },
+    { id: "view-changes", label: t("header.paletteViewChanges") },
+    { id: "view-log", label: t("header.paletteViewLog") },
+    { id: "view-graph", label: t("header.paletteViewGraph") },
+  );
+
+  // Overlays
+  out.push(
+    { id: "open-stash", label: t("sidebar.stashTitle") },
+    { id: "open-worktrees", label: t("worktree.title") },
+    { id: "open-rebase", label: t("rebase.title") },
+    { id: "open-settings", label: t("settings.title") },
+  );
+
+  // Universal: always available
+  out.push({ id: "new-tab", label: t("header.paletteNewTab") });
+
+  // Theme toggle — label reflects the target mode (what you'll flip TO).
+  out.push({
+    id: "toggle-theme",
+    label: theme.value === "dark" ? t("header.themeLightLabel") : t("header.themeDarkLabel"),
+  });
+
+  return out;
+});
+
+/**
+ * Route a palette action id to the matching app handler. Kept as an
+ * explicit switch (not a Record lookup) so TypeScript exhaustiveness
+ * would catch unhandled ids if we ever add discriminated unions later.
+ */
+function onPaletteAction(id: string) {
+  switch (id) {
+    case "push": doPush(); break;
+    case "pull": doPull(pullMode.value === "rebase"); break;
+    case "sync": doSync(); break;
+    case "fetch": doFetch(); break;
+    case "new-tab": handleOpenFolder(); break;
+    case "view-dashboard": viewMode.value = "dashboard"; break;
+    case "view-changes": viewMode.value = "changes"; break;
+    case "view-log": viewMode.value = "history"; break;
+    case "view-graph": viewMode.value = "graph"; break;
+    case "open-settings": showSettings.value = true; break;
+    case "open-stash": showStash.value = true; break;
+    case "open-worktrees": showWorktrees.value = true; break;
+    case "open-rebase": showRebase.value = true; break;
+    case "toggle-theme": toggleTheme(); break;
+  }
+}
+
+/** Palette → branch switch: delegate to the dirty-tree-aware handler. */
+function onPaletteSwitchBranch(name: string) {
+  handleSwitchBranch(name);
+}
+
+/** Palette → commit select: jump to the history view focused on that commit. */
+function onPaletteSelectCommit(hash: string) {
+  selectCommit(hash);
+  viewMode.value = "history";
+}
+
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
 
@@ -694,10 +908,11 @@ function onFolderPickerCancel() {
 function onKeyDown(e: KeyboardEvent) {
   if (showFolderPicker.value) return;
   const mod = e.metaKey || e.ctrlKey;
-  if (mod && e.key === "k") {
-    e.preventDefault();
-    handleOpenFolder();
-  } else if (mod && e.key === "t") {
+  // NOTE: Cmd/Ctrl+K is intentionally NOT bound here — it's reserved for
+  // the command palette (SearchTrigger owns that shortcut). Open-folder
+  // is reachable via Cmd+T (new tab) below, which matches the browser
+  // "new tab" convention users already know.
+  if (mod && e.key === "t") {
     // Cmd+T — new tab (open folder picker)
     e.preventDefault();
     handleOpenFolder();
@@ -778,14 +993,6 @@ onUnmounted(() => {
 
 <template>
   <div class="app">
-    <RepoTabBar
-      :tabs="repoTabs"
-      :active-tab-id="activeTabId"
-      @switch-tab="switchTab"
-      @close-tab="closeTab"
-      @new-tab="handleOpenFolder"
-    />
-
     <AppHeader
       :has-files="hasFiles"
       :theme="theme"
@@ -800,26 +1007,40 @@ onUnmounted(() => {
       :behind-count="behindCount"
       :is-pushing="isPushing"
       :is-pulling="isPulling"
+      :is-fetching="isFetching"
       :cwd="repoFolderPath ?? ''"
       :branches="branches"
       :branches-loading="branchesLoading"
       :is-switching-branch="isSwitchingBranch"
       :is-merging="isMerging"
+      :tabs="repoTabs"
+      :active-tab-id="activeTabId"
       @open-folder="handleOpenFolder"
       @open-repo="handleOpenPath"
+      @switch-tab="switchTab"
+      @close-tab="closeTab"
+      @new-tab="handleOpenFolder"
       @toggle-theme="toggleTheme"
       @push="doPush"
       @pull="() => doPull(pullMode === 'rebase')"
+      @fetch="doFetch"
+      @sync="doSync"
+      @publish="doPublish"
+      @rebase-onto-remote="doRebaseOntoRemote"
+      @merge-remote="doMergeRemote"
       @merge-branch="doMerge"
       @open-settings="showSettings = true"
       @switch-branch="handleSwitchBranch"
       @create-branch="createBranch"
       @delete-branch="deleteBranch"
+      @open-rename-modal="showBranchRenameModal = true"
+      @open-delete-modal="showBranchDeleteModal = true"
       @load-branches="loadBranches"
       @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true"
+      @open-search="handleOpenSearch"
     />
 
     <div class="app-body">
@@ -1144,6 +1365,37 @@ onUnmounted(() => {
       @update:pull-mode="onPullModeChange"
       @update:font-size="onFontSizeChange"
       @update:tab-size="onTabSizeChange"
+    />
+
+    <!-- Command palette (Cmd/Ctrl+K) — teleports to body, so position
+         in the template tree is cosmetic. Mounted conditionally so the
+         input gets fresh autofocus each time it opens. -->
+    <SearchPalette
+      v-if="showSearchPalette"
+      :branches="branches"
+      :commits="repoLog"
+      :actions="paletteActions"
+      @close="showSearchPalette = false"
+      @switch-branch="onPaletteSwitchBranch"
+      @select-commit="onPaletteSelectCommit"
+      @run-action="onPaletteAction"
+    />
+
+    <!-- Rename / Delete-branch modals, raised from BranchMenu.
+         Both teleport to body and guard against `branchDisplay` going
+         null between open + confirm (the :current-branch / :branch-name
+         binding is non-null because we only mount when showing). -->
+    <BranchRenameModal
+      v-if="showBranchRenameModal && branchDisplay"
+      :current-branch="branchDisplay"
+      @close="showBranchRenameModal = false"
+      @confirm="onBranchRenameConfirm"
+    />
+    <BranchDeleteModal
+      v-if="showBranchDeleteModal && branchDisplay"
+      :branch-name="branchDisplay"
+      @close="showBranchDeleteModal = false"
+      @confirm="onBranchDeleteConfirm"
     />
   </div>
 </template>

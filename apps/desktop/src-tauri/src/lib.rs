@@ -2014,6 +2014,20 @@ fn git_delete_branch(cwd: String, name: String, force: bool) -> Result<(), Strin
     Ok(())
 }
 
+#[tauri::command]
+fn git_rename_branch(cwd: String, old_name: String, new_name: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["branch", "-m", &old_name, &new_name])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to rename branch: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git branch -m failed: {}", stderr));
+    }
+    Ok(())
+}
+
 // ─── Git stash ────────────────────────────────────────────
 
 #[tauri::command]
@@ -4241,6 +4255,7 @@ pub fn run() {
             git_create_branch,
             git_switch_branch,
             git_delete_branch,
+            git_rename_branch,
             git_stash,
             git_stash_pop,
             open_in_editor,

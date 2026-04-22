@@ -77,6 +77,58 @@ const ptBR: Locale = {
     mergeAborted: "Merge abortado",
     resolveConflicts: "resolva os conflitos para continuar",
     abortMerge: "Abortar merge",
+    // Search trigger
+    searchTooltip: "Buscar (\u2318K)",
+    searchAriaLabel: "Abrir busca",
+    searchInputPlaceholder: "Buscar um branch, um commit, uma a\u00e7\u00e3o\u2026",
+    // Paleta de comandos
+    paletteSectionBranches: "Branches",
+    paletteSectionCommits: "Commits recentes",
+    paletteSectionActions: "A\u00e7\u00f5es",
+    paletteNoResults: "Sem resultados",
+    paletteNewTab: "Nova aba",
+    paletteFetch: "Fetch",
+    paletteViewDashboard: "Vis\u00e3o: Painel",
+    paletteViewChanges: "Vis\u00e3o: Altera\u00e7\u00f5es",
+    paletteViewLog: "Vis\u00e3o: Hist\u00f3rico",
+    paletteViewGraph: "Vis\u00e3o: Gr\u00e1fico",
+  },
+
+  // ─── Sync split button (header primary action) ─────────
+  syncAction: {
+    sync: "Sync",
+    pushN: "Pushear {0} commits",
+    pushOne: "Pushear 1 commit",
+    pullN: "Pullear {0} commits",
+    pullOne: "Pullear 1 commit",
+    publish: "Publicar branch",
+    fetch: "Fetch",
+    rebaseOntoRemote: "Rebase sobre o remoto",
+    mergeRemote: "Merge do remoto",
+    upToDate: "Atualizado",
+    tooltipClean: "Atualizado \u2014 clique para fetch",
+    tooltipDiverged: "Divergência \u2014 escolha como integrar",
+  },
+
+  // ─── Branch menu (header dropdown) ─────────────────────
+  branchMenu: {
+    title: "Branch",
+    mergeInto: "Merge na atual\u2026",
+    rebaseOnto: "Rebase da atual sobre\u2026",
+    rename: "Renomear branch\u2026",
+    deleteLabel: "Excluir branch\u2026",
+    rewind: "Retroceder\u2026",
+    advanced: "Avan\u00e7ado",
+    renamePromptTitle: "Renomear branch",
+    renamePromptLabel: "Novo nome para \u00ab {0} \u00bb",
+    renamePlaceholder: "novo-nome-de-branch",
+    renameModalConfirm: "Renomear",
+    deleteConfirm: "Excluir a branch \u00ab {0} \u00bb?",
+    deleteModalTitle: "Excluir branch",
+    deleteModalWarning: "A branch local \u00ab {0} \u00bb ser\u00e1 exclu\u00edda permanentemente. Commits que n\u00e3o estiverem em outra branch ou enviados a um remote ser\u00e3o perdidos.",
+    deleteModalGuardLabel: "Digite o nome da branch para confirmar",
+    deleteModalGuardPlaceholder: "Digite \u00ab {0} \u00bb",
+    deleteModalConfirm: "Excluir branch",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────

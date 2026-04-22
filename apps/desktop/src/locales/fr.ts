@@ -70,6 +70,58 @@ const fr: Locale = {
     mergeAborted: "Merge annul\u00e9",
     resolveConflicts: "r\u00e9solvez les conflits pour continuer",
     abortMerge: "Annuler le merge",
+    // Search trigger
+    searchTooltip: "Rechercher (\u2318K)",
+    searchAriaLabel: "Ouvrir la recherche",
+    searchInputPlaceholder: "Chercher une branche, un commit, une action\u2026",
+    // Palette de commandes
+    paletteSectionBranches: "Branches",
+    paletteSectionCommits: "Commits r\u00e9cents",
+    paletteSectionActions: "Actions",
+    paletteNoResults: "Aucun r\u00e9sultat",
+    paletteNewTab: "Nouvel onglet",
+    paletteFetch: "Fetch",
+    paletteViewDashboard: "Vue\u00a0: Tableau de bord",
+    paletteViewChanges: "Vue\u00a0: Modifications",
+    paletteViewLog: "Vue\u00a0: Historique",
+    paletteViewGraph: "Vue\u00a0: Graphe",
+  },
+
+  // ─── Sync split button (header primary action) ─────────
+  syncAction: {
+    sync: "Sync",
+    pushN: "Pusher {0} commits",
+    pushOne: "Pusher 1 commit",
+    pullN: "Puller {0} commits",
+    pullOne: "Puller 1 commit",
+    publish: "Publier la branche",
+    fetch: "Fetch",
+    rebaseOntoRemote: "Rebase sur la remote",
+    mergeRemote: "Merger la remote",
+    upToDate: "\u00c0 jour",
+    tooltipClean: "\u00c0 jour \u2014 cliquer pour fetch",
+    tooltipDiverged: "Divergence \u2014 choisir la strat\u00e9gie d\u2019int\u00e9gration",
+  },
+
+  // ─── Branch menu (header dropdown) ─────────────────────
+  branchMenu: {
+    title: "Branche",
+    mergeInto: "Merger dans la courante\u2026",
+    rebaseOnto: "Rebase la courante sur\u2026",
+    rename: "Renommer la branche\u2026",
+    deleteLabel: "Supprimer la branche\u2026",
+    rewind: "Rembobiner\u2026",
+    advanced: "Avanc\u00e9",
+    renamePromptTitle: "Renommer la branche",
+    renamePromptLabel: "Nouveau nom pour \u00ab {0} \u00bb",
+    renamePlaceholder: "nouveau-nom-de-branche",
+    renameModalConfirm: "Renommer",
+    deleteConfirm: "Supprimer la branche \u00ab {0} \u00bb ?",
+    deleteModalTitle: "Supprimer la branche",
+    deleteModalWarning: "La branche locale \u00ab {0} \u00bb sera supprim\u00e9e d\u00e9finitivement. Les commits qui ne sont pas sur une autre branche ou pouss\u00e9s sur un remote seront perdus.",
+    deleteModalGuardLabel: "Tapez le nom de la branche pour confirmer",
+    deleteModalGuardPlaceholder: "Tapez \u00ab {0} \u00bb",
+    deleteModalConfirm: "Supprimer la branche",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────

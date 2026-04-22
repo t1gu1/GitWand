@@ -76,6 +76,58 @@ const es: Locale = {
     mergeAborted: "Merge abortado",
     resolveConflicts: "resuelve los conflictos para continuar",
     abortMerge: "Abortar merge",
+    // Search trigger
+    searchTooltip: "Buscar (\u2318K)",
+    searchAriaLabel: "Abrir b\u00fasqueda",
+    searchInputPlaceholder: "Buscar una rama, un commit, una acci\u00f3n\u2026",
+    // Paleta de comandos
+    paletteSectionBranches: "Ramas",
+    paletteSectionCommits: "Commits recientes",
+    paletteSectionActions: "Acciones",
+    paletteNoResults: "Sin resultados",
+    paletteNewTab: "Nueva pesta\u00f1a",
+    paletteFetch: "Fetch",
+    paletteViewDashboard: "Vista: Panel",
+    paletteViewChanges: "Vista: Cambios",
+    paletteViewLog: "Vista: Historial",
+    paletteViewGraph: "Vista: Gr\u00e1fico",
+  },
+
+  // ─── Sync split button (header primary action) ─────────
+  syncAction: {
+    sync: "Sync",
+    pushN: "Pushear {0} commits",
+    pushOne: "Pushear 1 commit",
+    pullN: "Pullear {0} commits",
+    pullOne: "Pullear 1 commit",
+    publish: "Publicar rama",
+    fetch: "Fetch",
+    rebaseOntoRemote: "Rebase sobre el remoto",
+    mergeRemote: "Merge del remoto",
+    upToDate: "Actualizado",
+    tooltipClean: "Actualizado \u2014 clic para fetch",
+    tooltipDiverged: "Divergencia \u2014 elige c\u00f3mo integrar",
+  },
+
+  // ─── Branch menu (header dropdown) ─────────────────────
+  branchMenu: {
+    title: "Rama",
+    mergeInto: "Merge en la actual\u2026",
+    rebaseOnto: "Rebase de la actual sobre\u2026",
+    rename: "Renombrar rama\u2026",
+    deleteLabel: "Eliminar rama\u2026",
+    rewind: "Rebobinar\u2026",
+    advanced: "Avanzado",
+    renamePromptTitle: "Renombrar rama",
+    renamePromptLabel: "Nuevo nombre para \u00ab {0} \u00bb",
+    renamePlaceholder: "nuevo-nombre-de-rama",
+    renameModalConfirm: "Renombrar",
+    deleteConfirm: "\u00bfEliminar la rama \u00ab {0} \u00bb?",
+    deleteModalTitle: "Eliminar rama",
+    deleteModalWarning: "La rama local \u00ab {0} \u00bb se eliminar\u00e1 de forma permanente. Los commits que no est\u00e9n en otra rama o enviados a un remote se perder\u00e1n.",
+    deleteModalGuardLabel: "Escribe el nombre de la rama para confirmar",
+    deleteModalGuardPlaceholder: "Escribe \u00ab {0} \u00bb",
+    deleteModalConfirm: "Eliminar rama",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────

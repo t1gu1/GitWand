@@ -331,6 +331,29 @@ button:focus-visible,
 }
 .btn--secondary:hover:not(:disabled) { background: var(--color-border); }
 
+/*
+ * `.btn--sync` — header's state-aware primary CTA (SyncSplitButton,
+ * BranchMenu trigger). Global on purpose: both components live inside
+ * their own scoped-CSS bubbles, so a scoped rule in AppHeader wouldn't
+ * reach their inner <button> elements (Vue only propagates the parent's
+ * scope hash to a child component's *root* node, not to its descendants).
+ *
+ * Filled accent by default so "À jour" reads as primary, matching the
+ * visual hierarchy we want in the header. `.btn--sync-active` is kept
+ * as a no-op hook in case we later want a louder "work pending" variant.
+ */
+.btn--sync {
+  position: relative;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+.btn--sync:hover:not(:disabled) { background: var(--color-accent-hover); }
+
+.btn--sync-active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
 .btn--ghost {
   background: transparent;
   color: var(--color-text-muted);

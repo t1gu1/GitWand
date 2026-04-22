@@ -76,6 +76,58 @@ const en = {
     mergeAborted: "Merge aborted",
     resolveConflicts: "resolve conflicts to continue",
     abortMerge: "Abort merge",
+    // Search trigger
+    searchTooltip: "Search (\u2318K)",
+    searchAriaLabel: "Open search",
+    searchInputPlaceholder: "Search a branch, a commit, an action\u2026",
+    // Command palette
+    paletteSectionBranches: "Branches",
+    paletteSectionCommits: "Recent commits",
+    paletteSectionActions: "Actions",
+    paletteNoResults: "No results",
+    paletteNewTab: "New tab",
+    paletteFetch: "Fetch",
+    paletteViewDashboard: "View: Dashboard",
+    paletteViewChanges: "View: Changes",
+    paletteViewLog: "View: Log",
+    paletteViewGraph: "View: Graph",
+  },
+
+  // ─── Sync split button (header primary action) ─────────
+  syncAction: {
+    sync: "Sync",
+    pushN: "Push {0} commits",
+    pushOne: "Push 1 commit",
+    pullN: "Pull {0} commits",
+    pullOne: "Pull 1 commit",
+    publish: "Publish branch",
+    fetch: "Fetch",
+    rebaseOntoRemote: "Rebase onto remote",
+    mergeRemote: "Merge remote",
+    upToDate: "Up to date",
+    tooltipClean: "Up to date \u2014 click to fetch",
+    tooltipDiverged: "Diverged \u2014 choose how to integrate",
+  },
+
+  // ─── Branch menu (header dropdown) ─────────────────────
+  branchMenu: {
+    title: "Branch",
+    mergeInto: "Merge into current\u2026",
+    rebaseOnto: "Rebase current onto\u2026",
+    rename: "Rename branch\u2026",
+    deleteLabel: "Delete branch\u2026",
+    rewind: "Rewind\u2026",
+    advanced: "Advanced",
+    renamePromptTitle: "Rename branch",
+    renamePromptLabel: "New name for \u00ab {0} \u00bb",
+    renamePlaceholder: "new-branch-name",
+    renameModalConfirm: "Rename",
+    deleteConfirm: "Delete branch \u00ab {0} \u00bb?",
+    deleteModalTitle: "Delete branch",
+    deleteModalWarning: "This will permanently delete the local branch \u00ab {0} \u00bb. Any commits not on another branch or pushed to a remote will be lost.",
+    deleteModalGuardLabel: "Type the branch name to confirm",
+    deleteModalGuardPlaceholder: "Type \u00ab {0} \u00bb",
+    deleteModalConfirm: "Delete branch",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────
