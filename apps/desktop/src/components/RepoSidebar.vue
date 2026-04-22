@@ -1263,7 +1263,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 /*
- * Split-button: main ✨ action + dropdown chevron for alternative AI
+ * Split-button: main sparkle action + dropdown chevron for alternative AI
  * actions. We keep the split because the chevron opens a menu — the
  * global `.btn--ai` can't represent that affordance on its own. Color
  * comes from the shared `--color-ai` token so it still reads as "AI"

@@ -893,11 +893,24 @@ const ptBR: Locale = {
 
   // ─── Stash manager ──────────────────────────────────────
   stash: {
+    title: "Gerenciador de stash",
     composerPlaceholder: "Mensagem opcional — deixe em branco para o rótulo padrão",
     aiSuggestTooltip: "Sugerir uma mensagem com IA",
     aiButton: "IA",
     createButton: "Stash",
     cancelButton: "Cancelar",
+    createButtonShort: "+ Stash",
+    popButton: "Pop",
+    createTooltip: "Stash de todas as mudanças",
+    popTooltip: "Recuperar o stash mais recente",
+    apply: "Aplicar",
+    applyTooltip: "Aplicar (manter stash)",
+    drop: "Descartar",
+    dropTooltip: "Descartar stash",
+    loading: "Carregando stashes…",
+    empty: "Sem stashes. Use",
+    emptyAction: "+ Stash",
+    emptySuffix: "para salvar suas mudanças atuais.",
   },
 
   // ─── File history + blame AI ────────────────────────────

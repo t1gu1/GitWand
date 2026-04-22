@@ -880,11 +880,24 @@ const zhCN: Locale = {
 
   // ─── Stash manager ──────────────────────────────────────
   stash: {
+    title: "储藏管理器",
     composerPlaceholder: "可选留言 — 留空则使用默认标签",
     aiSuggestTooltip: "让 AI 建议一条留言",
     aiButton: "AI",
     createButton: "储藏",
     cancelButton: "取消",
+    createButtonShort: "+ 储藏",
+    popButton: "弹出",
+    createTooltip: "储藏所有修改",
+    popTooltip: "弹出最近的储藏",
+    apply: "应用",
+    applyTooltip: "应用（保留储藏）",
+    drop: "删除",
+    dropTooltip: "删除储藏",
+    loading: "加载储藏…",
+    empty: "暂无储藏。使用",
+    emptyAction: "+ 储藏",
+    emptySuffix: "保存当前修改。",
   },
 
   // ─── File history + blame AI ────────────────────────────

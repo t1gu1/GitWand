@@ -12,6 +12,8 @@ import {
 import { useStashMessage } from "../composables/useStashMessage";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useI18n } from "../composables/useI18n";
+import BaseModal from "./BaseModal.vue";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   cwd: string;
@@ -43,10 +45,6 @@ async function loadStashes() {
     stashes.value = await gitStashList(props.cwd);
   } catch (err: any) {
     const msg = String(err?.message ?? err);
-    // "Failed to list stashes: 404" means the dev-server endpoint is
-    // not registered (older dev-server version). There are no stashes
-    // to show, so treat it as an empty list instead of surfacing the
-    // error — real failures (500 / offline) will still surface.
     if (/stash.*:\s*404/i.test(msg)) {
       stashes.value = [];
     } else {
@@ -157,35 +155,65 @@ watch(() => props.cwd, loadStashes);
 </script>
 
 <template>
-  <div class="stash-manager">
-    <div class="stash-header">
-      <h3>📦 Stash Manager</h3>
-      <div class="stash-actions">
+  <BaseModal
+    size="lg"
+    :title="t('stash.title')"
+    @close="emit('close')"
+  >
+    <template #title-icon>
+      <span class="sm-title-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M3 7l9-4 9 4-9 4-9-4z"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M3 12l9 4 9-4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M3 17l9 4 9-4"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+    </template>
+
+    <template #header-actions>
+      <div class="sm-header-actions">
         <button
-          class="btn btn-sm btn-primary"
+          class="bm-btn bm-btn--primary sm-btn-sm"
           @click="openComposer"
           :disabled="composerOpen"
-          title="Stash all changes"
+          :title="t('stash.createTooltip')"
         >
-          + Stash
+          {{ t('stash.createButtonShort') }}
         </button>
         <button
-          class="btn btn-sm"
+          class="bm-btn bm-btn--ghost sm-btn-sm"
           @click="popStash"
           :disabled="stashes.length === 0"
-          title="Pop most recent stash"
+          :title="t('stash.popTooltip')"
         >
-          Pop
+          {{ t('stash.popButton') }}
         </button>
-        <button class="btn btn-sm btn-ghost" @click="$emit('close')" title="Close">✕</button>
       </div>
-    </div>
+    </template>
 
-    <div v-if="composerOpen" class="stash-composer">
+    <div v-if="composerOpen" class="sm-composer">
       <input
         v-model="stashMessage"
         type="text"
-        class="stash-composer-input"
+        class="sm-composer-input"
         :placeholder="t('stash.composerPlaceholder')"
         maxlength="120"
         @keydown.enter.prevent="createStash"
@@ -193,229 +221,224 @@ watch(() => props.cwd, loadStashes);
       />
       <button
         v-if="ai.isAvailable.value"
-        class="btn btn--ai btn--ai-solid btn-composer"
+        class="sm-btn sm-btn--ai"
         :disabled="isGeneratingMessage"
         @click="suggestMessage"
         :title="t('stash.aiSuggestTooltip')"
       >
         <span v-if="isGeneratingMessage">…</span>
-        <span v-else>✨ {{ t('stash.aiButton') }}</span>
+        <span v-else class="sm-ai-label">
+          <AiSparkle :size="13" />
+          {{ t('stash.aiButton') }}
+        </span>
       </button>
-      <button class="btn btn-composer btn-primary" @click="createStash">
+      <button class="bm-btn bm-btn--primary sm-btn-inline" @click="createStash">
         {{ t('stash.createButton') }}
       </button>
-      <button class="btn btn-composer btn-outline" @click="closeComposer">
+      <button class="bm-btn bm-btn--ghost sm-btn-inline" @click="closeComposer">
         {{ t('stash.cancelButton') }}
       </button>
     </div>
 
-    <div v-if="error" class="stash-error">{{ error }}</div>
+    <div v-if="error" class="sm-error">{{ error }}</div>
 
-    <div v-if="loading" class="stash-loading">Loading stashes…</div>
+    <div v-if="loading" class="sm-loading">{{ t('stash.loading') }}</div>
 
-    <div v-else-if="stashes.length === 0" class="stash-empty">
-      No stashes. Use <strong>+ Stash</strong> to save your current changes.
+    <div v-else-if="stashes.length === 0 && !composerOpen" class="sm-empty">
+      {{ t('stash.empty') }} <strong>{{ t('stash.emptyAction') }}</strong> {{ t('stash.emptySuffix') }}
     </div>
 
-    <div v-else class="stash-list">
+    <div v-else-if="stashes.length > 0" class="sm-list">
       <div
         v-for="stash in stashes"
         :key="stash.index"
-        class="stash-item"
-        :class="{ expanded: expandedIndex === stash.index }"
+        class="sm-item"
+        :class="{ 'sm-item--expanded': expandedIndex === stash.index }"
       >
-        <div class="stash-item-header" @click="toggleDiff(stash.index)">
-          <span class="stash-index">{{ stash.index }}</span>
-          <div class="stash-info">
-            <span class="stash-message">{{ stash.message }}</span>
-            <span class="stash-meta">
-              <span v-if="stash.branch" class="stash-branch">{{ stash.branch }}</span>
-              <span class="stash-date">{{ formatDate(stash.date) }}</span>
+        <div class="sm-item-header" @click="toggleDiff(stash.index)">
+          <span class="sm-index">{{ stash.index }}</span>
+          <div class="sm-info">
+            <span class="sm-message">{{ stash.message }}</span>
+            <span class="sm-meta">
+              <span v-if="stash.branch" class="sm-branch">{{ stash.branch }}</span>
+              <span class="sm-date">{{ formatDate(stash.date) }}</span>
             </span>
           </div>
-          <div class="stash-item-actions" @click.stop>
+          <div class="sm-item-actions" @click.stop>
             <button
-              class="btn btn-xs"
+              class="sm-btn-xs"
               @click="applyStash(stash.index)"
-              title="Apply (keep stash)"
+              :title="t('stash.applyTooltip')"
             >
-              Apply
+              {{ t('stash.apply') }}
             </button>
             <button
-              class="btn btn-xs btn-danger"
+              class="sm-btn-xs sm-btn-xs--danger"
               @click="dropStash(stash.index)"
-              title="Drop stash"
+              :title="t('stash.dropTooltip')"
             >
-              Drop
+              {{ t('stash.drop') }}
             </button>
           </div>
         </div>
-        <div v-if="expandedIndex === stash.index && expandedDiff" class="stash-diff">
+        <div v-if="expandedIndex === stash.index && expandedDiff" class="sm-diff">
           <pre>{{ expandedDiff }}</pre>
         </div>
       </div>
     </div>
-  </div>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* Full-height modal card. The outer .stash-overlay (in App.vue) handles
-   the backdrop; here we only style the card itself. */
-.stash-manager {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-  max-height: inherit;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.35));
-  overflow: hidden;
-}
-
-.stash-header {
-  display: flex;
+.sm-title-icon {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg);
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.14));
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
-.stash-header h3 {
-  margin: 0;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-
-.stash-actions {
-  display: flex;
-  gap: 6px;
+.sm-header-actions {
+  display: inline-flex;
+  gap: var(--space-2);
   align-items: center;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.sm-btn-sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  height: 32px;
 }
 
 /* ── Composer ─────────────────────────────────────────── */
-/*
- * Rule of thumb here: the input and every sibling button share the
- * SAME box dimensions (36 px height, identical padding) so the row
- * stays visually aligned no matter the locale / label length.
- */
-.stash-composer {
+.sm-composer {
   display: flex;
   align-items: stretch;
-  gap: 8px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
 }
 
-.stash-composer-input {
+.sm-composer-input {
   flex: 1;
   min-width: 0;
   height: 36px;
-  background: var(--color-bg);
+  background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--color-text);
   font-size: var(--font-size-md);
-  padding: 0 12px;
+  padding: 0 var(--space-5);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.stash-composer-input:focus {
+.sm-composer-input:focus {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
-/*
- * Scoped sizing override for the composer row. The generic `.btn`
- * from main.css carries 6×12 padding; we need 36px high + matching
- * horizontal padding so the input + three buttons align pixel-perfect.
- * Double-class selector (.btn.btn-composer) raises specificity above
- * the global `.btn { padding }` so the override actually lands.
- */
-.btn.btn-composer {
-  height: 36px;
-  min-height: 36px;
-  padding: 0 14px;
+.sm-btn-inline {
+  padding: var(--space-2) var(--space-5);
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
 }
 
-/* Outline variant for the Cancel action — keeps the same footprint
-   as the primary button so the row stays symmetric. */
-.btn-outline {
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
+.sm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
-.btn-outline:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-text-muted);
+.sm-btn--ai {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border: 1px solid var(--color-accent);
+}
+.sm-btn--ai:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+.sm-btn--ai:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sm-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 /* ── Error / empty states ─────────────────────────────── */
-.stash-error {
-  margin: 12px 18px 0;
-  padding: 8px 12px;
+.sm-error {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
   background: var(--color-danger-soft);
   border: 1px solid var(--color-danger);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
-.stash-loading,
-.stash-empty {
-  padding: 32px 24px;
+.sm-loading,
+.sm-empty {
+  padding: var(--space-9) var(--space-6);
   font-size: var(--font-size-md);
   color: var(--color-text-muted);
   text-align: center;
 }
 
-.stash-empty strong {
+.sm-empty strong {
   color: var(--color-text);
 }
 
 /* ── List ─────────────────────────────────────────────── */
-.stash-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 14px 14px;
+.sm-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
-.stash-item {
-  border-radius: var(--radius-sm);
+.sm-item {
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   overflow: hidden;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.stash-item:hover,
-.stash-item.expanded {
+.sm-item:hover,
+.sm-item--expanded {
   border-color: var(--color-accent);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
-.stash-item-header {
+.sm-item-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
   cursor: pointer;
 }
 
-.stash-index {
+.sm-index {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
   color: var(--color-accent);
@@ -425,12 +448,12 @@ watch(() => props.cwd, loadStashes);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-3);
   font-variant-numeric: tabular-nums;
 }
 
-.stash-info {
+.sm-info {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -438,7 +461,7 @@ watch(() => props.cwd, loadStashes);
   gap: 2px;
 }
 
-.stash-message {
+.sm-message {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   color: var(--color-text);
@@ -447,125 +470,62 @@ watch(() => props.cwd, loadStashes);
   text-overflow: ellipsis;
 }
 
-.stash-meta {
+.sm-meta {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   display: flex;
-  gap: 10px;
+  gap: var(--space-4);
 }
 
-.stash-branch {
+.sm-branch {
   color: var(--color-accent);
   font-family: var(--font-mono, "JetBrains Mono", monospace);
 }
 
-.stash-item-actions {
+.sm-item-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
-.stash-diff {
+.sm-btn-xs {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.sm-btn-xs:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+}
+
+.sm-btn-xs--danger:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
+}
+
+.sm-diff {
   border-top: 1px solid var(--color-border);
-  padding: 10px 12px;
+  padding: var(--space-4) var(--space-5);
   background: var(--color-bg-secondary);
   max-height: 240px;
   overflow: auto;
 }
 
-.stash-diff pre {
+.sm-diff pre {
   margin: 0;
   font-size: var(--font-size-xs);
   font-family: var(--font-mono, "JetBrains Mono", "Fira Code", monospace);
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.5;
-}
-
-/* ── Buttons (scoped, deterministic) ─────────────────── */
-/*
- * Each variant owns every property it needs at rest AND on hover.
- * We never rely on a base `.btn:hover` to set a property later
- * overridden by a variant — that's what was making
- * `.btn-primary:hover` invisible in the previous iteration.
- */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg);
-  color: var(--color-text);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  padding: 6px 12px;
-  transition: background var(--transition-fast), color var(--transition-fast),
-    border-color var(--transition-fast), filter var(--transition-fast);
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: var(--color-accent);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-sm { padding: 5px 12px; font-size: var(--font-size-sm); }
-.btn-xs { padding: 3px 8px; font-size: var(--font-size-xs); }
-
-/* Primary — accent background stays on hover (was broken before
-   because the generic .btn:hover was overriding background). */
-.btn-primary {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-color: var(--color-accent);
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-text);
-  filter: brightness(1.08);
-}
-
-/* AI button */
-.btn-ai {
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
-  border-color: var(--color-accent);
-}
-.btn-ai:hover:not(:disabled) {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-color: var(--color-accent);
-}
-
-/* Danger */
-.btn-danger {
-  background: var(--color-bg);
-  color: var(--color-text);
-  border-color: var(--color-border);
-}
-.btn-danger:hover:not(:disabled) {
-  background: var(--color-danger);
-  color: var(--color-accent-text);
-  border-color: var(--color-danger);
-}
-
-/* Ghost (close button, cancel) */
-.btn-ghost {
-  background: transparent;
-  color: var(--color-text-muted);
-  border-color: transparent;
-}
-.btn-ghost:hover:not(:disabled) {
-  background: var(--color-bg-hover);
-  border-color: transparent;
-  color: var(--color-text);
 }
 </style>

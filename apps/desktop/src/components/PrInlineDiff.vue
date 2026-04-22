@@ -12,6 +12,7 @@
 import { ref, computed } from "vue";
 import type { GitDiff, DiffLine, PrReviewComment } from "../utils/backend";
 import PrCommentThread from "./PrCommentThread.vue";
+import AiSparkle from "./AiSparkle.vue";
 import { detectLanguage, highlightLine } from "../utils/highlight";
 import { safeHtml } from "../composables/useSafeHtml";
 import { useAIProvider } from "../composables/useAIProvider";
@@ -262,7 +263,10 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
             @click="requestHunkCritique(hunkIdx)"
           >
             <span v-if="critiqueLoadingIdx === hunkIdx">…</span>
-            <span v-else>✨ {{ t('prInline.aiCritiqueButton') }}</span>
+            <span v-else class="pid-ai-label">
+              <AiSparkle :size="13" />
+              {{ t('prInline.aiCritiqueButton') }}
+            </span>
           </button>
         </div>
 
@@ -275,7 +279,8 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
           aria-live="polite"
         >
           <span class="pid-critique-icon">
-            {{ critiqueResults[hunkIdx] ? verdictIcon(critiqueResults[hunkIdx]!.verdict) : '✨' }}
+            <template v-if="critiqueResults[hunkIdx]">{{ verdictIcon(critiqueResults[hunkIdx]!.verdict) }}</template>
+            <AiSparkle v-else :size="14" />
           </span>
           <span class="pid-critique-body">
             <span v-if="critiqueAiError && !critiqueResults[hunkIdx]" class="pid-critique-error">{{ critiqueAiError }}</span>
@@ -444,6 +449,11 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
 .pid-hunk-ai--active {
   background: var(--color-ai);
   color: var(--color-ai-text);
+}
+.pid-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 /* ── Critique panel ────────────────────────────────── */

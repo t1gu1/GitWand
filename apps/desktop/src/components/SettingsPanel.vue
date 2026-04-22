@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useTheme } from "../composables/useTheme";
+import BaseModal from "./BaseModal.vue";
 import {
   localeLabels,
   supportedLocales,
@@ -350,25 +351,29 @@ onMounted(() => {
   runClaudeCliDetect();
 });
 
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
-}
 </script>
 
 <template>
-  <div class="settings-overlay" @click.self="emit('close')" @keydown="onKeyDown">
-    <div class="settings-panel" role="dialog" :aria-label="t('settings.title')">
-      <!-- Header -->
-      <div class="sp-header">
-        <h2 class="sp-title">{{ t('settings.title') }}</h2>
-        <button class="sp-close" @click="emit('close')" :aria-label="t('common.close')">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
-        </button>
-      </div>
+  <BaseModal
+    size="md"
+    :title="t('settings.title')"
+    @close="emit('close')"
+  >
+    <template #title-icon>
+      <span class="sp-title-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+    </template>
 
-      <!-- Tab navigation -->
+    <template #toolbar>
       <div class="sp-tabs">
         <button
           v-for="tab in settingsTabs"
@@ -396,11 +401,12 @@ function onKeyDown(e: KeyboardEvent) {
           <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : t('settings.tabAi') }}</span>
         </button>
       </div>
+    </template>
 
-      <!-- Tab content -->
-      <div class="sp-body">
+    <!-- Tab content -->
+    <div class="sp-body">
 
-        <!-- ═══ GÉNÉRAL ═══ -->
+      <!-- ═══ GÉNÉRAL ═══ -->
         <template v-if="activeSettingsTab === 'general'">
           <!-- Interface language -->
           <div class="sp-row">
@@ -601,7 +607,7 @@ function onKeyDown(e: KeyboardEvent) {
             <template v-if="settings.aiProvider === 'claude'">
               <!-- Auth mode selector -->
               <div class="sp-row">
-                <label class="sp-label">{{ t('settings.aiAuthLabel') }}</label>
+                <div class="sp-label">{{ t('settings.aiAuthLabel') }}</div>
                 <div class="sp-auth-toggle">
                   <button
                     :class="['sp-auth-btn', { 'sp-auth-btn--active': claudeAuthMode === 'connect' }]"
@@ -724,7 +730,7 @@ function onKeyDown(e: KeyboardEvent) {
             <!-- Claude Code CLI provider (piggyback on user's subscription) -->
             <template v-if="settings.aiProvider === 'claude-code-cli'">
               <div class="sp-row">
-                <label class="sp-label">{{ t('settings.aiCliStatus') }}</label>
+                <div class="sp-label">{{ t('settings.aiCliStatus') }}</div>
                 <div class="sp-cli-status">
                   <template v-if="claudeCliDetecting">
                     <span class="sp-hint">{{ t('settings.aiCliDetecting') }}</span>
@@ -874,75 +880,32 @@ function onKeyDown(e: KeyboardEvent) {
           </template>
         </template>
 
-      </div>
     </div>
-  </div>
+  </BaseModal>
 </template>
 
 <style scoped>
-.settings-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--color-overlay);
-  display: flex;
+.sp-title-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  backdrop-filter: blur(4px);
-}
-
-.settings-panel {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  width: min(520px, 90vw);
-  max-height: 85vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-xl);
-  animation: spSlideIn 0.2s ease-out;
-}
-
-@keyframes spSlideIn {
-  from { opacity: 0; transform: translateY(-10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.sp-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-6) var(--space-7) var(--space-5);
-}
-
-.sp-title {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  margin: 0;
-}
-
-.sp-close {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-}
-
-.sp-close:hover {
-  color: var(--color-text);
-  background: var(--color-bg-tertiary);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
 /* ─── Tab bar ──────────────────────────────────────────── */
+/* Sits inside BaseModal's #toolbar slot. Negative margin cancels the
+ * toolbar's own padding so the active-tab underline hugs the toolbar's
+ * bottom border, while we restore horizontal padding for the strip. */
 .sp-tabs {
   display: flex;
   gap: 0;
+  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-7));
   padding: 0 var(--space-7);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .sp-tab {

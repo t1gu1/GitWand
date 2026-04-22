@@ -904,11 +904,24 @@ const fr: Locale = {
 
   // ─── Stash manager ──────────────────────────────────────
   stash: {
+    title: "Gestionnaire de stash",
     composerPlaceholder: "Message optionnel \u2014 laisse vide pour le label par d\u00e9faut",
     aiSuggestTooltip: "Sugg\u00e9rer un message avec l'IA",
     aiButton: "IA",
     createButton: "Stasher",
     cancelButton: "Annuler",
+    createButtonShort: "+ Stash",
+    popButton: "Pop",
+    createTooltip: "Stasher tous les changements",
+    popTooltip: "Dépiler le stash le plus récent",
+    apply: "Appliquer",
+    applyTooltip: "Appliquer (conserver le stash)",
+    drop: "Supprimer",
+    dropTooltip: "Supprimer ce stash",
+    loading: "Chargement des stashes…",
+    empty: "Aucun stash. Utilisez",
+    emptyAction: "+ Stash",
+    emptySuffix: "pour enregistrer tes changements actuels.",
   },
 
   // ─── File history + blame AI ────────────────────────────

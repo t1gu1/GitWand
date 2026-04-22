@@ -892,11 +892,24 @@ const es: Locale = {
 
   // ─── Stash manager ──────────────────────────────────────
   stash: {
+    title: "Gestor de stash",
     composerPlaceholder: "Mensaje opcional — deja vacío para la etiqueta por defecto",
     aiSuggestTooltip: "Sugerir un mensaje con IA",
     aiButton: "IA",
     createButton: "Stash",
     cancelButton: "Cancelar",
+    createButtonShort: "+ Stash",
+    popButton: "Pop",
+    createTooltip: "Guardar todos los cambios",
+    popTooltip: "Recuperar el stash más reciente",
+    apply: "Aplicar",
+    applyTooltip: "Aplicar (conservar stash)",
+    drop: "Eliminar",
+    dropTooltip: "Eliminar stash",
+    loading: "Cargando stashes…",
+    empty: "No hay stashes. Usa",
+    emptyAction: "+ Stash",
+    emptySuffix: "para guardar tus cambios actuales.",
   },
 
   // ─── File history + blame AI ────────────────────────────

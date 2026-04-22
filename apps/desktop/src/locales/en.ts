@@ -919,11 +919,24 @@ const en = {
 
   // ─── Stash manager ──────────────────────────────────────
   stash: {
+    title: "Stash Manager",
     composerPlaceholder: "Optional message \u2014 leave empty for the default label",
     aiSuggestTooltip: "Suggest a message with AI",
     aiButton: "AI",
     createButton: "Stash",
     cancelButton: "Cancel",
+    createButtonShort: "+ Stash",
+    popButton: "Pop",
+    createTooltip: "Stash all changes",
+    popTooltip: "Pop most recent stash",
+    apply: "Apply",
+    applyTooltip: "Apply (keep stash)",
+    drop: "Drop",
+    dropTooltip: "Drop stash",
+    loading: "Loading stashes…",
+    empty: "No stashes. Use",
+    emptyAction: "+ Stash",
+    emptySuffix: "to save your current changes.",
   },
 
   // ─── File history + blame AI ────────────────────────────

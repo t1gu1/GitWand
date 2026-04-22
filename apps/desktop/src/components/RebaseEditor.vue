@@ -12,6 +12,8 @@ import { useSplitCommit } from "../composables/useSplitCommit";
 import { getGitBranches, type GitBranch } from "../utils/backend";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useSquashSuggestion, type SquashSuggestion } from "../composables/useSquashSuggestion";
+import BaseModal from "./BaseModal.vue";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   cwd: string;
@@ -305,45 +307,62 @@ function actionClass(action: RebaseAction): string {
 }
 
 // Close action menu on outside click
-function onPanelClick(e: MouseEvent) {
+function onBodyClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (!target.closest(".rb-action-dropdown")) {
     actionMenuIndex.value = null;
   }
 }
 
-// Keyboard shortcut: Escape to close
+// Keyboard shortcut: Escape handling (BaseModal already closes on Escape
+// when nothing else is active; we only intercept to cancel menu/reword first).
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
     if (actionMenuIndex.value !== null) {
+      e.stopPropagation();
       actionMenuIndex.value = null;
     } else if (editingIndex.value !== null) {
+      e.stopPropagation();
       cancelReword();
-    } else {
-      emit("close");
     }
+    // Otherwise let BaseModal handle the close.
   }
 }
-onMounted(() => window.addEventListener("keydown", onKeydown));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+onMounted(() => window.addEventListener("keydown", onKeydown, true));
+onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
+
+// Derived flags for slot gating.
+const inProgress = computed(() => !!rebase.progress.value?.inProgress);
+const hasTodo = computed(
+  () => rebase.todoEntries.value.length > 0 && !inProgress.value,
+);
 </script>
 
 <template>
-  <div class="rb-overlay" @click.self="emit('close')">
-    <div class="rb-panel" role="dialog" :aria-label="t('rebase.title')" @click="onPanelClick">
+  <BaseModal
+    size="lg"
+    :title="t('rebase.title')"
+    role="dialog"
+    body-flush
+    scroll-own
+    @close="emit('close')"
+  >
+    <template #title-icon>
+      <span class="rb-title-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="6" cy="5" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="6" cy="19" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="18" cy="12" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <path d="M6 7.2v9.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <path d="M8.2 5H13a3 3 0 0 1 3 3v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <path d="M8.2 19H13a3 3 0 0 0 3-3v-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+      </span>
+    </template>
 
-      <!-- Header -->
-      <div class="rb-header">
-        <h2 class="rb-title">{{ t('rebase.title') }}</h2>
-        <button class="rb-close" @click="emit('close')" :aria-label="t('common.close')">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
-        </button>
-      </div>
-
-      <!-- In-progress rebase banner -->
-      <div v-if="rebase.progress.value?.inProgress" class="rb-progress-banner">
+    <!-- ─── Toolbar: in-progress banner ───────────────────── -->
+    <template v-if="inProgress" #toolbar>
+      <div class="rb-progress-banner">
         <div class="rb-progress-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 1v6l4 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -352,49 +371,51 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
         </div>
         <div class="rb-progress-text">
           <strong>{{ t('rebase.inProgress') }}</strong>
-          <span v-if="rebase.progress.value.headName"> — {{ rebase.progress.value.headName }}</span>
-          <span v-if="rebase.progress.value.step"> ({{ rebase.progress.value.step }}/{{ rebase.progress.value.total }})</span>
+          <span v-if="rebase.progress.value?.headName"> — {{ rebase.progress.value.headName }}</span>
+          <span v-if="rebase.progress.value?.step"> ({{ rebase.progress.value.step }}/{{ rebase.progress.value.total }})</span>
         </div>
-        <div v-if="rebase.progress.value.hasConflict" class="rb-conflict-badge">
+        <div v-if="rebase.progress.value?.hasConflict" class="rb-conflict-badge">
           {{ t('rebase.conflict') }}
         </div>
       </div>
+    </template>
 
+    <!-- ─── Body ──────────────────────────────────────────── -->
+    <div class="rb-body" @click="onBodyClick">
+    <div class="rb-scroll">
       <!-- In-progress actions -->
-      <div v-if="rebase.progress.value?.inProgress" class="rb-progress-actions">
-        <!-- Split-at-halt: shown only when the current halted commit was originally
-             marked for `split`. Takes precedence over the Continue button so the
-             user knows the intended workflow. -->
+      <div v-if="inProgress" class="rb-progress-actions">
         <button
           v-if="pendingSplitAtHead"
-          class="rb-btn rb-btn--primary rb-btn--split"
+          class="bm-btn bm-btn--primary"
           @click="handleSplitAtHead"
           :disabled="rebase.isRunning.value || splitCommit.busy.value"
         >
           ✂️ {{ t('rebase.splitThisCommit') }}
         </button>
         <button
-          class="rb-btn"
-          :class="pendingSplitAtHead ? 'rb-btn--secondary' : 'rb-btn--primary'"
+          class="bm-btn"
+          :class="pendingSplitAtHead ? 'bm-btn--ghost' : 'bm-btn--primary'"
           @click="doContinue"
           :disabled="rebase.isRunning.value"
         >
           {{ t('rebase.continue') }}
         </button>
-        <button class="rb-btn rb-btn--secondary" @click="doSkip" :disabled="rebase.isRunning.value">
+        <button class="bm-btn bm-btn--ghost" @click="doSkip" :disabled="rebase.isRunning.value">
           {{ t('rebase.skip') }}
         </button>
-        <button class="rb-btn rb-btn--danger" @click="doAbort" :disabled="rebase.isRunning.value">
+        <button class="bm-btn bm-btn--danger" @click="doAbort" :disabled="rebase.isRunning.value">
           {{ t('rebase.abort') }}
         </button>
       </div>
 
       <!-- Base selection -->
-      <template v-if="showBasePicker && !rebase.progress.value?.inProgress">
+      <template v-if="showBasePicker && !inProgress">
         <div class="rb-section">
-          <label class="rb-label">{{ t('rebase.baseLabel') }}</label>
+          <label class="rb-label" for="rb-base-input">{{ t('rebase.baseLabel') }}</label>
           <p class="rb-hint">{{ t('rebase.baseHint') }}</p>
           <input
+            id="rb-base-input"
             class="rb-base-input mono"
             v-model="baseFilter"
             :placeholder="t('rebase.basePlaceholder')"
@@ -419,13 +440,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
       </template>
 
       <!-- Commit list (todo editor) -->
-      <template v-if="rebase.todoEntries.value.length > 0 && !rebase.progress.value?.inProgress">
+      <template v-if="hasTodo">
         <div class="rb-section">
           <div class="rb-section-header">
-            <label class="rb-label">
+            <div class="rb-label">
               {{ t('rebase.commitsLabel') }}
               <span class="rb-count">({{ rebase.todoEntries.value.length }})</span>
-            </label>
+            </div>
             <div class="rb-section-actions">
               <button
                 v-if="ai.isAvailable.value && rebase.todoEntries.value.length >= 2"
@@ -434,8 +455,14 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
                 :title="t('rebase.aiSquashHint')"
                 @click="handleSquashSuggest"
               >
-                <span v-if="isSuggestingSquash">… {{ t('rebase.aiSquashApplying') }}</span>
-                <span v-else>✨ {{ t('rebase.aiSquashSuggest') }}</span>
+                <span v-if="isSuggestingSquash" class="rb-ai-label">
+                  <span class="rb-ai-spinner" aria-hidden="true"></span>
+                  {{ t('rebase.aiSquashApplying') }}
+                </span>
+                <span v-else class="rb-ai-label">
+                  <AiSparkle :size="14" />
+                  {{ t('rebase.aiSquashSuggest') }}
+                </span>
               </button>
               <button class="rb-back-btn" @click="showBasePicker = true; rebase.reset()">
                 {{ t('rebase.changeBase') }}
@@ -449,7 +476,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
           <div v-if="squashSuggestion" class="rb-squash-suggestion">
             <div class="rb-squash-header">
               <span class="rb-squash-title">
-                ✨ {{ squashSuggestion.summary || t('rebase.aiSquashSuggest') }}
+                <AiSparkle :size="14" />
+                {{ squashSuggestion.summary || t('rebase.aiSquashSuggest') }}
               </span>
               <button class="rb-squash-dismiss" @click="dismissSquashSuggestion" :aria-label="t('rebase.aiSquashClose')">✕</button>
             </div>
@@ -582,32 +610,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
           </div>
         </div>
 
-        <!-- Legend -->
-        <div class="rb-legend">
-          <div v-for="a in actions" :key="a" class="rb-legend-item">
-            <span class="rb-legend-dot" :class="actionClass(a)"></span>
-            <span class="rb-legend-name">{{ a }}</span>
-            <span class="rb-legend-desc">{{ locale.startsWith('fr') ? actionDescriptions[a].fr : actionDescriptions[a].en }}</span>
-          </div>
-        </div>
-
-        <!-- Action bar -->
-        <div class="rb-action-bar">
-          <span v-if="rebase.error.value" class="rb-error">{{ rebase.error.value }}</span>
-          <div class="rb-action-bar-right">
-            <button class="rb-btn rb-btn--secondary" @click="emit('close')">
-              {{ t('common.cancel') }}
-            </button>
-            <button
-              class="rb-btn rb-btn--primary"
-              @click="startRebase"
-              :disabled="rebase.isRunning.value"
-            >
-              <template v-if="rebase.isRunning.value">{{ t('rebase.running') }}</template>
-              <template v-else>{{ t('rebase.start') }}</template>
-            </button>
-          </div>
-        </div>
       </template>
 
       <!-- Loading -->
@@ -616,68 +618,76 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
         {{ t('common.loading') }}
       </div>
 
-      <!-- Error -->
-      <div v-if="rebase.error.value && !rebase.todoEntries.value.length && !rebase.progress.value?.inProgress" class="rb-error-box">
+      <!-- Error (only when no todo loaded) -->
+      <div v-if="rebase.error.value && !rebase.todoEntries.value.length && !inProgress" class="rb-error-box">
         {{ rebase.error.value }}
       </div>
     </div>
-  </div>
+    <!-- Legend pinned at the bottom of the modal body, above the footer -->
+    <div v-if="hasTodo" class="rb-legend">
+      <div v-for="a in actions" :key="a" class="rb-legend-item">
+        <span class="rb-legend-dot" :class="actionClass(a)"></span>
+        <span class="rb-legend-name">{{ a }}</span>
+        <span class="rb-legend-desc">{{ locale.startsWith('fr') ? actionDescriptions[a].fr : actionDescriptions[a].en }}</span>
+      </div>
+    </div>
+    </div>
+
+    <!-- ─── Footer: todo-list actions ─────────────────────── -->
+    <template v-if="hasTodo" #footer>
+      <span v-if="rebase.error.value" class="rb-error">{{ rebase.error.value }}</span>
+      <button class="bm-btn bm-btn--ghost" @click="emit('close')">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        class="bm-btn bm-btn--primary"
+        @click="startRebase"
+        :disabled="rebase.isRunning.value"
+      >
+        <template v-if="rebase.isRunning.value">{{ t('rebase.running') }}</template>
+        <template v-else>{{ t('rebase.start') }}</template>
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-/* ─── Overlay ──────────────────────────────────────────────── */
-.rb-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
+/* ─── Title icon chip ───────────────────────────────────── */
+.rb-title-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.14));
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
 
-.rb-panel {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  width: min(640px, 90vw);
-  max-height: 80vh;
+/* ─── Body wrapper ──────────────────────────────────────── */
+/* BaseModal uses scroll-own → the body is a flex column and .rb-body
+   is a flex item that claims the remaining vertical space. This lets
+   .rb-scroll scroll internally while .rb-legend stays pinned at the
+   bottom (above the modal footer). */
+.rb-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  /* BaseModal is body-flush here; inner sections own horizontal padding. */
 }
 
-/* ─── Header ───────────────────────────────────────────────── */
-.rb-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.rb-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.rb-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 4px;
-  border-radius: var(--radius-sm);
-}
-.rb-close:hover {
-  color: var(--color-text);
-  background: var(--color-bg-secondary);
+.rb-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) 0;
 }
 
 /* ─── Sections ─────────────────────────────────────────────── */
 .rb-section {
-  padding: 12px 20px;
+  padding: var(--space-4) var(--space-7);
 }
 
 .rb-section-header {
@@ -687,8 +697,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 }
 
 .rb-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--color-text-muted);
@@ -702,7 +712,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-hint {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  margin: 4px 0 8px;
+  margin: 4px 0 var(--space-2);
 }
 
 .rb-back-btn {
@@ -711,7 +721,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   cursor: pointer;
   font-size: var(--font-size-sm);
   color: var(--color-accent);
-  padding: 2px 6px;
+  padding: 2px var(--space-2);
   border-radius: var(--radius-sm);
 }
 .rb-back-btn:hover {
@@ -721,9 +731,27 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-section-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
+/* AI CTA content — sparkle + label line up cleanly inside .btn--ai. */
+.rb-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rb-ai-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: rb-spin 0.7s linear infinite;
+}
+@keyframes rb-spin {
+  to { transform: rotate(360deg); }
+}
 
 .rb-hint--error {
   color: var(--color-danger, #ef4444);
@@ -731,26 +759,29 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 /* ─── Squash suggestion panel ──────────────────────────── */
 .rb-squash-suggestion {
-  margin: 8px 0 4px;
-  padding: 10px 12px;
+  margin: var(--space-2) 0 4px;
+  padding: var(--space-3) var(--space-4);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-left: 3px solid var(--color-accent);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
 
 .rb-squash-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 6px;
 }
 
 .rb-squash-title {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-ai);
 }
 
 .rb-squash-dismiss {
@@ -781,7 +812,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 }
 
 .rb-squash-group {
-  padding: 6px 8px;
+  padding: 6px var(--space-2);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -790,13 +821,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-squash-group-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .rb-squash-group-indices {
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-accent);
 }
 
@@ -817,15 +848,15 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   display: flex;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .rb-squash-apply,
 .rb-squash-cancel {
-  padding: 4px 12px;
+  padding: 4px var(--space-4);
   border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   border: 1px solid var(--color-border);
 }
@@ -848,16 +879,18 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 /* ─── Base picker ──────────────────────────────────────────── */
 .rb-base-input {
   width: 100%;
-  padding: 8px 10px;
+  padding: var(--space-3) var(--space-5);
   font-size: var(--font-size-sm);
-  background: var(--color-bg-secondary);
+  background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   color: var(--color-text);
   outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .rb-base-input:focus {
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(124, 58, 237, 0.18));
 }
 
 .rb-base-list {
@@ -871,8 +904,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-base-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-2);
+  padding: 6px var(--space-3);
   font-size: var(--font-size-sm);
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -884,16 +917,17 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 /* ─── Todo list ────────────────────────────────────────────── */
 .rb-todo-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 12px;
+  padding: 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .rb-todo-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: var(--space-2);
+  padding: 6px var(--space-2);
   border-radius: var(--radius-sm);
   transition: background 0.1s, opacity 0.15s;
   cursor: default;
@@ -984,7 +1018,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   list-style: none;
   padding: 4px 0;
   z-index: 300;
@@ -993,8 +1027,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-action-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: var(--space-2);
+  padding: 6px var(--space-4);
   font-size: var(--font-size-sm);
   cursor: pointer;
   transition: background 0.1s;
@@ -1005,7 +1039,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   background: var(--color-bg-secondary) !important;
 }
 .rb-action-menu-item--active {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .rb-action-menu-dot {
@@ -1023,7 +1057,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-action-menu-dot.rb-action--drop { background: var(--color-danger, #da3633); }
 
 .rb-action-menu-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   min-width: 48px;
 }
 
@@ -1108,12 +1142,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 /* ─── Legend ────────────────────────────────────────────────── */
 .rb-legend {
+  flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
-  padding: 8px 20px;
+  gap: 4px var(--space-5);
+  padding: var(--space-3) var(--space-7);
   border-top: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: var(--color-bg);
 }
 
 .rb-legend-item {
@@ -1138,7 +1173,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-legend-dot.rb-action--drop { background: var(--color-danger, #da3633); }
 
 .rb-legend-name {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -1147,74 +1182,17 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   color: var(--color-text-muted);
 }
 
-/* ─── Action bar ───────────────────────────────────────────── */
-.rb-action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 20px;
-  border-top: 1px solid var(--color-border);
-  gap: 12px;
-}
-
-.rb-action-bar-right {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.rb-btn {
-  padding: 6px 14px;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.rb-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.rb-btn--primary {
-  background: var(--color-accent);
-  color: #fff;
-  border-color: var(--color-accent);
-}
-.rb-btn--primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.rb-btn--secondary {
-  background: var(--color-bg-secondary);
-  color: var(--color-text);
-}
-.rb-btn--secondary:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
-}
-
-.rb-btn--danger {
-  background: none;
-  color: var(--color-danger);
-  border-color: var(--color-danger);
-}
-.rb-btn--danger:hover:not(:disabled) {
-  background: rgba(218, 54, 51, 0.1);
-}
-
-/* ─── Progress banner ──────────────────────────────────────── */
+/* ─── Progress banner (rendered inside BaseModal toolbar) ─── */
 .rb-progress-banner {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 20px;
-  background: rgba(218, 130, 25, 0.1);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-3);
+  width: 100%;
 }
 
 .rb-progress-icon {
   color: #da821a;
+  display: inline-flex;
 }
 
 .rb-progress-text {
@@ -1226,7 +1204,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  padding: 2px 8px;
+  padding: 2px var(--space-2);
   border-radius: 3px;
   background: rgba(218, 54, 51, 0.15);
   color: var(--color-danger);
@@ -1234,8 +1212,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 .rb-progress-actions {
   display: flex;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-7);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -1243,8 +1221,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-loading {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 20px;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-7);
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
@@ -1265,10 +1243,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .rb-error {
   font-size: var(--font-size-sm);
   color: var(--color-danger);
+  margin-right: auto;
 }
 
 .rb-error-box {
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-7);
   color: var(--color-danger);
   font-size: var(--font-size-sm);
 }

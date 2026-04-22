@@ -19,6 +19,7 @@ import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
 import StashManager from "./components/StashManager.vue";
+import AiSparkle from "./components/AiSparkle.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
 import SubmodulePanel from "./components/SubmodulePanel.vue";
 import SearchPalette from "./components/header/SearchPalette.vue";
@@ -1279,16 +1280,13 @@ onUnmounted(() => {
       @done="handleRebaseDone"
     />
 
-    <!-- Stash manager overlay -->
-    <div v-if="showStash && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showStash = false">
-      <div class="stash-overlay-body">
-        <StashManager
-          :cwd="repoFolderPath"
-          @close="showStash = false"
-          @refresh="repoRefresh()"
-        />
-      </div>
-    </div>
+    <!-- Stash manager (uses BaseModal, owns its own overlay) -->
+    <StashManager
+      v-if="showStash && repoFolderPath"
+      :cwd="repoFolderPath"
+      @close="showStash = false"
+      @refresh="repoRefresh()"
+    />
 
     <!-- Worktree manager overlay -->
     <div v-if="showWorktrees && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showWorktrees = false">
@@ -1341,7 +1339,10 @@ onUnmounted(() => {
             @click="suggestSwitchStashMessage"
           >
             <span v-if="isGeneratingSwitchStashMessage">…</span>
-            <span v-else>✨ {{ t('common.ai') }}</span>
+            <span v-else class="switch-stash-ai-label">
+              <AiSparkle :size="13" />
+              {{ t('common.ai') }}
+            </span>
           </button>
         </div>
         <p v-if="switchStashAiError" class="switch-stash-error">{{ switchStashAiError }}</p>
@@ -1704,6 +1705,11 @@ onUnmounted(() => {
 .switch-stash-ai-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.switch-stash-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .switch-stash-error {

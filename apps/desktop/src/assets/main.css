@@ -393,31 +393,67 @@ button:focus-visible,
 .btn--lg { padding: var(--space-5) var(--space-7); font-size: var(--font-size-lg); }
 
 /*
- * AI CTA — single source of truth for every ✨ action in the app.
+ * AI CTA — single source of truth for every AI action in the app.
  * Uses the dedicated --color-ai token (indigo, not brand purple) so
  * AI-assisted actions read as a distinct pattern at a glance.
  *
+ * Pair with the <AiSparkle /> component for the glyph — it ships its
+ * own animated pulse, drop-shadow and reduced-motion handling.
+ *
  * Usage:
- *   <button class="btn btn--ai">✨ IA</button>
- *   <button class="btn btn--ai btn--icon" aria-label="Suggérer avec l'IA">✨</button>
+ *   <button class="btn btn--ai"><AiSparkle :size="14" /> Suggérer</button>
+ *   <button class="btn btn--ai btn--icon" aria-label="..."><AiSparkle /></button>
  *
  * Two selectors (`.btn.btn--ai`) to win specificity against any
  * sibling `.btn-*` variant that a component might still declare.
  */
 .btn.btn--ai {
-  background: var(--color-ai-soft);
-  color: var(--color-ai);
-  border: 1px solid var(--color-ai);
-  border-radius: var(--radius-pill);
-  font-weight: var(--font-weight-semibold);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   min-height: 32px;
   padding: var(--space-2) var(--space-5);
-  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.01em;
+  color: var(--color-ai);
+  background:
+    linear-gradient(var(--color-bg-secondary), var(--color-bg-secondary)) padding-box,
+    linear-gradient(135deg, var(--color-ai) 0%, #c084fc 50%, var(--color-ai) 100%) border-box;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset, 0 4px 12px -4px var(--color-ai-soft);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+.btn.btn--ai::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, transparent 50%, rgba(192, 132, 252, 0.08) 100%);
+  pointer-events: none;
+}
+.btn.btn--ai > * {
+  position: relative;
+  z-index: 1;
 }
 .btn.btn--ai:hover:not(:disabled) {
-  background: var(--color-ai);
   color: var(--color-ai-text);
-  border-color: var(--color-ai);
+  background:
+    linear-gradient(135deg, var(--color-ai) 0%, var(--color-ai-hover) 100%) padding-box,
+    linear-gradient(135deg, var(--color-ai) 0%, #c084fc 50%, var(--color-ai) 100%) border-box;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.06), 0 8px 20px -4px var(--color-ai-soft);
+  transform: translateY(-1px);
+}
+.btn.btn--ai:active:not(:disabled) {
+  transform: translateY(0);
 }
 .btn.btn--ai:disabled {
   opacity: 0.55;
@@ -432,10 +468,10 @@ button:focus-visible,
 }
 /* Solid variant for hero CTAs (e.g. stash composer primary IA action). */
 .btn.btn--ai.btn--ai-solid {
-  background: linear-gradient(135deg, var(--color-ai) 0%, var(--color-ai-hover) 100%);
   color: var(--color-ai-text);
-  border-color: var(--color-ai);
-  box-shadow: 0 2px 10px var(--color-ai-soft);
+  background: linear-gradient(135deg, var(--color-ai) 0%, var(--color-ai-hover) 100%) padding-box,
+    linear-gradient(135deg, var(--color-ai) 0%, #c084fc 50%, var(--color-ai) 100%) border-box;
+  box-shadow: 0 2px 14px -2px var(--color-ai-soft);
 }
 .btn.btn--ai.btn--ai-solid:hover:not(:disabled) {
   filter: brightness(1.08);

@@ -1,12 +1,12 @@
 ---
 title: "Why I built another Git client"
-description: "There are already a dozen Git GUIs. Here's what was missing from all of them, and why I spent a year building GitWand anyway."
+description: "There are already a dozen Git GUIs. Here's what was missing from all of them, and why I spent the month building GitWand anyway."
 date: 2026-04-20
 ---
 
 # Why I built another Git client
 
-There are already a dozen Git GUIs. GitKraken, Fork, Tower, Sourcetree, GitHub Desktop, Sublime Merge, GitButler. Most of them are good. Some of them are excellent. So when people ask why I spent the better part of a year building yet another one, I owe them a real answer.
+There are already a dozen Git GUIs. GitKraken, Fork, Tower, Sourcetree, GitHub Desktop, Sublime Merge, GitButler. Most of them are good. Some of them are excellent. So when people ask why I spent the better part of a month building yet another one, I owe them a real answer.
 
 The short version: every Git client I've used shows you merge conflicts and stops there. Even for the obvious ones.
 

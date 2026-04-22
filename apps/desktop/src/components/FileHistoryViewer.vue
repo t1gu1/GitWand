@@ -8,6 +8,7 @@ import { safeHtml } from "../composables/useSafeHtml";
 import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useBlameContext } from "../composables/useBlameContext";
+import AiSparkle from "./AiSparkle.vue";
 
 const { t, locale } = useI18n();
 const ai = useAIProvider();
@@ -313,7 +314,7 @@ function shortHash(hash: string): string {
                 :title="t('fileHistory.explainChange')"
                 :aria-label="t('fileHistory.explainChange')"
                 @click.stop="requestBlameExplain(line.hashFull)"
-              >✨</button>
+              ><AiSparkle :size="14" /></button>
               <span class="fhv-blame-author">{{ line.author }}</span>
               <span class="fhv-blame-date muted">{{ formatDateFromTimestamp(line.authorDate) }}</span>
             </td>
@@ -330,7 +331,8 @@ function shortHash(hash: string): string {
       <div v-if="blameExplainHash" class="fhv-blame-explain-panel" role="status" aria-live="polite">
         <div class="fhv-blame-explain-head">
           <span class="fhv-blame-explain-title">
-            ✨ {{ t('fileHistory.whyThisChange') }}
+            <AiSparkle :size="13" />
+            {{ t('fileHistory.whyThisChange') }}
           </span>
           <button class="fhv-blame-explain-close" @click="closeBlameExplain" aria-label="Close">✕</button>
         </div>
@@ -633,9 +635,12 @@ function shortHash(hash: string): string {
 
 .fhv-blame-explain-title {
   flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--color-accent);
+  color: var(--color-ai);
 }
 
 .fhv-blame-explain-close {

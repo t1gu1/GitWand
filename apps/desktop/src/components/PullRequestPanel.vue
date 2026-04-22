@@ -804,17 +804,15 @@ watch(() => props.cwd, () => { loadRemote(); loadPrs(); selectedPr.value = null;
     </div>
   </Teleport>
 
-  <!-- Review modal (rendered outside the PR overlay so it stacks correctly) -->
-  <Teleport to="body">
-    <PrReviewModal
-      v-if="showReviewModal && selectedPr"
-      :pr-number="selectedPr.number"
-      :draft-comments="draftReviewComments"
-      :submitting="submittingReview"
-      @submit="handleSubmitReview"
-      @close="showReviewModal = false"
-    />
-  </Teleport>
+  <!-- Review modal (BaseModal handles its own Teleport + stacking) -->
+  <PrReviewModal
+    v-if="showReviewModal && selectedPr"
+    :pr-number="selectedPr.number"
+    :draft-comments="draftReviewComments"
+    :submitting="submittingReview"
+    @submit="handleSubmitReview"
+    @close="showReviewModal = false"
+  />
 </template>
 
 <style scoped>

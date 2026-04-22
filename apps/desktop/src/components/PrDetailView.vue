@@ -259,17 +259,15 @@ function openInBrowser(url: string) { window.open(url, "_blank"); }
       </div>
     </template>
 
-    <!-- Review modal -->
-    <Teleport to="body">
-      <PrReviewModal
-        v-if="p.showReviewModal.value && p.selectedPr.value"
-        :pr-number="p.selectedPr.value.number"
-        :draft-comments="p.draftReviewComments.value"
-        :submitting="p.submittingReview.value"
-        @submit="p.handleSubmitReview"
-        @close="p.showReviewModal.value = false"
-      />
-    </Teleport>
+    <!-- Review modal (BaseModal handles its own Teleport) -->
+    <PrReviewModal
+      v-if="p.showReviewModal.value && p.selectedPr.value"
+      :pr-number="p.selectedPr.value.number"
+      :draft-comments="p.draftReviewComments.value"
+      :submitting="p.submittingReview.value"
+      @submit="p.handleSubmitReview"
+      @close="p.showReviewModal.value = false"
+    />
   </div>
 </template>
 

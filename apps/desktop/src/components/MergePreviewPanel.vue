@@ -29,7 +29,10 @@
         @click="requestMergeRisk"
       >
         <span v-if="isMergeRiskAssessing">… {{ t('mergePreview.aiRiskAnalyzing') }}</span>
-        <span v-else>✨ {{ t('mergePreview.aiRisk') }}</span>
+        <span v-else class="preview-ai-label">
+          <AiSparkle :size="14" />
+          {{ t('mergePreview.aiRisk') }}
+        </span>
       </button>
       <button class="preview-close" @click="$emit('close')">✕</button>
     </div>
@@ -96,6 +99,7 @@ import { useI18n } from "../composables/useI18n.js";
 import type { MergePreviewSummary, PreviewFileResult, PreviewFileStatus } from "../composables/useMergePreview.js";
 import { useAIProvider } from "../composables/useAIProvider.js";
 import { useMergeRisk } from "../composables/useMergeRisk.js";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   loading: boolean;
@@ -240,6 +244,11 @@ function basename(path: string): string {
   min-height: 22px;
   padding: 1px 10px;
   font-size: 11px;
+}
+.preview-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .preview-risk {

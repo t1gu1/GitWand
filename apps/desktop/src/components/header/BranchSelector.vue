@@ -32,6 +32,7 @@ import { useMergePreview } from "../../composables/useMergePreview";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import MergePreviewPanel from "../MergePreviewPanel.vue";
+import AiSparkle from "../AiSparkle.vue";
 
 const { t } = useI18n();
 
@@ -305,7 +306,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           @click="handleBranchNameAI"
         >
           <span v-if="isGeneratingBranchName">…</span>
-          <span v-else>✨</span>
+          <AiSparkle v-else :size="14" />
         </button>
         <button
           class="bp-create-btn"

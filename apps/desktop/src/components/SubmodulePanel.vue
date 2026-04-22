@@ -122,16 +122,18 @@ onMounted(loadSubmodules);
     <!-- Add form -->
     <div v-if="showForm" class="sm-form">
       <div class="sm-form-row">
-        <label class="sm-label">{{ t("submodule.formUrl") }}</label>
+        <label class="sm-label" for="sub-form-url">{{ t("submodule.formUrl") }}</label>
         <input
+          id="sub-form-url"
           v-model="formUrl"
           class="sm-input"
           :placeholder="t('submodule.formUrlPlaceholder')"
         />
       </div>
       <div class="sm-form-row">
-        <label class="sm-label">{{ t("submodule.formPath") }}</label>
+        <label class="sm-label" for="sub-form-path">{{ t("submodule.formPath") }}</label>
         <input
+          id="sub-form-path"
           v-model="formPath"
           class="sm-input"
           :placeholder="t('submodule.formPathPlaceholder')"

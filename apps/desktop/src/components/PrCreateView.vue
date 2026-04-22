@@ -17,6 +17,7 @@ import { ghListReviewerCandidates, type GitBranch, type ReviewerCandidate } from
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { usePrDescription } from "../composables/usePrDescription";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   currentBranch: string;
@@ -381,7 +382,7 @@ function removeReviewer(name: string) {
 
       <!-- Branch flow -->
       <section class="pcv-section">
-        <label class="pcv-label">{{ t("pr.create.branchesLabel") }}</label>
+        <label class="pcv-label" for="pcv-base-input">{{ t("pr.create.branchesLabel") }}</label>
         <div class="pcv-flow">
           <div class="pcv-branch pcv-branch--from">
             <span class="pcv-branch-role">{{ t("pr.create.fromLabel") }}</span>
@@ -393,6 +394,7 @@ function removeReviewer(name: string) {
           <div class="pcv-branch pcv-branch--to" :class="{ 'pcv-branch--invalid': baseIsSameAsHead }">
             <span class="pcv-branch-role">{{ t("pr.create.intoLabel") }}</span>
             <input
+              id="pcv-base-input"
               list="pcv-base-list"
               class="pcv-branch-select"
               :value="p.newPrBase.value"
@@ -422,7 +424,10 @@ function removeReviewer(name: string) {
             @click="generateWithAI"
           >
             <span v-if="isGeneratingPrDescription">… {{ t('pr.create.aiGenerating') }}</span>
-            <span v-else>✨ {{ t('pr.create.aiGenerate') }}</span>
+            <span v-else class="pcv-ai-label">
+              <AiSparkle :size="14" />
+              {{ t('pr.create.aiGenerate') }}
+            </span>
           </button>
         </div>
         <input
@@ -698,6 +703,12 @@ function removeReviewer(name: string) {
   letter-spacing: -0.005em;
   line-height: 1.3;
 }
+.pcv-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .pcv-label-row {
   display: flex;
   align-items: center;

@@ -8,10 +8,13 @@
  *  - Write an optional body (required for Request Changes)
  *  - See how many pending draft comments will be included
  *  - Submit the review via GitHub API
+ *
+ * Built on BaseModal. Escape / backdrop dismissal come from BaseModal.
  */
 import { ref, computed } from "vue";
 import type { PendingReviewComment } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
+import BaseModal from "./BaseModal.vue";
 
 const { t } = useI18n();
 
@@ -65,149 +68,141 @@ function handleSubmit() {
   });
 }
 
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
-}
+/** Map review event → modifier class for the primary submit button. */
+const submitModifierClass = computed(() => {
+  switch (reviewEvent.value) {
+    case "APPROVE":
+      return "bm-btn--primary prm-submit--approve";
+    case "REQUEST_CHANGES":
+      return "bm-btn--danger";
+    default:
+      return "bm-btn--primary";
+  }
+});
 </script>
 
 <template>
-  <div class="prm-overlay" @click.self="emit('close')" @keydown="handleKeydown">
-    <div class="prm-modal" role="dialog" aria-modal="true" :aria-label="t('pr.review.modalAria')">
-      <!-- Header -->
-      <div class="prm-header">
-        <span class="prm-title">{{ t('pr.review.modalTitle') }}</span>
-        <button class="prm-close" @click="emit('close')" :title="t('pr.review.close')">✕</button>
-      </div>
+  <BaseModal
+    size="md"
+    :title="t('pr.review.modalTitle')"
+    :aria-label="t('pr.review.modalAria')"
+    @close="emit('close')"
+  >
+    <template #title-icon>
+      <span class="prm-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path
+            d="M9 12l2 2 4-4"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M20.5 7.5L12 3 3.5 7.5v7.25a2 2 0 0 0 1.1 1.79L12 20.5l7.4-3.96a2 2 0 0 0 1.1-1.79V7.5z"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </span>
+    </template>
 
-      <!-- Draft comments summary -->
-      <div v-if="draftComments.length > 0" class="prm-drafts">
-        <span class="prm-drafts-icon">💬</span>
-        <span>{{ t('pr.review.draftsInfo', draftComments.length) }}</span>
-      </div>
-      <div v-else class="prm-drafts prm-drafts--empty">
-        {{ t('pr.review.noDrafts') }}
-      </div>
+    <!-- Draft comments summary -->
+    <div v-if="draftComments.length > 0" class="prm-drafts">
+      <span class="prm-drafts-icon">💬</span>
+      <span>{{ t('pr.review.draftsInfo', draftComments.length) }}</span>
+    </div>
+    <div v-else class="prm-drafts prm-drafts--empty">
+      {{ t('pr.review.noDrafts') }}
+    </div>
 
-      <!-- Review type -->
-      <div class="prm-section">
-        <div class="prm-section-label">{{ t('pr.review.typeLabel') }}</div>
-        <div class="prm-radio-group">
-          <label
-            v-for="ev in (['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as ReviewEvent[])"
-            :key="ev"
-            class="prm-radio-label"
-            :class="{ 'prm-radio-label--active': reviewEvent === ev }"
-          >
-            <input
-              type="radio"
-              :value="ev"
-              v-model="reviewEvent"
-              class="prm-radio"
-            />
-            <span class="prm-radio-icon">{{ eventIcon[ev] }}</span>
-            <span class="prm-radio-text">{{ eventLabel[ev] }}</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Body -->
-      <div class="prm-section">
-        <div class="prm-section-label">
-          {{ t('pr.review.messageLabel') }}
-          <span v-if="reviewEvent === 'REQUEST_CHANGES'" class="prm-required">{{ t('pr.review.required') }}</span>
-          <span v-else class="prm-optional">{{ t('pr.review.optional') }}</span>
-        </div>
-        <textarea
-          v-model="body"
-          class="prm-textarea"
-          rows="5"
-          :placeholder="reviewEvent === 'APPROVE'
-            ? t('pr.review.placeholderApprove')
-            : reviewEvent === 'REQUEST_CHANGES'
-              ? t('pr.review.placeholderRequestChanges')
-              : t('pr.review.placeholderComment')"
-          @keydown.ctrl.enter.prevent="handleSubmit"
-          @keydown.meta.enter.prevent="handleSubmit"
-        />
-      </div>
-
-      <!-- Actions -->
-      <div class="prm-footer">
-        <button class="prm-cancel-btn" @click="emit('close')">{{ t('pr.review.cancel') }}</button>
-        <button
-          class="prm-submit-btn"
-          :class="`prm-submit-btn--${reviewEvent.toLowerCase().replace('_', '-')}`"
-          :disabled="!canSubmit"
-          @click="handleSubmit"
+    <!-- Review type -->
+    <div class="prm-section">
+      <div class="prm-section-label">{{ t('pr.review.typeLabel') }}</div>
+      <div class="prm-radio-group">
+        <label
+          v-for="ev in (['APPROVE', 'REQUEST_CHANGES', 'COMMENT'] as ReviewEvent[])"
+          :key="ev"
+          class="prm-radio-label"
+          :class="{ 'prm-radio-label--active': reviewEvent === ev }"
         >
-          <span v-if="submitting">{{ t('pr.review.submitting') }}</span>
-          <span v-else>{{ eventIcon[reviewEvent] }} {{ eventLabel[reviewEvent] }}</span>
-        </button>
+          <input
+            type="radio"
+            :value="ev"
+            v-model="reviewEvent"
+            class="prm-radio"
+          />
+          <span class="prm-radio-icon">{{ eventIcon[ev] }}</span>
+          <span class="prm-radio-text">{{ eventLabel[ev] }}</span>
+        </label>
       </div>
     </div>
-  </div>
+
+    <!-- Body -->
+    <div class="prm-section">
+      <div class="prm-section-label">
+        {{ t('pr.review.messageLabel') }}
+        <span v-if="reviewEvent === 'REQUEST_CHANGES'" class="prm-required">{{ t('pr.review.required') }}</span>
+        <span v-else class="prm-optional">{{ t('pr.review.optional') }}</span>
+      </div>
+      <textarea
+        v-model="body"
+        class="prm-textarea"
+        rows="5"
+        :placeholder="reviewEvent === 'APPROVE'
+          ? t('pr.review.placeholderApprove')
+          : reviewEvent === 'REQUEST_CHANGES'
+            ? t('pr.review.placeholderRequestChanges')
+            : t('pr.review.placeholderComment')"
+        @keydown.ctrl.enter.prevent="handleSubmit"
+        @keydown.meta.enter.prevent="handleSubmit"
+      />
+    </div>
+
+    <!-- Footer -->
+    <template #footer>
+      <button class="bm-btn bm-btn--ghost" @click="emit('close')">
+        {{ t('pr.review.cancel') }}
+      </button>
+      <button
+        class="bm-btn"
+        :class="submitModifierClass"
+        :disabled="!canSubmit"
+        @click="handleSubmit"
+      >
+        <span v-if="submitting">{{ t('pr.review.submitting') }}</span>
+        <span v-else>{{ eventIcon[reviewEvent] }} {{ eventLabel[reviewEvent] }}</span>
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-.prm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
+.prm-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex-shrink: 0;
 }
-
-.prm-modal {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  width: 520px;
-  max-width: 95vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-xl);
-}
-
-.prm-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.prm-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.prm-close {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.prm-close:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
 
 /* Draft summary */
 .prm-drafts {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 12px 16px 0;
-  padding: 8px 12px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-4);
   background: var(--color-accent-soft);
   border: 1px solid var(--color-accent);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
   color: var(--color-text);
 }
 .prm-drafts--empty {
@@ -219,16 +214,17 @@ function handleKeydown(e: KeyboardEvent) {
 
 /* Sections */
 .prm-section {
-  padding: 14px 16px 0;
+  margin-top: var(--space-4);
 }
+.prm-section:first-of-type { margin-top: 0; }
 
 .prm-section-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
   display: flex;
   gap: 6px;
   align-items: center;
@@ -247,14 +243,14 @@ function handleKeydown(e: KeyboardEvent) {
 .prm-radio-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--color-text);
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 .prm-radio-label:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
 .prm-radio-label--active { border-color: var(--color-accent); background: var(--color-accent-soft); }
@@ -268,52 +264,35 @@ function handleKeydown(e: KeyboardEvent) {
   width: 100%;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--color-text);
-  font-size: 12px;
-  padding: 8px 10px;
+  font-size: var(--font-size-sm);
+  padding: var(--space-3) var(--space-4);
   resize: vertical;
   font-family: inherit;
   box-sizing: border-box;
-  margin-top: 2px;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
-.prm-textarea:focus { outline: none; border-color: var(--color-accent); }
+.prm-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(124, 58, 237, 0.18));
+}
+</style>
 
-/* Footer */
-.prm-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 16px;
-  border-top: 1px solid var(--color-border);
-  margin-top: 14px;
+<!-- Override: APPROVE uses success colors rather than accent purple.
+     Non-scoped so the more-specific class wins over .bm-btn--primary
+     via source-order (both sit at specificity 0,1,0). -->
+<style>
+.prm-submit--approve {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-success-text, #ffffff);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 4px 10px rgba(46, 160, 67, 0.22);
 }
-
-.prm-cancel-btn {
-  background: none;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-text-muted);
-  padding: 6px 14px;
-  font-size: 12px;
-  cursor: pointer;
+.prm-submit--approve:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08), 0 8px 16px rgba(46, 160, 67, 0.28);
 }
-.prm-cancel-btn:hover { border-color: var(--color-text-muted); }
-
-.prm-submit-btn {
-  border: none;
-  border-radius: 6px;
-  padding: 6px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--color-accent-text);
-  background: var(--color-accent);
-  transition: filter 0.15s;
-}
-.prm-submit-btn--approve { background: var(--color-success); color: var(--color-success-text); }
-.prm-submit-btn--request-changes { background: var(--color-danger); color: var(--color-danger-text); }
-.prm-submit-btn--comment { background: var(--color-accent); }
-.prm-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.prm-submit-btn:not(:disabled):hover { filter: brightness(1.1); }
 </style>

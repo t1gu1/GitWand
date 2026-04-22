@@ -149,8 +149,9 @@ onMounted(() => {
     <!-- New worktree form -->
     <div v-if="showForm" class="wt-form">
       <div class="wt-form-row">
-        <label class="wt-label">{{ t("worktree.formPath") }}</label>
+        <label class="wt-label" for="wt-form-path">{{ t("worktree.formPath") }}</label>
         <input
+          id="wt-form-path"
           v-model="formPath"
           class="wt-input"
           :placeholder="t('worktree.formPathPlaceholder')"
@@ -158,8 +159,8 @@ onMounted(() => {
         />
       </div>
       <div class="wt-form-row">
-        <label class="wt-label">{{ t("worktree.formBranch") }}</label>
-        <select v-model="formBranch" class="wt-select">
+        <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
+        <select id="wt-form-branch" v-model="formBranch" class="wt-select">
           <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
           <option
             v-for="b in branches.filter(b => !b.isRemote)"
@@ -169,8 +170,9 @@ onMounted(() => {
         </select>
       </div>
       <div class="wt-form-row">
-        <label class="wt-label">{{ t("worktree.formNewBranch") }}</label>
+        <label class="wt-label" for="wt-form-new-branch">{{ t("worktree.formNewBranch") }}</label>
         <input
+          id="wt-form-new-branch"
           v-model="formNewBranch"
           class="wt-input"
           :placeholder="t('worktree.formNewBranchPlaceholder')"

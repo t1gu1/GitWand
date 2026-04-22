@@ -4,6 +4,7 @@ import type { GitLogEntry } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useCommitSearch, filterCommitsLocal, type CommitMatch } from "../composables/useCommitSearch";
+import AiSparkle from "./AiSparkle.vue";
 const { t, locale } = useI18n();
 
 const props = defineProps<{
@@ -218,7 +219,7 @@ function authorColor(name: string): string {
         @click="runAiSearch"
       >
         <span v-if="isAiSearching">…</span>
-        <span v-else>✨</span>
+        <AiSparkle v-else :size="16" />
       </button>
       <button
         v-if="searchQuery || aiMatches !== null"
@@ -230,7 +231,8 @@ function authorColor(name: string): string {
     </div>
     <p v-if="aiSearchError" class="log-search-error">{{ aiSearchError }}</p>
     <p v-if="aiMatches !== null" class="log-search-status">
-      ✨ {{ t('log.aiSearchResults', displayedEntries.length) }}
+      <AiSparkle :size="13" :animated="false" />
+      {{ t('log.aiSearchResults', displayedEntries.length) }}
     </p>
 
     <div class="log-loading" v-if="loading">
@@ -280,7 +282,8 @@ function authorColor(name: string): string {
               <span v-if="isUnpushed(entry)" class="unpushed-badge">{{ needsPublish ? t('log.unpublishedBadge') : 'unpushed' }}</span>
             </div>
             <div v-if="reasonByHash.get(entry.hashFull)" class="commit-ai-reason">
-              ✨ {{ reasonByHash.get(entry.hashFull) }}
+              <AiSparkle :size="12" :animated="false" />
+              <span>{{ reasonByHash.get(entry.hashFull) }}</span>
             </div>
             <div class="commit-meta">
               <span class="commit-hash mono">{{ entry.hash }}</span>
@@ -601,6 +604,9 @@ function authorColor(name: string): string {
   padding: 6px var(--space-3);
   font-size: var(--font-size-xs);
   border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .log-search-error {
@@ -618,6 +624,9 @@ function authorColor(name: string): string {
   font-size: var(--font-size-xs);
   color: var(--color-accent);
   line-height: 1.3;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
 }
 </style>
 

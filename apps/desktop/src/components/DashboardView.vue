@@ -16,6 +16,7 @@ import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
 import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
+import AiSparkle from "./AiSparkle.vue";
 
 const { t, locale } = useI18n();
 const ai = useAIProvider();
@@ -817,7 +818,10 @@ watch(() => props.cwd, loadDashboard);
                 :title="t('dashboard.releaseNotesHint')"
                 @click="openReleaseNotes"
               >
-                ✨ {{ t('dashboard.releaseNotes') }}
+                <span class="dv-ai-label">
+                  <AiSparkle :size="13" />
+                  {{ t('dashboard.releaseNotes') }}
+                </span>
               </button>
               <button class="panel-link" @click="emit('changeView', 'history')">
                 {{ t("dashboard.viewAll") }} →
@@ -927,7 +931,10 @@ watch(() => props.cwd, loadDashboard);
     >
       <div class="rn-modal" role="dialog" aria-modal="true">
         <header class="rn-head">
-          <h3 class="rn-title">✨ {{ t('dashboard.releaseNotesTitle') }}</h3>
+          <h3 class="rn-title">
+            <AiSparkle :size="16" />
+            {{ t('dashboard.releaseNotesTitle') }}
+          </h3>
           <button class="rn-close" @click="closeReleaseNotes" aria-label="Close">✕</button>
         </header>
         <p class="rn-desc">{{ t('dashboard.releaseNotesDesc') }}</p>
@@ -1865,6 +1872,11 @@ button.stat-card:hover {
   padding: 4px 12px;
   font-size: var(--font-size-sm);
 }
+.dv-ai-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 
 /* ─── Release notes modal ────────────────────────────── */
 .rn-overlay {
@@ -1900,8 +1912,12 @@ button.stat-card:hover {
 .rn-title {
   flex: 1;
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
+  color: var(--color-ai);
 }
 
 .rn-close {

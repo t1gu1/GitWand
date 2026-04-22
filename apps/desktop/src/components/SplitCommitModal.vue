@@ -12,6 +12,9 @@
  *
  * The working tree must be clean; the backend (`git_split_commit`) enforces
  * this precondition and surfaces a user-facing error otherwise.
+ *
+ * Built on BaseModal (xl size, body-flush so the diff list owns its own
+ * scrolling).
  */
 import { ref, computed, watch } from "vue";
 import DiffViewer from "./DiffViewer.vue";
@@ -19,6 +22,7 @@ import { useI18n } from "../composables/useI18n";
 import { useSplitCommit, type FileSelections } from "../composables/useSplitCommit";
 import type { LineSelection } from "../utils/patchBuilder";
 import type { DiffMode } from "../utils/diffMode";
+import BaseModal from "./BaseModal.vue";
 
 const { t } = useI18n();
 const split = useSplitCommit();
@@ -31,12 +35,6 @@ const emit = defineEmits<{
 }>();
 
 // ─── Per-file selection state ───────────────────────────────
-/**
- * fileSelections tracks the user's per-file hunk/line picks. DiffViewer
- * owns its selection internally and emits `selection-change` on every
- * toggle; we mirror the payload here keyed by file path so we can build
- * the combined first-patch on confirm.
- */
 const fileSelections = ref<FileSelections>(new Map());
 
 function onSelectionChange(path: string, selection: LineSelection) {
@@ -58,8 +56,6 @@ watch(
 const firstMessage = ref("");
 const secondMessage = ref("");
 
-// Pre-fill the second message with the original commit's subject+body
-// whenever the modal opens for a new commit.
 watch(
   () => split.originalMessage.value,
   (msg) => {
@@ -68,7 +64,7 @@ watch(
   },
 );
 
-// ─── Per-DiffViewer diff mode (preserves user's toggle per file) ────
+// ─── Per-DiffViewer diff mode ───────────────────────────────
 const diffModes = ref<Map<string, DiffMode>>(new Map());
 function diffModeFor(path: string): DiffMode {
   return diffModes.value.get(path) ?? "inline";
@@ -79,15 +75,7 @@ function setDiffMode(path: string, mode: DiffMode) {
   diffModes.value = next;
 }
 
-// ─── Per-file collapse/expand (DiffViewer is only mounted when expanded) ────
-/**
- * File rows start collapsed — on a 20-file commit, mounting 20 DiffViewer
- * instances at once is slow AND produces the "ghost row" layout bug where
- * each viewer's height:100% collapses in a vertical stack. Keeping most
- * files collapsed keeps the modal scannable and fast; the user expands
- * individual files to make their selection. Small commits (≤ 3 files)
- * auto-expand so the common case stays zero-click.
- */
+// ─── Per-file collapse/expand ────────────────────────────────
 const expandedFiles = ref<Set<string>>(new Set());
 function isExpanded(path: string): boolean {
   return expandedFiles.value.has(path);
@@ -105,7 +93,6 @@ function collapseAll(): void {
   expandedFiles.value = new Set();
 }
 
-// Reset expand state + auto-expand small commits when a new commit is opened.
 watch(
   () => split.diffs.value,
   (diffs) => {
@@ -117,7 +104,7 @@ watch(
   },
 );
 
-// ─── Per-file summary (for the collapsed row header) ─────────
+// ─── Per-file summary ─────────────────────────────────────────
 interface FileSummary {
   additions: number;
   deletions: number;
@@ -146,13 +133,11 @@ function summaryFor(path: string): FileSummary {
   return { additions, deletions, hunkCount: diff.hunks.length, selectedLines, totalChangeLines };
 }
 
-/** Short file name for the summary row. */
 function shortName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
 // ─── Derived state ──────────────────────────────────────────
-/** Total change lines across all files. */
 const totalChangeLines = computed(() => {
   let total = 0;
   for (const d of split.diffs.value) {
@@ -165,7 +150,6 @@ const totalChangeLines = computed(() => {
   return total;
 });
 
-/** Selected change lines across all files. */
 const selectedChangeLines = computed(() => {
   let selected = 0;
   for (const d of split.diffs.value) {
@@ -180,12 +164,6 @@ const remainingChangeLines = computed(
   () => totalChangeLines.value - selectedChangeLines.value,
 );
 
-/**
- * Split is only legal when:
- *  - Both commits would be non-empty (at least 1 selected, at least 1 remaining)
- *  - Both messages are non-empty
- *  - Not currently busy
- */
 const canConfirm = computed(() => {
   if (split.busy.value) return false;
   if (!firstMessage.value.trim()) return false;
@@ -214,287 +192,242 @@ function handleCancel() {
   split.cancel();
   emit("close");
 }
-
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") handleCancel();
-}
 </script>
 
 <template>
-  <Teleport to="body">
-    <div
-      v-if="split.open.value"
-      class="scm-overlay"
-      @click.self="handleCancel"
-      @keydown="handleKeydown"
-    >
-      <div
-        class="scm-modal"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('splitCommit.modalAria')"
-      >
-        <!-- Header -->
-        <div class="scm-header">
-          <div class="scm-header-main">
-            <span class="scm-title">{{ t('splitCommit.title') }}</span>
-            <span v-if="split.commit.value" class="scm-subtitle">
-              <code>{{ split.commit.value.hash.slice(0, 7) }}</code>
-              — {{ split.commit.value.message }}
-            </span>
+  <BaseModal
+    v-if="split.open.value"
+    size="xl"
+    :title="t('splitCommit.title')"
+    :aria-label="t('splitCommit.modalAria')"
+    body-flush
+    @close="handleCancel"
+  >
+    <template #title-icon>
+      <span class="scm-title-icon" aria-hidden="true">✂️</span>
+    </template>
+
+    <!-- Commit subtitle chip shown in header actions -->
+    <template v-if="split.commit.value" #header-actions>
+      <span class="scm-subtitle">
+        <code class="mono">{{ split.commit.value.hash.slice(0, 7) }}</code>
+        <span class="scm-subtitle-msg">{{ split.commit.value.message }}</span>
+      </span>
+    </template>
+
+    <!-- Body: hint banner, diffs, and message textareas -->
+    <div class="scm-body">
+      <!-- Hint banner -->
+      <div class="scm-hint">
+        <span class="scm-hint-icon">✂️</span>
+        <span>{{ t('splitCommit.hint') }}</span>
+      </div>
+
+      <!-- Loading / error states -->
+      <div v-if="split.loading.value && split.diffs.value.length === 0" class="scm-loading">
+        {{ t('splitCommit.loading') }}
+      </div>
+      <div v-else-if="split.error.value" class="scm-error">
+        <strong>{{ t('splitCommit.errorTitle') }}</strong>
+        <pre>{{ split.error.value }}</pre>
+      </div>
+
+      <!-- Diffs: one collapsible row per file. -->
+      <div v-if="split.diffs.value.length > 0" class="scm-diffs">
+        <!-- Toolbar: expand/collapse all when > 3 files -->
+        <div v-if="split.diffs.value.length > 3" class="scm-files-toolbar">
+          <span class="scm-files-count">
+            {{ t('splitCommit.filesCount', String(split.diffs.value.length)) }}
+          </span>
+          <div class="scm-files-actions">
+            <button type="button" class="scm-toolbar-btn" @click="expandAll">
+              {{ t('splitCommit.expandAll') }}
+            </button>
+            <button type="button" class="scm-toolbar-btn" @click="collapseAll">
+              {{ t('splitCommit.collapseAll') }}
+            </button>
           </div>
+        </div>
+
+        <div
+          v-for="diff in split.diffs.value"
+          :key="diff.path"
+          class="scm-file"
+          :class="{ 'scm-file--expanded': isExpanded(diff.path) }"
+        >
           <button
-            class="scm-close"
             type="button"
-            :title="t('splitCommit.close')"
-            @click="handleCancel"
-          >✕</button>
-        </div>
-
-        <!-- Hint banner -->
-        <div class="scm-hint">
-          <span class="scm-hint-icon">✂️</span>
-          <span>{{ t('splitCommit.hint') }}</span>
-        </div>
-
-        <!-- Loading / error states -->
-        <div v-if="split.loading.value && split.diffs.value.length === 0" class="scm-loading">
-          {{ t('splitCommit.loading') }}
-        </div>
-        <div v-else-if="split.error.value" class="scm-error">
-          <strong>{{ t('splitCommit.errorTitle') }}</strong>
-          <pre>{{ split.error.value }}</pre>
-        </div>
-
-        <!-- Diffs: one collapsible row per file. DiffViewer is only mounted
-             while a row is expanded to keep large commits (20+ files) fast
-             and avoid the "ghost row" layout collapse when stacking many
-             height:100% viewers vertically. -->
-        <div v-if="split.diffs.value.length > 0" class="scm-diffs">
-          <!-- Toolbar: expand/collapse all when > 3 files -->
-          <div v-if="split.diffs.value.length > 3" class="scm-files-toolbar">
-            <span class="scm-files-count">
-              {{ t('splitCommit.filesCount', String(split.diffs.value.length)) }}
-            </span>
-            <div class="scm-files-actions">
-              <button type="button" class="scm-toolbar-btn" @click="expandAll">
-                {{ t('splitCommit.expandAll') }}
-              </button>
-              <button type="button" class="scm-toolbar-btn" @click="collapseAll">
-                {{ t('splitCommit.collapseAll') }}
-              </button>
-            </div>
-          </div>
-
-          <div
-            v-for="diff in split.diffs.value"
-            :key="diff.path"
-            class="scm-file"
-            :class="{ 'scm-file--expanded': isExpanded(diff.path) }"
+            class="scm-file-summary"
+            :aria-expanded="isExpanded(diff.path) ? 'true' : 'false'"
+            @click="toggleExpand(diff.path)"
           >
-            <!-- Summary row: always visible, min-height 44px, click to toggle -->
-            <button
-              type="button"
-              class="scm-file-summary"
-              :aria-expanded="isExpanded(diff.path) ? 'true' : 'false'"
-              @click="toggleExpand(diff.path)"
+            <svg
+              class="scm-file-chevron"
+              :class="{ 'scm-file-chevron--open': isExpanded(diff.path) }"
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              aria-hidden="true"
             >
-              <svg
-                class="scm-file-chevron"
-                :class="{ 'scm-file-chevron--open': isExpanded(diff.path) }"
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                aria-hidden="true"
-              >
-                <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="scm-file-name mono">{{ shortName(diff.path) }}</span>
-              <span class="scm-file-path mono">{{ diff.path }}</span>
-              <span class="scm-file-stats">
-                <span v-if="summaryFor(diff.path).additions > 0" class="scm-stat-add">
-                  +{{ summaryFor(diff.path).additions }}
-                </span>
-                <span v-if="summaryFor(diff.path).deletions > 0" class="scm-stat-del">
-                  −{{ summaryFor(diff.path).deletions }}
-                </span>
-                <span class="scm-stat-hunks">
-                  {{ t('splitCommit.hunksCount', String(summaryFor(diff.path).hunkCount)) }}
-                </span>
-                <span
-                  v-if="summaryFor(diff.path).selectedLines > 0"
-                  class="scm-stat-selected"
-                >
-                  {{ summaryFor(diff.path).selectedLines }}/{{ summaryFor(diff.path).totalChangeLines }}
-                  {{ t('splitCommit.linesSelectedSuffix') }}
-                </span>
+              <path d="M3 2l4 3-4 3" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="scm-file-name mono">{{ shortName(diff.path) }}</span>
+            <span class="scm-file-path mono">{{ diff.path }}</span>
+            <span class="scm-file-stats">
+              <span v-if="summaryFor(diff.path).additions > 0" class="scm-stat-add">
+                +{{ summaryFor(diff.path).additions }}
               </span>
-            </button>
-
-            <DiffViewer
-              v-if="isExpanded(diff.path)"
-              :diff="diff"
-              :file-path="diff.path"
-              :diff-mode="diffModeFor(diff.path)"
-              :selectable="true"
-              :initial-selection="fileSelections.get(diff.path)"
-              @update:diff-mode="(m) => setDiffMode(diff.path, m)"
-              @selection-change="(sel) => onSelectionChange(diff.path, sel)"
-            />
-          </div>
-        </div>
-
-        <!-- Messages -->
-        <div class="scm-messages">
-          <div class="scm-message">
-            <label class="scm-label">
-              {{ t('splitCommit.firstMessageLabel') }}
-              <span class="scm-required">*</span>
-            </label>
-            <p class="scm-label-hint">{{ t('splitCommit.firstMessageHint') }}</p>
-            <textarea
-              v-model="firstMessage"
-              class="scm-textarea"
-              :placeholder="t('splitCommit.firstMessagePlaceholder')"
-              rows="3"
-            />
-          </div>
-
-          <div class="scm-message">
-            <label class="scm-label">
-              {{ t('splitCommit.secondMessageLabel') }}
-              <span class="scm-required">*</span>
-            </label>
-            <p class="scm-label-hint">{{ t('splitCommit.secondMessageHint') }}</p>
-            <textarea
-              v-model="secondMessage"
-              class="scm-textarea"
-              :placeholder="t('splitCommit.secondMessagePlaceholder')"
-              rows="3"
-            />
-          </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="scm-footer">
-          <div class="scm-stats">
-            <span class="scm-stat">
-              <strong>{{ selectedChangeLines }}</strong>
-              / {{ totalChangeLines }} {{ t('splitCommit.linesSelectedForA') }}
+              <span v-if="summaryFor(diff.path).deletions > 0" class="scm-stat-del">
+                −{{ summaryFor(diff.path).deletions }}
+              </span>
+              <span class="scm-stat-hunks">
+                {{ t('splitCommit.hunksCount', String(summaryFor(diff.path).hunkCount)) }}
+              </span>
+              <span
+                v-if="summaryFor(diff.path).selectedLines > 0"
+                class="scm-stat-selected"
+              >
+                {{ summaryFor(diff.path).selectedLines }}/{{ summaryFor(diff.path).totalChangeLines }}
+                {{ t('splitCommit.linesSelectedSuffix') }}
+              </span>
             </span>
-            <span
-              v-if="remainingChangeLines === 0 && selectedChangeLines > 0"
-              class="scm-warn"
-            >{{ t('splitCommit.warnAllSelected') }}</span>
-          </div>
-          <div class="scm-actions">
-            <button
-              class="scm-btn scm-btn--ghost"
-              type="button"
-              :disabled="split.busy.value"
-              @click="handleCancel"
-            >{{ t('splitCommit.cancel') }}</button>
-            <button
-              class="scm-btn scm-btn--primary"
-              type="button"
-              :disabled="!canConfirm"
-              @click="handleConfirm"
-            >
-              <span v-if="split.busy.value">{{ t('splitCommit.splitting') }}</span>
-              <span v-else>✂️ {{ t('splitCommit.confirm') }}</span>
-            </button>
-          </div>
+          </button>
+
+          <DiffViewer
+            v-if="isExpanded(diff.path)"
+            :diff="diff"
+            :file-path="diff.path"
+            :diff-mode="diffModeFor(diff.path)"
+            :selectable="true"
+            :initial-selection="fileSelections.get(diff.path)"
+            @update:diff-mode="(m) => setDiffMode(diff.path, m)"
+            @selection-change="(sel) => onSelectionChange(diff.path, sel)"
+          />
+        </div>
+      </div>
+
+      <!-- Messages -->
+      <div class="scm-messages">
+        <div class="scm-message">
+          <label class="scm-label" for="scm-first-message">
+            {{ t('splitCommit.firstMessageLabel') }}
+            <span class="scm-required">*</span>
+          </label>
+          <p class="scm-label-hint">{{ t('splitCommit.firstMessageHint') }}</p>
+          <textarea
+            id="scm-first-message"
+            v-model="firstMessage"
+            class="scm-textarea"
+            :placeholder="t('splitCommit.firstMessagePlaceholder')"
+            rows="3"
+          />
+        </div>
+
+        <div class="scm-message">
+          <label class="scm-label" for="scm-second-message">
+            {{ t('splitCommit.secondMessageLabel') }}
+            <span class="scm-required">*</span>
+          </label>
+          <p class="scm-label-hint">{{ t('splitCommit.secondMessageHint') }}</p>
+          <textarea
+            id="scm-second-message"
+            v-model="secondMessage"
+            class="scm-textarea"
+            :placeholder="t('splitCommit.secondMessagePlaceholder')"
+            rows="3"
+          />
         </div>
       </div>
     </div>
-  </Teleport>
+
+    <!-- Footer: selection stats + action buttons -->
+    <template #footer>
+      <div class="scm-stats">
+        <span class="scm-stat">
+          <strong>{{ selectedChangeLines }}</strong>
+          / {{ totalChangeLines }} {{ t('splitCommit.linesSelectedForA') }}
+        </span>
+        <span
+          v-if="remainingChangeLines === 0 && selectedChangeLines > 0"
+          class="scm-warn"
+        >{{ t('splitCommit.warnAllSelected') }}</span>
+      </div>
+      <button
+        class="bm-btn bm-btn--ghost"
+        type="button"
+        :disabled="split.busy.value"
+        @click="handleCancel"
+      >{{ t('splitCommit.cancel') }}</button>
+      <button
+        class="bm-btn bm-btn--primary"
+        type="button"
+        :disabled="!canConfirm"
+        @click="handleConfirm"
+      >
+        <span v-if="split.busy.value">{{ t('splitCommit.splitting') }}</span>
+        <span v-else>✂️ {{ t('splitCommit.confirm') }}</span>
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-.scm-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
+/* ─── Title icon ──────────────────────────────────────────── */
+.scm-title-icon {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  z-index: 250;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.14));
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
-.scm-modal {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  width: 960px;
-  max-width: 95vw;
-  max-height: 92vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--shadow-xl);
-}
-
-.scm-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--color-border);
-  gap: 12px;
-}
-
-.scm-header-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.scm-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-
+/* ─── Subtitle chip in header-actions ───────────────────── */
 .scm-subtitle {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+  min-width: 0;
+  max-width: 420px;
+}
+.scm-subtitle code {
+  background: var(--color-bg-tertiary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  flex-shrink: 0;
+}
+.scm-subtitle-msg {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
-.scm-subtitle code {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
-  background: var(--color-bg-tertiary);
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 11px;
-  color: var(--color-text);
+/* ─── Body wrapper ──────────────────────────────────────── */
+.scm-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
-.scm-close {
-  background: none;
-  border: none;
-  color: var(--color-text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.scm-close:hover { color: var(--color-text); background: var(--color-bg-tertiary); }
-
+/* ─── Hint banner ───────────────────────────────────────── */
 .scm-hint {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: flex-start;
-  margin: 12px 16px 0;
-  padding: 8px 12px;
+  margin: var(--space-4) var(--space-7) 0;
+  padding: var(--space-2) var(--space-4);
   background: var(--color-accent-soft);
   border: 1px solid var(--color-accent);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
   color: var(--color-text);
   line-height: 1.5;
 }
@@ -502,10 +435,10 @@ function handleKeydown(e: KeyboardEvent) {
 .scm-hint-icon { font-size: 14px; line-height: 1.4; }
 
 .scm-loading, .scm-error {
-  margin: 16px;
-  padding: 14px;
-  border-radius: 6px;
-  font-size: 13px;
+  margin: var(--space-4) var(--space-7);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
 }
 
 .scm-loading {
@@ -522,32 +455,32 @@ function handleKeydown(e: KeyboardEvent) {
 
 .scm-error pre {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
+/* ─── Diffs list (scrolls inside body) ──────────────────── */
 .scm-diffs {
   flex: 1;
   overflow: auto;
-  padding: 12px 16px;
+  padding: var(--space-4) var(--space-7);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 200px;
 }
 
 .scm-file {
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--color-bg-primary);
+  background: var(--color-bg);
   /*
    * In a flex column container, children shrink below their intrinsic
    * height when the total content exceeds available space. Without
-   * `flex-shrink: 0`, 17 summary rows get compressed to tiny strips
-   * and the outer scroll never engages. Lock each row's height to its
-   * natural content size and let .scm-diffs' overflow:auto handle it.
+   * `flex-shrink: 0`, many summary rows get compressed and the outer
+   * scroll never engages.
    */
   flex-shrink: 0;
 }
@@ -557,7 +490,7 @@ function handleKeydown(e: KeyboardEvent) {
   align-items: center;
   justify-content: space-between;
   padding: 2px 2px 6px;
-  font-size: 12px;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
 
@@ -567,14 +500,14 @@ function handleKeydown(e: KeyboardEvent) {
 
 .scm-files-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .scm-toolbar-btn {
   background: transparent;
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
   font-size: 11px;
   color: var(--color-text-muted);
   cursor: pointer;
@@ -585,14 +518,14 @@ function handleKeydown(e: KeyboardEvent) {
   color: var(--color-text);
 }
 
-/* ─── Summary row (always visible, click to expand) ─── */
+/* ─── Summary row (click to expand) ───────────────────── */
 .scm-file-summary {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   width: 100%;
   min-height: 44px;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-4);
   background: var(--color-bg-secondary);
   border: 0;
   cursor: pointer;
@@ -619,8 +552,8 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 .scm-file-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
   flex-shrink: 0;
 }
 
@@ -637,7 +570,7 @@ function handleKeydown(e: KeyboardEvent) {
 .scm-file-stats {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
   font-size: 11px;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -651,43 +584,37 @@ function handleKeydown(e: KeyboardEvent) {
   font-weight: 600;
   padding: 1px 6px;
   background: color-mix(in srgb, var(--color-accent, #8b5cf6) 14%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
 }
 
-/*
- * DiffViewer is designed for a fixed-height container (full-app panel):
- * its root uses `height: 100%` and its body uses `flex: 1; overflow: hidden`.
- * Inside the expanded .scm-file row those rules collapse the body to 0px.
- * Give it an intrinsic height capped at 480px with internal scroll.
- */
+/* DiffViewer height handling inside collapsible rows */
 .scm-file :deep(.diff-viewer) {
   height: auto;
 }
-
 .scm-file :deep(.diff-body) {
   flex: 0 1 auto;
   overflow: visible;
 }
-
 .scm-file :deep(.diff-content) {
   max-height: 480px;
   overflow-y: auto;
 }
 
+/* ─── Messages grid ─────────────────────────────────────── */
 .scm-messages {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-7);
   border-top: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
+  background: var(--color-bg);
 }
 
 .scm-message { display: flex; flex-direction: column; gap: 4px; }
 
 .scm-label {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -708,66 +635,31 @@ function handleKeydown(e: KeyboardEvent) {
 .scm-textarea {
   width: 100%;
   resize: vertical;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: var(--color-bg-secondary);
   color: var(--color-text);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   line-height: 1.5;
 }
 .scm-textarea:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
 
-.scm-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-}
-
+/* ─── Footer stats ──────────────────────────────────────── */
 .scm-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 12px;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+  margin-right: auto;
 }
 .scm-stat strong { color: var(--color-text); }
 
 .scm-warn { color: var(--color-danger); font-weight: 500; }
-
-.scm-actions { display: flex; gap: 8px; }
-
-.scm-btn {
-  padding: 7px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.scm-btn--ghost {
-  background: transparent;
-  color: var(--color-text);
-  border-color: var(--color-border);
-}
-.scm-btn--ghost:hover:not(:disabled) { background: var(--color-bg-tertiary); }
-
-.scm-btn--primary {
-  background: var(--color-accent);
-  color: var(--color-text-on-accent, #fff);
-  border-color: var(--color-accent);
-}
-.scm-btn--primary:hover:not(:disabled) { filter: brightness(1.08); }
-
-.scm-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>

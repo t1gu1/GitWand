@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useFolderHistory } from "../composables/useFolderHistory";
 import { useI18n } from "../composables/useI18n";
 import { locales, type SupportedLocale } from "../locales";
+import AiSparkle from "./AiSparkle.vue";
 
 const emit = defineEmits<{
   openFolder: [];
@@ -104,7 +105,10 @@ onUnmounted(() => {
 
     <!-- Rotating feature tip -->
     <div v-if="currentTip" class="empty-tip" role="note" aria-live="polite">
-      <span class="empty-tip-label">✨ {{ t('empty.tipLabel') }}</span>
+      <span class="empty-tip-label">
+        <AiSparkle :size="12" />
+        {{ t('empty.tipLabel') }}
+      </span>
       <Transition name="tip-fade" mode="out-in">
         <p :key="tipIndex" class="empty-tip-text">{{ currentTip }}</p>
       </Transition>
@@ -237,11 +241,14 @@ onUnmounted(() => {
 }
 
 .empty-tip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--color-accent);
+  color: var(--color-ai);
 }
 
 .empty-tip-text {
