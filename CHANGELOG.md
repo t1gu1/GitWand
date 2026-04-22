@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-04-23
+
+Design-system foundations — the app header and every overlay now ride on a shared chrome. A new `BaseModal` swallows the backdrop / focus-trap / Esc handling that had drifted across 10 modals, and a companion `AiSparkle` icon retires the ad-hoc SVG copies that had accumulated around AI actions. The refactor let us revisit the surfaces that carry them — PR views, merge editor, sidebar dashboard — with a consistent hand.
+
+### Added
+
+- **AppHeader revamp** — the 1654-line `AppHeader.vue` monolith is split into composable building blocks under `components/header/`: `SyncSplitButton` (primary sync CTA with publish/push/pull variants + split-button menu for less-common sync actions), `BranchSelector` (rich branch popover with search and quick-switch), `BranchMenu` (secondary branch actions), `SearchTrigger` + `SearchPalette` (centered search input opening a full-screen command palette), `RepoTabStrip` (replaces `RepoTabBar` with multi-tab ergonomics), `HeaderLogo`. Each is typed, i18n'd across all 5 locales, and re-wired into `App.vue`.
+- **Cmd/Ctrl+K command palette** — the new `SearchPalette` is reachable from anywhere and surfaces branches, commits, and quick actions. Centered search field in the header doubles as the palette trigger.
+- **Branch rename / delete modals** — `BranchRenameModal.vue` and `BranchDeleteModal.vue` replace the inline `rename()` / `confirm()` flows in `BranchMenu`. Delete modal includes a type-the-name guard for unmerged branches. Backed by a new `git_rename_branch` primitive (Rust/Tauri + Node dev-server + TypeScript wrapper), exposed via `useGitRepo.renameBranch`.
+- **`useSyncAction` composable** — central state machine for publish / push / pull / fetch / mergeRemote variants, with a unit test suite covering the transitions. Consumed by `SyncSplitButton` and `App.vue`.
+- **`BaseModal.vue`** — shared overlay wrapper (backdrop, focus trap, Esc-to-close, sized footers with typed primary/danger/ghost button variants, `bm-btn` class scale pinned to (0,1,0) specificity to keep modifiers composable). 367 lines of chrome reused by 10+ modals.
+- **`AiSparkle.vue`** — 77-line reusable sparkle icon for AI-powered actions. Replaces the scattered inline SVGs in the PR review modal, split commit modal, and PR intelligence panel.
+- **Merge editor line numbers + minimap** — per-line numbering on code and conflict panels, and a right-side canvas minimap that highlights auto-resolvable vs manual conflicts for one-click navigation across large merges.
+- **PR detail markdown description switch** — the Description block in `PrDetailView` now renders full markdown (tables, code blocks, links, blockquotes, images) via the existing `renderMarkdown` composable, with a segmented pill switch ("Formatted" / "Raw") matching the Dashboard's readme widget. New i18n keys `dashboard.formatted` / `dashboard.raw` across the 5 locales.
+- **PrIntelligencePanel redesign** — emoji section icons replaced with 28px accent-soft tile + inline SVG; scope grid upgraded to `.pi-stat` cards with radial hover gradient and lift; file rows / hotspot rows / AI flag rows unified with a `border-left: 3px solid` severity strip; conflict summary became a success/danger banner; "Analyser" button is now a primary CTA with play-triangle SVG and hover lift. Loading states use a 10px `.pi-dot-spinner`. `@media (prefers-reduced-motion)` disables all transforms + spin animations.
+- **PR create view polish** — `PrCreateView` restyled with an icon hero, segmented template pills, accent AI button, and highlighted draft card for a consistent PR flow with `PrDetailView`.
+
+### Changed
+
+- **10 modals migrated to `BaseModal`** — `EditCommitOverlay`, `MergeSuccessModal`, `PrReviewModal`, `RebaseEditor`, `SettingsPanel`, `SplitCommitModal`, `StashManager`, `BranchRenameModal`, `BranchDeleteModal`, `SearchPalette`. Net impact: duplicated backdrop/focus logic removed, accessibility fixes apply everywhere at once.
+- **Sidebar dashboard refresh** — `RepoSidebar.vue` gets more padding and gaps for breathing room, icon badges, and hover lifts on branch / activity / quick-action items.
+- **Folder history pill chips** — `FolderPicker.vue` switches from a vertical list to wrapping pill-shaped chips, hiding the path and shrinking pin/remove controls for a denser layout.
+- `@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp`, `@gitwand/desktop`, and `gitwand-website` bumped to `1.8.0`. `@gitwand/mcp` server-reported handshake version and `packages/mcp/server.json` (MCP Registry manifest) aligned to `1.8.0`.
+
+### Docs
+
+- ROADMAP: new **Tags management** section (UI-driven tag creation, push, log badges) and **Log commit context menu** plan (checkout / reset / revert / create branch / tag / cherry-pick / amend / copy SHA / open on forge / compare with).
+
 ## [1.7.0] - 2026-04-21
 
 ### Added

@@ -259,9 +259,53 @@ Premier jalon de l'alignement Git 2.54. Découpe d'un commit en deux via sélect
 **i18n**
 - 6 clés pour le flux split (`errorMergeCommit`, `filesCount`, `expandAll`, `collapseAll`, `hunksCount`, `linesSelectedSuffix`) traduites dans les 5 locales (en, fr, es, pt-BR, zh-CN)
 
+### v1.8.0 — Design system & modal foundations ✅
+
+Refonte transverse du header et socle d'overlay partagé — prépare le terrain pour la suite de l'alignement Git 2.54 sans repayer la dette d'UI à chaque nouveau flux.
+
+**AppHeader composable**
+- `AppHeader.vue` (1654 lignes) découpé en briques sous `components/header/` : `SyncSplitButton`, `BranchSelector`, `BranchMenu`, `SearchTrigger`, `SearchPalette`, `RepoTabStrip` (remplace `RepoTabBar`), `HeaderLogo`, `BranchRenameModal`, `BranchDeleteModal`
+- Composable `useSyncAction` + tests (transitions publish / push / pull / fetch / mergeRemote)
+- Cmd/Ctrl+K command palette (branches, commits, quick actions)
+- i18n des clés `syncAction`, `branchMenu`, `header.searchTooltip` dans les 5 locales (en, fr, es, pt-BR, zh-CN)
+
+**BaseModal + AiSparkle**
+- `BaseModal.vue` (367 lignes) : backdrop, focus trap, Esc-to-close, footers typés (primary/danger/ghost), specificity `.bm-btn` pinned à (0,1,0) pour que les modifiers restent composables
+- `AiSparkle.vue` (77 lignes) : icône réutilisable pour les actions IA, remplace les SVG inline dispersés
+- 10 modales migrées : `EditCommitOverlay`, `MergeSuccessModal`, `PrReviewModal`, `RebaseEditor`, `SettingsPanel`, `SplitCommitModal`, `StashManager`, `BranchRenameModal`, `BranchDeleteModal`, `SearchPalette`
+
+**Backend : renommage de branches**
+- Nouveau primitif `git_rename_branch` (Rust + dev-server + wrapper TS), exposé via `useGitRepo.renameBranch`
+- Modale dédiée `BranchRenameModal.vue` remplaçant l'inline `rename()` dans `BranchMenu`
+- `BranchDeleteModal.vue` avec type-the-name guard pour branches non-merged
+
+**Merge editor — numéros de ligne + minimap**
+- Numérotation par ligne sur les panneaux code et conflit
+- Minimap canvas à droite : highlight auto-resolvable vs manual pour navigation rapide
+
+**PR — description markdown + switch formatted/raw**
+- `PrDetailView` rend la description en markdown complet (tables, code blocks, liens, blockquotes, images) via `renderMarkdown`
+- Segmented pill switch "Formatted / Raw" aligné sur le widget readme du Dashboard
+- Clés i18n `dashboard.formatted` / `dashboard.raw` dans les 5 locales
+
+**PrIntelligencePanel — refonte**
+- Icônes de section (emoji → tuile accent-soft 28px + SVG inline)
+- Scope grid en `.pi-stat` cards (icône + label + valeur, radial hover gradient, lift)
+- File rows / hotspot rows / AI flag rows unifiés avec `border-left: 3px solid` severity strip
+- Banner conflit success/danger, bouton "Analyser" en CTA primaire
+- Loading dot-spinner 10px, `@media (prefers-reduced-motion)` désactive transforms + spin
+
+**PrCreateView — polish**
+- Icon hero, segmented template pills, bouton AI accent, draft card mise en valeur
+- Cohérence visuelle avec `PrDetailView`
+
+**Sidebar & folder picker**
+- `RepoSidebar.vue` : padding aéré, icon badges, hover lifts sur branches / activité / quick actions
+- `FolderPicker.vue` : historique en chips pill (plutôt que liste verticale)
+
 ---
 
-## Next — v1.8.0 — Suite alignement Git 2.54
+## Next — v1.9.0 — Suite alignement Git 2.54
 
 Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changement de philosophie.
 
