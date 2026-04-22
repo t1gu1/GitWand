@@ -85,8 +85,10 @@ const showSpinner = computed(() => {
 function runAction(id: SyncAction) {
   switch (id) {
     case "push":
+      emit("push");
+      break;
     case "publish":
-      emit(id === "publish" ? "publish" : "push");
+      emit("publish");
       break;
     case "pull":
       emit("pull");
