@@ -275,6 +275,11 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 **Status & forks**
 - Workflow triangulaire : comparaison double (upstream + push remote) via `status.compareBranches = @{upstream} @{push}`, badge ahead/behind séparé pour les forks — cohérent avec le positionnement "GitHub Desktop alternative"
 
+**Tags**
+- Création de tags depuis l'UI (lightweight + annotés avec message) via `git tag` — panneau "Tags" listant local & remote, clic droit sur un commit du log pour tagger, suppression local (`git tag -d`) et remote (`git push --delete`)
+- Push de tags : bouton dédié ("Pusher les tags") + checkbox "inclure les tags" dans le push standard (`git push --tags` / `--follow-tags`)
+- Ref badges tag dans le log (distincts des branches), filtre "version entre deux tags" câblé au générateur de release notes (`git log <tag>..<tag>`, déjà prévu en 1.3.4)
+
 ---
 
 ## Later — v2.0.0
