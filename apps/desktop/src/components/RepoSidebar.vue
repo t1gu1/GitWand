@@ -1518,52 +1518,72 @@ function formatActivityDate(dateStr: string): string {
 .sidebar-dashboard {
   flex: 1;
   overflow-y: auto;
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-7) var(--space-5) var(--space-8);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-8);
 }
 
-.side-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.side-block { display: flex; flex-direction: column; gap: var(--space-4); }
 
 .side-label {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding: 0 var(--space-3);
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.09em;
   color: var(--color-text-subtle);
 }
 
-.branch-list { display: flex; flex-direction: column; gap: 2px; }
+.side-label svg {
+  width: 14px;
+  height: 14px;
+  padding: 3px;
+  box-sizing: content-box;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.branch-list { display: flex; flex-direction: column; gap: var(--space-1); }
 
 .branch-item {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
   background: none;
   border: none;
   color: var(--color-text);
   cursor: pointer;
   text-align: left;
   font-size: var(--font-size-sm);
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
-.branch-item:hover { background: var(--color-bg-tertiary); }
+.branch-item:hover {
+  background: var(--color-bg-tertiary);
+  transform: translateX(2px);
+}
 
 .branch-item--current {
   background: var(--color-accent-soft);
   color: var(--color-accent);
+  box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
-.branch-item--current .branch-name { font-weight: 600; }
+.branch-item--current:hover {
+  transform: none;
+  background: var(--color-accent-soft);
+}
+
+.branch-item--current .branch-name { font-weight: 700; }
 
 .branch-name {
   white-space: nowrap;
@@ -1574,8 +1594,9 @@ function formatActivityDate(dateStr: string): string {
 
 .branch-indicator {
   display: inline-flex;
-  gap: var(--space-2);
-  font-size: var(--font-size-sm);
+  gap: var(--space-3);
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
 }
@@ -1584,7 +1605,7 @@ function formatActivityDate(dateStr: string): string {
 .branch-down { color: var(--color-info); }
 
 .side-empty {
-  padding: var(--space-3);
+  padding: var(--space-5) var(--space-3);
   font-size: var(--font-size-sm);
   color: var(--color-text-subtle);
   text-align: center;
@@ -1592,36 +1613,42 @@ function formatActivityDate(dateStr: string): string {
 
 .activity-item {
   display: grid;
-  grid-template-columns: 24px 1fr;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  grid-template-columns: 32px 1fr;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
-.activity-item:hover { background: var(--color-bg-tertiary); }
+.activity-item:hover {
+  background: var(--color-bg-tertiary);
+  transform: translateX(2px);
+}
 
 .activity-dot {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   color: white;
   flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+  letter-spacing: 0.02em;
 }
 
-.activity-body { min-width: 0; }
+.activity-body { min-width: 0; align-self: center; }
 
 .activity-msg {
   font-size: var(--font-size-sm);
+  font-weight: 500;
   color: var(--color-text);
   white-space: nowrap;
   overflow: hidden;
@@ -1632,33 +1659,61 @@ function formatActivityDate(dateStr: string): string {
 .activity-time {
   font-size: 11px;
   color: var(--color-text-subtle);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .quick-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
+  gap: var(--space-4);
   padding: 0 var(--space-3);
 }
 
 .qa {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  gap: var(--space-4);
+  padding: var(--space-5);
   font-size: var(--font-size-sm);
+  font-weight: 600;
   background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
+  color: var(--color-text);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
+  transition: border-color var(--transition-fast),
+              background var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast);
+}
+
+.qa svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  padding: 6px;
+  box-sizing: content-box;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .qa:hover {
   color: var(--color-text);
-  border-color: var(--color-border-strong);
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.qa:hover svg {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.qa:active {
+  transform: translateY(0);
+  box-shadow: none;
 }
 </style>
 
