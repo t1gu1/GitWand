@@ -60,8 +60,12 @@ const fr: Locale = {
     remaining: "restant",
     remainingPlural: "restants",
     staged: "indexés",
+    stagedOne: "indexé",
     modified: "modifi\u00e9s",
+    modifiedOne: "modifi\u00e9",
     untracked: "non suivis",
+    untrackedOne: "non suivi",
+    conflictsOne: "conflit",
     // Toast notifications
     syncUpToDate: "D\u00e9j\u00e0 \u00e0 jour",
     syncDone: "Synchronisation termin\u00e9e",

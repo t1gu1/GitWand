@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { ConflictFile } from "../composables/useGitWand";
 import type { ConflictHunk } from "@gitwand/core";
 import { highlightConflict } from "../utils/diffHighlight";
@@ -118,11 +118,23 @@ function dismissExplanation() {
   explanationError.value = null;
 }
 
+const canResolve = computed(() => props.file.result.stats.autoResolved > 0);
+
+const hunks = computed(() => props.file.result.hunks);
+
 /** Parse file content into displayable segments (code + conflict hunks). */
 interface Segment {
   type: "code" | "conflict";
   lines: string[];
+  /** 1-based line number of the first line in the raw file */
+  startLine: number;
   hunkIndex?: number;
+  /** 1-based line number of the first "ours" line (conflict only) */
+  oursStart?: number;
+  /** 1-based line number of the first "base" line (diff3 only) */
+  baseStart?: number | null;
+  /** 1-based line number of the first "theirs" line (conflict only) */
+  theirsStart?: number;
 }
 
 const segments = computed<Segment[]>(() => {
@@ -130,41 +142,69 @@ const segments = computed<Segment[]>(() => {
   const lines = content.split("\n");
   const result: Segment[] = [];
   let current: string[] = [];
+  let currentStart = 1;
   let inConflict = false;
   let hunkIdx = 0;
   let conflictLines: string[] = [];
+  let conflictStart = 0;
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const lineNo = i + 1;
     if (line.startsWith("<<<<<<<")) {
       if (current.length > 0) {
-        result.push({ type: "code", lines: [...current] });
+        result.push({ type: "code", lines: [...current], startLine: currentStart });
         current = [];
       }
       inConflict = true;
       conflictLines = [line];
+      conflictStart = lineNo;
     } else if (line.startsWith(">>>>>>>") && inConflict) {
       conflictLines.push(line);
-      result.push({ type: "conflict", lines: [...conflictLines], hunkIndex: hunkIdx });
+      const hunk = hunks.value[hunkIdx];
+      const oursLen = hunk?.oursLines.length ?? 0;
+      const baseLen = hunk?.baseLines.length ?? 0;
+      const hasBase = baseLen > 0;
+      // Layout inside the conflict block:
+      //   <<<<<<< (conflictStart)
+      //   ...ours lines...          → oursStart
+      //   ||||||| (diff3 only)
+      //   ...base lines...          → baseStart
+      //   =======
+      //   ...theirs lines...        → theirsStart
+      //   >>>>>>>
+      const oursStart = conflictStart + 1;
+      const baseStart = hasBase ? oursStart + oursLen + 1 : null;
+      const theirsStart = hasBase
+        ? (baseStart as number) + baseLen + 1
+        : oursStart + oursLen + 1;
+      result.push({
+        type: "conflict",
+        lines: [...conflictLines],
+        hunkIndex: hunkIdx,
+        startLine: conflictStart,
+        oursStart,
+        baseStart,
+        theirsStart,
+      });
       hunkIdx++;
       conflictLines = [];
       inConflict = false;
+      currentStart = lineNo + 1;
     } else if (inConflict) {
       conflictLines.push(line);
     } else {
+      if (current.length === 0) currentStart = lineNo;
       current.push(line);
     }
   }
 
   if (current.length > 0) {
-    result.push({ type: "code", lines: current });
+    result.push({ type: "code", lines: current, startLine: currentStart });
   }
 
   return result;
 });
-
-const canResolve = computed(() => props.file.result.stats.autoResolved > 0);
-
-const hunks = computed(() => props.file.result.hunks);
 
 function hunkForSegment(seg: Segment): ConflictHunk | undefined {
   if (seg.hunkIndex == null) return undefined;
@@ -218,11 +258,108 @@ const highlightedHunks = computed(() => {
   return map;
 });
 
-function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): string {
+/** Per-line highlighted HTML array, used to pair each line with its line number. */
+function highlightedLines(hunkIndex: number, panel: "ours" | "base" | "theirs"): string[] {
   const hl = highlightedHunks.value.get(hunkIndex);
-  if (!hl) return "";
-  return hl[panel].lines.join("\n");
+  if (!hl) return [];
+  return hl[panel].lines;
 }
+
+// ─── Minimap ───────────────────────────────────────────
+const contentEl = ref<HTMLElement | null>(null);
+const minimapCanvas = ref<HTMLCanvasElement | null>(null);
+const MINIMAP_WIDTH = 48;
+
+type MinimapLineKind = "code" | "conflict-auto" | "conflict-manual";
+
+/** Flattened list of line kinds for minimap rendering, one entry per raw line. */
+const allLineKinds = computed<MinimapLineKind[]>(() => {
+  const kinds: MinimapLineKind[] = [];
+  for (const seg of segments.value) {
+    if (seg.type === "code") {
+      for (let i = 0; i < seg.lines.length; i++) kinds.push("code");
+    } else {
+      const hunk = seg.hunkIndex != null ? hunks.value[seg.hunkIndex] : undefined;
+      const kind: MinimapLineKind =
+        hunk && isAutoResolvable(hunk) ? "conflict-auto" : "conflict-manual";
+      for (let i = 0; i < seg.lines.length; i++) kinds.push(kind);
+    }
+  }
+  return kinds;
+});
+
+function drawMinimap() {
+  const canvas = minimapCanvas.value;
+  if (!canvas) return;
+  const kinds = allLineKinds.value;
+  if (kinds.length === 0) return;
+
+  const dpr = window.devicePixelRatio || 1;
+  const containerHeight = canvas.parentElement?.clientHeight ?? 300;
+  canvas.width = MINIMAP_WIDTH * dpr;
+  canvas.height = containerHeight * dpr;
+  canvas.style.width = `${MINIMAP_WIDTH}px`;
+  canvas.style.height = `${containerHeight}px`;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, MINIMAP_WIDTH, containerHeight);
+
+  const lineH = Math.max(1, containerHeight / kinds.length);
+
+  for (let i = 0; i < kinds.length; i++) {
+    const k = kinds[i];
+    if (k === "code") continue; // skip for a cleaner look
+    ctx.fillStyle =
+      k === "conflict-auto"
+        ? "rgba(34, 197, 94, 0.6)" // green — auto-resolvable
+        : "rgba(239, 68, 68, 0.6)"; // red — needs manual attention
+    ctx.fillRect(0, i * lineH, MINIMAP_WIDTH, Math.max(lineH, 2));
+  }
+
+  // Viewport indicator
+  const contentArea = contentEl.value;
+  if (contentArea && contentArea.scrollHeight > 0) {
+    const ratio = contentArea.scrollTop / contentArea.scrollHeight;
+    const visibleRatio = contentArea.clientHeight / contentArea.scrollHeight;
+    const vpY = ratio * containerHeight;
+    const vpH = Math.max(visibleRatio * containerHeight, 10);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+    ctx.fillRect(0, vpY, MINIMAP_WIDTH, vpH);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, vpY + 0.5, MINIMAP_WIDTH - 1, vpH - 1);
+  }
+}
+
+function onMinimapClick(e: MouseEvent) {
+  const canvas = minimapCanvas.value;
+  const contentArea = contentEl.value;
+  if (!canvas || !contentArea) return;
+  const rect = canvas.getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  const ratio = y / rect.height;
+  contentArea.scrollTop = ratio * contentArea.scrollHeight - contentArea.clientHeight / 2;
+}
+
+function onContentScroll() {
+  drawMinimap();
+}
+
+watch(allLineKinds, () => nextTick(drawMinimap));
+watch(
+  () => props.file.path,
+  () => nextTick(drawMinimap),
+);
+
+onMounted(() => {
+  nextTick(drawMinimap);
+  if (typeof ResizeObserver !== "undefined" && contentEl.value) {
+    const ro = new ResizeObserver(() => drawMinimap());
+    ro.observe(contentEl.value);
+  }
+});
 </script>
 
 <template>
@@ -251,8 +388,15 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
       </button>
     </div>
 
-    <!-- Code view -->
-    <div class="editor-content" role="document" :aria-label="file.path">
+    <!-- Editor body: code + minimap -->
+    <div class="merge-body">
+    <div
+      class="editor-content"
+      ref="contentEl"
+      role="document"
+      :aria-label="file.path"
+      @scroll="onContentScroll"
+    >
       <div
         v-for="(seg, i) in segments"
         :key="i"
@@ -260,9 +404,18 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
       >
         <!-- Normal code lines -->
         <template v-if="seg.type === 'code'">
-          <pre class="code-block mono"><code><template
-            v-for="(line, j) in seg.lines" :key="j"
-          >{{ line }}{{ j < seg.lines.length - 1 ? '\n' : '' }}</template></code></pre>
+          <table class="merge-code-table mono">
+            <tbody>
+              <tr
+                v-for="(line, j) in seg.lines"
+                :key="j"
+                class="merge-code-row"
+              >
+                <td class="line-no mono">{{ seg.startLine + j }}</td>
+                <td class="line-content mono">{{ line || '\u00a0' }}</td>
+              </tr>
+            </tbody>
+          </table>
         </template>
 
         <!-- Conflict hunk -->
@@ -394,19 +547,41 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <span class="panel-dot panel-dot--ours" aria-hidden="true"></span>
                     {{ t('merge.currentBranch') }}
                   </div>
-                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'ours'))"></code></pre>
+                  <table class="merge-panel-table mono">
+                    <tbody>
+                      <tr
+                        v-for="(lineHtml, j) in highlightedLines(seg.hunkIndex!, 'ours')"
+                        :key="j"
+                        class="merge-panel-row"
+                      >
+                        <td class="line-no mono">{{ seg.oursStart! + j }}</td>
+                        <td class="line-content mono"><span v-html="safeHtml(lineHtml) || '&nbsp;'"></span></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
                 <!-- Base (if diff3) -->
                 <div
-                  v-if="hunkForSegment(seg) && hunkForSegment(seg)!.baseLines.length > 0"
+                  v-if="hunkForSegment(seg) && hunkForSegment(seg)!.baseLines.length > 0 && seg.baseStart != null"
                   class="hunk-panel hunk-panel--base"
                 >
                   <div class="panel-label">
                     <span class="panel-dot panel-dot--base" aria-hidden="true"></span>
                     Base
                   </div>
-                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'base'))"></code></pre>
+                  <table class="merge-panel-table mono">
+                    <tbody>
+                      <tr
+                        v-for="(lineHtml, j) in highlightedLines(seg.hunkIndex!, 'base')"
+                        :key="j"
+                        class="merge-panel-row"
+                      >
+                        <td class="line-no mono">{{ seg.baseStart! + j }}</td>
+                        <td class="line-content mono"><span v-html="safeHtml(lineHtml) || '&nbsp;'"></span></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
                 <!-- Incoming (theirs) -->
@@ -415,7 +590,18 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
                     <span class="panel-dot panel-dot--theirs" aria-hidden="true"></span>
                     {{ t('merge.incomingBranch') }}
                   </div>
-                  <pre class="panel-code mono"><code v-html="safeHtml(highlightedHtml(seg.hunkIndex!, 'theirs'))"></code></pre>
+                  <table class="merge-panel-table mono">
+                    <tbody>
+                      <tr
+                        v-for="(lineHtml, j) in highlightedLines(seg.hunkIndex!, 'theirs')"
+                        :key="j"
+                        class="merge-panel-row"
+                      >
+                        <td class="line-no mono">{{ seg.theirsStart! + j }}</td>
+                        <td class="line-content mono"><span v-html="safeHtml(lineHtml) || '&nbsp;'"></span></td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </template>
@@ -431,6 +617,12 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
         </template>
       </div>
     </div>
+
+    <!-- Minimap (right-side overview) -->
+    <div class="merge-minimap" @click="onMinimapClick">
+      <canvas ref="minimapCanvas"></canvas>
+    </div>
+    </div><!-- /merge-body -->
   </div>
 </template>
 
@@ -484,23 +676,82 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
   background: var(--color-accent-hover);
 }
 
+/* ─── Body layout (content + minimap) ──────────────────── */
+.merge-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  position: relative;
+}
+
 .editor-content {
   flex: 1;
   overflow-y: auto;
   padding: 0;
+  min-width: 0;
+}
+
+/* ─── Minimap ──────────────────────────────────────────── */
+.merge-minimap {
+  width: 48px;
+  flex-shrink: 0;
+  background: var(--color-bg-secondary);
+  border-left: 1px solid var(--color-border);
+  cursor: pointer;
+  position: relative;
+}
+
+.merge-minimap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .segment--code {
   background: var(--color-bg);
 }
 
-.code-block {
-  margin: 0;
-  padding: 4px 20px;
-  font-size: var(--text-md);
+/* ─── Line-numbered code table (shared between segments & panels) ─── */
+.merge-code-table,
+.merge-panel-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.merge-code-row,
+.merge-panel-row {
+  line-height: 1.6;
+}
+
+.merge-code-table .line-no,
+.merge-panel-table .line-no {
+  width: 48px;
+  min-width: 48px;
+  padding: 0 8px;
+  text-align: right;
+  font-size: var(--text-xs);
+  color: var(--color-text-subtle);
+  opacity: 0.5;
+  user-select: none;
+  vertical-align: top;
+  border-right: 1px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.merge-code-table .line-content,
+.merge-panel-table .line-content {
+  padding: 0 12px;
+  font-size: var(--text-base);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
+  vertical-align: top;
+}
+
+.merge-code-table {
+  padding: 4px 0;
 }
 
 /* ─── Conflict Hunk ────────────────────────────────────── */
@@ -686,22 +937,17 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
 .panel-dot--base { background: var(--color-text-muted); }
 .panel-dot--theirs { background: var(--color-theirs); }
 
-.panel-code {
-  margin: 0;
-  padding: 8px 12px;
-  font-size: var(--text-base);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  min-height: 32px;
-}
-
-.hunk-panel--ours .panel-code {
+.hunk-panel--ours .merge-panel-table {
   background: var(--color-ours-bg);
 }
 
-.hunk-panel--theirs .panel-code {
+.hunk-panel--theirs .merge-panel-table {
   background: var(--color-theirs-bg);
+}
+
+.hunk-panel .merge-panel-table {
+  padding: 4px 0;
+  min-height: 32px;
 }
 
 /* ─── Inline Edit ──────────────────────────────────────── */
@@ -755,21 +1001,21 @@ function highlightedHtml(hunkIndex: number, panel: "ours" | "base" | "theirs"): 
 
 /* ─── Diff Highlighting ────────────────────────────────── */
 
-.panel-code :deep(.diff-add) {
+.merge-panel-table :deep(.diff-add) {
   background: var(--color-success-soft);
   border-radius: 2px;
   padding: 0 1px;
 }
 
-.hunk-panel--ours .panel-code :deep(.diff-add) {
+.hunk-panel--ours .merge-panel-table :deep(.diff-add) {
   background: var(--color-info-soft);
 }
 
-.hunk-panel--theirs .panel-code :deep(.diff-add) {
+.hunk-panel--theirs .merge-panel-table :deep(.diff-add) {
   background: var(--color-accent-soft);
 }
 
-.panel-code :deep(.diff-del) {
+.merge-panel-table :deep(.diff-del) {
   background: var(--color-danger-soft);
   border-radius: 2px;
   padding: 0 1px;

@@ -66,8 +66,12 @@ const en = {
     remaining: "remaining",
     remainingPlural: "remaining",
     staged: "staged",
+    stagedOne: "staged",
     modified: "modified",
+    modifiedOne: "modified",
     untracked: "untracked",
+    untrackedOne: "untracked",
+    conflictsOne: "conflict",
     // Toast notifications
     syncUpToDate: "Already up to date",
     syncDone: "Sync completed",

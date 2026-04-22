@@ -56,14 +56,6 @@ const primaryLabel = computed(() => {
   return n === undefined ? t(key) : t(key, n);
 });
 
-// Which badge count to show on the primary button (if any).
-const badgeCount = computed(() => {
-  const a = action.value;
-  if (a.state === "ahead") return props.aheadCount;
-  if (a.state === "behind") return props.behindCount;
-  return null;
-});
-
 // The primary is visually "active" (filled) when there's work to do.
 const isPrimaryActive = computed(() => action.value.state !== "clean");
 
@@ -243,11 +235,13 @@ const primaryTitle = computed(() => {
         <path d="M4 3v10M1 6l3-3 3 3M12 13V3M9 10l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
 
+      <!--
+        The primary label already carries the count (e.g. "Pusher 1
+        commit" / "Pusher 5 commits" via the pushOne / pushN i18n keys),
+        so a separate pill-shaped badge would just repeat the number.
+        Removed 2026-04 after the "Pusher 1 commit 1" double-count bug.
+      -->
       <span>{{ primaryLabel }}</span>
-
-      <span v-if="badgeCount !== null" class="sync-badge" :class="action.state === 'ahead' ? 'sync-badge--push' : 'sync-badge--pull'">
-        {{ badgeCount }}
-      </span>
     </button>
 
     <button

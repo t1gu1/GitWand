@@ -27,6 +27,7 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import type { GitBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
+import type { LocaleKey } from "../../locales";
 import { useMergePreview } from "../../composables/useMergePreview";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
@@ -63,6 +64,21 @@ const hasRepoStats = computed(
       props.repoStats.conflicted >
     0,
 );
+
+/**
+ * Pick the singular or plural label for a stat based on the count.
+ *
+ * The four stats kinds map to `header.<kind>` (plural) and
+ * `header.<kind>One` (singular). Some languages inflect the participle
+ * ("modifié" / "modifiés" in FR); others use the same form for both
+ * ("modified" in EN, "已修改" in zh-CN) — the singular keys carry the
+ * right value regardless, so the callsite doesn't have to know which.
+ */
+type StatKind = "staged" | "modified" | "untracked" | "conflicts";
+function statLabel(kind: StatKind, n: number): string {
+  const key = (`header.${kind}${n === 1 ? "One" : ""}`) as LocaleKey;
+  return t(key);
+}
 
 // ─── Popover state ───────────────────────────────────────────────
 const showPopover = ref(false);
@@ -233,19 +249,19 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         <span v-if="hasRepoStats" class="branch-trigger__stats">
           <span v-if="repoStats.staged > 0" class="branch-trigger__stat">
             <span class="branch-trigger__stat-dot" style="background: var(--color-success)"></span>
-            {{ repoStats.staged }} {{ t('header.staged') }}
+            {{ repoStats.staged }} {{ statLabel('staged', repoStats.staged) }}
           </span>
           <span v-if="repoStats.unstaged > 0" class="branch-trigger__stat">
             <span class="branch-trigger__stat-dot" style="background: var(--color-warning)"></span>
-            {{ repoStats.unstaged }} {{ t('header.modified') }}
+            {{ repoStats.unstaged }} {{ statLabel('modified', repoStats.unstaged) }}
           </span>
           <span v-if="repoStats.untracked > 0" class="branch-trigger__stat">
             <span class="branch-trigger__stat-dot" style="background: var(--color-text-muted)"></span>
-            {{ repoStats.untracked }} {{ t('header.untracked') }}
+            {{ repoStats.untracked }} {{ statLabel('untracked', repoStats.untracked) }}
           </span>
           <span v-if="repoStats.conflicted > 0" class="branch-trigger__stat">
             <span class="branch-trigger__stat-dot" style="background: var(--color-danger)"></span>
-            {{ repoStats.conflicted }} {{ t('header.conflicts') }}
+            {{ repoStats.conflicted }} {{ statLabel('conflicts', repoStats.conflicted) }}
           </span>
         </span>
       </span>

@@ -607,21 +607,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   background: var(--color-border);
 }
 
-.sync-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 20px;
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-.sync-badge--push { background: var(--color-surface-inverse-action-hover); color: var(--color-accent-text); }
-.sync-badge--pull { background: var(--color-accent); color: var(--color-accent-text); }
-
 .btn--icon {
   display: inline-flex;
   align-items: center;
