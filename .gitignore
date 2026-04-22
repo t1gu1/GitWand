@@ -56,3 +56,4 @@ research/
 .claude/launch.json
 /docs
 .release-notes-v1.5.0.md
+website/.vitepress/.temp
