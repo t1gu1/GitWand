@@ -140,7 +140,6 @@ const es: Locale = {
     tabBranches: "Ramas",
     tabLog: "Historial",
     tabGraph: "Gráfico",
-    tabStash: "Stash",
     stashTitle: "Gestor de stash",
     logScopeLabel: "Ámbito del historial",
     logScopeCurrent: "Rama actual",
@@ -175,6 +174,8 @@ const es: Locale = {
     noBranches: "Sin ramas",
     recentActivity: "Actividad reciente",
     quickActions: "Acciones rápidas",
+    openRepo: "Abrir repositorio",
+    openRepoOn: "Abrir en {0}",
     // Context menu (right-click on a file)
     ctxDeleteFile: "Eliminar archivo",
     ctxDiscardChanges: "Descartar cambios",

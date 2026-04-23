@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
-import type { GitLogEntry, GitBranch } from "../utils/backend";
+import { gitRemoteInfo, gitStashList, type GitLogEntry, type GitBranch, type RemoteInfo } from "../utils/backend";
 import CommitLog from "./CommitLog.vue";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
@@ -164,6 +164,90 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("click", closeContextMenu);
   window.removeEventListener("contextmenu", closeContextMenu);
+});
+
+// ─── Remote info (for the "Open repository" quick action) ─────
+const remoteInfo = ref<RemoteInfo | null>(null);
+
+async function loadRemoteInfo() {
+  if (!props.cwd) { remoteInfo.value = null; return; }
+  try { remoteInfo.value = await gitRemoteInfo(props.cwd); }
+  catch { remoteInfo.value = null; }
+}
+onMounted(loadRemoteInfo);
+watch(() => props.cwd, loadRemoteInfo);
+
+// ─── Stash count (badge on the icon-only stash button) ────────
+// Re-fetched on cwd change AND on repo-state mutations (staging a
+// file, committing, popping a stash from the modal…), since the
+// only in-app stash mutations come from the StashManager modal which
+// emits `@refresh` → App.vue calls `repoRefresh()` → props change.
+const stashCount = ref<number>(0);
+
+async function loadStashCount() {
+  if (!props.cwd) { stashCount.value = 0; return; }
+  try {
+    const list = await gitStashList(props.cwd);
+    stashCount.value = Array.isArray(list) ? list.length : 0;
+  } catch {
+    stashCount.value = 0;
+  }
+}
+onMounted(loadStashCount);
+watch(() => props.cwd, loadStashCount);
+// Cheap "repo state mutated" signature — any staged/unstaged/untracked/
+// conflicted count delta triggers a reload. Covers stash create (wt goes
+// clean) and pop (files come back) via StashManager's refresh emit.
+watch(
+  () => props.repoStats.staged + props.repoStats.unstaged + props.repoStats.untracked + props.repoStats.conflicted,
+  loadStashCount,
+);
+
+/**
+ * Browser-friendly URL of the current repo's remote, or null if unknown.
+ * Prefers a clean `https://<host>/<owner>/<repo>` when the provider is
+ * recognized; falls back to normalizing a raw SSH/HTTPS URL otherwise.
+ */
+const repoWebUrl = computed<string | null>(() => {
+  const info = remoteInfo.value;
+  if (!info || !info.url) return null;
+
+  const hosts: Record<string, string> = {
+    github: "github.com",
+    gitlab: "gitlab.com",
+    bitbucket: "bitbucket.org",
+  };
+
+  if (info.owner && info.repo && info.provider in hosts) {
+    return `https://${hosts[info.provider]}/${info.owner}/${info.repo}`;
+  }
+
+  // Fallback: normalize the raw URL.
+  let u = info.url.trim();
+  if (u.endsWith(".git")) u = u.slice(0, -4);
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  // git@github.com:owner/repo  →  https://github.com/owner/repo
+  const sshMatch = u.match(/^(?:ssh:\/\/)?(?:git@)?([^:/]+)[:/](.+)$/);
+  if (sshMatch) return `https://${sshMatch[1]}/${sshMatch[2]}`;
+  return null;
+});
+
+/** Short provider name for the button label ("GitHub", "GitLab", ...) or null. */
+const repoProviderName = computed<string | null>(() => {
+  const names: Record<string, string> = {
+    github: "GitHub",
+    gitlab: "GitLab",
+    bitbucket: "Bitbucket",
+  };
+  const p = remoteInfo.value?.provider;
+  return p && p in names ? names[p] : null;
+});
+
+/** Localized label, e.g. "Open on GitHub" or (fallback) "Open repository". */
+const openRepoLabel = computed<string>(() => {
+  const name = repoProviderName.value;
+  return name ? t("sidebar.openRepoOn", name) : t("sidebar.openRepo");
 });
 
 // ─── AI commit message generation ─────────────────────────
@@ -432,13 +516,21 @@ function formatActivityDate(dateStr: string): string {
       >
         PRs
       </button>
+      <!-- Divider: stash isn't a view, it opens a modal.
+           Visually breaks from the tabs that swap content. -->
+      <div class="view-tab-divider" aria-hidden="true"></div>
       <button
-        class="view-tab view-tab--stash"
+        class="view-tab-action view-tab-action--stash"
         @click="emit('openStash')"
         :title="t('sidebar.stashTitle')"
         :aria-label="t('sidebar.stashTitle')"
       >
-        {{ t('sidebar.tabStash') }}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 8v13H3V8" />
+          <path d="M1 3h22v5H1z" />
+          <path d="M10 12h4" />
+        </svg>
+        <span v-if="stashCount > 0" class="view-tab-action__badge">{{ stashCount }}</span>
       </button>
     </div>
 
@@ -809,6 +901,21 @@ function formatActivityDate(dateStr: string): string {
             </svg>
             PRs
           </button>
+          <a
+            v-if="repoWebUrl"
+            class="qa qa--full"
+            :href="repoWebUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            :title="repoWebUrl"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            {{ openRepoLabel }}
+          </a>
         </div>
       </div>
     </div>
@@ -900,7 +1007,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text-muted);
   background: none;
   border-bottom: 2px solid transparent;
-  transition: color var(--transition-base), border-color var(--transition-base);
+  transition: color var(--transition-hover), border-color var(--transition-hover);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -915,9 +1022,54 @@ function formatActivityDate(dateStr: string): string {
   border-bottom-color: var(--color-accent);
 }
 
-.view-tab--stash {
+/* Vertical separator between the view-tabs (which swap content)
+   and trailing actions like Stash (which open a modal). */
+.view-tab-divider {
   flex: 0 0 auto;
-  padding: var(--space-5) var(--space-4);
+  width: 1px;
+  align-self: stretch;
+  margin: var(--space-3) var(--space-2);
+  background: var(--color-border);
+}
+
+/* Icon-only action button sitting in the tab row but explicitly
+   NOT a tab — it never takes the active state, opens a modal. */
+.view-tab-action {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+  background: none;
+  color: var(--color-text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--transition-hover), background var(--transition-hover), border-color var(--transition-hover);
+}
+
+.view-tab-action:hover {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+}
+
+.view-tab-action__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+  text-align: center;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-radius: var(--radius-pill);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .tab-badge {
@@ -962,7 +1114,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1004,7 +1156,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
   white-space: nowrap;
 }
 
@@ -1084,7 +1236,7 @@ function formatActivityDate(dateStr: string): string {
   font-weight: var(--font-weight-bold);
   color: var(--color-text-muted);
   background: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-hover), color var(--transition-hover);
 }
 
 .section-action:hover {
@@ -1102,7 +1254,7 @@ function formatActivityDate(dateStr: string): string {
   gap: var(--space-4);
   padding: var(--space-3) var(--space-6) var(--space-3) 18px;
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition: background var(--transition-hover);
   border-left: 3px solid transparent;
 }
 
@@ -1198,7 +1350,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text-muted);
   background: none;
   opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+  transition: opacity var(--transition-hover), background var(--transition-hover), color var(--transition-hover);
   flex-shrink: 0;
 }
 
@@ -1253,7 +1405,7 @@ function formatActivityDate(dateStr: string): string {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   outline: none;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-hover);
 }
 
 .commit-ai-wrapper {
@@ -1279,7 +1431,7 @@ function formatActivityDate(dateStr: string): string {
   border: 1px solid var(--color-ai);
   border-radius: var(--radius-md) 0 0 var(--radius-md);
   cursor: pointer;
-  transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
+  transition: background var(--transition-hover), border-color var(--transition-hover), color var(--transition-hover);
 }
 
 .commit-ai-chevron {
@@ -1293,7 +1445,7 @@ function formatActivityDate(dateStr: string): string {
   margin-left: -1px;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
   cursor: pointer;
-  transition: background var(--transition-base), border-color var(--transition-base);
+  transition: background var(--transition-hover), border-color var(--transition-hover);
 }
 
 .commit-ai-chevron:hover:not(:disabled) {
@@ -1345,7 +1497,7 @@ function formatActivityDate(dateStr: string): string {
   font-size: var(--font-size-sm);
   color: var(--color-text);
   cursor: pointer;
-  transition: background var(--transition-base);
+  transition: background var(--transition-hover);
 }
 
 .commit-ai-menu li:hover:not(.disabled) {
@@ -1391,7 +1543,7 @@ function formatActivityDate(dateStr: string): string {
   font-size: var(--font-size-sm);
   color: var(--color-text);
   cursor: pointer;
-  transition: background var(--transition-base);
+  transition: background var(--transition-hover);
 }
 
 .commit-ai-submenu li:hover {
@@ -1437,7 +1589,7 @@ function formatActivityDate(dateStr: string): string {
   min-height: 38px;
   max-height: 120px;
   outline: none;
-  transition: border-color var(--transition-base);
+  transition: border-color var(--transition-hover);
 }
 
 .commit-description:focus {
@@ -1467,7 +1619,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  transition: background var(--transition-base), border-color var(--transition-base);
+  transition: background var(--transition-hover), border-color var(--transition-hover), color var(--transition-hover);
   white-space: nowrap;
 }
 
@@ -1489,7 +1641,7 @@ function formatActivityDate(dateStr: string): string {
   background: var(--color-accent);
   color: var(--color-accent-text);
   border-radius: var(--radius-pill);
-  transition: background var(--transition-base), opacity var(--transition-base);
+  transition: background var(--transition-hover), opacity var(--transition-hover);
 }
 
 .commit-btn:hover:not(:disabled) {
@@ -1564,7 +1716,7 @@ function formatActivityDate(dateStr: string): string {
   cursor: pointer;
   text-align: left;
   font-size: var(--font-size-sm);
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-hover), transform var(--transition-hover);
 }
 
 .branch-item:hover {
@@ -1622,7 +1774,7 @@ function formatActivityDate(dateStr: string): string {
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background var(--transition-fast), transform var(--transition-fast);
+  transition: background var(--transition-hover), transform var(--transition-hover);
 }
 
 .activity-item:hover {
@@ -1673,36 +1825,37 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5);
+  padding: var(--space-4) var(--space-5);
   font-size: var(--font-size-sm);
   font-weight: 600;
   background: var(--color-bg-tertiary);
   color: var(--color-text);
+  /* Bordure transparente par défaut pour éviter tout layout shift
+     quand la couleur apparaît au hover. */
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: border-color var(--transition-fast),
-              background var(--transition-fast),
-              color var(--transition-fast),
-              transform var(--transition-fast);
+  transition: border-color var(--transition-hover),
+              background var(--transition-hover),
+              color var(--transition-hover),
+              box-shadow var(--transition-hover);
 }
 
 .qa svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   padding: 6px;
   box-sizing: content-box;
   border-radius: var(--radius-sm);
   background: var(--color-accent-soft);
   color: var(--color-accent);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-hover), color var(--transition-hover);
 }
 
 .qa:hover {
   color: var(--color-text);
   border-color: var(--color-accent);
-  transform: translateY(-2px);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1712,8 +1865,14 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .qa:active {
-  transform: translateY(0);
   box-shadow: none;
+}
+
+/* Full-width quick action (e.g. "Open on GitHub") — spans both grid columns. */
+.qa--full {
+  grid-column: 1 / -1;
+  justify-content: center;
+  text-decoration: none;
 }
 </style>
 
@@ -1731,7 +1890,7 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  animation: ctx-fade-in var(--transition-fast) ease;
+  animation: ctx-fade-in var(--transition-base) ease;
 }
 
 @keyframes ctx-fade-in {
@@ -1752,7 +1911,7 @@ function formatActivityDate(dateStr: string): string {
   width: 100%;
   text-align: left;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-hover), color var(--transition-hover);
 }
 
 .ctx-item:hover {

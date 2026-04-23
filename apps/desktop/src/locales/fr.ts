@@ -134,7 +134,6 @@ const fr: Locale = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graphe",
-    tabStash: "Stash",
     stashTitle: "Gestionnaire de stash",
     // Log scope toggle (current branch vs all refs)
     logScopeLabel: "Portée du log",
@@ -175,6 +174,8 @@ const fr: Locale = {
     noBranches: "Aucune branche",
     recentActivity: "Activité récente",
     quickActions: "Actions rapides",
+    openRepo: "Ouvrir le dépôt",
+    openRepoOn: "Ouvrir sur {0}",
     // Context menu (right-click on a file)
     ctxDeleteFile: "Supprimer le fichier",
     ctxDiscardChanges: "Annuler les modifications",

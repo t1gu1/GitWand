@@ -141,7 +141,6 @@ const ptBR: Locale = {
     tabBranches: "Branches",
     tabLog: "Histórico",
     tabGraph: "Grafo",
-    tabStash: "Stash",
     stashTitle: "Gerenciador de stash",
     logScopeLabel: "Escopo do histórico",
     logScopeCurrent: "Branch atual",
@@ -176,6 +175,8 @@ const ptBR: Locale = {
     noBranches: "Sem branches",
     recentActivity: "Atividade recente",
     quickActions: "Ações rápidas",
+    openRepo: "Abrir repositório",
+    openRepoOn: "Abrir no {0}",
     // Context menu (right-click on a file)
     ctxDeleteFile: "Excluir arquivo",
     ctxDiscardChanges: "Descartar alterações",

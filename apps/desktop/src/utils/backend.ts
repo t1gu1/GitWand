@@ -1417,7 +1417,17 @@ export async function gitRemoteInfo(cwd: string): Promise<RemoteInfo> {
   if (isTauri()) {
     return tauriInvoke<RemoteInfo>("git_remote_info", { cwd });
   }
-  return { name: "origin", url: "", provider: "unknown", owner: "", repo: "" };
+  try {
+    const res = await fetch(
+      `${DEV_SERVER}/api/git-remote-info?cwd=${encodeURIComponent(cwd)}`,
+    );
+    if (!res.ok) {
+      return { name: "origin", url: "", provider: "unknown", owner: "", repo: "" };
+    }
+    return (await res.json()) as RemoteInfo;
+  } catch {
+    return { name: "origin", url: "", provider: "unknown", owner: "", repo: "" };
+  }
 }
 
 export interface PullRequest {

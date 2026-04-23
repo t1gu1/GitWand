@@ -140,7 +140,6 @@ const en = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graph",
-    tabStash: "Stash",
     stashTitle: "Stash manager",
     // Log scope toggle (current branch vs all refs)
     logScopeLabel: "Log scope",
@@ -182,6 +181,8 @@ const en = {
     noBranches: "No branches",
     recentActivity: "Recent activity",
     quickActions: "Quick actions",
+    openRepo: "Open repository",
+    openRepoOn: "Open on {0}",
     // Context menu (right-click on a file)
     ctxDeleteFile: "Delete file",
     ctxDiscardChanges: "Discard changes",

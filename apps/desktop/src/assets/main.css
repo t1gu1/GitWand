@@ -55,6 +55,10 @@
   --ease-out: cubic-bezier(.2, .8, .2, 1);
   --transition-fast: 100ms var(--ease-out);
   --transition-base: 160ms var(--ease-out);
+  /* Dédiée aux micro-interactions de survol : un poil plus lente
+     que --transition-base pour adoucir les changements de couleur
+     de fond / de bordure sans donner d'effet de latence. */
+  --transition-hover: 200ms var(--ease-out);
   --transition-slow: 240ms var(--ease-out);
 
   /* Layout */

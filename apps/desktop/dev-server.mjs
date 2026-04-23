@@ -2935,6 +2935,58 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // GET /api/git-remote-info?cwd=<path>
+    // Mirrors the Tauri `git_remote_info` command: parses the first
+    // `(fetch)` line from `git remote -v`, detects the hosting provider,
+    // and extracts owner/repo from SSH or HTTPS URLs.
+    if (url.pathname === "/api/git-remote-info" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const r = spawnSync(GIT, ["remote", "-v"], { cwd: resolvedCwd, encoding: "utf-8" });
+        if (r.status !== 0) {
+          return jsonResponse(req, res, { error: r.stderr || "git remote failed" }, 500);
+        }
+        const lines = (r.stdout || "").split("\n");
+        let name = "";
+        let remoteUrl = "";
+        for (const line of lines) {
+          if (!line.includes("(fetch)")) continue;
+          const parts = line.split(/\s+/).filter(Boolean);
+          if (parts.length < 2) continue;
+          name = parts[0];
+          remoteUrl = parts[1];
+          break;
+        }
+        if (!remoteUrl) {
+          return jsonResponse(req, res, { error: "No remote found" }, 404);
+        }
+        let provider = "unknown";
+        if (remoteUrl.includes("github.com")) provider = "github";
+        else if (remoteUrl.includes("gitlab")) provider = "gitlab";
+        else if (remoteUrl.includes("bitbucket")) provider = "bitbucket";
+
+        // Extract owner/repo — SSH (git@host:owner/repo.git) or HTTPS.
+        let owner = "";
+        let repo = "";
+        const sshMatch = remoteUrl.match(/^git@[^:]+:(.+?)\/(.+?)(?:\.git)?$/);
+        if (sshMatch) {
+          owner = sshMatch[1];
+          repo = sshMatch[2];
+        } else {
+          const httpsMatch = remoteUrl.match(/^https?:\/\/[^/]+\/(.+?)\/(.+?)(?:\.git)?$/);
+          if (httpsMatch) {
+            owner = httpsMatch[1];
+            repo = httpsMatch[2];
+          }
+        }
+        return jsonResponse(req, res, { name, url: remoteUrl, provider, owner, repo });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);
@@ -2964,5 +3016,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/gh-reviewer-candidates?cwd=<path>`);
   console.log(`    GET  /api/gh-pr-detail?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-diff?cwd=<path>&number=<n>`);
-  console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>\n`);
+  console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>`);
+  console.log(`    GET  /api/git-remote-info?cwd=<path>\n`);
 });

@@ -144,7 +144,6 @@ const zhCN: Locale = {
     tabBranches: "分支",
     tabLog: "日志",
     tabGraph: "图谱",
-    tabStash: "储藏",
     stashTitle: "储藏管理",
     logScopeLabel: "日志范围",
     logScopeCurrent: "当前分支",
@@ -179,6 +178,8 @@ const zhCN: Locale = {
     noBranches: "没有分支",
     recentActivity: "近期活动",
     quickActions: "快捷操作",
+    openRepo: "打开仓库",
+    openRepoOn: "在 {0} 上打开",
     // Context menu (right-click on a file)
     ctxDeleteFile: "删除文件",
     ctxDiscardChanges: "放弃更改",
