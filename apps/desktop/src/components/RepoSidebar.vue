@@ -77,6 +77,7 @@ const emit = defineEmits<{
   refresh: [];
   /** Open the stash manager panel. */
   openStash: [];
+  openTags: [];
 }>();
 
 const { t, locale } = useI18n();
@@ -538,6 +539,17 @@ function formatActivityDate(dateStr: string): string {
           <path d="M10 12h4" />
         </svg>
         <span v-if="stashCount > 0" class="view-tab-action__badge">{{ stashCount }}</span>
+      </button>
+      <button
+        class="view-tab-action"
+        @click="emit('openTags')"
+        :title="t('tags.title')"
+        :aria-label="t('tags.title')"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
+        </svg>
       </button>
     </div>
 

@@ -23,6 +23,8 @@ import {
   gitRemoteInfo,
 } from "../utils/backend";
 import { useI18n } from "./useI18n";
+import { useTagSuggestion } from "./useTagSuggestion";
+import { useAIProvider } from "./useAIProvider";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -50,6 +52,8 @@ interface Deps {
 export function useCommitActions(deps: Deps) {
   const { t } = useI18n();
   const { repoFolderPath, repoError, loadLog, loadBranches, repoRefresh } = deps;
+  const tagAI = useTagSuggestion();
+  const ai = useAIProvider();
 
   // ── Modal state ────────────────────────────────────────
 
@@ -164,6 +168,22 @@ export function useCommitActions(deps: Deps) {
     modal.value = { ...modal.value, type: "tag", entry, tagName: "", tagMessage: "", error: "" };
   }
 
+  async function suggestTagWithAI() {
+    const cwd = repoFolderPath.value;
+    if (!cwd) return;
+    modal.value.busy = true;
+    modal.value.error = "";
+    try {
+      const suggestion = await tagAI.suggest(cwd);
+      modal.value.tagName = suggestion.name;
+      modal.value.tagMessage = suggestion.message;
+    } catch (err: any) {
+      modal.value.error = err?.message ?? String(err);
+    } finally {
+      modal.value.busy = false;
+    }
+  }
+
   async function confirmTagCommit() {
     const entry = modal.value.entry;
     const cwd = repoFolderPath.value;
@@ -240,5 +260,9 @@ export function useCommitActions(deps: Deps) {
     confirmResetToCommit,
     confirmCreateBranchFromCommit,
     confirmTagCommit,
+    // AI
+    suggestTagWithAI,
+    isTagAISuggesting: tagAI.isGenerating,
+    isAIAvailable: ai.isAvailable,
   };
 }

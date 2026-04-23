@@ -1327,6 +1327,76 @@ export async function gitCreateTag(cwd: string, name: string, sha: string, messa
   if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git tag failed: ${res.status}`);
 }
 
+// ─── Tags manager (v1.9) ───────────────────────────────────
+
+export interface GitTag {
+  name: string;
+  /** Short commit SHA the tag points to (dereferenced for annotated tags). */
+  hash: string;
+  isAnnotated: boolean;
+  /** ISO date string (tagger date for annotated, committer date for lightweight). */
+  date: string;
+  /** Subject line from the tag message (annotated only). */
+  message: string;
+}
+
+export async function gitListTags(cwd: string): Promise<GitTag[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ name: string; hash: string; is_annotated: boolean; date: string; message: string }>>("git_list_tags", { cwd });
+    return raw.map(t => ({ name: t.name, hash: t.hash, isAnnotated: t.is_annotated, date: t.date, message: t.message }));
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-list-tags?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`git list-tags failed: ${res.status}`);
+  const raw = await res.json() as Array<{ name: string; hash: string; is_annotated: boolean; date: string; message: string }>;
+  return raw.map(t => ({ name: t.name, hash: t.hash, isAnnotated: t.is_annotated, date: t.date, message: t.message }));
+}
+
+export async function gitDeleteTag(cwd: string, name: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_delete_tag", { cwd, name });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-delete-tag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, name }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git delete-tag failed: ${res.status}`);
+}
+
+/** Push tags to a remote.
+ *  mode "all" = --tags (all local tags), "follow" = --follow-tags, "single" = push one tag by name. */
+export async function gitPushTags(
+  cwd: string,
+  remote: string,
+  mode: "all" | "follow" | "single" = "all",
+  tagName?: string,
+): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_push_tags", { cwd, remote, mode, tagName: tagName ?? null });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-push-tags`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, remote, mode, tagName }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git push-tags failed: ${res.status}`);
+}
+
+export async function gitDeleteRemoteTag(cwd: string, remote: string, name: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_delete_remote_tag", { cwd, remote, name });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-delete-remote-tag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, remote, name }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git delete-remote-tag failed: ${res.status}`);
+}
+
 // ─── Stash Manager (Phase 8.2) ─────────────────────────────
 
 export interface StashEntry {

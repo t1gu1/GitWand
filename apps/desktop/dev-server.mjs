@@ -3053,6 +3053,73 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ── Tags manager (v1.9) ───────────────────────────────────────────────────
+
+    // GET /api/git-list-tags?cwd=<path>
+    if (url.pathname === "/api/git-list-tags" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      try {
+        // Use \x1f (unit separator) — same as git_log, safe in Node child_process args
+        const SEP = "\x1f";
+        const fmt = `%(refname:short)${SEP}%(objecttype)${SEP}%(objectname:short)${SEP}%(*objectname:short)${SEP}%(taggerdate:iso)${SEP}%(creatordate:iso)${SEP}%(contents:subject)`;
+        const out = spawnSync(GIT, ["tag", "-l", "--sort=-version:refname", "--sort=-creatordate", `--format=${fmt}`], { cwd: resolve(cwd), encoding: "utf-8" });
+        const tags = (out.stdout || "").split("\n").map(line => {
+          const parts = line.split(SEP);
+          if (parts.length < 7) return null;
+          const name = parts[0].trim();
+          if (!name) return null;
+          const isAnnotated = parts[1].trim() === "tag";
+          const hash = isAnnotated && parts[3].trim() ? parts[3].trim() : parts[2].trim();
+          const date = isAnnotated && parts[4].trim() ? parts[4].trim() : parts[5].trim();
+          return { name, hash, is_annotated: isAnnotated, date, message: parts[6].trim() };
+        }).filter(Boolean);
+        return jsonResponse(req, res, tags);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-delete-tag  { cwd, name }
+    if (url.pathname === "/api/git-delete-tag" && req.method === "POST") {
+      const { cwd, name } = await readBody(req);
+      if (!cwd || !name) return jsonResponse(req, res, { error: "Missing cwd or name" }, 400);
+      try {
+        execFileSync(GIT, ["tag", "-d", name], { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/git-push-tags  { cwd, remote, mode, tagName? }
+    if (url.pathname === "/api/git-push-tags" && req.method === "POST") {
+      const { cwd, remote, mode, tagName } = await readBody(req);
+      if (!cwd || !remote) return jsonResponse(req, res, { error: "Missing cwd or remote" }, 400);
+      try {
+        const args = ["push", remote];
+        if (mode === "single" && tagName) { args.push(tagName); }
+        else if (mode === "follow") { args.push("--follow-tags"); }
+        else { args.push("--tags"); }
+        execFileSync(GIT, args, { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/git-delete-remote-tag  { cwd, remote, name }
+    if (url.pathname === "/api/git-delete-remote-tag" && req.method === "POST") {
+      const { cwd, remote, name } = await readBody(req);
+      if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
+      try {
+        execFileSync(GIT, ["push", remote, "--delete", name], { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Commit context menu** — right-click any commit in the Log to get a full action menu. Twelve entries in four groups:
+  - *Navigation* — **Checkout commit** (modal with detached-HEAD warning); **Reset to commit** (soft / mixed / hard selector, danger styling and explicit warning on `--hard`, `repoRefresh()` called after to keep the staged/unstaged panel in sync).
+  - *Branching* — **Create branch here** (`git checkout -b <name> <sha>`); **Tag this commit** (lightweight or annotated depending on whether a message is supplied); **Cherry-pick onto current branch**.
+  - *History* — **Revert commit** (non-destructive, merge commits handled via `-m 1`); **Amend** (HEAD only); **Split** (HEAD only, no merge commits — routes to the existing split-commit modal).
+  - *Clipboard & forge* — **Copy short SHA**, **Copy full SHA**, **Copy commit message** (summary + body); **View on GitHub / GitLab / Bitbucket** (URL derived from `gitRemoteInfo`).
+- **Four new backend primitives** (Rust + Node dev-server + TypeScript wrapper, three layers each): `git_checkout_commit`, `git_reset_to_commit`, `git_revert_commit`, `git_create_tag`. `git_create_branch` extended with an optional `start_point` parameter (backward-compatible).
+- **`useCommitActions` composable** (`composables/useCommitActions.ts`, 244 lines) — encapsulates modal state, all handlers, and confirm callbacks extracted from `App.vue`. App.vue shrinks by 172 lines.
+- **37 i18n keys** for the commit context menu translated across all 5 locales (`en`, `fr`, `es`, `pt-BR`, `zh-CN`), zero TypeScript errors.
+
+### Changed
+
+- Commit context-menu modals use `BaseModal` (consistent background, border-radius, slide-in animation, close button, footer layout) instead of hand-rolled overlays.
+- `RepoSidebar` now forwards the 7 new commit context-menu events (`checkoutCommit`, `resetToCommit`, `revertCommit`, `createBranchFromCommit`, `tagCommit`, `cherryPickCommit`, `viewOnForge`) from its internal `CommitLog` up to `App.vue`.
+
+### Fixed
+
+- `isCtxEntryHead` in `CommitLog` now guards against search mode: when a search is active, `idx === 0` no longer implies HEAD, so **Amend** and **Split** are correctly disabled for non-HEAD results.
+- Checkout and Reset `--hard` now call `repoRefresh()` after completion so the staged/unstaged file panel reflects the new working-tree state immediately.
+
 ## [1.8.0] - 2026-04-23
 
 Design-system foundations — the app header and every overlay now ride on a shared chrome. A new `BaseModal` swallows the backdrop / focus-trap / Esc handling that had drifted across 10 modals, and a companion `AiSparkle` icon retires the ad-hoc SVG copies that had accumulated around AI actions. The refactor let us revisit the surfaces that carry them — PR views, merge editor, sidebar dashboard — with a consistent hand.

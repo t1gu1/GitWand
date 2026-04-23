@@ -375,6 +375,8 @@ const en = {
     hoursAgo: "{0}h ago",
     daysAgo: "{0}d ago",
     weeksAgo: "{0}w ago",
+    monthsAgo: "{0}mo ago",
+    yearsAgo: "{0}y ago",
   },
 
   // ─── Branches ───────────────────────────────────────────
@@ -504,6 +506,8 @@ const en = {
     tagMessagePlaceholder: "Annotated tag message (optional)",
     tagAnnotatedHint: "Leave the message empty to create a lightweight tag.",
     tagConfirm: "Create tag",
+    tagAiHint: "AI can suggest a version name and message.",
+    tagAiSuggest: "Suggest",
     cherryPick: "Cherry-pick onto current branch",
     cherryPickHeadDisabled: "Cannot cherry-pick HEAD onto itself",
     cherryPickConflicts: "Cherry-pick created conflicts \u2014 resolve them, then continue.",
@@ -1073,6 +1077,22 @@ const en = {
     aiResponseInvalidJson: "The AI provider's response could not be interpreted (invalid JSON).",
     sameBranches: "Head and base branches are identical \u2014 no PR possible.",
     noChangesToStash: "No local changes to stash \u2014 modify files before generating a message.",
+  },
+
+  // ─── Tags panel (v1.9) ──────────────────────────────────
+  tags: {
+    title: "Tags",
+    subtitle: "{0} tag(s)",
+    newTag: "New tag",
+    pushAll: "Push all to {0}",
+    pushTag: "Push to {0}",
+    deleteTag: "Delete tag",
+    annotated: "annotated",
+    lightweight: "lightweight",
+    empty: "No tags yet. Create one from a commit in the Log.",
+    deleteConfirmTitle: "Delete tag",
+    deleteAlsoRemote: "Also delete from {0}",
+    deleteConfirm: "Delete",
   },
 } as const;
 

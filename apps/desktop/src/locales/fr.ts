@@ -368,6 +368,8 @@ const fr: Locale = {
     hoursAgo: "il y a {0}h",
     daysAgo: "il y a {0}j",
     weeksAgo: "il y a {0} sem.",
+    monthsAgo: "il y a {0} mois",
+    yearsAgo: "il y a {0} an(s)",
   },
 
   // ─── Branches ───────────────────────────────────────────
@@ -497,6 +499,8 @@ const fr: Locale = {
     tagMessagePlaceholder: "Message du tag annoté (optionnel)",
     tagAnnotatedHint: "Laissez le message vide pour créer un tag léger.",
     tagConfirm: "Créer le tag",
+    tagAiHint: "L'IA peut suggérer un nom de version et un message.",
+    tagAiSuggest: "Suggérer",
     cherryPick: "Cherry-pick sur la branche courante",
     cherryPickHeadDisabled: "Impossible de cherry-picker HEAD sur lui-même",
     cherryPickConflicts: "Le cherry-pick a créé des conflits — résolvez-les puis continuez.",
@@ -1059,6 +1063,22 @@ const fr: Locale = {
     sameBranches: "La branche source et la branche cible sont identiques \u2014 aucune PR possible.",
     noChangesToStash: "Aucun changement local \u00e0 stasher \u2014 modifie des fichiers avant de g\u00e9n\u00e9rer un message.",
   },
+  // ─── Tags panel (v1.9)
+  tags: {
+    title: "Tags",
+    subtitle: "{0} tag(s)",
+    newTag: "Nouveau tag",
+    pushAll: "Pousser tout vers {0}",
+    pushTag: "Pousser vers {0}",
+    deleteTag: "Supprimer le tag",
+    annotated: "annoté",
+    lightweight: "léger",
+    empty: "Aucun tag. Créez-en un depuis un commit dans le Log.",
+    deleteConfirmTitle: "Supprimer le tag",
+    deleteAlsoRemote: "Supprimer aussi sur {0}",
+    deleteConfirm: "Supprimer",
+  },
+
 };
 
 export default fr;

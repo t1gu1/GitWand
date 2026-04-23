@@ -2275,6 +2275,116 @@ fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String
     Ok(())
 }
 
+// ─── Tags manager (v1.9) ─────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct TagEntry {
+    name: String,
+    hash: String,       // commit SHA (dereferenced for annotated tags)
+    is_annotated: bool,
+    date: String,       // tagger date (annotated) or committer date (lightweight)
+    message: String,    // subject line (annotated) or empty
+}
+
+/// List all local tags, sorted by version then by date (newest first).
+#[tauri::command]
+fn git_list_tags(cwd: String) -> Result<Vec<TagEntry>, String> {
+    // --format uses \x1f (unit separator) as field separator — same as git_log, never appears in refs/dates
+    // %(objecttype): "tag" for annotated, "commit" for lightweight
+    // %(*objectname:short): dereferenced commit hash for annotated (empty for lightweight)
+    let sep = "\x1f";
+    let fmt = format!(
+        "%(refname:short){s}%(objecttype){s}%(objectname:short){s}%(*objectname:short){s}%(taggerdate:iso){s}%(creatordate:iso){s}%(contents:subject)",
+        s = sep
+    );
+    let output = std::process::Command::new(git_binary())
+        .args(["tag", "-l", "--sort=-version:refname", "--sort=-creatordate", &format!("--format={}", fmt)])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to list tags: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git tag failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut tags = Vec::new();
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\x1f').collect();
+        if parts.len() < 7 { continue; }
+        let name = parts[0].trim().to_string();
+        if name.is_empty() { continue; }
+        let obj_type = parts[1].trim();
+        let is_annotated = obj_type == "tag";
+        // For annotated tags, the commit is the dereferenced object; for lightweight it's the direct object.
+        let hash = if is_annotated && !parts[3].trim().is_empty() {
+            parts[3].trim().to_string()
+        } else {
+            parts[2].trim().to_string()
+        };
+        let date = if is_annotated && !parts[4].trim().is_empty() {
+            parts[4].trim().to_string()
+        } else {
+            parts[5].trim().to_string()
+        };
+        let message = parts[6].trim().to_string();
+        tags.push(TagEntry { name, hash, is_annotated, date, message });
+    }
+    Ok(tags)
+}
+
+/// Delete a local tag.
+#[tauri::command]
+fn git_delete_tag(cwd: String, name: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["tag", "-d", &name])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to delete tag: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git tag -d failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(())
+}
+
+/// Push tags to a remote. mode: "all" (--tags) | "follow" (--follow-tags) | "single" (push one tag by name).
+#[tauri::command]
+fn git_push_tags(cwd: String, remote: String, mode: String, tag_name: Option<String>) -> Result<(), String> {
+    let mut args = vec!["push".to_string(), remote.clone()];
+    match mode.as_str() {
+        "single" => {
+            if let Some(name) = tag_name {
+                args.push(name);
+            } else {
+                return Err("tag_name required for mode=single".into());
+            }
+        }
+        "follow" => args.push("--follow-tags".to_string()),
+        _ => args.push("--tags".to_string()),  // "all" is the default
+    }
+    let output = std::process::Command::new(git_binary())
+        .args(&args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to push tags: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git push tags failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(())
+}
+
+/// Delete a tag on a remote (git push <remote> --delete <tag>).
+#[tauri::command]
+fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["push", &remote, "--delete", &name])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to delete remote tag: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git push --delete failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(())
+}
+
 // ─── Stash Manager (Phase 8.2) ───────────────────────────
 
 #[derive(serde::Serialize)]
@@ -4393,6 +4503,10 @@ pub fn run() {
             git_reset_to_commit,
             git_revert_commit,
             git_create_tag,
+            git_list_tags,
+            git_delete_tag,
+            git_push_tags,
+            git_delete_remote_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

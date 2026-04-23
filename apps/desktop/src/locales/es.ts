@@ -361,6 +361,8 @@ const es: Locale = {
     hoursAgo: "hace {0} h",
     daysAgo: "hace {0} d",
     weeksAgo: "hace {0} sem",
+    monthsAgo: "hace {0} mes(es)",
+    yearsAgo: "hace {0} año(s)",
   },
 
   // ─── Branches ───────────────────────────────────────────
@@ -490,6 +492,8 @@ const es: Locale = {
     tagMessagePlaceholder: "Mensaje de la etiqueta anotada (opcional)",
     tagAnnotatedHint: "Deja el mensaje vacío para crear una etiqueta ligera.",
     tagConfirm: "Crear etiqueta",
+    tagAiHint: "La IA puede sugerir un nombre de versión y un mensaje.",
+    tagAiSuggest: "Sugerir",
     cherryPick: "Cherry-pick a la rama actual",
     cherryPickHeadDisabled: "No se puede cherry-pick HEAD sobre sí mismo",
     cherryPickConflicts: "El cherry-pick creó conflictos — resuélvelos y continúa.",
@@ -1047,6 +1051,22 @@ const es: Locale = {
     sameBranches: "La rama fuente y la rama destino son idénticas — ninguna PR posible.",
     noChangesToStash: "Sin cambios locales para el stash — modifica archivos antes de generar un mensaje.",
   },
+  // ─── Tags panel (v1.9)
+  tags: {
+    title: "Tags",
+    subtitle: "{0} tag(s)",
+    newTag: "Nuevo tag",
+    pushAll: "Enviar todo a {0}",
+    pushTag: "Enviar a {0}",
+    deleteTag: "Eliminar tag",
+    annotated: "anotado",
+    lightweight: "ligero",
+    empty: "Sin tags. Crea uno desde un commit en el Log.",
+    deleteConfirmTitle: "Eliminar tag",
+    deleteAlsoRemote: "Eliminar también en {0}",
+    deleteConfirm: "Eliminar",
+  },
+
 };
 
 export default es;

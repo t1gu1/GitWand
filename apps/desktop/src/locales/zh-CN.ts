@@ -360,6 +360,8 @@ const zhCN: Locale = {
     hoursAgo: "{0} 小时前",
     daysAgo: "{0} 天前",
     weeksAgo: "{0} 周前",
+    monthsAgo: "{0}个月前",
+    yearsAgo: "{0}年前",
   },
 
   branches: {
@@ -485,6 +487,8 @@ const zhCN: Locale = {
     tagMessagePlaceholder: "注释标签消息（可选）",
     tagAnnotatedHint: "留空消息可创建轻量标签。",
     tagConfirm: "创建标签",
+    tagAiHint: "AI 可以建议版本名称和消息。",
+    tagAiSuggest: "建议",
     cherryPick: "摘取到当前分支",
     cherryPickHeadDisabled: "无法将 HEAD 摘取到自身",
     cherryPickConflicts: "摘取产生了冲突——请解决后继续。",
@@ -1034,6 +1038,22 @@ const zhCN: Locale = {
     sameBranches: "源分支与目标分支相同 — 无法创建 PR。",
     noChangesToStash: "没有可存储的本地更改 — 请先修改文件再生成消息。",
   },
+  // ─── Tags panel (v1.9)
+  tags: {
+    title: "标签",
+    subtitle: "{0} 个标签",
+    newTag: "新建标签",
+    pushAll: "推送所有到 {0}",
+    pushTag: "推送到 {0}",
+    deleteTag: "删除标签",
+    annotated: "注释",
+    lightweight: "轻量",
+    empty: "暂无标签。从 Log 中的提交创建一个。",
+    deleteConfirmTitle: "删除标签",
+    deleteAlsoRemote: "同时从 {0} 删除",
+    deleteConfirm: "删除",
+  },
+
 };
 
 export default zhCN;

@@ -187,6 +187,19 @@ watch(searchQuery, () => {
   aiMatches.value = null;
 });
 
+interface RefBadge { type: "head" | "branch" | "remote" | "tag"; label: string; }
+
+function parseRefBadges(refs: string): RefBadge[] {
+  if (!refs) return [];
+  return refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
+    if (r.startsWith("HEAD -> ")) return { type: "head" as const, label: r.slice(8) };
+    if (r === "HEAD") return { type: "head" as const, label: "HEAD" };
+    if (r.startsWith("tag: ")) return { type: "tag" as const, label: r.slice(5) };
+    if (r.includes("/")) return { type: "remote" as const, label: r };
+    return { type: "branch" as const, label: r };
+  });
+}
+
 function relativeDate(isoDate: string): string {
   const date = new Date(isoDate);
   const now = new Date();
@@ -320,6 +333,15 @@ function authorColor(name: string): string {
               <span class="commit-author">{{ entry.author }}</span>
               <span class="commit-separator" aria-hidden="true">&middot;</span>
               <time class="commit-date" :datetime="entry.date">{{ relativeDate(entry.date) }}</time>
+            </div>
+            <!-- Ref badges (branch + tag) — hidden when search active to save space -->
+            <div v-if="!isSearchActive && entry.refs" class="commit-refs">
+              <span
+                v-for="badge in parseRefBadges(entry.refs)"
+                :key="badge.label"
+                class="commit-ref-badge"
+                :class="`commit-ref-badge--${badge.type}`"
+              >{{ badge.label }}</span>
             </div>
           </div>
           <!-- Edit button — HEAD unpushed only (hidden in search mode) -->
@@ -778,6 +800,42 @@ function authorColor(name: string): string {
 .log-search-status {
   color: var(--color-accent);
   background: var(--color-accent-soft, rgba(139, 92, 246, 0.06));
+}
+
+.commit-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.commit-ref-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-ref-badge--head,
+.commit-ref-badge--branch {
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.12));
+  color: var(--color-accent);
+}
+
+.commit-ref-badge--tag {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+}
+
+.commit-ref-badge--remote {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
 }
 
 .commit-ai-reason {

@@ -19,6 +19,7 @@ import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
 import StashManager from "./components/StashManager.vue";
+import TagsPanel from "./components/TagsPanel.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
 import SubmodulePanel from "./components/SubmodulePanel.vue";
@@ -438,6 +439,9 @@ const {
   confirmResetToCommit,
   confirmCreateBranchFromCommit,
   confirmTagCommit,
+  suggestTagWithAI,
+  isTagAISuggesting,
+  isAIAvailable,
 } = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh });
 
 // ─── Folder opening ─────────────────────────────────────
@@ -749,6 +753,7 @@ const showRebase = ref(false);
 
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
+const showTags = ref(false);
 
 // ─── Worktree manager panel ──────────────────────────────
 const showWorktrees = ref(false);
@@ -1113,6 +1118,7 @@ onUnmounted(() => {
           @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()"
           @open-stash="showStash = true"
+          @open-tags="showTags = true"
         />
       </aside>
 
@@ -1315,6 +1321,14 @@ onUnmounted(() => {
       @refresh="repoRefresh()"
     />
 
+    <!-- Tags panel -->
+    <TagsPanel
+      v-if="showTags && repoFolderPath"
+      :cwd="repoFolderPath"
+      @close="showTags = false"
+      @create-tag="showTags = false; commitActionModal.type = 'tag'; commitActionModal.entry = repoLog[0] ?? null;"
+    />
+
     <!-- Worktree manager overlay -->
     <div v-if="showWorktrees && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showWorktrees = false">
       <div class="stash-overlay-body">
@@ -1515,6 +1529,18 @@ onUnmounted(() => {
       @close="closeCommitActionModal"
     >
       <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+        <!-- AI suggestion strip -->
+        <div v-if="isAIAvailable" class="tag-ai-row">
+          <span class="tag-ai-hint">{{ t('commitCtx.tagAiHint') }}</span>
+          <button
+            class="bm-btn btn--ai tag-ai-btn"
+            :disabled="commitActionModal.busy || isTagAISuggesting"
+            @click="suggestTagWithAI"
+          >
+            <AiSparkle :size="13" :animated="isTagAISuggesting" />
+            {{ isTagAISuggesting ? t('common.loading') : t('commitCtx.tagAiSuggest') }}
+          </button>
+        </div>
         <input
           v-model="commitActionModal.tagName"
           type="text"
@@ -1898,6 +1924,30 @@ onUnmounted(() => {
 }
 
 /* ── Commit action modal body elements (v1.9) ─────────── */
+.tag-ai-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.08));
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-accent-muted, rgba(124, 58, 237, 0.2));
+}
+
+.tag-ai-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  flex: 1;
+}
+
+.tag-ai-btn {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-3);
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
 .cam-warn {
   margin: 0;
   padding: var(--space-2) var(--space-3);
