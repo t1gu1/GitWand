@@ -851,10 +851,10 @@ const t = computed(() => i18n[locale.value])
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/automatic-merge-conflict-resolution" class="blog-teaser-card">
-          <div class="blog-teaser-meta">Apr 20, 2026 · 10 min read</div>
-          <h3 class="blog-teaser-title">How I built automatic merge conflict resolution: pattern classification and composite confidence scoring</h3>
-          <p class="blog-teaser-excerpt">Pattern-based engine that auto-resolves trivial Git merge conflicts using classification, composite confidence scoring, and format-aware resolvers for JSON and Markdown.</p>
+        <a href="/blog/auto-merge-failure-modes" class="blog-teaser-card">
+          <div class="blog-teaser-meta">Apr 23, 2026 · 8 min read</div>
+          <h3 class="blog-teaser-title">How often does GitWand's auto-merge get it wrong? A catalog of known failure modes</h3>
+          <p class="blog-teaser-excerpt">Honest per-pattern catalog of where the conflict classifier can be wrong, the structural safeguards that keep the blast radius small, and the design trade-offs behind each one.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

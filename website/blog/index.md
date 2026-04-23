@@ -5,6 +5,12 @@ title: Blog
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/auto-merge-failure-modes" class="blog-card">
+    <div class="blog-meta">Apr 23, 2026 · 8 min read</div>
+    <h2 class="blog-title">How often does GitWand's auto-merge get it wrong? A catalog of known failure modes</h2>
+    <p class="blog-excerpt">Honest per-pattern catalog of where the conflict classifier can be wrong, the structural safeguards that keep the blast radius small, and the design trade-offs behind each one.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/split-commit-by-hunks" class="blog-card">
     <div class="blog-meta">Apr 21, 2026 · 9 min read</div>
     <h2 class="blog-title">Splitting a commit by hunks: what went into GitWand v1.7.0</h2>
