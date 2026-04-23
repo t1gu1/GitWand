@@ -54,8 +54,15 @@ const emit = defineEmits<{
   "update:commitDescription": [value: string];
   selectCommit: [hash: string];
   editCommit: [entry: GitLogEntry];
-  /** User picked "Split commit..." from the commit-item context menu. */
   splitCommit: [entry: GitLogEntry];
+  // v1.9 — commit context menu actions
+  checkoutCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry];
+  revertCommit: [entry: GitLogEntry];
+  createBranchFromCommit: [entry: GitLogEntry];
+  tagCommit: [entry: GitLogEntry];
+  cherryPickCommit: [entry: GitLogEntry];
+  viewOnForge: [entry: GitLogEntry];
   /** Change the log scope toggle (current branch vs all refs). */
   "update:logScope": [scope: "current" | "all"];
   /** Toggle the author filter (all commits vs mine only). */
@@ -798,6 +805,13 @@ function formatActivityDate(dateStr: string): string {
         @select-commit="(hash: string) => emit('selectCommit', hash)"
         @edit-commit="(entry) => emit('editCommit', entry)"
         @split-commit="(entry) => emit('splitCommit', entry)"
+        @checkout-commit="(entry) => emit('checkoutCommit', entry)"
+        @reset-to-commit="(entry) => emit('resetToCommit', entry)"
+        @revert-commit="(entry) => emit('revertCommit', entry)"
+        @create-branch-from-commit="(entry) => emit('createBranchFromCommit', entry)"
+        @tag-commit="(entry) => emit('tagCommit', entry)"
+        @cherry-pick-commit="(entry) => emit('cherryPickCommit', entry)"
+        @view-on-forge="(entry) => emit('viewOnForge', entry)"
       />
     </div>
 

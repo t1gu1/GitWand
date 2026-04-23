@@ -1960,10 +1960,12 @@ fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
 }
 
 #[tauri::command]
-fn git_create_branch(cwd: String, name: String, checkout: bool) -> Result<(), String> {
+fn git_create_branch(cwd: String, name: String, checkout: bool, start_point: Option<String>) -> Result<(), String> {
     if checkout {
+        let mut args = vec!["checkout", "-b", &name];
+        if let Some(ref sp) = start_point { args.push(sp); }
         let output = std::process::Command::new(git_binary())
-            .args(["checkout", "-b", &name])
+            .args(&args)
             .current_dir(&cwd)
             .output()
             .map_err(|e| format!("Failed to create branch: {}", e))?;
@@ -1972,8 +1974,10 @@ fn git_create_branch(cwd: String, name: String, checkout: bool) -> Result<(), St
             return Err(format!("git checkout -b failed: {}", stderr));
         }
     } else {
+        let mut args = vec!["branch", &name];
+        if let Some(ref sp) = start_point { args.push(sp); }
         let output = std::process::Command::new(git_binary())
-            .args(["branch", &name])
+            .args(&args)
             .current_dir(&cwd)
             .output()
             .map_err(|e| format!("Failed to create branch: {}", e))?;
@@ -2178,6 +2182,97 @@ fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult, String> {
         message: if output.status.success() { stdout } else { stderr },
         conflicts: None,
     })
+}
+
+// ─── Commit context menu operations (v1.9) ───────────────
+
+/// Checkout a specific commit — puts the repo in detached HEAD state.
+#[tauri::command]
+fn git_checkout_commit(cwd: String, sha: String) -> Result<(), String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["checkout", &sha])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to checkout commit: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git checkout failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Reset the current branch HEAD to a specific commit.
+/// mode: "soft" | "mixed" | "hard"
+#[tauri::command]
+fn git_reset_to_commit(cwd: String, sha: String, mode: String) -> Result<(), String> {
+    let flag = match mode.as_str() {
+        "soft" => "--soft",
+        "hard" => "--hard",
+        _ => "--mixed",
+    };
+    let output = std::process::Command::new(git_binary())
+        .args(["reset", flag, &sha])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to reset: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git reset {} failed: {}",
+            flag,
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+/// Revert a commit — creates a new commit that undoes the changes.
+/// For merge commits pass mainline = Some(1) to use -m 1.
+#[tauri::command]
+fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>) -> Result<GitPushPullResult, String> {
+    let mut args = vec!["revert".to_string(), "--no-edit".to_string()];
+    if let Some(m) = mainline {
+        args.push("-m".to_string());
+        args.push(m.to_string());
+    }
+    args.push(sha);
+    let output = std::process::Command::new(git_binary())
+        .args(&args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to revert commit: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let has_conflicts = stderr.contains("CONFLICT") || stdout.contains("CONFLICT");
+    Ok(GitPushPullResult {
+        success: output.status.success(),
+        message: if output.status.success() { stdout } else { stderr },
+        conflicts: Some(has_conflicts),
+    })
+}
+
+/// Create a lightweight or annotated tag at a specific commit SHA.
+#[tauri::command]
+fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String>) -> Result<(), String> {
+    let trimmed = message.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let args: Vec<String> = if let Some(m) = trimmed {
+        vec!["tag".into(), "-a".into(), name, sha, "-m".into(), m.to_string()]
+    } else {
+        vec!["tag".into(), name, sha]
+    };
+    let output = std::process::Command::new(git_binary())
+        .args(&args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to create tag: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git tag failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
 }
 
 // ─── Stash Manager (Phase 8.2) ───────────────────────────
@@ -4294,6 +4389,10 @@ pub fn run() {
             git_submodule_init,
             git_submodule_update,
             git_submodule_add,
+            git_checkout_commit,
+            git_reset_to_commit,
+            git_revert_commit,
+            git_create_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

@@ -1507,17 +1507,21 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    // POST /api/git-create-branch  { cwd, name, checkout }
+    // POST /api/git-create-branch  { cwd, name, checkout, startPoint? }
     if (url.pathname === "/api/git-create-branch" && req.method === "POST") {
-      const { cwd, name, checkout } = await readBody(req);
+      const { cwd, name, checkout, startPoint } = await readBody(req);
       if (!cwd || !name) return jsonResponse(req, res, { error: "Missing cwd or name" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const cmd = checkout ? `git checkout -b "${name}"` : `git branch "${name}"`;
-        execSync(cmd, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        const sp = startPoint ? [startPoint] : [];
+        if (checkout) {
+          execFileSync(GIT, ["checkout", "-b", name, ...sp], { cwd: resolvedCwd });
+        } else {
+          execFileSync(GIT, ["branch", name, ...sp], { cwd: resolvedCwd });
+        }
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2984,6 +2988,68 @@ const server = createServer(async (req, res) => {
         return jsonResponse(req, res, { name, url: remoteUrl, provider, owner, repo });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // ── Commit context-menu operations (v1.9) ────────────────────────────
+
+    // POST /api/git-checkout-commit  { cwd, sha }
+    if (url.pathname === "/api/git-checkout-commit" && req.method === "POST") {
+      const { cwd, sha } = await readBody(req);
+      if (!cwd || !sha) return jsonResponse(req, res, { error: "Missing cwd or sha" }, 400);
+      try {
+        execFileSync(GIT, ["checkout", sha], { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/git-reset-to-commit  { cwd, sha, mode }
+    if (url.pathname === "/api/git-reset-to-commit" && req.method === "POST") {
+      const { cwd, sha, mode } = await readBody(req);
+      if (!cwd || !sha) return jsonResponse(req, res, { error: "Missing cwd or sha" }, 400);
+      const flag = mode === "soft" ? "--soft" : mode === "hard" ? "--hard" : "--mixed";
+      try {
+        execFileSync(GIT, ["reset", flag, sha], { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/git-revert-commit  { cwd, sha, mainline? }
+    if (url.pathname === "/api/git-revert-commit" && req.method === "POST") {
+      const { cwd, sha, mainline } = await readBody(req);
+      if (!cwd || !sha) return jsonResponse(req, res, { error: "Missing cwd or sha" }, 400);
+      try {
+        const args = ["revert", "--no-edit"];
+        if (mainline != null) { args.push("-m", String(mainline)); }
+        args.push(sha);
+        const out = spawnSync(GIT, args, { cwd: resolve(cwd), encoding: "utf-8" });
+        const hasConflicts = (out.stderr || "").includes("CONFLICT") || (out.stdout || "").includes("CONFLICT");
+        return jsonResponse(req, res, {
+          success: out.status === 0,
+          message: out.status === 0 ? (out.stdout || "") : (out.stderr || ""),
+          conflicts: hasConflicts,
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-create-tag  { cwd, name, sha, message? }
+    if (url.pathname === "/api/git-create-tag" && req.method === "POST") {
+      const { cwd, name, sha, message } = await readBody(req);
+      if (!cwd || !name || !sha) return jsonResponse(req, res, { error: "Missing cwd, name, or sha" }, 400);
+      try {
+        const args = message?.trim()
+          ? ["tag", "-a", name, sha, "-m", message.trim()]
+          : ["tag", name, sha];
+        execFileSync(GIT, args, { cwd: resolve(cwd) });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 

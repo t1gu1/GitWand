@@ -26,6 +26,7 @@ import SearchPalette from "./components/header/SearchPalette.vue";
 import type { PaletteAction } from "./components/header/SearchPalette.vue";
 import BranchRenameModal from "./components/header/BranchRenameModal.vue";
 import BranchDeleteModal from "./components/header/BranchDeleteModal.vue";
+import BaseModal from "./components/BaseModal.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -40,6 +41,7 @@ import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
 import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore } from "./utils/backend";
+import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
@@ -419,6 +421,24 @@ async function handleSplitCompleted(_hashes: { firstHash: string; secondHash: st
 function handleSplitClose() {
   // No-op — the composable already reset its own state on cancel.
 }
+
+// ─── Commit context menu — v1.9 ──────────────────────────
+
+const {
+  commitActionModal,
+  closeCommitActionModal,
+  handleCheckoutCommit,
+  handleResetToCommit,
+  handleRevertCommit,
+  handleCreateBranchFromCommit,
+  handleTagCommit,
+  handleCherryPickCommit,
+  handleViewOnForge,
+  confirmCheckoutCommit,
+  confirmResetToCommit,
+  confirmCreateBranchFromCommit,
+  confirmTagCommit,
+} = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh });
 
 // ─── Folder opening ─────────────────────────────────────
 async function handleOpenFolder() {
@@ -1080,6 +1100,13 @@ onUnmounted(() => {
           @select-commit="selectCommit"
           @edit-commit="handleEditCommit"
           @split-commit="handleSplitCommitRequest"
+          @checkout-commit="handleCheckoutCommit"
+          @reset-to-commit="handleResetToCommit"
+          @revert-commit="handleRevertCommit"
+          @create-branch-from-commit="handleCreateBranchFromCommit"
+          @tag-commit="handleTagCommit"
+          @cherry-pick-commit="handleCherryPickCommit"
+          @view-on-forge="handleViewOnForge"
           @update:log-scope="setLogScope"
           @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
@@ -1398,6 +1425,122 @@ onUnmounted(() => {
       @close="showBranchDeleteModal = false"
       @confirm="onBranchDeleteConfirm"
     />
+
+    <!-- ── Commit context-menu modals (v1.9) — using BaseModal for design consistency ── -->
+
+    <!-- Checkout commit -->
+    <BaseModal
+      v-if="commitActionModal.type === 'checkout'"
+      :title="t('commitCtx.checkout')"
+      :subtitle="t('commitCtx.checkoutDesc', commitActionModal.entry?.hash ?? '')"
+      size="sm"
+      role="alertdialog"
+      @close="closeCommitActionModal"
+    >
+      <p class="cam-warn">{{ t('commitCtx.checkoutWarn') }}</p>
+      <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy" @click="confirmCheckoutCommit">
+          {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.checkout') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Reset to commit -->
+    <BaseModal
+      v-if="commitActionModal.type === 'reset'"
+      :title="t('commitCtx.reset')"
+      :subtitle="t('commitCtx.resetDesc', commitActionModal.entry?.hash ?? '')"
+      size="sm"
+      role="alertdialog"
+      @close="closeCommitActionModal"
+    >
+      <div class="cam-radio-group">
+        <label v-for="mode in (['soft','mixed','hard'] as const)" :key="mode" class="cam-radio">
+          <input type="radio" name="resetMode" :value="mode" v-model="commitActionModal.resetMode" />
+          <span class="cam-radio-label">
+            <strong>--{{ mode }}</strong>
+            <span class="cam-radio-hint">{{ t(`commitCtx.reset${mode.charAt(0).toUpperCase() + mode.slice(1)}Hint`) }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="commitActionModal.resetMode === 'hard'" class="cam-warn" style="margin-top: var(--space-3)">{{ t('commitCtx.resetHardWarn') }}</p>
+      <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button
+          class="bm-btn"
+          :class="commitActionModal.resetMode === 'hard' ? 'bm-btn--danger' : 'bm-btn--primary'"
+          :disabled="commitActionModal.busy"
+          @click="confirmResetToCommit"
+        >
+          {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.resetConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Create branch from commit -->
+    <BaseModal
+      v-if="commitActionModal.type === 'createBranch'"
+      :title="t('commitCtx.createBranch')"
+      :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')"
+      size="sm"
+      @close="closeCommitActionModal"
+    >
+      <input
+        v-model="commitActionModal.branchName"
+        type="text"
+        class="cam-input"
+        :placeholder="t('commitCtx.branchNamePlaceholder')"
+        maxlength="100"
+        autofocus
+        @keydown.enter.prevent="confirmCreateBranchFromCommit"
+      />
+      <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy || !commitActionModal.branchName.trim()" @click="confirmCreateBranchFromCommit">
+          {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.createBranchConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Tag this commit -->
+    <BaseModal
+      v-if="commitActionModal.type === 'tag'"
+      :title="t('commitCtx.tag')"
+      :subtitle="t('commitCtx.tagDesc', commitActionModal.entry?.hash ?? '')"
+      size="sm"
+      @close="closeCommitActionModal"
+    >
+      <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+        <input
+          v-model="commitActionModal.tagName"
+          type="text"
+          class="cam-input"
+          :placeholder="t('commitCtx.tagNamePlaceholder')"
+          maxlength="100"
+          autofocus
+        />
+        <input
+          v-model="commitActionModal.tagMessage"
+          type="text"
+          class="cam-input"
+          :placeholder="t('commitCtx.tagMessagePlaceholder')"
+          maxlength="200"
+          @keydown.enter.prevent="confirmTagCommit"
+        />
+        <p class="cam-hint">{{ t('commitCtx.tagAnnotatedHint') }}</p>
+        <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      </div>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy || !commitActionModal.tagName.trim()" @click="confirmTagCommit">
+          {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.tagConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -1753,4 +1896,68 @@ onUnmounted(() => {
 .switch-stash-confirm:hover {
   filter: brightness(1.08);
 }
+
+/* ── Commit action modal body elements (v1.9) ─────────── */
+.cam-warn {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-warning);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--color-warning);
+}
+
+.cam-error {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-danger, #ef4444);
+}
+
+.cam-hint {
+  margin: 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.cam-input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.cam-input:focus {
+  border-color: var(--color-accent);
+}
+
+.cam-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cam-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.cam-radio-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cam-radio-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
 </style>

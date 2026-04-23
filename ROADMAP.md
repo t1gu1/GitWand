@@ -19,7 +19,7 @@ Devenir le client Git de référence qui combine la puissance visuelle de **Kale
 | **Kaleidoscope** | macOS natif | ~150€/an | Image diff, folder diff, 3-way merge visuel | macOS-only, pas de workflow Git, pas d'auto-resolve |
 | **GitHub Desktop** | Electron | Gratuit | Simple, bon workflow PR, cherry-pick/rebase | Diff basique, résolution rudimentaire, lourd |
 | **GitButler** | Tauri/Rust | Gratuit | Virtual branches, stacked PRs, IA intégrée | Nouveau paradigme déroutant, pas d'image/folder diff |
-| **GitKraken** | Electron | $5/mois | Graph visuel, merge editor 3-way, Jira intégré | Payant, Electron |
+| **GitKraken** | Electron | $5/mois | Graph visuel, merge editor 3-way, Jira/Trello intégrés, Launchpad (PRs+issues cross-repo), Workspaces multi-repo cloud-synced, Cloud Patches, AI partout (commit/PR/merge), Agent Sessions View (Claude Code) | Payant, Electron, lourd, nécessite compte cloud pour les features avancées |
 | **Fork** | Natif | $50 | Rapide, interface propre, gros repos | Pas d'auto-resolve, pas d'IA |
 | **Tower** | Natif | $69/an | Undo puissant, conflict advisor | Payant, pas d'auto-resolve |
 | **Sublime Merge** | Natif | $99 | Ultra-rapide, search puissant | Pas de PR workflow |
@@ -309,6 +309,19 @@ Refonte transverse du header et socle d'overlay partagé — prépare le terrain
 
 Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changement de philosophie.
 
+**Log — menu contextuel commit ✅**
+- Checkout commit (détached HEAD, warning + modal)
+- Reset to commit (sélecteur soft/mixed/hard, warning rouge sur --hard)
+- Revert commit (non-destructif, merge commits via -m 1)
+- Create branch here (git checkout -b \<name\> \<sha\>)
+- Tag this commit (lightweight ou annoté)
+- Cherry-pick onto current branch
+- Amend / Split — HEAD only, guards sur merge commits
+- Copy short SHA / Copy full SHA / Copy commit message
+- View on GitHub / GitLab / Bitbucket
+- 4 nouveaux backends 3-couches (Rust + dev-server + TS), `git_create_branch` étendu avec `start_point`
+- 37 clés i18n en parité sur les 5 locales (en/fr/es/pt-BR/zh-CN)
+
 **Rebase & commits**
 - Trailer-aware commits / rebase (`git rebase --trailer`, `git interpret-trailers`) — toggles "Signed-off-by" / "Reviewed-by" dans l'éditeur de message + option rebase interactif. Revoir la décision d'exclusion des trailers dans `useCommitMessage.ts`
 
@@ -349,6 +362,35 @@ Garde-fous partagés :
 ---
 
 ## Later — v2.0.0
+
+### Launchpad — Vue cross-repo unifiée
+
+Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos ouverts dans GitWand.
+
+- **PRs cross-repo** : liste unifiée de toutes les PRs ouvertes sur les repos dans le workspace (via `gh` CLI), avec statuts CI, reviewers, labels — sans ouvrir chaque repo un par un
+- **Issues cross-repo** : GitHub Issues agrégées (filtres : assignées à moi, mentionné, créées par moi)
+- **WIP panel** : liste des repos avec des changements non commités ou branches en retard — une vue "qu'est-ce qui m'attend" en un coup d'œil
+- **Pin / snooze** : épingler une PR importante en haut, snoozer une issue pour la semaine prochaine
+- **Vue Équipe** (optionnelle) : ce que les autres font sur les mêmes repos (via l'API GitHub), pour détecter les chevauchements avant qu'ils deviennent des conflits
+
+### Agent Sessions View
+
+GitKraken l'a lancé en avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel.
+
+- **Panel "Agents"** dans la sidebar : liste les sessions MCP actives (Claude Code, Cursor, Windsurf…) travaillant sur les worktrees du repo courant
+- Chaque carte : worktree associé, branche, statut (ahead/behind, uncommitted changes), outil agent détecté
+- **Intégration worktree** : ouvrir le worktree d'un agent en un clic dans un onglet GitWand — voir son diff en live
+- **Lancer une session** : raccourci pour démarrer Claude Code (`claude`) sur un worktree vierge depuis GitWand directement
+- Complète le MCP server existant : les agents voient GitWand, GitWand voit les agents
+
+### Workspaces multi-repo (local)
+
+Version locale du concept GitKraken Workspaces — sans cloud, sans compte, juste un fichier `.gitwand-workspace.json` commitable.
+
+- Grouper plusieurs repos dans un workspace nommé (par projet, par client, par squad)
+- **Actions groupées** : fetch all, pull all, status all en un clic
+- Ouvrir tous les repos du workspace d'un coup dans des onglets GitWand
+- Launchpad filtré par workspace
 
 ### Intégrations forge
 
@@ -411,3 +453,8 @@ Garde-fous partagés :
 - [GitButler — Virtual Branches & Stacked PRs](https://docs.gitbutler.com/)
 - [Git Tower — Release notes](https://www.git-tower.com/release-notes)
 - [Best Git GUI Clients 2026](https://lithiumgit.com/most-popular-git-gui-clients)
+- [GitKraken Desktop Features](https://www.gitkraken.com/git-client)
+- [GitKraken Launchpad](https://www.gitkraken.com/features/launchpad)
+- [GitKraken Workspaces](https://www.gitkraken.com/features/workspaces)
+- [GitKraken Conflict Prevention](https://help.gitkraken.com/gitkraken-desktop/conflict-prevention/)
+- [GitKraken Agent Sessions View — avril 2026](https://help.gitkraken.com/gitkraken-desktop/experimental-features/)

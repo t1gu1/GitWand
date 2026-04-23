@@ -1030,15 +1030,20 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
 /**
  * Create a new branch. If checkout=true, switch to it.
  */
-export async function gitCreateBranch(cwd: string, name: string, checkout: boolean = true): Promise<void> {
+export async function gitCreateBranch(
+  cwd: string,
+  name: string,
+  checkout: boolean = true,
+  startPoint?: string,
+): Promise<void> {
   if (isTauri()) {
-    await tauriInvoke("git_create_branch", { cwd, name, checkout });
+    await tauriInvoke("git_create_branch", { cwd, name, checkout, startPoint: startPoint ?? null });
     return;
   }
   const res = await fetch(`${DEV_SERVER}/api/git-create-branch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, name, checkout }),
+    body: JSON.stringify({ cwd, name, checkout, startPoint }),
   });
   if (!res.ok) throw new Error(`Failed to create branch: ${res.status}`);
 }
@@ -1252,6 +1257,74 @@ export async function gitCherryPickContinue(cwd: string): Promise<GitPushPullRes
     body: JSON.stringify({ cwd }),
   });
   return res.json();
+}
+
+// ─── Commit context-menu operations (v1.9) ─────────────────
+
+/**
+ * Checkout a specific commit SHA — puts the repo in detached HEAD state.
+ */
+export async function gitCheckoutCommit(cwd: string, sha: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_checkout_commit", { cwd, sha });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-checkout-commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, sha }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git checkout failed: ${res.status}`);
+}
+
+/**
+ * Reset the current branch to a specific commit.
+ * mode: "soft" | "mixed" | "hard"
+ */
+export async function gitResetToCommit(cwd: string, sha: string, mode: "soft" | "mixed" | "hard"): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_reset_to_commit", { cwd, sha, mode });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-reset-to-commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, sha, mode }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git reset failed: ${res.status}`);
+}
+
+/**
+ * Revert a commit — creates a new commit undoing its changes.
+ * Pass mainline=1 for merge commits (uses -m 1).
+ */
+export async function gitRevertCommit(cwd: string, sha: string, mainline?: number): Promise<GitPushPullResult> {
+  if (isTauri()) {
+    return tauriInvoke<GitPushPullResult>("git_revert_commit", { cwd, sha, mainline: mainline ?? null });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-revert-commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, sha, mainline }),
+  });
+  return res.json();
+}
+
+/**
+ * Create a tag at a specific commit SHA.
+ * If message is provided, creates an annotated tag; otherwise lightweight.
+ */
+export async function gitCreateTag(cwd: string, name: string, sha: string, message?: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_create_tag", { cwd, name, sha, message: message ?? null });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-create-tag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, name, sha, message }),
+  });
+  if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git tag failed: ${res.status}`);
 }
 
 // ─── Stash Manager (Phase 8.2) ─────────────────────────────
