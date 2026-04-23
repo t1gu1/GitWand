@@ -39,7 +39,7 @@ function buildTransformPrompt(action: CommitMessageAction, currentMessage: strin
 Rules:
 1. Follow Conventional Commits: "<type>(<optional scope>): <subject>".
 2. Subject line MUST be 72 characters or less, imperative mood, no trailing period.
-3. Never include trailers (Co-Authored-By, Signed-off-by…).
+3. Do not include trailers (Co-Authored-By, Signed-off-by…) — the user adds those separately.
 4. Output ONLY the raw commit message — no code fences, no explanations.`;
 
   switch (action) {
@@ -74,7 +74,7 @@ Rules:
 3. After the subject, leave a blank line, then optionally add a short body (1-3 lines)
    explaining *why* the change was made. Skip the body for trivial changes.
 4. Write in ${lang}.
-5. Never include "Co-Authored-By", "Signed-off-by", or any other trailer.
+5. Do not include trailers (Co-Authored-By, Signed-off-by, Reviewed-by…) — the user controls those via the GitWand trailer checkboxes.
 6. Never wrap your answer in code fences or add explanations — output ONLY the
    raw commit message, ready to be passed to \`git commit -m\`.`;
 }

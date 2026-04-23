@@ -305,6 +305,10 @@ export interface GitStatus {
   remote: string | null;
   ahead: number;
   behind: number;
+  /** Push remote when it differs from upstream (fork / triangular workflow). */
+  pushRemote: string | null;
+  /** Commits ahead of the push remote (relevant when pushRemote differs from remote). */
+  aheadPush: number;
   staged: FileChange[];
   unstaged: FileChange[];
   untracked: string[];
@@ -321,6 +325,8 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: string | null;
       ahead: number;
       behind: number;
+      push_remote: string | null;
+      ahead_push: number;
       staged: Array<{ path: string; status: string; old_path?: string }>;
       unstaged: Array<{ path: string; status: string; old_path?: string }>;
       untracked: string[];
@@ -332,6 +338,8 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: raw.remote,
       ahead: raw.ahead,
       behind: raw.behind,
+      pushRemote: raw.push_remote ?? null,
+      aheadPush: raw.ahead_push ?? 0,
       staged: raw.staged.map((f) => ({
         path: f.path,
         status: f.status as "added" | "modified" | "deleted" | "renamed",
@@ -349,7 +357,9 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
 
   const res = await fetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  // dev-server doesn't compute push remote — fill defaults
+  return { pushRemote: null, aheadPush: 0, ...data };
 }
 
 // ─── Git diff ──────────────────────────────────────────────
@@ -855,14 +865,25 @@ export interface BlameLine {
   content: string;
 }
 
+export type BlameAlgorithm = "histogram" | "patience" | "minimal" | "myers";
+
 /**
  * Get blame info for a file.
+ * @param algorithm diff algorithm passed to `git blame --diff-algorithm=<algo>`. Defaults to "histogram".
  */
-export async function getGitBlame(cwd: string, path: string): Promise<BlameLine[]> {
+export async function getGitBlame(cwd: string, path: string, algorithm: BlameAlgorithm = "histogram"): Promise<BlameLine[]> {
   if (isTauri()) {
-    return tauriInvoke<BlameLine[]>("git_blame", { cwd, path });
+    // Rust returns snake_case keys — map to camelCase
+    const raw = await tauriInvoke<Array<{
+      hash: string; hash_full: string; final_line: number; orig_line: number;
+      author: string; author_date: string; summary: string; content: string;
+    }>>("git_blame", { cwd, path, algorithm });
+    return raw.map(r => ({
+      hash: r.hash, hashFull: r.hash_full, finalLine: r.final_line, origLine: r.orig_line,
+      author: r.author, authorDate: r.author_date, summary: r.summary, content: r.content,
+    }));
   }
-  const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&algorithm=${algorithm}`;
   const res = await fetch(`${DEV_SERVER}/api/git-blame${qs}`);
   if (!res.ok) throw new Error(`Failed to get blame: ${res.status}`);
   return res.json();

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import type { BlameLine, FileLogEntry, GitDiff } from "../utils/backend";
-import { getGitBlame, getGitFileLog, getGitFileDiff } from "../utils/backend";
+import { getGitBlame, getGitFileLog, getGitFileDiff, type BlameAlgorithm } from "../utils/backend";
+import { loadSettings } from "../composables/useSettings";
 import { useI18n } from "../composables/useI18n";
 import { detectLanguage, highlightLine } from "../utils/highlight";
 import { safeHtml } from "../composables/useSafeHtml";
@@ -68,6 +69,25 @@ const fileLog = ref<FileLogEntry[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
+/** Blame algorithm — initialised from settings, overridable inline without leaving the view. */
+const blameAlgo = ref<BlameAlgorithm>(loadSettings().blameAlgorithm ?? "histogram");
+
+async function loadBlame(path: string) {
+  if (!path || !props.cwd) return;
+  loading.value = true;
+  error.value = null;
+  try {
+    blameLines.value = await getGitBlame(props.cwd, path, blameAlgo.value);
+  } catch (err: any) {
+    error.value = err?.message || String(err);
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Reload blame when algorithm changes (file stays the same)
+watch(blameAlgo, () => { if (props.filePath) loadBlame(props.filePath); });
+
 // ─── Load data on filePath change ───────────────────────
 watch(
   () => props.filePath,
@@ -77,7 +97,7 @@ watch(
     error.value = null;
     try {
       const [blame, log] = await Promise.all([
-        getGitBlame(props.cwd, path),
+        getGitBlame(props.cwd, path, blameAlgo.value),
         getGitFileLog(props.cwd, path),
       ]);
       blameLines.value = blame;
@@ -274,6 +294,18 @@ function shortHash(hash: string): string {
           @click="activeTab = 'compare'"
         >{{ t('diff.compare') }}</button>
       </div>
+      <!-- Blame algo selector — only shown on the blame tab -->
+      <select
+        v-if="activeTab === 'blame'"
+        v-model="blameAlgo"
+        class="fhv-algo-select"
+        :title="t('settings.blameAlgorithm')"
+      >
+        <option value="histogram">histogram</option>
+        <option value="patience">patience</option>
+        <option value="minimal">minimal</option>
+        <option value="myers">myers</option>
+      </select>
       <button class="fhv-close" @click="emit('close')" :title="t('common.close')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
           <path d="M3.646 3.646a.5.5 0 01.708 0L7 6.293l2.646-2.647a.5.5 0 01.708.708L7.707 7l2.647 2.646a.5.5 0 01-.708.708L7 7.707l-2.646 2.647a.5.5 0 01-.708-.708L6.293 7 3.646 4.354a.5.5 0 010-.708z"/>
@@ -512,6 +544,25 @@ function shortHash(hash: string): string {
   background: var(--color-bg-secondary);
   color: var(--color-accent);
   box-shadow: var(--shadow-xs);
+}
+
+.fhv-algo-select {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+  cursor: pointer;
+  outline: none;
+  flex-shrink: 0;
+  margin-right: var(--space-1);
+}
+
+.fhv-algo-select:hover,
+.fhv-algo-select:focus {
+  border-color: var(--color-accent);
+  color: var(--color-text);
 }
 
 .fhv-close {

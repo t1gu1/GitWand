@@ -1694,13 +1694,13 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && url.pathname === "/api/git-blame") {
       const cwd = url.searchParams.get("cwd");
       const filePath = url.searchParams.get("path");
+      const algorithm = url.searchParams.get("algorithm") || "histogram";
       if (!cwd || !filePath) return jsonResponse(req, res, { error: "cwd and path required" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const raw = execSync(
-          `git blame --porcelain -- "${filePath}"`,
-          { cwd: resolvedCwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: true },
-        );
+        const out = spawnSync(GIT, ["blame", "--porcelain", `--diff-algorithm=${algorithm}`, "--", filePath],
+          { cwd: resolvedCwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+        const raw = out.stdout || "";
         const lines = raw.split("\n");
         const blameLines = [];
         let i = 0;

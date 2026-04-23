@@ -103,6 +103,8 @@ const {
   needsPublish,
   aheadCount,
   behindCount,
+  pushRemote,
+  aheadPushCount,
   isPushing,
   isPulling,
   isFetching,
@@ -1031,6 +1033,8 @@ onUnmounted(() => {
       :needs-publish="needsPublish"
       :ahead-count="aheadCount"
       :behind-count="behindCount"
+      :push-remote="pushRemote"
+      :ahead-push-count="aheadPushCount"
       :is-pushing="isPushing"
       :is-pulling="isPulling"
       :is-fetching="isFetching"
@@ -1099,7 +1103,8 @@ onUnmounted(() => {
           @stage-all="stageAll"
           @stage-paths="(paths) => stageFiles(paths)"
           @unstage-all="unstageAll"
-          @commit="doCommit"
+          :git-user="currentGitUser"
+          @commit="(trailers) => doCommit(trailers)"
           @update:commit-summary="(val) => commitSummary = val"
           @update:commit-description="(val) => commitDescription = val"
           @select-commit="selectCommit"

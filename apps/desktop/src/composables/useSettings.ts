@@ -11,6 +11,7 @@
 
 import { ref } from "vue";
 import type { DiffMode } from "../utils/diffMode";
+import type { BlameAlgorithm } from "../utils/backend";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -28,6 +29,8 @@ export interface AppSettings {
   fontSize: number;
   tabSize: number;
   notifications: boolean;
+  /** Diff algorithm used for git blame. "histogram" gives the best blame results for most codebases. */
+  blameAlgorithm: BlameAlgorithm;
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -43,6 +46,7 @@ export const defaultAppSettings: AppSettings = {
   fontSize: 12,
   tabSize: 4,
   notifications: true,
+  blameAlgorithm: "histogram",
 };
 
 const SETTINGS_KEY = "gitwand-settings";

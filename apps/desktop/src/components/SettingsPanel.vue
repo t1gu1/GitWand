@@ -515,6 +515,23 @@ onMounted(() => {
             </label>
             <span class="sp-hint">{{ t('settings.commitSignatureHint') }}</span>
           </div>
+
+          <!-- Blame diff algorithm -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-blame-algo">{{ t('settings.blameAlgorithm') }}</label>
+            <select
+              id="setting-blame-algo"
+              class="sp-select"
+              :value="settings.blameAlgorithm"
+              @change="updateSetting('blameAlgorithm', ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="histogram">histogram {{ t('settings.blameAlgoRecommended') }}</option>
+              <option value="patience">patience</option>
+              <option value="minimal">minimal</option>
+              <option value="myers">myers</option>
+            </select>
+            <span class="sp-hint">{{ t('settings.blameAlgorithmHint') }}</span>
+          </div>
         </template>
 
         <!-- ═══ ÉDITEUR ═══ -->

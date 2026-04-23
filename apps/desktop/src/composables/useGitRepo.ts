@@ -179,6 +179,10 @@ export function useGitRepo() {
   /** How many commits ahead / behind the remote tracking branch. */
   const aheadCount = computed(() => status.value?.ahead ?? 0);
   const behindCount = computed(() => status.value?.behind ?? 0);
+  /** Push remote when it differs from upstream (fork / triangular workflow). */
+  const pushRemote = computed(() => status.value?.pushRemote ?? null);
+  /** Commits ahead of the push remote (fork setup only). */
+  const aheadPushCount = computed(() => status.value?.aheadPush ?? 0);
 
   /** Can we commit? (staged files + non-empty summary) */
   const canCommit = computed(() => {
@@ -543,14 +547,18 @@ export function useGitRepo() {
   /**
    * Commit staged changes with the current message.
    */
-  async function commit() {
+  async function commit(trailers = "") {
     if (!folderPath.value || !canCommit.value) return;
     isCommitting.value = true;
     try {
       const desc = commitDescription.value.trim();
-      const fullMessage = desc
+      let fullMessage = desc
         ? `${commitSummary.value.trim()}\n\n${desc}`
         : commitSummary.value.trim();
+      // Append trailers (Signed-off-by, Reviewed-by…) as a separate paragraph.
+      // git trailer convention: one blank line before the trailer block.
+      const trailerBlock = trailers.trim();
+      if (trailerBlock) fullMessage += `\n\n${trailerBlock}`;
       const hash = await gitCommit(folderPath.value, fullMessage);
       lastCommitHash.value = hash;
       commitSummary.value = "";
@@ -956,6 +964,8 @@ export function useGitRepo() {
     needsPublish,
     aheadCount,
     behindCount,
+    pushRemote,
+    aheadPushCount,
     // Actions
     openRepo,
     closeRepo,

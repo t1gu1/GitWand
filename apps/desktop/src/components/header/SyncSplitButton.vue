@@ -23,7 +23,13 @@ const props = defineProps<{
   isFetching: boolean;
   canPush: boolean;
   canPull: boolean;
+  /** Fork / triangular workflow: push remote when it differs from upstream. */
+  pushRemote?: string | null;
+  aheadPushCount?: number;
 }>();
+
+/** True when a fork setup is detected (push remote ≠ upstream). */
+const isFork = computed(() => !!props.pushRemote);
 
 const emit = defineEmits<{
   push: [];
@@ -244,6 +250,17 @@ const primaryTitle = computed(() => {
         Removed 2026-04 after the "Pusher 1 commit 1" double-count bug.
       -->
       <span>{{ primaryLabel }}</span>
+      <!-- Fork badge — visible when push remote ≠ upstream (triangular workflow) -->
+      <span
+        v-if="isFork && (aheadPushCount ?? 0) > 0"
+        class="sync-fork-badge"
+        :title="t('syncAction.forkBadgeTooltip', pushRemote ?? '')"
+      >
+        <svg width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 12V4M5 7l3-3 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        {{ aheadPushCount }} fork
+      </span>
     </button>
 
     <button
@@ -282,6 +299,20 @@ const primaryTitle = computed(() => {
   position: relative;
   display: inline-flex;
   align-items: stretch;
+}
+
+/* Fork badge — shown when push remote ≠ upstream */
+.sync-fork-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  margin-left: var(--space-1);
+  letter-spacing: 0.02em;
 }
 
 /* When there's a chevron, glue the two buttons together visually. */

@@ -322,12 +322,22 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 - 4 nouveaux backends 3-couches (Rust + dev-server + TS), `git_create_branch` étendu avec `start_point`
 - 37 clés i18n en parité sur les 5 locales (en/fr/es/pt-BR/zh-CN)
 
-**Rebase & commits**
-- Trailer-aware commits / rebase (`git rebase --trailer`, `git interpret-trailers`) — toggles "Signed-off-by" / "Reviewed-by" dans l'éditeur de message + option rebase interactif. Revoir la décision d'exclusion des trailers dans `useCommitMessage.ts`
+**Trailers ✅**
+- Toggles `Signed-off-by` / `Reviewed-by` dans le panneau de commit de la sidebar
+- Signed-off-by auto-rempli depuis `git config user.name/email` (chargé eagerly au montage)
+- Reviewed-by : checkbox + input texte libre
+- Trailers injectés comme bloc séparé (ligne vide + trailers) dans `useGitRepo.commit(trailers)`
+- `useCommitMessage.ts` : assouplissement de l'interdiction IA → les trailers restent sous contrôle de l'utilisateur
 
-**Blame & log**
-- Choix de l'algorithme de diff pour blame (`git blame --diff-algorithm=histogram|patience|minimal|myers`) — exposé dans Settings, applicable à `useBlameContext.ts`
-- File history line-range + pickaxe (`git log -L` combiné à `-S` / `-G`) — recherche de symbole dans la plage d'une fonction, rendue possible par le refactor 2.54 qui route `-L` dans le pipeline diff standard
+**Blame diff algorithm ✅**
+- Sélecteur `histogram | patience | minimal | myers` dans Settings → onglet Git
+- `git_blame` implémenté en Rust (était manquant — seulement dans dev-server), avec flag `--diff-algorithm=<algo>`
+- `getGitBlame(cwd, path, algorithm)` mis à jour (backend.ts + dev-server)
+- `FileHistoryViewer` lit le setting au moment du chargement du blame
+- 3 nouvelles clés i18n × 5 locales
+
+**File history line-range + pickaxe**
+- `git log -L` combiné à `-S` / `-G` — recherche de symbole dans la plage d'une fonction
 
 **Log — menu contextuel commit**
 Clic droit sur un commit dans le `CommitLog` — aujourd'hui une seule entrée ("Split this commit…"). Étendre vers un menu complet, chaque action câblée sur un primitif backend existant quand possible, sinon un nouveau wrapper 3 couches (Rust + dev-server + TS). Garde-fous systématiques pour les merge commits et le HEAD détaché, cohérents avec le pattern déjà posé pour `split`.
@@ -348,8 +358,11 @@ Garde-fous partagés :
 - Commit non pushé vs pushé : warning sur les opérations destructives (reset, amend) quand le commit est déjà sur le remote
 - HEAD détaché : les actions branch-aware (reset, amend, revert) proposent d'abord "créer une branche ici"
 
-**Status & forks**
-- Workflow triangulaire : comparaison double (upstream + push remote) via `status.compareBranches = @{upstream} @{push}`, badge ahead/behind séparé pour les forks — cohérent avec le positionnement "GitHub Desktop alternative"
+**Status & forks (triangulaire) ✅**
+- `GitStatus` étendu : `push_remote` + `ahead_push` calculés depuis `@{push}` quand il diffère de `@{upstream}`
+- Badge "↑N fork" dans `SyncSplitButton` — visible uniquement quand push remote ≠ upstream
+- Détection automatique : `git rev-parse --abbrev-ref @{push}` + `git rev-list --count <push_remote>..HEAD`
+- Propagation : useGitRepo → App.vue → AppHeader → SyncSplitButton (props `pushRemote` / `aheadPushCount`)
 
 **Tags ✅**
 - Panneau "Tags" (bouton ◇ dans la sidebar) : liste locale triée semver, badges annoté/léger, date relative, hash court
@@ -365,6 +378,19 @@ Garde-fous partagés :
 - Poll npm jusqu'à 12 min pour garantir la propagation avant de publier sur le registry
 - Auth via `secrets.MCP_PUBLISHER_TOKEN` (PAT `read:user`, doc mise à jour dans PUBLISH-TO-REGISTRY.md)
 
+**Commit prefixes — Conventional Commits**
+- Sélecteur de préfixe dans le panneau de commit (avant le champ de texte) : `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `style`, `perf`, `ci`, `revert`
+- Préfixe injecté automatiquement au début du summary (`feat: <message>`)
+- Configurable dans `.gitwandrc` : activer/désactiver, liste de préfixes custom, scope optionnel (`feat(auth): …`)
+- Complémente le flux IA existant : le bouton ✦ génère le message, le picker permet de corriger/forcer le type
+- Compatible avec les hooks `commit-msg` (commitlint, husky) — réduit les rejections de commit
+
+**Post-merge branch cleanup**
+- Après un merge réussi, la `MergeSuccessModal` propose « Supprimer la branche mergée ? » avec un bouton secondaire
+- Suppression locale uniquement par défaut ; option "supprimer aussi sur le remote" si la branche est trackée
+- Respecte les guards existants (branches non-merged, branches protégées détectées via `.gitwandrc`)
+- Configurable dans Settings : auto-proposer toujours / jamais / si la branche est déjà mergée sur le remote
+
 ---
 
 ## Later — v2.0.0
@@ -378,6 +404,16 @@ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tablea
 - **WIP panel** : liste des repos avec des changements non commités ou branches en retard — une vue "qu'est-ce qui m'attend" en un coup d'œil
 - **Pin / snooze** : épingler une PR importante en haut, snoozer une issue pour la semaine prochaine
 - **Vue Équipe** (optionnelle) : ce que les autres font sur les mêmes repos (via l'API GitHub), pour détecter les chevauchements avant qu'ils deviennent des conflits
+
+### Voice Input — Dictée de commit offline
+
+Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
+
+- **Dictée locale** : bouton microphone dans le panneau de commit, capture audio → transcription via un modèle Whisper embarqué (whisper-rs côté Rust) — zéro cloud, zéro réseau
+- **Enrichissement IA optionnel** : après transcription, proposer de passer le texte dicté dans `useAIProvider` pour correction grammaticale / conventional commit formatting — GitWand fait mieux que Gitux sur ce point
+- **Modèles au choix** : `tiny` (rapide, léger) ou `base` (meilleure précision) téléchargés à la demande via Settings, stockés localement
+- **Multilingue** : Whisper détecte automatiquement la langue — utile pour les équipes mixtes FR/EN
+- **Fallback gracieux** : si l'accès micro est refusé par macOS TCC, message d'erreur clair avec lien vers Préférences système
 
 ### Agent Sessions View
 

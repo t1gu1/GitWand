@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
-import { gitRemoteInfo, gitStashList, type GitLogEntry, type GitBranch, type RemoteInfo } from "../utils/backend";
+import { gitRemoteInfo, gitStashList, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser } from "../utils/backend";
 import CommitLog from "./CommitLog.vue";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
@@ -38,6 +38,8 @@ const props = defineProps<{
   dirFiles?: string[];
   /** All branches (local + remote) — used by the dashboard sidebar section. */
   branches?: GitBranch[];
+  /** Current git user — used to auto-fill Signed-off-by trailer. */
+  gitUser?: GitUser | null;
 }>();
 
 const emit = defineEmits<{
@@ -49,7 +51,8 @@ const emit = defineEmits<{
   /** Stage a specific list of file paths (used by section "+" buttons). */
   stagePaths: [paths: string[]];
   unstageAll: [];
-  commit: [];
+  /** Emitted when user confirms commit; carries the pre-formatted trailer block (may be empty). */
+  commit: [trailers: string];
   "update:commitSummary": [value: string];
   "update:commitDescription": [value: string];
   selectCommit: [hash: string];
@@ -264,6 +267,43 @@ const { isGenerating, lastError: aiError, generate: generateCommitMsg, transform
 const aiMenuOpen = ref(false);
 const aiLangMenuOpen = ref(false);
 
+// ─── Trailers ────────────────────────────────────────────
+const trailerSob = ref(false);
+const trailerRbValue = ref("");
+const trailerRbEnabled = ref(false);
+/** Section is collapsed by default — only experts need it */
+const trailerSectionOpen = ref(false);
+
+/** Local git user — loaded eagerly on mount for Signed-off-by auto-fill. */
+const localGitUser = ref<GitUser | null>(null);
+watch(() => props.cwd, async (cwd) => {
+  if (!cwd) return;
+  try { localGitUser.value = await getGitUser(cwd); } catch { /* ignore */ }
+}, { immediate: true });
+
+/** Resolved git user: prefer locally-fetched, fall back to prop. */
+const resolvedGitUser = computed(() => localGitUser.value ?? props.gitUser ?? null);
+
+/** Auto-fill Signed-off-by value from git user. */
+const sobValue = computed(() => {
+  const u = resolvedGitUser.value;
+  if (!u?.name && !u?.email) return "";
+  if (u.name && u.email) return `${u.name} <${u.email}>`;
+  return u.name || u.email || "";
+});
+
+/** Build the formatted trailer block to append to the commit message. */
+function buildTrailers(): string {
+  const lines: string[] = [];
+  if (trailerSob.value && sobValue.value) {
+    lines.push(`Signed-off-by: ${sobValue.value}`);
+  }
+  if (trailerRbEnabled.value && trailerRbValue.value.trim()) {
+    lines.push(`Reviewed-by: ${trailerRbValue.value.trim()}`);
+  }
+  return lines.join("\n");
+}
+
 /** Read the commit-message language from settings (empty string = follow UI locale). */
 function getCommitMessageLang(): string {
   try {
@@ -426,7 +466,7 @@ function onDescriptionInput(e: Event) {
 function onCommitKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
     e.preventDefault();
-    if (props.canCommit) emit("commit");
+    if (props.canCommit) emit("commit", buildTrailers());
   }
 }
 
@@ -734,6 +774,50 @@ function formatActivityDate(dateStr: string): string {
         :placeholder="t('sidebar.descriptionPlaceholder')"
         rows="4"
       ></textarea>
+      <!-- Trailers — collapsed by default, unlocked by a toggle -->
+      <div class="commit-trailers">
+        <button
+          type="button"
+          class="trailer-toggle"
+          :class="{ 'trailer-toggle--open': trailerSectionOpen }"
+          @click="trailerSectionOpen = !trailerSectionOpen"
+          :title="t('sidebar.trailerToggleTitle')"
+        >
+          <svg class="trailer-toggle-caret" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2.5 3.5L5 6l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('sidebar.trailerToggleLabel') }}</span>
+          <!-- Dot when any trailer is active -->
+          <span v-if="trailerSob || trailerRbEnabled" class="trailer-active-dot" :title="t('sidebar.trailerActiveTitle')"></span>
+        </button>
+
+        <template v-if="trailerSectionOpen">
+          <!-- Signed-off-by -->
+          <label v-if="sobValue" class="trailer-row">
+            <input type="checkbox" v-model="trailerSob" class="trailer-check" />
+            <span class="trailer-main-label">{{ t('sidebar.trailerSobLabel') }}</span>
+            <span class="trailer-git-key">Signed-off-by</span>
+            <button type="button" class="trailer-help" :title="t('sidebar.trailerSobHelp')" tabindex="-1" @click.prevent>?</button>
+          </label>
+          <div v-if="trailerSob && sobValue" class="trailer-value-line">{{ sobValue }}</div>
+
+          <!-- Reviewed-by -->
+          <label class="trailer-row">
+            <input type="checkbox" v-model="trailerRbEnabled" class="trailer-check" />
+            <span class="trailer-main-label">{{ t('sidebar.trailerRbLabel') }}</span>
+            <span class="trailer-git-key">Reviewed-by</span>
+            <button type="button" class="trailer-help" :title="t('sidebar.trailerRbHelp')" tabindex="-1" @click.prevent>?</button>
+          </label>
+          <input
+            v-if="trailerRbEnabled"
+            v-model="trailerRbValue"
+            type="text"
+            class="trailer-input"
+            :placeholder="t('sidebar.trailerRbPlaceholder')"
+            @click.stop
+          />
+        </template>
+      </div>
       <div class="commit-actions">
         <button
           class="commit-stage-all"
@@ -749,7 +833,7 @@ function formatActivityDate(dateStr: string): string {
           class="commit-btn"
           :class="{ 'commit-btn--disabled': !canCommit }"
           :disabled="!canCommit"
-          @click="emit('commit')"
+          @click="emit('commit', buildTrailers())"
         >
           <svg v-if="isCommitting" class="commit-spinner" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
             <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3"/>
@@ -1626,6 +1710,132 @@ function formatActivityDate(dateStr: string): string {
 .commit-description::placeholder {
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ─── Trailers ───────────────────────────────────────────── */
+.commit-trailers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+}
+
+/* Toggle button */
+.trailer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  width: 100%;
+  text-align: left;
+  transition: color var(--transition-fast);
+}
+
+.trailer-toggle:hover {
+  color: var(--color-text);
+}
+
+.trailer-toggle-caret {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+  transform: rotate(-90deg);
+}
+
+.trailer-toggle--open .trailer-toggle-caret {
+  transform: rotate(0deg);
+}
+
+.trailer-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+}
+
+/* Row inside expanded section */
+.trailer-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  min-height: 20px;
+  padding-left: var(--space-2);
+}
+
+.trailer-check {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.trailer-main-label {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.trailer-git-key {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+  opacity: 0.7;
+}
+
+.trailer-help {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: bold;
+  cursor: help;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
+}
+
+.trailer-help:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.trailer-value-line {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  padding-left: calc(var(--space-2) + 14px + 5px);  /* indent: padding-left + checkbox + gap */
+  margin-top: -1px;
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trailer-input {
+  margin-left: calc(var(--space-2) + 14px + 5px);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-2);
+  outline: none;
+  width: calc(100% - var(--space-2) - 14px - 5px);
+  box-sizing: border-box;
+}
+
+.trailer-input:focus {
+  border-color: var(--color-accent);
 }
 
 .commit-actions {

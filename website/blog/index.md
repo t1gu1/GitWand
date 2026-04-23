@@ -5,6 +5,12 @@ title: Blog
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/contributing-to-open-source-with-forks" class="blog-card">
+    <div class="blog-meta">Apr 23, 2026 · 7 min read</div>
+    <h2 class="blog-title">Contributing to open source with a fork: a GitWand walkthrough</h2>
+    <p class="blog-excerpt">The fork → clone → upstream → PR workflow, step by step. How GitWand's triangular-workflow badge surfaces the right information at the right time — something GitHub Desktop still doesn't do.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/auto-merge-failure-modes" class="blog-card">
     <div class="blog-meta">Apr 23, 2026 · 8 min read</div>
     <h2 class="blog-title">How often does GitWand's auto-merge get it wrong? A catalog of known failure modes</h2>

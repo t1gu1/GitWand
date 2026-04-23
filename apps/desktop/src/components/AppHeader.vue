@@ -58,6 +58,10 @@ const props = defineProps<{
   needsPublish?: boolean;
   aheadCount: number;
   behindCount: number;
+  /** Push remote when it differs from upstream (fork / triangular workflow). */
+  pushRemote?: string | null;
+  /** Commits ahead of the push remote (fork setup). */
+  aheadPushCount?: number;
   isPushing: boolean;
   isPulling: boolean;
   /** Whether a fetch is in flight (drives the sync-split spinner). */
@@ -334,6 +338,8 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           <SyncSplitButton
             :ahead-count="aheadCount"
             :behind-count="behindCount"
+            :push-remote="pushRemote"
+            :ahead-push-count="aheadPushCount"
             :needs-publish="needsPublish ?? false"
             :is-pushing="isPushing"
             :is-pulling="isPulling"

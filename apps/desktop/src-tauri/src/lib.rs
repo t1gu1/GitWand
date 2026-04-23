@@ -155,9 +155,13 @@ pub struct FileChange {
 #[derive(Serialize)]
 pub struct GitStatus {
     branch: String,
-    remote: Option<String>,
-    ahead: i32,
-    behind: i32,
+    remote: Option<String>,     // upstream tracking branch (fetch remote)
+    ahead: i32,                 // commits ahead of upstream
+    behind: i32,                // commits behind upstream
+    /// Push remote when it differs from the upstream (fork / triangular workflow).
+    /// None when push_remote == upstream or there is no push remote.
+    push_remote: Option<String>,
+    ahead_push: i32,            // commits ahead of push remote
     staged: Vec<FileChange>,
     unstaged: Vec<FileChange>,
     untracked: Vec<String>,
@@ -339,11 +343,47 @@ fn git_status(cwd: String) -> Result<GitStatus, String> {
         }
     }
 
+    // ── Triangular / fork workflow ───────────────────────────────────────────
+    // When push.default = "upstream" or a fork is set up, the push remote may
+    // differ from the upstream (fetch) remote. Detect this and compute a
+    // separate ahead count so the UI can show two distinct badges.
+    let mut push_remote: Option<String> = None;
+    let mut ahead_push: i32 = 0;
+
+    let push_ref_out = std::process::Command::new(git_binary())
+        .args(["rev-parse", "--abbrev-ref", "@{push}"])
+        .current_dir(&cwd)
+        .output();
+
+    if let Ok(p) = push_ref_out {
+        if p.status.success() {
+            let push_ref = String::from_utf8_lossy(&p.stdout).trim().to_string();
+            let upstream_ref = remote.as_deref().unwrap_or("");
+            // Only proceed if push remote is set AND differs from upstream
+            if !push_ref.is_empty() && push_ref != upstream_ref {
+                // ahead of push remote (how many commits would be pushed)
+                let rl = std::process::Command::new(git_binary())
+                    .args(["rev-list", "--count", &format!("{}..HEAD", push_ref)])
+                    .current_dir(&cwd)
+                    .output();
+                if let Ok(o) = rl {
+                    if o.status.success() {
+                        ahead_push = String::from_utf8_lossy(&o.stdout)
+                            .trim().parse().unwrap_or(0);
+                    }
+                }
+                push_remote = Some(push_ref);
+            }
+        }
+    }
+
     Ok(GitStatus {
         branch,
         remote,
         ahead,
         behind,
+        push_remote,
+        ahead_push,
         staged,
         unstaged,
         untracked,
@@ -1887,6 +1927,73 @@ pub struct GitBranch {
     behind: i32,
     last_commit: String,
     last_commit_date: String,
+}
+
+// ─── Git blame (v1.9) ─────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct BlameLine {
+    hash: String,
+    hash_full: String,
+    final_line: u32,
+    orig_line: u32,
+    author: String,
+    author_date: String,
+    summary: String,
+    content: String,
+}
+
+/// Run `git blame --porcelain` on a file.
+/// algorithm: "histogram" | "patience" | "minimal" | "myers" (default "histogram").
+#[tauri::command]
+fn git_blame(cwd: String, path: String, algorithm: Option<String>) -> Result<Vec<BlameLine>, String> {
+    let algo = algorithm.as_deref().unwrap_or("histogram");
+    let diff_algo_flag = format!("--diff-algorithm={}", algo);
+    let output = std::process::Command::new(git_binary())
+        .args(["blame", "--porcelain", &diff_algo_flag, "--", &path])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git blame: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git blame failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = raw.lines().collect();
+    let mut blame_lines: Vec<BlameLine> = Vec::new();
+    let mut i = 0;
+    while i < lines.len() {
+        // Header: <40-char-sha> <orig-line> <final-line> [<num-lines-in-group>]
+        let parts: Vec<&str> = lines[i].split_whitespace().collect();
+        if parts.len() < 3 || parts[0].len() != 40 {
+            i += 1;
+            continue;
+        }
+        let hash_full = parts[0].to_string();
+        let hash = hash_full[..7].to_string();
+        let orig_line: u32 = parts[1].parse().unwrap_or(0);
+        let final_line: u32 = parts[2].parse().unwrap_or(0);
+        i += 1;
+        let mut author = String::new();
+        let mut author_date = String::new();
+        let mut summary = String::new();
+        let mut content = String::new();
+        while i < lines.len() && !lines[i].starts_with('\t') {
+            if lines[i].starts_with("author ") {
+                author = lines[i][7..].to_string();
+            } else if lines[i].starts_with("author-time ") {
+                author_date = lines[i][12..].to_string();
+            } else if lines[i].starts_with("summary ") {
+                summary = lines[i][8..].to_string();
+            }
+            i += 1;
+        }
+        if i < lines.len() && lines[i].starts_with('\t') {
+            content = lines[i][1..].to_string();
+            i += 1;
+        }
+        blame_lines.push(BlameLine { hash, hash_full, final_line, orig_line, author, author_date, summary, content });
+    }
+    Ok(blame_lines)
 }
 
 #[tauri::command]
@@ -4499,6 +4606,7 @@ pub fn run() {
             git_submodule_init,
             git_submodule_update,
             git_submodule_add,
+            git_blame,
             git_checkout_commit,
             git_reset_to_commit,
             git_revert_commit,
