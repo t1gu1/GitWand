@@ -905,11 +905,44 @@ export interface FileLogEntry {
  */
 export async function getGitFileLog(cwd: string, path: string, count = 50): Promise<FileLogEntry[]> {
   if (isTauri()) {
-    return tauriInvoke<FileLogEntry[]>("git_file_log", { cwd, path, count });
+    const raw = await tauriInvoke<Array<{ hash_full: string; hash: string; author: string; date: string; message: string; body: string }>>("git_file_log", { cwd, path, count });
+    return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&count=${count}`;
   const res = await fetch(`${DEV_SERVER}/api/git-file-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get file log: ${res.status}`);
+  return res.json();
+}
+
+export type PickaxeMode = "S" | "G";
+
+/**
+ * Pickaxe search: find commits where `search` was added or removed in `path`.
+ * mode "S" = literal string match, "G" = regex match.
+ */
+export async function getGitFileLogPickaxe(cwd: string, path: string, search: string, mode: PickaxeMode = "S"): Promise<FileLogEntry[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ hash_full: string; hash: string; author: string; date: string; message: string; body: string }>>("git_file_log_pickaxe", { cwd, path, search, mode });
+    return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
+  }
+  const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&search=${encodeURIComponent(search)}&mode=${mode}`;
+  const res = await fetch(`${DEV_SERVER}/api/git-file-log-pickaxe${qs}`);
+  if (!res.ok) throw new Error(`Failed to get pickaxe log: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Line-range history: commits that touched lines [startLine..endLine] in path.
+ * Uses `git log -L <start>,<end>:<path>`.
+ */
+export async function getGitFileLogRange(cwd: string, path: string, startLine: number, endLine: number): Promise<FileLogEntry[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ hash_full: string; hash: string; author: string; date: string; message: string; body: string }>>("git_file_log_range", { cwd, path, startLine, endLine });
+    return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
+  }
+  const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&startLine=${startLine}&endLine=${endLine}`;
+  const res = await fetch(`${DEV_SERVER}/api/git-file-log-range${qs}`);
+  if (!res.ok) throw new Error(`Failed to get range log: ${res.status}`);
   return res.json();
 }
 

@@ -172,6 +172,16 @@ const en = {
     trailerSobTooltip: "Append Signed-off-by trailer to the commit message",
     trailerRbTooltip: "Append Reviewed-by trailer to the commit message",
     trailerRbPlaceholder: "Name <email>",
+    ccTypesTitle: "Conventional Commit type \u2014 click to prefix the summary",
+    ccType_feat: "feat: a new feature",
+    ccType_fix: "fix: a bug fix",
+    ccType_docs: "docs: documentation only",
+    ccType_chore: "chore: build process or tooling",
+    ccType_refactor: "refactor: code change with no new feature or fix",
+    ccType_test: "test: adding or correcting tests",
+    ccType_style: "style: formatting, whitespace, semicolons",
+    ccType_perf: "perf: performance improvement",
+    ccType_ci: "ci: CI/CD configuration",
     trailerToggleLabel: "Certify & review",
     trailerToggleTitle: "Add a certification or reviewer to the commit message",
     trailerActiveTitle: "A trailer is active",
@@ -603,6 +613,8 @@ const en = {
     successDesc: "All conflicts have been resolved and the merge commit has been created.",
     successClose: "Close",
     successPush: "Push",
+    deleteMergedBranch: "Delete \u201c{0}\u201d",
+    deleteAlsoRemote: "Also delete from remote",
   },
 
   // ─── PR creation ────────────────────────────────────────
@@ -1004,6 +1016,14 @@ const en = {
     explainChange: "Explain this change with AI",
     whyThisChange: "Why did this change?",
     analyzingCommit: "Analysing commit\u2026",
+  },
+
+  // ─── FileHistoryViewer — pickaxe + line-range (v1.9) ────
+  fhv: {
+    pickaxePlaceholder: "Search string or regex\u2026 (Enter to search)",
+    pickaxeNoResults: "No commits found for this search.",
+    showLineHistory: "Show history for these lines",
+    rangeHistory: "History for lines {0}\u2013{1}",
   },
 
   // ─── Worktrees ──────────────────────────────────────────

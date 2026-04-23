@@ -230,6 +230,26 @@ function corsHeaders(req) {
   };
 }
 
+/** Parse `git log --format="%H\n%h\n%an\n%aI\n%s\n%b\n---END---"` output into FileLogEntry objects. */
+function parseFileLog(raw) {
+  const entries = [];
+  for (const block of raw.split("---END---")) {
+    const trimmed = block.trim();
+    if (!trimmed) continue;
+    const parts = trimmed.split("\n");
+    if (parts.length < 5) continue;
+    entries.push({
+      hashFull: parts[0].trim(),
+      hash: parts[1].trim(),
+      author: parts[2].trim(),
+      date: parts[3].trim(),
+      message: parts[4].trim(),
+      body: parts.slice(5).join("\n").trim(),
+    });
+  }
+  return entries;
+}
+
 function jsonResponse(req, res, data, status = 200) {
   res.writeHead(status, corsHeaders(req));
   res.end(JSON.stringify(data));
@@ -1738,28 +1758,45 @@ const server = createServer(async (req, res) => {
       if (!cwd || !filePath) return jsonResponse(req, res, { error: "cwd and path required" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const format = "%H%n%h%n%an%n%aI%n%s%n%b%n---END---";
-        const raw = execSync(
-          `git log --follow -n ${count} --format="${format}" -- "${filePath}"`,
-          { cwd: resolvedCwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: true },
-        );
-        const entries = [];
-        const blocks = raw.split("---END---\n");
-        for (const block of blocks) {
-          const trimmed = block.trim();
-          if (!trimmed) continue;
-          const parts = trimmed.split("\n");
-          if (parts.length < 5) continue;
-          entries.push({
-            hashFull: parts[0],
-            hash: parts[1],
-            author: parts[2],
-            date: parts[3],
-            message: parts[4],
-            body: parts.slice(5).join("\n").trim(),
-          });
-        }
-        return jsonResponse(req, res, entries);
+        const fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+        const out = spawnSync(GIT, ["log", "--follow", "-n", String(count), `--format=${fmt}`, "--", filePath],
+          { cwd: resolvedCwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+        return jsonResponse(req, res, parseFileLog(out.stdout || ""));
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // GET /api/git-file-log-pickaxe?cwd=&path=&search=&mode=S|G
+    if (req.method === "GET" && url.pathname === "/api/git-file-log-pickaxe") {
+      const cwd = url.searchParams.get("cwd");
+      const filePath = url.searchParams.get("path");
+      const search = url.searchParams.get("search") || "";
+      const mode = url.searchParams.get("mode") === "G" ? "-G" : "-S";
+      if (!cwd || !filePath || !search) return jsonResponse(req, res, { error: "cwd, path, search required" }, 400);
+      try {
+        const fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+        const out = spawnSync(GIT, ["log", "--follow", mode, search, `--format=${fmt}`, "--", filePath],
+          { cwd: resolve(cwd), encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+        return jsonResponse(req, res, parseFileLog(out.stdout || ""));
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // GET /api/git-file-log-range?cwd=&path=&startLine=&endLine=
+    if (req.method === "GET" && url.pathname === "/api/git-file-log-range") {
+      const cwd = url.searchParams.get("cwd");
+      const filePath = url.searchParams.get("path");
+      const startLine = url.searchParams.get("startLine") || "1";
+      const endLine = url.searchParams.get("endLine") || "1";
+      if (!cwd || !filePath) return jsonResponse(req, res, { error: "cwd and path required" }, 400);
+      try {
+        const fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+        const range = `${startLine},${endLine}:${filePath}`;
+        const out = spawnSync(GIT, ["log", "-L", range, `--format=${fmt}`],
+          { cwd: resolve(cwd), encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
+        return jsonResponse(req, res, parseFileLog(out.stdout || ""));
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }

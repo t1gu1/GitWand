@@ -336,27 +336,11 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 - `FileHistoryViewer` lit le setting au moment du chargement du blame
 - 3 nouvelles clés i18n × 5 locales
 
-**File history line-range + pickaxe**
-- `git log -L` combiné à `-S` / `-G` — recherche de symbole dans la plage d'une fonction
-
-**Log — menu contextuel commit**
-Clic droit sur un commit dans le `CommitLog` — aujourd'hui une seule entrée ("Split this commit…"). Étendre vers un menu complet, chaque action câblée sur un primitif backend existant quand possible, sinon un nouveau wrapper 3 couches (Rust + dev-server + TS). Garde-fous systématiques pour les merge commits et le HEAD détaché, cohérents avec le pattern déjà posé pour `split`.
-- **Checkout commit** (`git checkout <sha>`) — passe en HEAD détaché, modale d'avertissement explicite + proposition directe "Créer une branche ici". Désactivé si working tree dirty (propose stash)
-- **Reset to commit** — sous-menu `--soft` / `--mixed` / `--hard` avec explications visuelles de ce qui change (HEAD, index, working tree), confirmation forte sur `--hard`. Bloqué si pas sur une branche locale
-- **Revert commit** (`git revert <sha>`) — crée un commit inverse (non destructif, safe sur branche partagée). Support merge commits via `-m 1`. Éditeur de message pré-rempli, résolution de conflit si besoin via le merge editor existant
-- **Create branch from commit** (`git branch <name> <sha>` + checkout optionnel) — input inline avec validation de nom (réutilise la logique `useBranchName`)
-- **Tag this commit** — raccourci vers la modale de création de tag (voir section Tags ci-dessus), pré-remplie avec le SHA
-- **Cherry-pick onto current branch** — raccourci vers le flux existant `CherryPickPanel`, pré-sélection du commit cliqué
-- **Amend** — surface l'action d'amend existante dans le menu contextuel (uniquement si le commit = HEAD et working tree propre)
-- **Copy SHA** — short (7) / full — sous-menu, écrit dans le presse-papier via `navigator.clipboard`
-- **Copy commit message** — summary seul ou summary + description
-- **View on GitHub / GitLab / Bitbucket** — ouvre `<remote-url>/commit/<sha>` via `tauri-plugin-opener`, détection du forge depuis `git remote get-url origin` (même helper que pour les PR)
-- **Compare with…** — sous-menu : working tree, HEAD, another commit (picker) — ouvre `DiffViewer` entre les deux refs
-
-Garde-fous partagés :
-- Merge commits : grisés avec tooltip pour `split`, `reset --hard` (déjà posé), `amend` ; `revert` autorisé avec `-m 1`
-- Commit non pushé vs pushé : warning sur les opérations destructives (reset, amend) quand le commit est déjà sur le remote
-- HEAD détaché : les actions branch-aware (reset, amend, revert) proposent d'abord "créer une branche ici"
+**File history line-range + pickaxe ✅**
+- Barre de recherche pickaxe dans l'onglet Historique de `FileHistoryViewer` : mode `-S` (chaîne littérale) et `-G` (regex), résultats filtrés en temps réel
+- Bouton 🕐 sur chaque bloc de lignes du blame → `git log -L <start>,<end>:<file>` — bascule automatiquement vers l'onglet Historique avec un bandeau "Historique des lignes X–Y"
+- `git_file_log` implémenté en Rust (était manquant), + `git_file_log_pickaxe`, `git_file_log_range` — 3 backends 3-couches
+- `displayedLog` computed consolidant les 3 sources (range > pickaxe > log complet)
 
 **Status & forks (triangulaire) ✅**
 - `GitStatus` étendu : `push_remote` + `ahead_push` calculés depuis `@{push}` quand il diffère de `@{upstream}`
@@ -378,18 +362,15 @@ Garde-fous partagés :
 - Poll npm jusqu'à 12 min pour garantir la propagation avant de publier sur le registry
 - Auth via `secrets.MCP_PUBLISHER_TOKEN` (PAT `read:user`, doc mise à jour dans PUBLISH-TO-REGISTRY.md)
 
-**Commit prefixes — Conventional Commits**
-- Sélecteur de préfixe dans le panneau de commit (avant le champ de texte) : `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `style`, `perf`, `ci`, `revert`
-- Préfixe injecté automatiquement au début du summary (`feat: <message>`)
-- Configurable dans `.gitwandrc` : activer/désactiver, liste de préfixes custom, scope optionnel (`feat(auth): …`)
-- Complémente le flux IA existant : le bouton ✦ génère le message, le picker permet de corriger/forcer le type
-- Compatible avec les hooks `commit-msg` (commitlint, husky) — réduit les rejections de commit
+**Commit prefixes — Conventional Commits ✅**
+- Chips `feat · fix · docs · chore · refactor · test · style · perf · ci` au-dessus du summary input
+- Clic → injecte le préfixe (`feat: …`) et remplace l'existant ; re-clic → retire le préfixe
+- `activePrefix` computed détecte le préfixe en temps réel (compatible avec les messages générés par l'IA)
 
-**Post-merge branch cleanup**
-- Après un merge réussi, la `MergeSuccessModal` propose « Supprimer la branche mergée ? » avec un bouton secondaire
-- Suppression locale uniquement par défaut ; option "supprimer aussi sur le remote" si la branche est trackée
-- Respecte les guards existants (branches non-merged, branches protégées détectées via `.gitwandrc`)
-- Configurable dans Settings : auto-proposer toujours / jamais / si la branche est déjà mergée sur le remote
+**Post-merge branch cleanup ✅**
+- `MergeSuccessModal` propose "Supprimer «branche»" après un merge réussi
+- Checkbox "Supprimer aussi sur le remote" → `git push <remote> --delete <branch>`
+- `lastMergedBranch` capturé dans `mergeBranch()` et passé en prop au modal
 
 ---
 

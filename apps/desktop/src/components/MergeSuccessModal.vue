@@ -5,16 +5,30 @@ import BaseModal from "./BaseModal.vue";
 
 const { t } = useI18n();
 
+const props = defineProps<{
+  /** The branch that was just merged — offered for deletion as a cleanup step. */
+  mergedBranch?: string;
+}>();
+
 const emit = defineEmits<{
   close: [];
   push: [];
+  deleteBranch: [branch: string, alsoRemote: boolean];
 }>();
 
 const pushing = ref(false);
+const alsoDeleteRemote = ref(false);
+const deleting = ref(false);
 
 async function handlePush() {
   pushing.value = true;
   emit("push");
+}
+
+async function handleDeleteBranch() {
+  if (!props.mergedBranch) return;
+  deleting.value = true;
+  emit("deleteBranch", props.mergedBranch, alsoDeleteRemote.value);
 }
 </script>
 
@@ -35,6 +49,24 @@ async function handlePush() {
 
       <h2 class="msm-title">{{ t('merge.successTitle') }}</h2>
       <p class="msm-desc">{{ t('merge.successDesc') }}</p>
+    </div>
+
+    <!-- Branch cleanup offer -->
+    <div v-if="mergedBranch" class="msm-cleanup">
+      <label class="msm-cleanup-label">
+        <input type="checkbox" v-model="alsoDeleteRemote" class="msm-cleanup-check" />
+        <span>{{ t('merge.deleteAlsoRemote') }}</span>
+      </label>
+      <button
+        class="bm-btn bm-btn--ghost msm-cleanup-btn"
+        :disabled="deleting || pushing"
+        @click="handleDeleteBranch"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 2h3l1 1h4a1 1 0 0 1 1 1v1H3V4a1 1 0 0 1 1-1zM3 5h10l-.8 8H3.8L3 5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+        </svg>
+        {{ deleting ? t('common.loading') : t('merge.deleteMergedBranch', mergedBranch) }}
+      </button>
     </div>
 
     <template #footer>
@@ -78,6 +110,41 @@ async function handlePush() {
   font-size: var(--font-size-md);
   color: var(--color-text-muted);
   line-height: var(--line-height-normal);
+}
+
+.msm-cleanup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.msm-cleanup-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.msm-cleanup-check {
+  accent-color: var(--color-danger, #ef4444);
+  cursor: pointer;
+}
+
+.msm-cleanup-btn {
+  font-size: var(--font-size-sm);
+  gap: var(--space-1);
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+  align-self: flex-start;
+}
+
+.msm-cleanup-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.06);
 }
 
 .msm-spinner {

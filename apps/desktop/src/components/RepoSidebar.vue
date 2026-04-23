@@ -459,6 +459,24 @@ function onSummaryInput(e: Event) {
   emit("update:commitSummary", (e.target as HTMLInputElement).value);
 }
 
+// ─── Conventional Commits prefix picker ──────────────────
+const CC_TYPES = ["feat", "fix", "docs", "chore", "refactor", "test", "style", "perf", "ci"] as const;
+const CC_PREFIX_RE = /^([a-z]+)(\([^)]*\))?!?:\s*/;
+
+/** The active type prefix extracted from the current summary, or "" if none. */
+const activePrefix = computed(() => {
+  const m = props.commitSummary.match(CC_PREFIX_RE);
+  return m ? m[1] : "";
+});
+
+function setCommitType(type: string) {
+  // Strip any existing conventional prefix first
+  const bare = props.commitSummary.replace(CC_PREFIX_RE, "");
+  // Toggle: clicking the same type removes it
+  const next = type && type !== activePrefix.value ? `${type}: ${bare}` : bare;
+  emit("update:commitSummary", next);
+}
+
 function onDescriptionInput(e: Event) {
   emit("update:commitDescription", (e.target as HTMLTextAreaElement).value);
 }
@@ -701,6 +719,17 @@ function formatActivityDate(dateStr: string): string {
 
     <!-- Commit panel — fixed at bottom, always visible in changes view -->
     <div class="commit-panel" v-if="viewMode === 'changes'">
+      <!-- Conventional Commits type picker -->
+      <div class="cc-types" :title="t('sidebar.ccTypesTitle')">
+        <button
+          v-for="type in CC_TYPES"
+          :key="type"
+          class="cc-chip"
+          :class="{ 'cc-chip--active': activePrefix === type }"
+          @click="setCommitType(type)"
+          :title="t(`sidebar.ccType_${type}`)"
+        >{{ type }}</button>
+      </div>
       <div class="commit-summary-row">
         <input
           class="commit-summary mono"
@@ -1710,6 +1739,44 @@ function formatActivityDate(dateStr: string): string {
 .commit-description::placeholder {
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* ─── Conventional Commits type chips ───────────────────── */
+.cc-types {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 3px;
+  padding: 4px var(--space-3) 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.cc-types::-webkit-scrollbar { display: none; }
+
+.cc-chip {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  font-weight: var(--font-weight-medium);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.cc-chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.cc-chip--active {
+  background: var(--color-accent-soft, rgba(124,58,237,0.12));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
 }
 
 /* ─── Trailers ───────────────────────────────────────────── */

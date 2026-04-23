@@ -171,6 +171,17 @@ const zhCN: Locale = {
     trailerSobTooltip: "在提交消息中附加 Signed-off-by 尾注",
     trailerRbTooltip: "在提交消息中附加 Reviewed-by 尾注",
     trailerRbPlaceholder: "姓名 <邮箱>",
+    ccTypesTitle: "规范提交类型 — 点击以将类型添加到摘要前",
+    ccType_feat: "feat：新功能",
+    ccType_fix: "fix：修复错误",
+    ccType_docs: "docs：仅文档",
+    ccType_chore: "chore：构建或工具",
+    ccType_refactor: "refactor：重构，无新功能或修复",
+    ccType_test: "test：添加或修复测试",
+    ccType_style: "style：格式、空格",
+    ccType_perf: "perf：性能优化",
+    ccType_ci: "ci：CI/CD 配置",
+
     trailerToggleLabel: "认证与审查",
     trailerToggleTitle: "向提交消息添加认证或审查者",
     trailerActiveTitle: "有一个 trailer 已激活",
@@ -580,6 +591,9 @@ const zhCN: Locale = {
     successDesc: "所有冲突已解决，合并提交已创建。",
     successClose: "关闭",
     successPush: "推送",
+    deleteMergedBranch: "删除“{0}”",
+    deleteAlsoRemote: "同时从远程删除",
+
   },
 
   pr: {
@@ -1066,6 +1080,15 @@ const zhCN: Locale = {
     deleteConfirmTitle: "删除标签",
     deleteAlsoRemote: "同时从 {0} 删除",
     deleteConfirm: "删除",
+  },
+
+
+  // ─── FileHistoryViewer — pickaxe + line-range (v1.9)
+  fhv: {
+    pickaxePlaceholder: "搜索字符串或正则表达式…（Enter 搜索）",
+    pickaxeNoResults: "未找到符合搜索的提交。",
+    showLineHistory: "查看这些行的历史",
+    rangeHistory: "行 {0}–{1} 的历史",
   },
 
 };

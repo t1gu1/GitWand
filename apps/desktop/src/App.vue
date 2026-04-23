@@ -41,7 +41,7 @@ import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
-import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore } from "./utils/backend";
+import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -125,7 +125,7 @@ const {
   push: doPush,
   pull: doPull,
   fetch: doFetch,
-  mergeBranch: doMerge,
+  mergeBranch: doMergeRaw,
   mergeContinue: doMergeContinue,
   abortMerge: doAbortMerge,
   discardFiles,
@@ -233,18 +233,49 @@ watch(repoError, (val) => {
   }
 });
 
+/** Wrap the raw merge to capture the merged branch name for the cleanup modal. */
+async function doMerge(branch: string) {
+  lastMergedBranch.value = branch;
+  await doMergeRaw(branch);
+}
+
 // ─── Merge success modal ──────────────────────────────────
 const showMergeSuccess = ref(false);
+/** Branch that was just merged — offered for cleanup in MergeSuccessModal. */
+const lastMergedBranch = ref<string | null>(null);
 
 function onMergeSuccessClose() {
   showMergeSuccess.value = false;
+  lastMergedBranch.value = null;
   viewMode.value = "dashboard";
 }
 
 async function onMergeSuccessPush() {
   showMergeSuccess.value = false;
+  lastMergedBranch.value = null;
   viewMode.value = "dashboard";
   await doPush();
+}
+
+async function onMergeSuccessDeleteBranch(branch: string, alsoRemote: boolean) {
+  const cwd = repoFolderPath.value;
+  if (!cwd || !branch) return;
+  try {
+    await gitDeleteBranch(cwd, branch, false);
+    if (alsoRemote) {
+      // git push <remote> --delete <branch> — same command as for tags
+      const remoteInfo = await gitRemoteInfo(cwd);
+      if (remoteInfo?.name) {
+        await gitDeleteRemoteTag(cwd, remoteInfo.name, branch).catch(() => {/* best-effort */});
+      }
+    }
+    showMergeSuccess.value = false;
+    lastMergedBranch.value = null;
+    await loadBranches();
+    viewMode.value = "dashboard";
+  } catch (err: any) {
+    repoError.value = err?.message ?? String(err);
+  }
 }
 
 // Auto-dismiss success toast after 3s
@@ -1283,8 +1314,10 @@ onUnmounted(() => {
     <!-- Merge success modal -->
     <MergeSuccessModal
       v-if="showMergeSuccess"
+      :merged-branch="lastMergedBranch ?? undefined"
       @close="onMergeSuccessClose"
       @push="onMergeSuccessPush"
+      @delete-branch="onMergeSuccessDeleteBranch"
     />
 
     <!-- Split commit modal (driven by the useSplitCommit composable's

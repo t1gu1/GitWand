@@ -167,6 +167,17 @@ const es: Locale = {
     trailerSobTooltip: "Añadir trailer Signed-off-by al mensaje de commit",
     trailerRbTooltip: "Añadir trailer Reviewed-by al mensaje de commit",
     trailerRbPlaceholder: "Nombre <email>",
+    ccTypesTitle: "Tipo de commit convencional — clic para prefijar el resumen",
+    ccType_feat: "feat: nueva funcionalidad",
+    ccType_fix: "fix: corrección de error",
+    ccType_docs: "docs: solo documentación",
+    ccType_chore: "chore: herramientas o build",
+    ccType_refactor: "refactor: reestructuración sin nueva función ni corrección",
+    ccType_test: "test: añadir o corregir tests",
+    ccType_style: "style: formato, espacios",
+    ccType_perf: "perf: mejora de rendimiento",
+    ccType_ci: "ci: configuración CI/CD",
+
     trailerToggleLabel: "Certificación & revisión",
     trailerToggleTitle: "Añadir una certificación o revisor al mensaje de commit",
     trailerActiveTitle: "Un trailer está activo",
@@ -589,6 +600,9 @@ const es: Locale = {
     successDesc: "Todos los conflictos han sido resueltos y el commit de merge ha sido creado.",
     successClose: "Cerrar",
     successPush: "Push",
+    deleteMergedBranch: "Eliminar «{0}»",
+    deleteAlsoRemote: "Eliminar también en el remote",
+
   },
 
   // ─── PR creation ────────────────────────────────────────
@@ -1079,6 +1093,15 @@ const es: Locale = {
     deleteConfirmTitle: "Eliminar tag",
     deleteAlsoRemote: "Eliminar también en {0}",
     deleteConfirm: "Eliminar",
+  },
+
+
+  // ─── FileHistoryViewer — pickaxe + line-range (v1.9)
+  fhv: {
+    pickaxePlaceholder: "Buscar cadena o regex… (Enter para buscar)",
+    pickaxeNoResults: "No se encontraron commits para esta búsqueda.",
+    showLineHistory: "Ver historial de estas líneas",
+    rangeHistory: "Historial de líneas {0}–{1}",
   },
 
 };

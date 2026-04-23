@@ -165,6 +165,17 @@ const fr: Locale = {
     trailerSobTooltip: "Ajouter un trailer Signed-off-by au message de commit",
     trailerRbTooltip: "Ajouter un trailer Reviewed-by au message de commit",
     trailerRbPlaceholder: "Nom <email>",
+    ccTypesTitle: "Type de commit conventionnel — cliquer pour préfixer le résumé",
+    ccType_feat: "feat : nouvelle fonctionnalité",
+    ccType_fix: "fix : correction de bug",
+    ccType_docs: "docs : documentation uniquement",
+    ccType_chore: "chore : outillage ou build",
+    ccType_refactor: "refactor : restructuration sans fonctionnalité ni correction",
+    ccType_test: "test : ajout ou correction de tests",
+    ccType_style: "style : formatage, espaces",
+    ccType_perf: "perf : amélioration de performance",
+    ccType_ci: "ci : configuration CI/CD",
+
     trailerToggleLabel: "Certification & revue",
     trailerToggleTitle: "Ajouter une certification ou un relecteur au message de commit",
     trailerActiveTitle: "Un trailer est actif",
@@ -596,6 +607,9 @@ const fr: Locale = {
     successDesc: "Tous les conflits ont été résolus et le merge commit a été créé.",
     successClose: "Fermer",
     successPush: "Push",
+    deleteMergedBranch: "Supprimer « {0} »",
+    deleteAlsoRemote: "Supprimer aussi sur le remote",
+
   },
 
   // ─── PR creation ────────────────────────────────────────
@@ -1091,6 +1105,15 @@ const fr: Locale = {
     deleteConfirmTitle: "Supprimer le tag",
     deleteAlsoRemote: "Supprimer aussi sur {0}",
     deleteConfirm: "Supprimer",
+  },
+
+
+  // ─── FileHistoryViewer — pickaxe + line-range (v1.9)
+  fhv: {
+    pickaxePlaceholder: "Chercher une chaîne ou regex… (Entrée pour chercher)",
+    pickaxeNoResults: "Aucun commit trouvé pour cette recherche.",
+    showLineHistory: "Voir l’historique de ces lignes",
+    rangeHistory: "Historique des lignes {0}–{1}",
   },
 
 };

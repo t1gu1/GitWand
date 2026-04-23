@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import type { BlameLine, FileLogEntry, GitDiff } from "../utils/backend";
-import { getGitBlame, getGitFileLog, getGitFileDiff, type BlameAlgorithm } from "../utils/backend";
+import { getGitBlame, getGitFileLog, getGitFileLogPickaxe, getGitFileLogRange, getGitFileDiff, type BlameAlgorithm, type PickaxeMode } from "../utils/backend";
 import { loadSettings } from "../composables/useSettings";
 import { useI18n } from "../composables/useI18n";
 import { detectLanguage, highlightLine } from "../utils/highlight";
@@ -71,6 +71,84 @@ const error = ref<string | null>(null);
 
 /** Blame algorithm — initialised from settings, overridable inline without leaving the view. */
 const blameAlgo = ref<BlameAlgorithm>(loadSettings().blameAlgorithm ?? "histogram");
+
+// ─── Pickaxe (Log tab search) ────────────────────────────
+const pickaxeQuery = ref("");
+const pickaxeMode = ref<PickaxeMode>("S");
+const pickaxeResults = ref<FileLogEntry[] | null>(null);
+const pickaxeLoading = ref(false);
+const pickaxeError = ref<string | null>(null);
+
+async function runPickaxe() {
+  const q = pickaxeQuery.value.trim();
+  if (!q || !props.cwd || !props.filePath) return;
+  pickaxeLoading.value = true;
+  pickaxeError.value = null;
+  try {
+    pickaxeResults.value = await getGitFileLogPickaxe(props.cwd, props.filePath, q, pickaxeMode.value);
+  } catch (err: any) {
+    pickaxeError.value = err?.message || String(err);
+  } finally {
+    pickaxeLoading.value = false;
+  }
+}
+
+function clearPickaxe() {
+  pickaxeQuery.value = "";
+  pickaxeResults.value = null;
+  pickaxeError.value = null;
+}
+
+// ─── Line-range (Blame tab → switch to Log) ──────────────
+const rangeLogLines = ref<{ start: number; end: number } | null>(null);
+const rangeLogResults = ref<FileLogEntry[] | null>(null);
+const rangeLogLoading = ref(false);
+const rangeLogError = ref<string | null>(null);
+
+async function showRangeHistory(startLine: number, endLine: number) {
+  if (!props.cwd || !props.filePath) return;
+  rangeLogLines.value = { start: startLine, end: endLine };
+  rangeLogResults.value = null;
+  rangeLogError.value = null;
+  activeTab.value = "log";   // switch to log tab to show results
+  rangeLogLoading.value = true;
+  try {
+    rangeLogResults.value = await getGitFileLogRange(props.cwd, props.filePath, startLine, endLine);
+  } catch (err: any) {
+    rangeLogError.value = err?.message || String(err);
+  } finally {
+    rangeLogLoading.value = false;
+  }
+}
+
+function clearRangeLog() {
+  rangeLogLines.value = null;
+  rangeLogResults.value = null;
+}
+
+// The effective log to display in the Log tab:
+// 1. range log (from blame line selection) takes priority
+// 2. pickaxe results if a search is active
+// 3. full file log otherwise
+const displayedLog = computed<FileLogEntry[]>(() => {
+  if (rangeLogResults.value !== null) return rangeLogResults.value;
+  if (pickaxeResults.value !== null) return pickaxeResults.value;
+  return fileLog.value;
+});
+
+/** Show line-range history for the consecutive block of blame lines starting at idx. */
+function showRangeHistoryForBlock(idx: number) {
+  const targetHash = blameLines.value[idx]?.hashFull;
+  if (!targetHash) return;
+  // Find where this hash block starts and ends
+  let start = idx;
+  while (start > 0 && blameLines.value[start - 1]?.hashFull === targetHash) start--;
+  let end = idx;
+  while (end < blameLines.value.length - 1 && blameLines.value[end + 1]?.hashFull === targetHash) end++;
+  const startLine = blameLines.value[start].finalLine;
+  const endLine = blameLines.value[end].finalLine;
+  showRangeHistory(startLine, endLine);
+}
 
 async function loadBlame(path: string) {
   if (!path || !props.cwd) return;
@@ -347,6 +425,17 @@ function shortHash(hash: string): string {
                 :aria-label="t('fileHistory.explainChange')"
                 @click.stop="requestBlameExplain(line.hashFull)"
               ><AiSparkle :size="14" /></button>
+              <!-- Line-range history button — shows history for the block of consecutive lines with this hash -->
+              <button
+                class="fhv-blame-range-btn"
+                :title="t('fhv.showLineHistory')"
+                @click.stop="showRangeHistoryForBlock(idx)"
+              >
+                <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+                  <path d="M8 5v3l2 1.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
               <span class="fhv-blame-author">{{ line.author }}</span>
               <span class="fhv-blame-date muted">{{ formatDateFromTimestamp(line.authorDate) }}</span>
             </td>
@@ -380,6 +469,30 @@ function shortHash(hash: string): string {
 
     <!-- Log tab -->
     <div v-else-if="activeTab === 'log'" class="fhv-log">
+      <!-- Pickaxe search bar -->
+      <div class="fhv-pickaxe-bar">
+        <div class="fhv-pickaxe-modes">
+          <button class="fhv-pickaxe-mode" :class="{ 'fhv-pickaxe-mode--active': pickaxeMode === 'S' }" @click="pickaxeMode = 'S'" title="-S: literal string">S</button>
+          <button class="fhv-pickaxe-mode" :class="{ 'fhv-pickaxe-mode--active': pickaxeMode === 'G' }" @click="pickaxeMode = 'G'" title="-G: regex">G</button>
+        </div>
+        <input
+          v-model="pickaxeQuery"
+          class="fhv-pickaxe-input"
+          :placeholder="t('fhv.pickaxePlaceholder')"
+          @keydown.enter="runPickaxe"
+          @keydown.esc="clearPickaxe"
+        />
+        <button v-if="pickaxeQuery" class="fhv-pickaxe-clear" @click="clearPickaxe" :title="t('common.close')">✕</button>
+      </div>
+      <!-- Range log banner -->
+      <div v-if="rangeLogLines" class="fhv-range-banner">
+        <span>{{ t('fhv.rangeHistory', rangeLogLines.start, rangeLogLines.end) }}</span>
+        <button class="fhv-pickaxe-clear" @click="clearRangeLog">✕</button>
+      </div>
+      <p v-if="pickaxeError || rangeLogError" class="fhv-pickaxe-error">{{ pickaxeError ?? rangeLogError }}</p>
+      <div v-if="pickaxeLoading || rangeLogLoading" class="fhv-loading"><span class="muted">{{ t('common.loading') }}</span></div>
+      <p v-else-if="pickaxeResults !== null && displayedLog.length === 0" class="fhv-pickaxe-empty muted">{{ t('fhv.pickaxeNoResults') }}</p>
+
       <!-- Compare selection hint -->
       <div class="fhv-compare-hint" v-if="!compareFrom">
         <span class="muted">{{ t('diff.compareHint') }}</span>
@@ -390,7 +503,7 @@ function shortHash(hash: string): string {
       </div>
 
       <div
-        v-for="entry in fileLog"
+        v-for="entry in displayedLog"
         :key="entry.hashFull"
         class="fhv-log-entry"
         :class="{
@@ -544,6 +657,112 @@ function shortHash(hash: string): string {
   background: var(--color-bg-secondary);
   color: var(--color-accent);
   box-shadow: var(--shadow-xs);
+}
+
+/* ─── Pickaxe search bar ────────────────────────────────── */
+.fhv-pickaxe-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.fhv-pickaxe-modes {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.fhv-pickaxe-mode {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  font-family: var(--font-mono, monospace);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  cursor: pointer;
+}
+
+.fhv-pickaxe-mode--active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+.fhv-pickaxe-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
+  padding: 2px 0;
+}
+
+.fhv-pickaxe-input::placeholder { color: var(--color-text-muted); }
+
+.fhv-pickaxe-clear {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.fhv-range-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(124,58,237,0.06));
+  border-bottom: 1px solid var(--color-border);
+}
+
+.fhv-pickaxe-error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-danger, #ef4444);
+}
+
+.fhv-pickaxe-empty {
+  padding: var(--space-4) var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+/* ─── Blame range-history button ─────────────────────────── */
+.fhv-blame-range-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+  vertical-align: middle;
+}
+
+.fhv-blame-meta:hover .fhv-blame-range-btn,
+.fhv-blame-line:hover .fhv-blame-range-btn {
+  opacity: 1;
+}
+
+.fhv-blame-range-btn:hover {
+  color: var(--color-accent);
 }
 
 .fhv-algo-select {

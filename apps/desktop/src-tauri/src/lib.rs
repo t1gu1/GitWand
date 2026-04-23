@@ -1943,6 +1943,88 @@ struct BlameLine {
     content: String,
 }
 
+// ─── File log (v1.9) — pickaxe + line-range ──────────────
+
+#[derive(serde::Serialize)]
+struct FileLogEntry {
+    hash_full: String,
+    hash: String,
+    author: String,
+    date: String,
+    message: String,
+    body: String,
+}
+
+fn parse_file_log_output(raw: &str) -> Vec<FileLogEntry> {
+    let sep = "---END---";
+    let mut entries = Vec::new();
+    for block in raw.split(sep) {
+        let trimmed = block.trim();
+        if trimmed.is_empty() { continue; }
+        let parts: Vec<&str> = trimmed.splitn(6, '\n').collect();
+        if parts.len() < 5 { continue; }
+        entries.push(FileLogEntry {
+            hash_full: parts[0].trim().to_string(),
+            hash: parts[1].trim().to_string(),
+            author: parts[2].trim().to_string(),
+            date: parts[3].trim().to_string(),
+            message: parts[4].trim().to_string(),
+            body: parts.get(5).map(|s| s.trim().to_string()).unwrap_or_default(),
+        });
+    }
+    entries
+}
+
+/// Standard file log (git log --follow).
+#[tauri::command]
+fn git_file_log(cwd: String, path: String, count: Option<u32>) -> Result<Vec<FileLogEntry>, String> {
+    let n = count.unwrap_or(50).to_string();
+    let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+    let output = std::process::Command::new(git_binary())
+        .args(["log", "--follow", "-n", &n, &format!("--format={}", fmt), "--", &path])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("git log failed: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git log failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(parse_file_log_output(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Pickaxe: find commits that added or removed `search` string.
+/// mode: "S" (literal string) | "G" (regex)
+#[tauri::command]
+fn git_file_log_pickaxe(cwd: String, path: String, search: String, mode: String) -> Result<Vec<FileLogEntry>, String> {
+    let flag = if mode == "G" { "-G" } else { "-S" };
+    let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+    let output = std::process::Command::new(git_binary())
+        .args(["log", "--follow", flag, &search, &format!("--format={}", fmt), "--", &path])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("git log pickaxe failed: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git log pickaxe failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(parse_file_log_output(&String::from_utf8_lossy(&output.stdout)))
+}
+
+/// Line-range history: commits that touched lines [start..end] in path.
+/// Uses git log -L <start>,<end>:<path> (no --follow; incompatible with -L).
+#[tauri::command]
+fn git_file_log_range(cwd: String, path: String, start_line: u32, end_line: u32) -> Result<Vec<FileLogEntry>, String> {
+    let range = format!("{},{}:{}", start_line, end_line, path);
+    let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
+    let output = std::process::Command::new(git_binary())
+        .args(["log", "-L", &range, &format!("--format={}", fmt)])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("git log -L failed: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("git log -L failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    Ok(parse_file_log_output(&String::from_utf8_lossy(&output.stdout)))
+}
+
 /// Run `git blame --porcelain` on a file.
 /// algorithm: "histogram" | "patience" | "minimal" | "myers" (default "histogram").
 #[tauri::command]
@@ -4606,6 +4688,9 @@ pub fn run() {
             git_submodule_init,
             git_submodule_update,
             git_submodule_add,
+            git_file_log,
+            git_file_log_pickaxe,
+            git_file_log_range,
             git_blame,
             git_checkout_commit,
             git_reset_to_commit,
