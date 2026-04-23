@@ -15,6 +15,11 @@ permissions:
   contents: read
   id-token: write  # Required for npm provenance attestations
 
+env:
+  # Tag name without the leading "v" (e.g. "1.9.0"). Evaluated per-job so
+  # it works for both push-tag and workflow_dispatch triggers.
+  PKG_VERSION: ${{ github.ref_name != '' && startsWith(github.ref_name, 'v') && github.ref_name || '' }}
+
 jobs:
   publish:
     name: Publish @gitwand/{core,mcp,cli} to npm
@@ -155,3 +160,70 @@ jobs:
             });
             setTimeout(() => { killed = true; c.kill(); }, 5000);
           "
+
+  # ── MCP Registry publish ─────────────────────────────────────────────────
+  # Triggered only on tag push (not workflow_dispatch) since the registry
+  # publish requires an exact @gitwand/mcp version already live on npm.
+  #
+  # Pre-requisite secret: MCP_PUBLISHER_TOKEN — a GitHub PAT with at minimum
+  # `read:user` scope, owned by an account that has write access to the
+  # devlint/GitWand repository on GitHub. The registry uses this to verify
+  # the publisher is authorised to claim the `io.github.devlint/gitwand` name.
+  publish-mcp-registry:
+    name: Publish io.github.devlint/gitwand to MCP Registry
+    needs: [publish, smoke-test]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher (pre-built binary)
+        run: |
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          echo "Downloading mcp-publisher for ${OS}/${ARCH}…"
+          curl -fsSL \
+            "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_${OS}_${ARCH}.tar.gz" \
+            | tar -xz mcp-publisher
+          sudo mv mcp-publisher /usr/local/bin/
+          mcp-publisher --help
+
+      - name: Wait for @gitwand/mcp to propagate on npm
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "Polling npm for @gitwand/mcp@${VER}…"
+          for i in $(seq 1 24); do
+            if npm view "@gitwand/mcp@${VER}" version 2>/dev/null | grep -q "${VER}"; then
+              echo "✓ @gitwand/mcp@${VER} is live on npm"
+              exit 0
+            fi
+            echo "  attempt ${i}/24 — not yet available, waiting 30s…"
+            sleep 30
+          done
+          echo "::error::@gitwand/mcp@${VER} did not appear on npm within 12 minutes"
+          exit 1
+
+      - name: Publish to MCP Registry
+        working-directory: packages/mcp
+        env:
+          # PAT with read:user scope, owner must have write access to devlint/GitWand.
+          # Set this secret in the repo: Settings → Secrets → MCP_PUBLISHER_TOKEN
+          GITHUB_TOKEN: ${{ secrets.MCP_PUBLISHER_TOKEN }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          echo "Publishing io.github.devlint/gitwand v${VER} to MCP Registry…"
+          mcp-publisher publish
+          echo "✓ MCP Registry publish complete"
+
+      - name: Remove PUBLISH-TO-REGISTRY.md note about automation
+        # The doc said "Consider automating this once the flow is proven manually."
+        # We have. Remove that line so it doesn't confuse future maintainers.
+        run: |
+          sed -i '/Consider automating this in the CI publish workflow/d' packages/mcp/PUBLISH-TO-REGISTRY.md
+          git config user.email "actions@github.com"
+          git config user.name "github-actions[bot]"
+          if ! git diff --quiet packages/mcp/PUBLISH-TO-REGISTRY.md; then
+            git add packages/mcp/PUBLISH-TO-REGISTRY.md
+            git commit -m "docs(mcp): remove manual publish note — CI now handles registry"
+            git push origin HEAD:main
+          fi

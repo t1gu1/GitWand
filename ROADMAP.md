@@ -351,13 +351,19 @@ Garde-fous partagés :
 **Status & forks**
 - Workflow triangulaire : comparaison double (upstream + push remote) via `status.compareBranches = @{upstream} @{push}`, badge ahead/behind séparé pour les forks — cohérent avec le positionnement "GitHub Desktop alternative"
 
-**Tags**
-- Création de tags depuis l'UI (lightweight + annotés avec message) via `git tag` — panneau "Tags" listant local & remote, clic droit sur un commit du log pour tagger, suppression local (`git tag -d`) et remote (`git push --delete`)
-- Push de tags : bouton dédié ("Pusher les tags") + checkbox "inclure les tags" dans le push standard (`git push --tags` / `--follow-tags`)
-- Ref badges tag dans le log (distincts des branches), filtre "version entre deux tags" câblé au générateur de release notes (`git log <tag>..<tag>`, déjà prévu en 1.3.4)
+**Tags ✅**
+- Panneau "Tags" (bouton ◇ dans la sidebar) : liste locale triée semver, badges annoté/léger, date relative, hash court
+- Actions par tag au hover : push vers remote, suppression locale (avec option de supprimer aussi sur remote — confirmation modale)
+- "Push all tags" en un clic via `--tags`
+- Ref badges branch/tag/remote dans la vue Log list (en plus du DAG) — amber pour les tags, violet pour les branches
+- AI tag suggestion : bouton ✦ dans le modal de création → analyse commits depuis le dernier tag, suggère le prochain bump semver + message annoté en une ligne (`useTagSuggestion.ts`)
+- Backends 3-couches : `git_list_tags`, `git_delete_tag`, `git_push_tags`, `git_delete_remote_tag`
 
-**Release automation — MCP Registry**
-- Ajouter un step `publish-mcp-registry` à `.github/workflows/publish.yml` déclenché par le push de tag : installe `mcp-publisher`, attend la propagation `@gitwand/mcp@${TAG}` sur npm, puis lance `mcp-publisher publish` depuis `packages/mcp/`. Auth via `MCP_PUBLISHER_TOKEN` (PAT GitHub dédié, scope `read:user` minimum) en secret repo. Raison : jusqu'à 1.7.0 le `server.json` était bumpé dans le repo mais le registry restait figé à 1.6.1 — aucun `mcp-publisher publish` manuel n'a été lancé depuis. La doc `packages/mcp/PUBLISH-TO-REGISTRY.md` note déjà "Consider automating this in the CI publish workflow once the flow is proven manually once", à retirer une fois le step ajouté.
+**Release automation — MCP Registry ✅**
+- Job `publish-mcp-registry` ajouté à `publish.yml` : déclenché sur tag `v*.*.*`, après `publish` + `smoke-test`
+- Installe `mcp-publisher` via binaire pré-compilé (pas de brew requis sur ubuntu-latest)
+- Poll npm jusqu'à 12 min pour garantir la propagation avant de publier sur le registry
+- Auth via `secrets.MCP_PUBLISHER_TOKEN` (PAT `read:user`, doc mise à jour dans PUBLISH-TO-REGISTRY.md)
 
 ---
 

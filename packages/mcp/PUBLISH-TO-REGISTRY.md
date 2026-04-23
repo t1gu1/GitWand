@@ -57,13 +57,22 @@ After publish:
 
 ## Updating on each release
 
-For every new release (e.g. v1.7.0):
+**This is now automated.** Pushing a `v*.*.*` tag triggers `.github/workflows/publish.yml`
+which, after the npm packages are live and the smoke-test passes, automatically:
 
-1. Bump `version` in `server.json` to match the new `@gitwand/mcp` version on npm.
-2. Bump the `version` under `packages[0]`.
-3. Re-run `mcp-publisher publish` (the CLI detects the name + maintainer and updates in place).
+1. Installs `mcp-publisher` from the official GitHub releases.
+2. Polls npm until `@gitwand/mcp@<version>` propagates (up to 12 min).
+3. Runs `mcp-publisher publish` from this directory.
 
-Consider automating this in the CI publish workflow once the flow is proven manually once.
+The only manual step remaining before tagging is to bump `version` in `server.json`
+(root + `packages[0]`) to match the new `@gitwand/mcp` version — the same bump
+you already do in `packages/mcp/package.json` and `packages/mcp/src/server.ts`.
+
+### Required secret
+
+The workflow reads `secrets.MCP_PUBLISHER_TOKEN` — a GitHub PAT with at minimum
+`read:user` scope, owned by an account with write access to `devlint/GitWand`.
+Set it once in: **Repo → Settings → Secrets and variables → Actions → New repository secret**.
 
 ## Current server.json summary
 
