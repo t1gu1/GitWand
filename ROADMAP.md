@@ -343,6 +343,9 @@ Garde-fous partagés :
 - Push de tags : bouton dédié ("Pusher les tags") + checkbox "inclure les tags" dans le push standard (`git push --tags` / `--follow-tags`)
 - Ref badges tag dans le log (distincts des branches), filtre "version entre deux tags" câblé au générateur de release notes (`git log <tag>..<tag>`, déjà prévu en 1.3.4)
 
+**Release automation — MCP Registry**
+- Ajouter un step `publish-mcp-registry` à `.github/workflows/publish.yml` déclenché par le push de tag : installe `mcp-publisher`, attend la propagation `@gitwand/mcp@${TAG}` sur npm, puis lance `mcp-publisher publish` depuis `packages/mcp/`. Auth via `MCP_PUBLISHER_TOKEN` (PAT GitHub dédié, scope `read:user` minimum) en secret repo. Raison : jusqu'à 1.7.0 le `server.json` était bumpé dans le repo mais le registry restait figé à 1.6.1 — aucun `mcp-publisher publish` manuel n'a été lancé depuis. La doc `packages/mcp/PUBLISH-TO-REGISTRY.md` note déjà "Consider automating this in the CI publish workflow once the flow is proven manually once", à retirer une fois le step ajouté.
+
 ---
 
 ## Later — v2.0.0
