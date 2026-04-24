@@ -48,6 +48,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'Claude Code + GitWand: AI agents & merges', link: '/blog/claude-code-gitwand-ai-agents' },
             { text: 'Auto-merge failure modes', link: '/blog/auto-merge-failure-modes' },
             { text: 'Splitting a commit by hunks (v1.7.0)', link: '/blog/split-commit-by-hunks' },
             { text: 'Worktrees, submodules & auto-update', link: '/blog/worktrees-submodules-auto-update' },

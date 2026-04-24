@@ -5,6 +5,12 @@ title: Blog
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/claude-code-gitwand-ai-agents" class="blog-card">
+    <div class="blog-meta">Apr 24, 2026 · 9 min read</div>
+    <h2 class="blog-title">Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare</h2>
+    <p class="blog-excerpt">How GitWand's MCP server closes the gap between an AI agent that can write code and one that can actually merge it — the preview-first pattern, the auto-resolve handoff, and where it still breaks.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/contributing-to-open-source-with-forks" class="blog-card">
     <div class="blog-meta">Apr 23, 2026 · 7 min read</div>
     <h2 class="blog-title">Contributing to open source with a fork: a GitWand walkthrough</h2>
