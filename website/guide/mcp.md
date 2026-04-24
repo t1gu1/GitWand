@@ -1,3 +1,8 @@
+---
+title: MCP Server — GitWand
+description: GitWand's MCP server exposes Git conflict resolution to AI agents. Use it with Claude Code, Cursor, Windsurf, and any MCP-compatible client — no API key required.
+---
+
 # MCP Server
 
 GitWand ships an MCP (Model Context Protocol) server that exposes its conflict resolution engine to AI agents. Any MCP-compatible client can use it — Claude Code, Claude Desktop, Cursor, Windsurf, Continue, and others.

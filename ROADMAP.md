@@ -406,6 +406,17 @@ Deux points d'entrée pour récupérer un repo sans passer par le terminal :
 - Auto-update channel (stable / beta)
 - Homebrew cask, winget, Flatpak
 
+**Barre de menu macOS native**
+
+Menus File / Edit / Repository / View / Window / Help branchés sur les actions existantes de l'app — rend GitWand "citoyen" de macOS et ouvre des raccourcis clavier système.
+
+- **File** : Open Repository… `⌘O`, Open Recent (sous-menu), Clone…, Fork…, Close Window `⌘W`
+- **Edit** : Undo/Redo `⌘Z/⌘⇧Z` (branché sur l'undo stack), Copy/Paste/Select All (requis pour que les raccourcis fonctionnent dans les champs), Find in Log… `⌘F`
+- **Repository** _(menu custom, courant chez Tower/Fork)_ : Fetch `⌘⇧F`, Pull, Push `⌘P`, New Branch… `⌘⇧B`, Merge…, Open in Terminal `⌘⇧T`, Open on GitHub/GitLab
+- **View** : Toggle Sidebar, Toggle Dark/Light Mode, Enter Full Screen `⌃⌘F`
+- **Window** : Minimize `⌘M`, Zoom, Bring All to Front
+- **Help** : Documentation, What's New (→ changelog), Report an Issue, Check for Updates… (branché sur `runUpdateCheck()`)
+
 **Dashboard — Contributors amélioré**
 - **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
 - **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits

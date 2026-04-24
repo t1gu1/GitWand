@@ -5,8 +5,23 @@ export default defineConfig({
   description: "Git's magic wand — smart conflict resolution & native Git client",
   base: '/',
 
+  sitemap: {
+    hostname: 'https://gitwand.devlint.fr',
+  },
+
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+    // Open Graph
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'GitWand' }],
+    ['meta', { property: 'og:image', content: 'https://gitwand.devlint.fr/og-image.png' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    // Twitter / X
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: 'https://gitwand.devlint.fr/og-image.png' }],
+    // Misc
+    ['meta', { name: 'theme-color', content: '#7c3aed' }],
   ],
 
   themeConfig: {

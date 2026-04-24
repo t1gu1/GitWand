@@ -1,5 +1,6 @@
 ---
-title: Blog
+title: Blog — GitWand
+description: Technical articles on Git workflows, AI-powered conflict resolution, and open-source development. Written by the team behind GitWand.
 ---
 
 # Blog

@@ -1,3 +1,8 @@
+---
+title: AI Integrations — GitWand
+description: Connect GitWand to Claude Code CLI, the Anthropic API, OpenAI-compatible endpoints, or Ollama for AI-powered commit messages, PR descriptions, conflict explanations, and more.
+---
+
 # AI integrations
 
 GitWand can connect to an AI model to generate commit messages, PR titles and descriptions, branch names, stash messages, release notes, and conflict explanations. The model runs through a provider you configure — GitWand never bundles its own model.

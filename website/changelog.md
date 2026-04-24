@@ -1,3 +1,8 @@
+---
+title: Changelog — GitWand
+description: Release history for GitWand — the native Git client with AI conflict resolution. Follow new features, fixes, and improvements across every version.
+---
+
 # Changelog
 
 ## v1.10.0 — April 2026

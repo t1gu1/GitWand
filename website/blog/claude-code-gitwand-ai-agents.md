@@ -2,6 +2,16 @@
 title: "Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare"
 description: "How GitWand's MCP server closes the gap between an AI agent that can write code and one that can actually merge it — without blowing up your history."
 date: 2026-04-24
+head:
+  - - meta
+    - property: og:title
+      content: "Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare"
+  - - meta
+    - property: og:description
+      content: "How GitWand's MCP server closes the gap between an AI agent that can write code and one that can actually merge it — without blowing up your history."
+  - - meta
+    - name: twitter:title
+      content: "Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare"
 ---
 
 # Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare

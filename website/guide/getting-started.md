@@ -1,3 +1,8 @@
+---
+title: Getting Started — GitWand
+description: Install GitWand as a desktop app, CLI tool, or VS Code extension. All three share the same conflict resolution engine. macOS, Linux, Windows.
+---
+
 # Getting Started
 
 GitWand is available as a desktop app, a CLI tool, and a VS Code extension. Install whichever fits your workflow — they all share the same conflict resolution engine.
