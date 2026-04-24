@@ -42,7 +42,8 @@
     "longDescription": "GitWand automatically detects and resolves trivial Git merge conflicts using deterministic pattern matching. Supports same-change, one-side-change, non-overlapping edits, whitespace-only diffs, and more.",
     "copyright": "Copyright (c) 2026 Laurent Guitton",
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "10.15",
+      "signingIdentity": null
     },
     "windows": {
       "wix": null
