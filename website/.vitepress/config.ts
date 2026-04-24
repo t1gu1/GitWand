@@ -22,6 +22,8 @@ export default defineConfig({
     ['meta', { name: 'twitter:image', content: 'https://gitwand.devlint.fr/og-image.png' }],
     // Misc
     ['meta', { name: 'theme-color', content: '#7c3aed' }],
+    // Google Search Console verification
+    ['meta', { name: 'google-site-verification', content: 'hskwXWiX9CPY24yjaZt8QOYTh0uEQ4VMErKVRiZO7n4' }],
   ],
 
   themeConfig: {
