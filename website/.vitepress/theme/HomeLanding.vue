@@ -137,6 +137,8 @@ const i18n: Record<Locale, any> = {
       { q: 'Quelle est la différence avec les autres clients Git ?', a: 'GitWand se distingue par son moteur de résolution intégré, son architecture native Tauri (pas d\'Electron), ses 3 interfaces cohérentes (desktop, CLI, VS Code), et son serveur MCP pour l\'intégration avec les agents IA.' },
       { q: 'Comment installer le serveur MCP ?', a: 'Avec Claude Code, une seule commande suffit : claude mcp add gitwand -- npx -y @gitwand/mcp. Pour Claude Desktop, Cursor ou Windsurf, ajoutez le bloc mcpServers à la config de votre client (voir la documentation). Le serveur est aussi listé sur le registre officiel MCP, donc les clients qui parcourent le registre le trouvent automatiquement.' },
     ],
+    compareTitle: 'GitWand face à la concurrence',
+    compareSub: 'Comparaison fonctionnalité par fonctionnalité avec les clients Git les plus populaires.',
   },
   en: {
     badge: 'v1.10.0 · Open Source · MIT',
@@ -231,6 +233,8 @@ const i18n: Record<Locale, any> = {
       { q: 'What sets GitWand apart from other Git clients?', a: 'GitWand stands out with its built-in resolution engine, native Tauri architecture (no Electron), three consistent interfaces (desktop, CLI, VS Code), and an MCP server for AI agent integration.' },
       { q: 'How do I install the MCP server?', a: 'With Claude Code, a single command is enough: claude mcp add gitwand -- npx -y @gitwand/mcp. For Claude Desktop, Cursor, or Windsurf, add the mcpServers block to your client config (see the docs). The server is also listed on the official MCP Registry, so clients that browse the registry discover it automatically.' },
     ],
+    compareTitle: 'How does GitWand compare?',
+    compareSub: 'Feature-by-feature breakdown against the most popular Git clients on the market.',
   },
   es: {
     badge: 'v1.10.0 · Open Source · MIT',
@@ -325,6 +329,8 @@ const i18n: Record<Locale, any> = {
       { q: '¿Qué lo diferencia de otros clientes Git?', a: 'GitWand destaca por su motor de resolución integrado, su arquitectura nativa Tauri (sin Electron), sus 3 interfaces coherentes (escritorio, CLI, VS Code) y su servidor MCP para la integración con agentes IA.' },
       { q: '¿Cómo se instala el servidor MCP?', a: 'Con Claude Code basta un solo comando: claude mcp add gitwand -- npx -y @gitwand/mcp. Para Claude Desktop, Cursor o Windsurf, añade el bloque mcpServers a la configuración de tu cliente (ver la documentación). El servidor también está listado en el registro oficial MCP, así que los clientes que exploran el registro lo encuentran automáticamente.' },
     ],
+    compareTitle: 'GitWand frente a la competencia',
+    compareSub: 'Comparativa función a función con los clientes Git más populares del mercado.',
   },
   'pt-BR': {
     badge: 'v1.10.0 · Open Source · MIT',
@@ -419,6 +425,8 @@ const i18n: Record<Locale, any> = {
       { q: 'Qual é a diferença para outros clientes Git?', a: 'O GitWand se destaca pelo motor de resolução integrado, arquitetura nativa Tauri (sem Electron), 3 interfaces coerentes (desktop, CLI, VS Code) e servidor MCP para integração com agentes de IA.' },
       { q: 'Como instalar o servidor MCP?', a: 'Com Claude Code basta um único comando: claude mcp add gitwand -- npx -y @gitwand/mcp. Para Claude Desktop, Cursor ou Windsurf, adicione o bloco mcpServers à configuração do seu cliente (veja a documentação). O servidor também está listado no registro oficial MCP, então clientes que navegam o registro o encontram automaticamente.' },
     ],
+    compareTitle: 'GitWand comparado à concorrência',
+    compareSub: 'Comparação recurso a recurso com os clientes Git mais populares do mercado.',
   },
   'zh-CN': {
     badge: 'v1.10.0 · 开源 · MIT',
@@ -513,10 +521,90 @@ const i18n: Record<Locale, any> = {
       { q: '与其他 Git 客户端有什么区别?', a: 'GitWand 的亮点在于内置的解决引擎、原生的 Tauri 架构(非 Electron)、3 种一致的界面(桌面端、CLI、VS Code),以及用于 AI 代理集成的 MCP 服务器。' },
       { q: '如何安装 MCP 服务器?', a: '使用 Claude Code 一条命令即可:claude mcp add gitwand -- npx -y @gitwand/mcp。对于 Claude Desktop、Cursor 或 Windsurf,将 mcpServers 块添加到你的客户端配置(见文档)。该服务器也已列入官方 MCP 注册表,浏览注册表的客户端会自动发现它。' },
     ],
+    compareTitle: 'GitWand 与同类对比',
+    compareSub: '与市场上最流行的 Git 客户端逐功能对比。',
   },
 }
 
 const t = computed(() => i18n[locale.value])
+
+// ── Comparison table ──────────────────────────────────────────────────────────
+type CompareValue = boolean | 'partial' | 'soon'
+interface CompareRow {
+  category?: boolean
+  label: string
+  note?: string
+  highlight?: boolean
+  gw?: CompareValue
+  ghd?: CompareValue
+  gk?: CompareValue
+  fork?: CompareValue
+  tower?: CompareValue
+  sm?: CompareValue
+}
+
+const COMPARE_ROWS: CompareRow[] = [
+  { category: true, label: 'Workflow' },
+  { label: 'Free & open source',       gw: true,      ghd: true,      gk: false,     fork: false,   tower: false,  sm: false },
+  { label: 'Native app (no Electron)', gw: true,      ghd: false,     gk: false,     fork: true,    tower: true,   sm: true  },
+  { label: 'macOS',                    gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Linux',                    gw: true,      ghd: false,     gk: true,      fork: false,   tower: false,  sm: true  },
+  { label: 'Windows',                  gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'CLI tool',                 gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
+  { label: 'VS Code extension',        gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
+
+  { category: true, label: 'Diff & Staging' },
+  { label: 'Syntax highlighting',      gw: true,      ghd: false,     gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Hunk-level staging',       gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Line-level staging',       gw: true,      ghd: false,     gk: 'partial', fork: 'partial', tower: true, sm: false },
+  { label: 'Side-by-side diff',        gw: true,      ghd: false,     gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Image diff (visual)',      gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
+  { label: 'Folder tree diff',         gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
+
+  { category: true, label: 'Conflict Resolution' },
+  { label: 'Auto-resolve conflicts',        gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
+  { label: 'Confidence scoring per hunk',   gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
+  { label: '3-way merge editor',            gw: true, ghd: false, gk: true,  fork: true,  tower: true,  sm: true  },
+  { label: 'Zero-impact merge preview',     gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
+  { label: 'Proactive conflict prevention', gw: true, ghd: false, gk: 'partial', fork: false, tower: 'partial', sm: false },
+
+  { category: true, label: 'Power Git' },
+  { label: 'Interactive rebase',            gw: true, ghd: 'partial', gk: true, fork: true, tower: true, sm: true  },
+  { label: 'Worktrees',                     gw: true, ghd: false,     gk: 'partial', fork: false, tower: true, sm: false },
+  { label: 'Submodule management',          gw: true, ghd: false,     gk: true, fork: true, tower: true, sm: true  },
+  { label: 'Split commit by hunks',         gw: true, ghd: false,     gk: false, fork: false, tower: false, sm: false },
+  { label: 'File blame + line-range',       gw: true, ghd: false,     gk: true, fork: true, tower: true, sm: true  },
+  { label: 'Conventional commits',          gw: true,   ghd: false,     gk: false,     fork: false, tower: false,     sm: false },
+  { label: 'Multi-repo workspaces',         gw: 'soon', ghd: false,     gk: true,      fork: false, tower: 'partial', sm: false },
+  { label: 'Cross-repo dashboard',          gw: 'soon', ghd: false,     gk: true,      fork: false, tower: false,     sm: false },
+
+  { category: true, label: 'Forge integrations' },
+  { label: 'GitHub PRs',                    gw: true,   ghd: true,      gk: true,      fork: 'partial', tower: 'partial', sm: false },
+  { label: 'GitLab MRs',                    gw: 'soon', ghd: false,     gk: true,      fork: false,     tower: 'partial', sm: false },
+  { label: 'Bitbucket PRs',                 gw: 'soon', ghd: false,     gk: true,      fork: false,     tower: false,     sm: false },
+  { label: 'Git hooks manager',             gw: 'soon', ghd: false,     gk: false,     fork: false,     tower: false,     sm: false },
+
+  { category: true, label: 'AI & Agents', note: 'GitWand connects to your own LLM — Claude, OpenAI-compatible, or Ollama. No built-in model.' },
+  { label: 'AI commit messages',            gw: true,   ghd: true,  gk: true,      fork: false, tower: false, sm: false },
+  { label: 'AI conflict explanation',       gw: true,   ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
+  { label: 'AI PR description',             gw: true,   ghd: false, gk: true,      fork: false, tower: false, sm: false },
+  { label: 'MCP server for AI agents',      gw: true,   ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
+  { label: 'Agent Sessions panel',          gw: 'soon', ghd: false, gk: 'partial', fork: false, tower: false, sm: false },
+  { label: 'Voice input (offline Whisper)', gw: 'soon', ghd: false, gk: false,     fork: false, tower: false, sm: false },
+]
+
+function cellIcon(v: CompareValue | undefined): string {
+  if (v === true) return '✓'
+  if (v === 'partial') return '~'
+  if (v === 'soon') return 'soon'
+  return '✗'
+}
+function cellClass(v: CompareValue | undefined): string {
+  if (v === true) return 'cell-yes'
+  if (v === 'partial') return 'cell-partial'
+  if (v === 'soon') return 'cell-soon'
+  return 'cell-no'
+}
 </script>
 
 <template>
@@ -970,6 +1058,72 @@ const t = computed(() => i18n[locale.value])
             </div>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         COMPARISON TABLE
+    ══════════════════════════════════════ -->
+    <section class="compare-section">
+      <div class="section-inner">
+        <h2 id="compare" class="section-title">{{ t.compareTitle }}</h2>
+        <p class="section-sub">{{ t.compareSub }}</p>
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th class="compare-feat-col"></th>
+                <th class="compare-app-col compare-app--gw">
+                  <span class="compare-app-name">GitWand</span>
+                  <span class="compare-app-meta">Free · MIT</span>
+                </th>
+                <th class="compare-app-col">
+                  <span class="compare-app-name">GitHub Desktop</span>
+                  <span class="compare-app-meta">Free · Electron</span>
+                </th>
+                <th class="compare-app-col">
+                  <span class="compare-app-name">GitKraken</span>
+                  <span class="compare-app-meta">$5/mo · Electron</span>
+                </th>
+                <th class="compare-app-col">
+                  <span class="compare-app-name">Fork</span>
+                  <span class="compare-app-meta">$50 · Native</span>
+                </th>
+                <th class="compare-app-col">
+                  <span class="compare-app-name">Tower</span>
+                  <span class="compare-app-meta">$69/yr · Native</span>
+                </th>
+                <th class="compare-app-col">
+                  <span class="compare-app-name">Sublime Merge</span>
+                  <span class="compare-app-meta">$99 · Native</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="row in COMPARE_ROWS" :key="row.label">
+                <tr v-if="row.category" class="compare-category-row">
+                  <td colspan="7">
+                    {{ row.label }}
+                    <span v-if="row.note" class="compare-category-note">{{ row.note }}</span>
+                  </td>
+                </tr>
+                <tr v-else class="compare-feat-row" :class="{ 'compare-feat-row--highlight': row.highlight }">
+                  <td class="compare-feat-name">
+                    <span>{{ row.label }}</span>
+                    <span v-if="row.highlight" class="compare-exclusive">unique</span>
+                  </td>
+                  <td class="compare-cell compare-app--gw"><span :class="cellClass(row.gw)">{{ cellIcon(row.gw) }}</span></td>
+                  <td class="compare-cell"><span :class="cellClass(row.ghd)">{{ cellIcon(row.ghd) }}</span></td>
+                  <td class="compare-cell"><span :class="cellClass(row.gk)">{{ cellIcon(row.gk) }}</span></td>
+                  <td class="compare-cell"><span :class="cellClass(row.fork)">{{ cellIcon(row.fork) }}</span></td>
+                  <td class="compare-cell"><span :class="cellClass(row.tower)">{{ cellIcon(row.tower) }}</span></td>
+                  <td class="compare-cell"><span :class="cellClass(row.sm)">{{ cellIcon(row.sm) }}</span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p class="compare-note">~ partial &nbsp;·&nbsp; SOON on the roadmap &nbsp;·&nbsp; data accurate as of April 2026</p>
       </div>
     </section>
 
@@ -2026,6 +2180,154 @@ const t = computed(() => i18n[locale.value])
   font-size: 0.85rem;
   color: var(--gw-purple);
   font-weight: 500;
+}
+
+/* ───────────────────────────────────────────
+   COMPARISON TABLE
+─────────────────────────────────────────── */
+.compare-section {
+  padding: 96px 0;
+  background: var(--gw-bg-2);
+  border-top: 1px solid var(--gw-border-soft);
+}
+.compare-section .section-title { margin-bottom: 12px; }
+.compare-section .section-sub   { margin-bottom: 48px; }
+
+.compare-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+}
+
+.compare-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+/* ── Header row ── */
+.compare-table thead th {
+  padding: 14px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  border-bottom: 1px solid var(--gw-border);
+  background: var(--gw-bg);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.compare-feat-col {
+  text-align: left !important;
+  width: 220px;
+  min-width: 160px;
+}
+.compare-app-col { min-width: 110px; }
+
+.compare-app--gw {
+  background: rgba(139, 92, 246, 0.07) !important;
+  border-left: 1px solid rgba(139, 92, 246, 0.25);
+  border-right: 1px solid rgba(139, 92, 246, 0.25);
+}
+.compare-app-name {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--gw-text);
+  margin-bottom: 3px;
+}
+.compare-app--gw .compare-app-name { color: var(--gw-purple-light); }
+.compare-app-meta {
+  display: block;
+  font-size: 10px;
+  color: var(--gw-text-muted);
+  font-family: var(--vp-font-family-mono, monospace);
+}
+
+/* ── Category rows ── */
+.compare-category-row td {
+  padding: 20px 16px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--gw-purple);
+  font-family: var(--vp-font-family-mono, monospace);
+  background: var(--gw-bg);
+  border-bottom: 1px solid var(--gw-border-soft);
+}
+.compare-category-row:first-child td { padding-top: 16px; }
+.compare-category-note {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--gw-text-muted);
+  font-family: inherit;
+  margin-top: 3px;
+  opacity: 0.8;
+}
+
+/* ── Feature rows ── */
+.compare-feat-row {
+  border-bottom: 1px solid var(--gw-border-soft);
+  transition: background 0.1s;
+}
+.compare-feat-row:last-child { border-bottom: none; }
+.compare-feat-row:hover { background: var(--gw-surface); }
+.compare-feat-row--highlight { background: rgba(139, 92, 246, 0.03); }
+.compare-feat-row--highlight:hover { background: rgba(139, 92, 246, 0.06); }
+
+.compare-feat-name {
+  padding: 11px 16px 11px 16px;
+  font-size: 13px;
+  color: var(--gw-text-muted);
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.compare-exclusive {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gw-purple-light);
+  background: rgba(139, 92, 246, 0.15);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--vp-font-family-mono, monospace);
+  flex-shrink: 0;
+}
+
+/* ── Value cells ── */
+.compare-cell {
+  text-align: center;
+  padding: 11px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--vp-font-family-mono, monospace);
+}
+.compare-cell.compare-app--gw {
+  background: rgba(139, 92, 246, 0.07);
+  border-left: 1px solid rgba(139, 92, 246, 0.15);
+  border-right: 1px solid rgba(139, 92, 246, 0.15);
+}
+.cell-yes     { color: var(--gw-green); }
+.cell-partial { color: #f59e0b; font-size: 17px; }
+.cell-no      { color: var(--gw-border); font-size: 13px; font-weight: 400; }
+.cell-soon    { color: var(--gw-purple-light); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-family: var(--vp-font-family-mono, monospace); }
+
+.compare-note {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--gw-text-muted);
+  font-family: var(--vp-font-family-mono, monospace);
+  opacity: 0.7;
 }
 
 /* ───────────────────────────────────────────

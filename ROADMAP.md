@@ -374,11 +374,67 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 ---
 
-## Later — v2.0.0
+## v2.0 — Roadmap
 
-### Launchpad — Vue cross-repo unifiée
+> Pivot vers le multi-repo et l'écosystème agents. Chaque jalon est livrable indépendamment.
 
-Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos ouverts dans GitWand.
+---
+
+### v2.0.0 — Distribution & polish
+
+Fondations cross-platform et quick wins UI avant d'attaquer les grosses features.
+
+**Distribution & signing**
+- ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
+- Signature Windows (Authenticode)
+- Auto-update channel (stable / beta)
+- Homebrew cask, winget, Flatpak
+
+**Dashboard — Contributors amélioré**
+- **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
+- **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits
+- **Layout horizontal scrollable** : passer la zone contributors en `flex-row` avec `overflow-x: auto` et `scroll-snap-type: x mandatory` — chaque carte fait ~33% de la largeur visible pour indiquer qu'il y a du contenu à droite
+- **Compact** : réduire la hauteur de chaque carte (avatar + nom + count + barre en une ligne dense)
+
+---
+
+### v2.1.0 — Workspaces + Hooks manager
+
+Fondations multi-repo (prérequis pour le Launchpad) et pouvoir utilisateur avancé.
+
+**Workspaces multi-repo (local)**
+
+Version locale du concept GitKraken Workspaces — sans cloud, sans compte, juste un fichier `.gitwand-workspace.json` commitable.
+
+- Grouper plusieurs repos dans un workspace nommé (par projet, par client, par squad)
+- **Actions groupées** : fetch all, pull all, status all en un clic
+- Ouvrir tous les repos du workspace d'un coup dans des onglets GitWand
+- Launchpad filtré par workspace (prépare v2.3)
+
+**Hooks manager**
+
+- Panneau "Hooks" : liste (`git hook list`), enable / disable (`hook.<name>.enabled`)
+- Création de hooks en config (format `[hook "name"] event/command` Git 2.54), avec multiple hooks par event
+- Partage cross-repo via `~/.gitconfig` (vs copie dans chaque `$GIT_DIR/hooks`)
+- Cohérent avec la philosophie "rendre visuel ce que le terminal cache"
+
+---
+
+### v2.2.0 — Agent Sessions View
+
+Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel.
+
+- **Panel "Agents"** dans la sidebar : liste les sessions MCP actives (Claude Code, Cursor, Windsurf…) travaillant sur les worktrees du repo courant
+- Chaque carte : worktree associé, branche, statut (ahead/behind, uncommitted changes), outil agent détecté
+- **Intégration worktree** : ouvrir le worktree d'un agent en un clic dans un onglet GitWand — voir son diff en live
+- **Lancer une session** : raccourci pour démarrer Claude Code (`claude`) sur un worktree vierge depuis GitWand directement
+- Complète le MCP server existant : les agents voient GitWand, GitWand voit les agents
+
+---
+
+### v2.3.0 — Launchpad
+
+_Dépend de v2.1.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos du workspace.
 
 - **PRs cross-repo** : liste unifiée de toutes les PRs ouvertes sur les repos dans le workspace (via `gh` CLI), avec statuts CI, reviewers, labels — sans ouvrir chaque repo un par un
 - **Issues cross-repo** : GitHub Issues agrégées (filtres : assignées à moi, mentionné, créées par moi)
@@ -386,7 +442,28 @@ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tablea
 - **Pin / snooze** : épingler une PR importante en haut, snoozer une issue pour la semaine prochaine
 - **Vue Équipe** (optionnelle) : ce que les autres font sur les mêmes repos (via l'API GitHub), pour détecter les chevauchements avant qu'ils deviennent des conflits
 
-### Voice Input — Dictée de commit offline
+---
+
+### v2.4.0 — Intégrations forge
+
+Ouvre GitWand aux utilisateurs non-GitHub.
+
+- GitLab MRs : API REST/GraphQL native (lister, reviewer, merger)
+- Bitbucket PRs : Support Bitbucket Cloud
+- Multi-compte GitHub/GitLab (personnel + pro)
+- Draft PR convert depuis l'app
+
+---
+
+### v2.5.0 — Performance à grande échelle
+
+- Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
+- Pagination lazy du log sur repos 100k+ commits
+- Background indexing pour la recherche dans les commits
+
+---
+
+### v2.6.0 — Voice Input (expérimental)
 
 Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
 
@@ -395,59 +472,6 @@ Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en 
 - **Modèles au choix** : `tiny` (rapide, léger) ou `base` (meilleure précision) téléchargés à la demande via Settings, stockés localement
 - **Multilingue** : Whisper détecte automatiquement la langue — utile pour les équipes mixtes FR/EN
 - **Fallback gracieux** : si l'accès micro est refusé par macOS TCC, message d'erreur clair avec lien vers Préférences système
-
-### Agent Sessions View
-
-GitKraken l'a lancé en avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel.
-
-- **Panel "Agents"** dans la sidebar : liste les sessions MCP actives (Claude Code, Cursor, Windsurf…) travaillant sur les worktrees du repo courant
-- Chaque carte : worktree associé, branche, statut (ahead/behind, uncommitted changes), outil agent détecté
-- **Intégration worktree** : ouvrir le worktree d'un agent en un clic dans un onglet GitWand — voir son diff en live
-- **Lancer une session** : raccourci pour démarrer Claude Code (`claude`) sur un worktree vierge depuis GitWand directement
-- Complète le MCP server existant : les agents voient GitWand, GitWand voit les agents
-
-### Workspaces multi-repo (local)
-
-Version locale du concept GitKraken Workspaces — sans cloud, sans compte, juste un fichier `.gitwand-workspace.json` commitable.
-
-- Grouper plusieurs repos dans un workspace nommé (par projet, par client, par squad)
-- **Actions groupées** : fetch all, pull all, status all en un clic
-- Ouvrir tous les repos du workspace d'un coup dans des onglets GitWand
-- Launchpad filtré par workspace
-
-### Intégrations forge
-
-- GitLab MRs : API REST/GraphQL native (lister, reviewer, merger)
-- Bitbucket PRs : Support Bitbucket Cloud
-- Multi-compte GitHub/GitLab (personnel + pro)
-- Draft PR convert depuis l'app
-
-### Hooks manager
-
-- Panneau "Hooks" : liste (`git hook list`), enable / disable (`hook.<name>.enabled`)
-- Création de hooks en config (format `[hook "name"] event/command` Git 2.54), avec multiple hooks par event
-- Partage cross-repo via `~/.gitconfig` (vs copie dans chaque `$GIT_DIR/hooks`)
-- Cohérent avec la philosophie "rendre visuel ce que le terminal cache"
-
-### Distribution & signing
-
-- ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
-- Signature Windows (Authenticode)
-- Auto-update channel (stable / beta)
-- Homebrew cask, winget, Flatpak
-
-### Dashboard — Contributors amélioré
-
-- **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
-- **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits
-- **Layout horizontal scrollable** : passer la zone contributors en `flex-row` avec `overflow-x: auto` et `scroll-snap-type: x mandatory` — chaque carte fait ~33% de la largeur visible pour indiquer qu'il y a du contenu à droite
-- **Compact** : réduire la hauteur de chaque carte (avatar + nom + count + barre en une ligne dense)
-
-### Performance à grande échelle
-
-- Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
-- Pagination lazy du log sur repos 100k+ commits
-- Background indexing pour la recherche dans les commits
 
 ---
 
