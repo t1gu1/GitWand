@@ -24,6 +24,22 @@ function setLocale(code: Locale) {
   locale.value = code
 }
 
+// ── Smart download URL (OS detection) ─────────────────────────────────────
+const LATEST = '1.9.0'
+const RELEASES = 'https://github.com/devlint/GitWand/releases'
+
+const downloadUrl = computed(() => {
+  if (typeof navigator === 'undefined') return RELEASES
+  const ua = navigator.userAgent
+  if (/Mac|Macintosh/.test(ua))
+    return `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_universal.dmg`
+  if (/Win|Windows/.test(ua))
+    return `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
+  if (/Linux/.test(ua))
+    return `${RELEASES}/download/v${LATEST}/git-wand_${LATEST}_amd64.AppImage`
+  return RELEASES
+})
+
 const i18n: Record<Locale, any> = {
   fr: {
     badge: 'v1.9.0 · Open Source · MIT',
@@ -31,6 +47,8 @@ const i18n: Record<Locale, any> = {
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
     download: 'Télécharger',
+    github: 'GitHub',
+    whatsNew: 'Nouveautés v1.9',
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patterns de résolution',
@@ -66,6 +84,16 @@ const i18n: Record<Locale, any> = {
     featSubmodulesDesc: 'Listez, initialisez et mettez à jour les sous-modules Git avec badges de statut. Ajoutez-en et ouvrez-les en onglet depuis le panneau.',
     featSplitCommit: 'Split de commit par hunks',
     featSplitCommitDesc: 'Découpez un commit en deux via sélection fichier-par-fichier et ligne-par-ligne. Protège contre les merge commits, préserve votre sélection au collapse/expand, supporte ajouts/suppressions/renommages.',
+    featCommitCtx: 'Menu contextuel de commit',
+    featCommitCtxDesc: '12 actions en un clic droit : checkout, reset (soft/mixed/hard), revert, nouvelle branche, tag, cherry-pick, vue sur le forge et copie SHA.',
+    featTags: 'Gestionnaire de tags',
+    featTagsDesc: 'Listez, créez, pushez et supprimez vos tags locaux et distants. Suggestion IA du prochain tag sémantique depuis l\'historique.',
+    featTrailers: 'Trailers & Conventional Commits',
+    featTrailersDesc: 'Ajoutez Signed-off-by et Reviewed-by en un clic. Choisissez le préfixe de commit (feat, fix, docs…) depuis un picker intégré.',
+    featFileHistory: 'Historique de fichier avancé',
+    featFileHistoryDesc: 'Recherche pickaxe (-S/-G) dans l\'historique d\'un fichier, blame par plage de lignes, et sélecteur d\'algorithme diff (histogram, patience, myers).',
+    featForkWorkflow: 'Workflow fork & triangulaire',
+    featForkWorkflowDesc: 'Badge "↑N fork" dans le bouton de sync pour les workflows fork : push remote ≠ upstream. Fini les push accidentels sur l\'origine.',
     featMcp: 'Serveur MCP',
     featMcpDesc: 'Exposez GitWand à Claude, Cursor, Windsurf et tout client MCP. Une commande : npx -y @gitwand/mcp. Publié avec provenance.',
     conflictTitle: 'Les conflits de merge, résolus automatiquement',
@@ -113,6 +141,8 @@ const i18n: Record<Locale, any> = {
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
     download: 'Download',
+    github: 'GitHub',
+    whatsNew: "What's new in v1.9",
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'resolution patterns',
@@ -148,6 +178,16 @@ const i18n: Record<Locale, any> = {
     featSubmodulesDesc: 'List, initialize, and update Git submodules with status badges. Add submodules and open them as tabs directly from the panel.',
     featSplitCommit: 'Split a commit by hunks',
     featSplitCommitDesc: 'Break a commit in two by picking files and lines. Blocks merge commits, preserves your selection across collapse/expand, and handles added/deleted/renamed files.',
+    featCommitCtx: 'Commit context menu',
+    featCommitCtxDesc: '12 actions on right-click: checkout, reset (soft/mixed/hard), revert, new branch, tag, cherry-pick, view on forge, and copy SHA.',
+    featTags: 'Tags manager',
+    featTagsDesc: 'List, create, push, and delete local and remote tags. AI-powered suggestion for the next semantic version from your commit history.',
+    featTrailers: 'Trailers & Conventional Commits',
+    featTrailersDesc: 'Add Signed-off-by and Reviewed-by in one click. Pick a commit prefix (feat, fix, docs…) from a built-in chip picker.',
+    featFileHistory: 'Advanced file history',
+    featFileHistoryDesc: 'Pickaxe search (-S/-G) in file history, blame by line range, and diff algorithm selector (histogram, patience, myers).',
+    featForkWorkflow: 'Fork & triangular workflow',
+    featForkWorkflowDesc: '"↑N fork" badge in the sync button for fork workflows where push remote ≠ upstream. No more accidental pushes to origin.',
     featMcp: 'MCP server',
     featMcpDesc: 'Expose GitWand to Claude, Cursor, Windsurf, and any MCP client. One command: npx -y @gitwand/mcp. Published with provenance.',
     conflictTitle: 'Merge conflicts, resolved automatically',
@@ -195,6 +235,8 @@ const i18n: Record<Locale, any> = {
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
     download: 'Descargar',
+    github: 'GitHub',
+    whatsNew: 'Novedades v1.9',
     docs: 'Documentación →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patrones de resolución',
@@ -230,6 +272,16 @@ const i18n: Record<Locale, any> = {
     featSubmodulesDesc: 'Lista, inicializa y actualiza submódulos Git con insignias de estado. Añade submódulos y ábrelos como pestañas desde el panel.',
     featSplitCommit: 'Dividir un commit por hunks',
     featSplitCommitDesc: 'Divide un commit en dos seleccionando archivos y líneas. Bloquea commits de merge, conserva tu selección al contraer/expandir y soporta archivos añadidos, eliminados o renombrados.',
+    featCommitCtx: 'Menú contextual de commit',
+    featCommitCtxDesc: '12 acciones con clic derecho: checkout, reset, revert, nueva rama, tag, cherry-pick, ver en forge y copiar SHA.',
+    featTags: 'Gestión de tags',
+    featTagsDesc: 'Lista, crea, envía y elimina tags locales y remotos. Sugerencia IA del próximo tag semántico.',
+    featTrailers: 'Trailers & Conventional Commits',
+    featTrailersDesc: 'Añade Signed-off-by y Reviewed-by con un clic. Selector de prefijo de commit (feat, fix, docs…).',
+    featFileHistory: 'Historial de archivo avanzado',
+    featFileHistoryDesc: 'Búsqueda pickaxe (-S/-G), blame por rango de líneas y selector de algoritmo diff.',
+    featForkWorkflow: 'Workflow fork & triangular',
+    featForkWorkflowDesc: 'Badge "↑N fork" en el botón de sync para workflows donde push remote ≠ upstream.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Expón GitWand a Claude, Cursor, Windsurf y cualquier cliente MCP. Un comando: npx -y @gitwand/mcp. Publicado con attestations de procedencia.',
     conflictTitle: 'Conflictos de merge, resueltos automáticamente',
@@ -277,6 +329,8 @@ const i18n: Record<Locale, any> = {
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
     download: 'Baixar',
+    github: 'GitHub',
+    whatsNew: 'Novidades v1.9',
     docs: 'Documentação →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'padrões de resolução',
@@ -312,6 +366,16 @@ const i18n: Record<Locale, any> = {
     featSubmodulesDesc: 'Liste, inicialize e atualize submódulos Git com badges de status. Adicione submódulos e abra-os como abas diretamente do painel.',
     featSplitCommit: 'Dividir commit por hunks',
     featSplitCommitDesc: 'Divida um commit em dois selecionando arquivos e linhas. Bloqueia merge commits, preserva sua seleção ao colapsar/expandir e suporta arquivos adicionados, excluídos ou renomeados.',
+    featCommitCtx: 'Menu contextual de commit',
+    featCommitCtxDesc: '12 ações com clique direito: checkout, reset, revert, nova branch, tag, cherry-pick, ver no forge e copiar SHA.',
+    featTags: 'Gerenciador de tags',
+    featTagsDesc: 'Liste, crie, envie e exclua tags locais e remotas. Sugestão de IA para o próximo tag semântico.',
+    featTrailers: 'Trailers & Conventional Commits',
+    featTrailersDesc: 'Adicione Signed-off-by e Reviewed-by com um clique. Seletor de prefixo (feat, fix, docs…).',
+    featFileHistory: 'Histórico de arquivo avançado',
+    featFileHistoryDesc: 'Busca pickaxe (-S/-G), blame por intervalo de linhas e seletor de algoritmo diff.',
+    featForkWorkflow: 'Workflow fork & triangular',
+    featForkWorkflowDesc: 'Badge "↑N fork" no botão de sync para workflows onde push remote ≠ upstream.',
     featMcp: 'Servidor MCP',
     featMcpDesc: 'Exponha o GitWand ao Claude, Cursor, Windsurf e qualquer cliente MCP. Um comando: npx -y @gitwand/mcp. Publicado com atestados de proveniência.',
     conflictTitle: 'Conflitos de merge, resolvidos automaticamente',
@@ -359,6 +423,8 @@ const i18n: Record<Locale, any> = {
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
     download: '下载',
+    github: 'GitHub',
+    whatsNew: 'v1.9 新特性',
     docs: '文档 →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: '种解决模式',
@@ -394,6 +460,16 @@ const i18n: Record<Locale, any> = {
     featSubmodulesDesc: '列出、初始化并更新 Git 子模块,带状态标记。从面板中添加子模块并直接以标签页形式打开。',
     featSplitCommit: '按 hunk 拆分提交',
     featSplitCommitDesc: '通过选择文件和行将一次提交拆分为两次。阻止合并提交,在折叠/展开时保留选择,支持新增、删除、重命名文件。',
+    featCommitCtx: '提交右键菜单',
+    featCommitCtxDesc: '右键 12 个操作:checkout、reset、revert、新建分支、tag、cherry-pick、在 forge 查看及复制 SHA。',
+    featTags: 'Tag 管理器',
+    featTagsDesc: '列出、创建、推送和删除本地及远程 tag。AI 自动建议下一个语义版本号。',
+    featTrailers: 'Trailers & 约定式提交',
+    featTrailersDesc: '一键添加 Signed-off-by 和 Reviewed-by。内置提交前缀选择器(feat、fix、docs…)。',
+    featFileHistory: '高级文件历史',
+    featFileHistoryDesc: '文件历史 pickaxe 搜索(-S/-G)、按行范围 blame,以及 diff 算法选择器。',
+    featForkWorkflow: 'Fork & 三角工作流',
+    featForkWorkflowDesc: '同步按钮上的"↑N fork"标记,适用于 push remote ≠ upstream 的 fork 场景。',
     featMcp: 'MCP 服务器',
     featMcpDesc: '将 GitWand 暴露给 Claude、Cursor、Windsurf 等 MCP 客户端。一条命令:npx -y @gitwand/mcp。附带 provenance 签名发布。',
     conflictTitle: '合并冲突,自动解决',
@@ -475,10 +551,15 @@ const t = computed(() => i18n[locale.value])
             {{ t.heroSub }}
           </p>
           <div class="hero-ctas">
-            <a href="https://github.com/devlint/GitWand/releases" class="btn-primary">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-              {{ t.download }}
-            </a>
+            <div class="btn-split">
+              <a :href="downloadUrl" class="btn-primary btn-split__main">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                {{ t.download }}
+              </a>
+              <a href="https://github.com/devlint/GitWand/releases" class="btn-primary btn-split__aside" target="_blank" rel="noopener" :title="t.github">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+            </div>
             <a href="/guide/getting-started" class="btn-ghost">
               {{ t.docs }}
             </a>
@@ -640,6 +721,52 @@ const t = computed(() => i18n[locale.value])
             </div>
             <h3>{{ t.featMcp }}</h3>
             <p>{{ t.featMcpDesc }}</p>
+          </div>
+
+          <!-- ── v1.9 features ── -->
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v1.9</div>
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featCommitCtx }}</h3>
+            <p>{{ t.featCommitCtxDesc }}</p>
+          </div>
+
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v1.9</div>
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 7h10M7 12h6" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="17" r="4" stroke="#7C3AED" stroke-width="1.8"/><path d="M17 15v2l1 1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featTags }}</h3>
+            <p>{{ t.featTagsDesc }}</p>
+          </div>
+
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v1.9</div>
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M3 9h18M8 13h3M8 16h5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featTrailers }}</h3>
+            <p>{{ t.featTrailersDesc }}</p>
+          </div>
+
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v1.9</div>
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="3" stroke="#7C3AED" stroke-width="1.6"/><path d="M21.5 19.5l1.5 1.5" stroke="#7C3AED" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featFileHistory }}</h3>
+            <p>{{ t.featFileHistoryDesc }}</p>
+          </div>
+
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v1.9</div>
+            <div class="feat-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><path d="M7.5 12h9M16.5 6l-4 4.5M16.5 18l-4-4.5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>{{ t.featForkWorkflow }}</h3>
+            <p>{{ t.featForkWorkflowDesc }}</p>
           </div>
 
         </div>
@@ -876,13 +1003,17 @@ const t = computed(() => i18n[locale.value])
         <h2 class="cta-title">{{ t.ctaTitle }}</h2>
         <p class="cta-sub">{{ t.ctaSub }}</p>
         <div class="cta-btns">
-          <a href="https://github.com/devlint/GitWand/releases" class="btn-primary btn-lg">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            {{ t.ctaDownload }}
-          </a>
-          <a href="https://github.com/devlint/GitWand" class="btn-ghost btn-lg" target="_blank" rel="noopener">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            GitHub
+          <div class="btn-split btn-split--lg">
+            <a :href="downloadUrl" class="btn-primary btn-lg btn-split__main">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M8 1v10M4 7l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 13h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              {{ t.ctaDownload }}
+            </a>
+            <a href="https://github.com/devlint/GitWand/releases" class="btn-primary btn-lg btn-split__aside" target="_blank" rel="noopener" :title="t.github">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+          </div>
+          <a href="/changelog" class="btn-ghost btn-lg">
+            ✨ {{ t.whatsNew }}
           </a>
         </div>
       </div>
@@ -1016,6 +1147,23 @@ const t = computed(() => i18n[locale.value])
 .btn-primary:hover {
   background: var(--gw-purple-light);
   transform: translateY(-1px);
+}
+
+/* Split button: Download | GitHub icon */
+.btn-split {
+  display: inline-flex;
+  align-items: stretch;
+}
+.btn-split__main {
+  border-radius: 8px 0 0 8px;
+  border-right: 1px solid rgba(255,255,255,0.2);
+}
+.btn-split__aside {
+  border-radius: 0 8px 8px 0;
+  padding: 12px 14px;
+}
+.btn-split--lg .btn-split__aside {
+  padding: 14px 16px;
 }
 .btn-ghost {
   display: inline-flex;
@@ -1401,6 +1549,22 @@ const t = computed(() => i18n[locale.value])
 }
 .feat-card--ai:hover {
   border-color: var(--gw-green);
+}
+.feat-card--new {
+  position: relative;
+  border-color: rgba(124,58,237,0.35);
+}
+.feat-badge {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--gw-purple-light);
+  background: rgba(124,58,237,0.12);
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 .feat-card h3 {
   font-size: 16px;

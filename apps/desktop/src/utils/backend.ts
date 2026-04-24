@@ -2507,23 +2507,61 @@ export async function gitSubmoduleAdd(cwd: string, url: string, path: string): P
 
 // ─── Updater ────────────────────────────────────────────
 
+export interface UpdateInfo {
+  /** New version string, e.g. "1.10.0" */
+  version: string;
+  /** Release notes in plain text / Markdown (may be empty) */
+  body: string;
+}
+
 /**
  * Check for app updates via the Tauri updater plugin.
  *
- * With `"dialog": true` in tauri.conf.json, Tauri handles the entire flow:
- * - Fetches the update endpoint
- * - If a newer version exists, shows a native OS dialog
- * - User accepts → download + install + restart
+ * With `"dialog": false` in tauri.conf.json, Tauri returns the update
+ * metadata without showing any native UI. We show our own modal instead.
  *
- * This is a no-op in browser (dev) mode.
+ * Returns `null` when:
+ * - Running in browser (dev) mode
+ * - No update is available
+ * - The network request failed (silently ignored)
  */
-export async function checkForUpdates(): Promise<void> {
-  if (!isTauri()) return;
+export async function checkForUpdates(): Promise<UpdateInfo | null> {
+  if (!isTauri()) return null;
   try {
-    await tauriInvoke("plugin:updater|check");
+    const update = await tauriInvoke<{ available: boolean; version?: string; body?: string } | null>(
+      "plugin:updater|check"
+    );
+    if (update && update.available && update.version) {
+      return { version: update.version, body: update.body ?? "" };
+    }
+    return null;
   } catch {
     // Silently ignore — updater errors shouldn't affect the app UX.
-    // Common non-error cases: no internet, endpoint returns 204 (no update).
+    return null;
   }
+}
+
+/**
+ * Download the pending update and restart the app.
+ * Must only be called after `checkForUpdates()` returned a non-null value.
+ *
+ * Progress callback is optional — receives bytes downloaded / total (0–1).
+ */
+export async function installUpdate(
+  onProgress?: (fraction: number) => void
+): Promise<void> {
+  if (!isTauri()) return;
+  // The updater plugin keeps the pending update object internally.
+  // We call download_and_install which handles everything then triggers a restart.
+  await tauriInvoke("plugin:updater|download_and_install", {
+    onEvent: (event: { event: string; data?: { contentLength?: number; downloaded?: number } }) => {
+      if (event.event === "Downloaded" && onProgress) {
+        const { contentLength, downloaded } = event.data ?? {};
+        if (contentLength && downloaded) {
+          onProgress(downloaded / contentLength);
+        }
+      }
+    },
+  });
 }
 

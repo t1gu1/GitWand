@@ -16,6 +16,7 @@ export default defineConfig({
       { text: 'Guide', link: '/guide/getting-started' },
       { text: 'Reference', link: '/reference/core-api' },
       { text: 'Blog', link: '/blog/' },
+      { text: "What's new", link: '/changelog' },
     ],
 
     sidebar: {

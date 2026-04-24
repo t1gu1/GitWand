@@ -67,7 +67,7 @@
       "endpoints": [
         "https://devlint.github.io/GitWand/update/latest.json"
       ],
-      "dialog": true
+      "dialog": false
     }
   }
 }

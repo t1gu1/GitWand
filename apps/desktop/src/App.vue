@@ -46,7 +46,9 @@ import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
-import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates } from "./utils/backend";
+import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, installUpdate } from "./utils/backend";
+import type { UpdateInfo } from "./utils/backend";
+import UpdateModal from "./components/UpdateModal.vue";
 
 const { theme, toggle: toggleTheme } = useTheme();
 
@@ -1037,13 +1039,29 @@ async function setupGlobalShortcutListener() {
   }
 }
 
+// ─── In-app updater ────────────────────────────────────────────────────────
+const pendingUpdate = ref<UpdateInfo | null>(null);
+const updateModalRef = ref<InstanceType<typeof UpdateModal> | null>(null);
+
+async function runUpdateCheck() {
+  const info = await checkForUpdates();
+  if (info) pendingUpdate.value = info;
+}
+
+async function onInstallUpdate() {
+  await installUpdate((fraction) => {
+    updateModalRef.value?.setProgress(fraction);
+  });
+  // installUpdate triggers a Tauri restart — if we reach here something went wrong.
+  pendingUpdate.value = null;
+}
+
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   applyGitConfig();
   setupGlobalShortcutListener();
   // Check for updates after a short delay so the app renders first.
-  // The updater plugin shows a native OS dialog if a newer version is available.
-  setTimeout(() => checkForUpdates(), 5_000);
+  setTimeout(() => runUpdateCheck(), 5_000);
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown);
@@ -1297,6 +1315,15 @@ onUnmounted(() => {
         </template>
       </main>
     </div>
+
+    <!-- In-app update modal -->
+    <UpdateModal
+      v-if="pendingUpdate"
+      ref="updateModalRef"
+      :update="pendingUpdate"
+      @close="pendingUpdate = null"
+      @install="onInstallUpdate"
+    />
 
     <!-- Folder picker modal (browser mode) -->
     <FolderPicker
