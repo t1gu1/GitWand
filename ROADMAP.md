@@ -431,10 +431,17 @@ Version locale du concept GitKraken Workspaces — sans cloud, sans compte, just
 
 ### Distribution & signing
 
-- Signature macOS (notarization Apple)
+- ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
 - Signature Windows (Authenticode)
 - Auto-update channel (stable / beta)
 - Homebrew cask, winget, Flatpak
+
+### Dashboard — Contributors amélioré
+
+- **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
+- **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits
+- **Layout horizontal scrollable** : passer la zone contributors en `flex-row` avec `overflow-x: auto` et `scroll-snap-type: x mandatory` — chaque carte fait ~33% de la largeur visible pour indiquer qu'il y a du contenu à droite
+- **Compact** : réduire la hauteur de chaque carte (avatar + nom + count + barre en une ligne dense)
 
 ### Performance à grande échelle
 
