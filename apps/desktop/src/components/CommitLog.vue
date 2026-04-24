@@ -78,8 +78,15 @@ function onCtxSplit() {
 }
 
 function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | "createBranchFromCommit" | "tagCommit" | "cherryPickCommit" | "viewOnForge") {
-  if (!ctxMenu.value.entry) return;
-  emit(event, ctxMenu.value.entry);
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  if (event === "checkoutCommit")         emit("checkoutCommit", entry);
+  else if (event === "resetToCommit")     emit("resetToCommit", entry);
+  else if (event === "revertCommit")      emit("revertCommit", entry);
+  else if (event === "createBranchFromCommit") emit("createBranchFromCommit", entry);
+  else if (event === "tagCommit")         emit("tagCommit", entry);
+  else if (event === "cherryPickCommit")  emit("cherryPickCommit", entry);
+  else if (event === "viewOnForge")       emit("viewOnForge", entry);
   closeCommitContextMenu();
 }
 

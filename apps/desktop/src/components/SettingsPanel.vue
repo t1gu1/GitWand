@@ -526,7 +526,7 @@ onMounted(() => {
               id="setting-blame-algo"
               class="sp-select"
               :value="settings.blameAlgorithm"
-              @change="updateSetting('blameAlgorithm', ($event.target as HTMLSelectElement).value)"
+              @change="updateSetting('blameAlgorithm', ($event.target as HTMLSelectElement).value as BlameAlgorithm)"
             >
               <option value="histogram">histogram {{ t('settings.blameAlgoRecommended') }}</option>
               <option value="patience">patience</option>
