@@ -35,6 +35,7 @@ const emit = defineEmits<{
 const SETTINGS_KEY = "gitwand-settings";
 
 import type { DiffMode } from "../utils/diffMode";
+import type { BlameAlgorithm } from "../utils/backend";
 
 interface Settings {
   editor: string;
@@ -48,6 +49,7 @@ interface Settings {
   fontSize: number;
   tabSize: number;
   notifications: boolean;
+  blameAlgorithm: BlameAlgorithm;
   // AI settings
   aiEnabled: boolean;
   aiProvider: AIProvider;
@@ -78,6 +80,7 @@ const defaultSettings: Settings = {
   aiModel: "claude-sonnet-4-20250514",
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
+  blameAlgorithm: "histogram",
 };
 
 function loadSettings(): Settings {

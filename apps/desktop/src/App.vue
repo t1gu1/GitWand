@@ -142,6 +142,7 @@ const {
   switchBranch,
   deleteBranch,
   renameBranch: doRenameBranch,
+  currentGitUser,
 } = useGitRepo();
 
 // ─── PR panel (shared state via provide/inject) ──────────
@@ -1513,7 +1514,7 @@ onUnmounted(() => {
           <input type="radio" name="resetMode" :value="mode" v-model="commitActionModal.resetMode" />
           <span class="cam-radio-label">
             <strong>--{{ mode }}</strong>
-            <span class="cam-radio-hint">{{ t(`commitCtx.reset${mode.charAt(0).toUpperCase() + mode.slice(1)}Hint`) }}</span>
+            <span class="cam-radio-hint">{{ t((`commitCtx.reset${mode.charAt(0).toUpperCase() + mode.slice(1)}Hint`) as any) }}</span>
           </span>
         </label>
       </div>
