@@ -375,9 +375,10 @@ function shortHash(hash: string): string {
       <!-- Blame algo selector — only shown on the blame tab -->
       <select
         v-if="activeTab === 'blame'"
-        v-model="blameAlgo"
+        :value="blameAlgo"
         class="fhv-algo-select"
         :title="t('settings.blameAlgorithm')"
+        @change="blameAlgo = ($event.target as HTMLSelectElement).value as BlameAlgorithm"
       >
         <option value="histogram">histogram</option>
         <option value="patience">patience</option>
