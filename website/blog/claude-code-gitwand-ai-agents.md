@@ -165,4 +165,4 @@ The `/resolve` slash command runs the full flow: preview, auto-resolve, surface 
 
 The MCP server is also listed on the [official MCP Registry](https://mcp-registry.io), so any client that browses the registry will find it without configuration.
 
-The [full documentation](/guide/mcp-server) covers all five tools, the resource schema, and the `.gitwandrc` policy options.
+The [full documentation](/guide/mcp) covers all five tools, the resource schema, and the `.gitwandrc` policy options.
