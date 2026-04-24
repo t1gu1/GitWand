@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 
 type Locale = 'en' | 'fr' | 'es' | 'pt-BR' | 'zh-CN'
 
@@ -28,16 +28,19 @@ function setLocale(code: Locale) {
 const LATEST = '1.10.0'
 const RELEASES = 'https://github.com/devlint/GitWand/releases'
 
-const downloadUrl = computed(() => {
-  if (typeof navigator === 'undefined') return RELEASES
+// SSR-safe: start with the generic releases page, then switch to the
+// OS-specific direct download once the component mounts in the browser.
+// A computed() won't work here because navigator.userAgent is not reactive —
+// Vue would never re-evaluate it after SSR hydration.
+const downloadUrl = ref(RELEASES)
+onMounted(() => {
   const ua = navigator.userAgent
   if (/Mac|Macintosh/.test(ua))
-    return `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_universal.dmg`
-  if (/Win|Windows/.test(ua))
-    return `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
-  if (/Linux/.test(ua))
-    return `${RELEASES}/download/v${LATEST}/git-wand_${LATEST}_amd64.AppImage`
-  return RELEASES
+    downloadUrl.value = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_universal.dmg`
+  else if (/Win|Windows/.test(ua))
+    downloadUrl.value = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
+  else if (/Linux/.test(ua))
+    downloadUrl.value = `${RELEASES}/download/v${LATEST}/git-wand_${LATEST}_amd64.AppImage`
 })
 
 const i18n: Record<Locale, any> = {
