@@ -384,6 +384,22 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 Fondations cross-platform et quick wins UI avant d'attaquer les grosses features.
 
+**Clone & Fork depuis l'UI**
+
+Deux points d'entrée pour récupérer un repo sans passer par le terminal :
+
+- **Écran d'accueil** : boutons "Clone from URL" et "Fork on GitHub" à côté du bouton "Open folder" existant — visibles au premier lancement, naturels pour les nouveaux utilisateurs
+- **Tab strip `+`** : le bouton d'ouverture d'onglet devient un dropdown avec trois options : `📂 Open folder / ⬇ Clone from URL / ⑂ Fork on GitHub`
+- Clone : saisie d'URL git (HTTPS ou SSH), sélection du dossier de destination, `git clone` avec barre de progression
+- Fork : ouvre le repo GitHub dans le browser via `gh repo fork <url> --clone`, puis ouvre automatiquement le dossier dans GitWand avec le remote upstream configuré
+
+**AI providers — Codex CLI, Gemini CLI & MCP compatibility matrix**
+
+- **Codex CLI** (`codex -q "<prompt>"`) ajouté comme provider subprocess dans `useAIProvider.ts`, au même titre que Claude Code CLI — option dans Settings > AI
+- **Gemini CLI** (`gemini`) idem, dès stabilisation du mode non-interactif Google
+- Le provider "OpenAI-compatible" existant couvre déjà l'API OpenAI directe (`gpt-4o`, `o3`…) — pas de changement nécessaire de ce côté
+- **MCP compatibility matrix** : tester et documenter officiellement Cursor, Windsurf, Codex CLI (dès support MCP) ; adapter l'Agent Sessions panel (v2.2) pour détecter tous ces clients, pas uniquement Claude Code
+
 **Distribution & signing**
 - ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
 - Signature Windows (Authenticode)

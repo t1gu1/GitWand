@@ -27,6 +27,7 @@ export default defineConfig({
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Desktop App', link: '/guide/desktop' },
             { text: 'CLI', link: '/guide/cli' },
+            { text: 'AI integrations', link: '/guide/ai' },
             { text: 'MCP Server', link: '/guide/mcp' },
             { text: 'VS Code Extension', link: '/guide/vscode' },
             { text: 'Conflict Resolution', link: '/guide/conflict-resolution' },
