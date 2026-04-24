@@ -2514,6 +2514,11 @@ export interface UpdateInfo {
   body: string;
 }
 
+// Keep a reference to the Update object so installUpdate() can use it.
+// The @tauri-apps/plugin-updater `Update` object carries the download handle.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _pendingUpdate: any = null;
+
 /**
  * Check for app updates via the Tauri updater plugin.
  *
@@ -2528,10 +2533,10 @@ export interface UpdateInfo {
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
   if (!isTauri()) return null;
   try {
-    const update = await tauriInvoke<{ available: boolean; version?: string; body?: string } | null>(
-      "plugin:updater|check"
-    );
-    if (update && update.available && update.version) {
+    const { check } = await import("@tauri-apps/plugin-updater");
+    const update = await check();
+    if (update?.available) {
+      _pendingUpdate = update;
       return { version: update.version, body: update.body ?? "" };
     }
     return null;
@@ -2545,23 +2550,24 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
  * Download the pending update and restart the app.
  * Must only be called after `checkForUpdates()` returned a non-null value.
  *
- * Progress callback is optional — receives bytes downloaded / total (0–1).
+ * Progress callback receives fraction 0–1 as bytes are downloaded.
  */
 export async function installUpdate(
   onProgress?: (fraction: number) => void
 ): Promise<void> {
-  if (!isTauri()) return;
-  // The updater plugin keeps the pending update object internally.
-  // We call download_and_install which handles everything then triggers a restart.
-  await tauriInvoke("plugin:updater|download_and_install", {
-    onEvent: (event: { event: string; data?: { contentLength?: number; downloaded?: number } }) => {
-      if (event.event === "Downloaded" && onProgress) {
-        const { contentLength, downloaded } = event.data ?? {};
-        if (contentLength && downloaded) {
-          onProgress(downloaded / contentLength);
-        }
+  if (!isTauri() || !_pendingUpdate) return;
+  let downloaded = 0;
+  let contentLength = 0;
+  await _pendingUpdate.downloadAndInstall((event: { event: string; data?: { contentLength?: number; chunkLength?: number } }) => {
+    if (event.event === "Started") {
+      contentLength = event.data?.contentLength ?? 0;
+    } else if (event.event === "Progress") {
+      downloaded += event.data?.chunkLength ?? 0;
+      if (contentLength > 0 && onProgress) {
+        onProgress(downloaded / contentLength);
       }
-    },
+    }
+    // "Finished" → the app restarts automatically
   });
 }
 
