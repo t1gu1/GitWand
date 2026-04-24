@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.10.0 — April 2026
+
+### In-app update modal
+
+GitWand no longer hands off to the native OS update dialog. A new modal surfaces directly in the app when an update is available. It shows a version badge, the full release notes for the incoming version rendered from markdown (bold, inline code, bullet lists), and a real-time download progress bar with a percentage counter. Dismiss it and keep working — the update applies on next relaunch.
+
+### Fixes
+
+- Blame diff algorithm selector: fixed a type cast error that prevented saving the setting in `SettingsPanel`
+- `CommitLog`: resolved an emit overload that could cause a type error when selecting commits
+- `blameAlgo` select binding and `currentGitUser` initialisation: fixed two TS errors that surfaced in strict mode
+- macOS: fixed a base64 compatibility issue with binary data returned from the Rust backend
+
+---
+
 ## v1.9.0 — April 2026
 
 ### Commit context menu — 12 actions
