@@ -303,9 +303,7 @@ Refonte transverse du header et socle d'overlay partagé — prépare le terrain
 - `RepoSidebar.vue` : padding aéré, icon badges, hover lifts sur branches / activité / quick actions
 - `FolderPicker.vue` : historique en chips pill (plutôt que liste verticale)
 
----
-
-## Next — v1.9.0 — Suite alignement Git 2.54
+### v1.9.0 — Suite alignement Git 2.54 ✅
 
 Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changement de philosophie.
 
@@ -374,13 +372,7 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 ---
 
-## v2.0 — Roadmap
-
-> Pivot vers le multi-repo et l'écosystème agents. Chaque jalon est livrable indépendamment.
-
----
-
-### v2.0.0 — Distribution & polish
+## Next — v2.0.0 — Distribution & polish
 
 Fondations cross-platform et quick wins UI avant d'attaquer les grosses features.
 
@@ -406,22 +398,37 @@ Deux points d'entrée pour récupérer un repo sans passer par le terminal :
 - Auto-update channel (stable / beta)
 - Homebrew cask, winget, Flatpak
 
-**Barre de menu macOS native**
+**Barre de menu macOS native ✅**
 
-Menus File / Edit / Repository / View / Window / Help branchés sur les actions existantes de l'app — rend GitWand "citoyen" de macOS et ouvre des raccourcis clavier système.
+Menus File / Edit / Repository / View / Window / Help construits côté JS via `@tauri-apps/api/menu` — labels tirés de `useI18n()`, rebuild atomique sur changement de locale ou ouverture/fermeture de repo. Composable `useAppMenu.ts`, gating macOS via `navigator.platform`. 22 clés `menu.*` × 5 locales. No-op sur Linux/Windows (l'`AppHeader` porte la chrome ailleurs).
 
-- **File** : Open Repository… `⌘O`, Open Recent (sous-menu), Clone…, Fork…, Close Window `⌘W`
-- **Edit** : Undo/Redo `⌘Z/⌘⇧Z` (branché sur l'undo stack), Copy/Paste/Select All (requis pour que les raccourcis fonctionnent dans les champs), Find in Log… `⌘F`
-- **Repository** _(menu custom, courant chez Tower/Fork)_ : Fetch `⌘⇧F`, Pull, Push `⌘P`, New Branch… `⌘⇧B`, Merge…, Open in Terminal `⌘⇧T`, Open on GitHub/GitLab
-- **View** : Toggle Sidebar, Toggle Dark/Light Mode, Enter Full Screen `⌃⌘F`
-- **Window** : Minimize `⌘M`, Zoom, Bring All to Front
-- **Help** : Documentation, What's New (→ changelog), Report an Issue, Check for Updates… (branché sur `runUpdateCheck()`)
+- **GitWand (app menu) ✅** : About, Settings… `⌘,`, Services, Hide / Hide Others / Show All, Quit (predefined macOS items + Settings custom)
+- **File ✅** : Open Repository… `⌘O`, Open Recent (sous-menu peuplé depuis `useFolderHistory`, max 10 + Clear), Close Window `⌘W` (close active tab — sémantique GitWand, pas l'OS window)
+- **Edit ✅** : Cut `⌘X`, Copy `⌘C`, Paste `⌘V`, Select All `⌘A` — predefined items, routent vers le first-responder natif. Cmd+Z laissé webview-default pour préserver le text-undo dans les inputs.
+- **Repository ✅** _(disabled si pas de repo ouvert)_ : Fetch `⌘⇧F`, Pull, Push `⌘P`, New Branch… `⌘⇧B` (provide/inject bridge `BRANCH_CREATE_REQUEST_KEY` → ouvre le popover + le formulaire inline de `BranchSelector`, autofocus natif sur l'input), Open on GitHub / GitLab / Bitbucket (auto-détection via `gitRemoteInfo`)
+- **View ✅** : Toggle Light/Dark Mode `⌘⇧T`, Enter Full Screen `⌃⌘F` (predefined)
+- **Window ✅** : Minimize `⌘M`, Zoom, + window list auto via `setAsWindowsMenuForNSApp()`
+- **Help ✅** : GitWand Documentation (gitwand.devlint.fr), What's New (GitHub Releases), Report an Issue (GitHub Issues), Check for Updates… (branché sur `runUpdateCheck()`). Search box auto via `setAsHelpMenuForNSApp()`.
+
+_Différés (autre chantier ou infra manquante)_ :
+- Clone… / Fork… → autre chantier de v2.0.0
+- Undo/Redo sur l'undo stack → conflit sémantique avec le text-undo natif de Cmd+Z dans les inputs ; à reprendre avec un raccourci dédié
+- Find in Log `⌘F` → pas de handler Cmd+F dans l'app
+- Merge… → contextuel à la branche, mieux servi par le `BranchMenu`
+- Open in Terminal `⌘⇧T` → terminal intégré non exposé comme action callable
+- Toggle Sidebar → sidebar layout-driven par `hasRepo`, pas de state de visibilité indépendant
 
 **Dashboard — Contributors amélioré**
 - **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
 - **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits
 - **Layout horizontal scrollable** : passer la zone contributors en `flex-row` avec `overflow-x: auto` et `scroll-snap-type: x mandatory` — chaque carte fait ~33% de la largeur visible pour indiquer qu'il y a du contenu à droite
 - **Compact** : réduire la hauteur de chaque carte (avatar + nom + count + barre en une ligne dense)
+
+---
+
+## v2.x — Roadmap
+
+> Pivot vers le multi-repo et l'écosystème agents. Chaque jalon est livrable indépendamment.
 
 ---
 

@@ -41,6 +41,9 @@ import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
+import { useFolderHistory } from "./composables/useFolderHistory";
+import { useAppMenu } from "./composables/useAppMenu";
+import { BRANCH_CREATE_REQUEST_KEY } from "./composables/branchPickerBridge";
 import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
@@ -151,6 +154,12 @@ const {
 const prCwd = computed(() => repoFolderPath.value ?? "");
 const prPanel = usePrPanel(prCwd);
 provide(PR_PANEL_KEY, prPanel);
+
+// ─── Bridge: native menu → BranchSelector create form ────
+// The macOS menu's "New Branch…" item bumps this counter; BranchSelector
+// watches it and opens its inline create form (with autofocus).
+const branchCreateRequest = ref(0);
+provide(BRANCH_CREATE_REQUEST_KEY, branchCreateRequest);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────
 const {
@@ -1055,6 +1064,47 @@ async function onInstallUpdate() {
   // installUpdate triggers a Tauri restart — if we reach here something went wrong.
   pendingUpdate.value = null;
 }
+
+// ─── Native macOS menu bar ─────────────────────────────────────────────────
+// Builds the File / Edit / Repository / View / Window / Help menus. macOS
+// only — no-op on Linux/Windows where the AppHeader carries the chrome.
+const { clearHistory: clearFolderHistory } = useFolderHistory();
+useAppMenu(
+  {
+    openFolder: handleOpenFolder,
+    openRecentFolder: handleOpenPath,
+    clearRecents: clearFolderHistory,
+    closeWindow: () => {
+      if (activeTabId.value !== null) closeTab(activeTabId.value);
+    },
+    fetch: doFetch,
+    pull: () => doPull(pullMode.value === "rebase"),
+    push: doPush,
+    newBranch: () => {
+      // Bump the bridge counter; BranchSelector opens its inline create
+      // form (popover + create-input visible, autofocused).
+      branchCreateRequest.value++;
+    },
+    openOnForge: async () => {
+      if (!repoFolderPath.value) return;
+      const info = await gitRemoteInfo(repoFolderPath.value);
+      if (!info.owner || !info.repo) return;
+      const url =
+        info.provider === "gitlab"
+          ? `https://gitlab.com/${info.owner}/${info.repo}`
+          : info.provider === "bitbucket"
+            ? `https://bitbucket.org/${info.owner}/${info.repo}`
+            : `https://github.com/${info.owner}/${info.repo}`;
+      window.open(url, "_blank");
+    },
+    toggleTheme,
+    checkForUpdates: runUpdateCheck,
+    openSettings: () => {
+      showSettings.value = true;
+    },
+  },
+  { hasRepo },
+);
 
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);

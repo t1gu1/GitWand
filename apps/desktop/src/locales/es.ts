@@ -1104,6 +1104,32 @@ const es: Locale = {
     rangeHistory: "Historial de líneas {0}–{1}",
   },
 
+  // ─── Barra de menú nativa de macOS (v2.0)
+  menu: {
+    preferences: "Ajustes…",
+    file: "Archivo",
+    edit: "Edición",
+    repository: "Repositorio",
+    view: "Visualización",
+    window: "Ventana",
+    help: "Ayuda",
+    openRepository: "Abrir repositorio…",
+    openRecent: "Abrir reciente",
+    noRecents: "Sin repositorios recientes",
+    clearRecents: "Borrar recientes",
+    closeWindow: "Cerrar ventana",
+    fetch: "Fetch",
+    pull: "Pull",
+    push: "Push",
+    newBranch: "Nueva rama…",
+    openOnForge: "Abrir en GitHub",
+    toggleTheme: "Alternar modo claro/oscuro",
+    documentation: "Documentación de GitWand",
+    whatsNew: "Novedades",
+    reportIssue: "Reportar un problema…",
+    checkForUpdates: "Buscar actualizaciones…",
+  },
+
 };
 
 export default es;

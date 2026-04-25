@@ -1128,6 +1128,38 @@ const en = {
     deleteAlsoRemote: "Also delete from {0}",
     deleteConfirm: "Delete",
   },
+
+  // ─── Native macOS menu bar (v2.0) ───────────────────────
+  menu: {
+    // App menu
+    preferences: "Settings\u2026",
+    // Section titles
+    file: "File",
+    edit: "Edit",
+    repository: "Repository",
+    view: "View",
+    window: "Window",
+    help: "Help",
+    // File
+    openRepository: "Open Repository\u2026",
+    openRecent: "Open Recent",
+    noRecents: "No Recent Repositories",
+    clearRecents: "Clear Recents",
+    closeWindow: "Close Window",
+    // Repository
+    fetch: "Fetch",
+    pull: "Pull",
+    push: "Push",
+    newBranch: "New Branch\u2026",
+    openOnForge: "Open on GitHub",
+    // View
+    toggleTheme: "Toggle Light/Dark Mode",
+    // Help
+    documentation: "GitWand Documentation",
+    whatsNew: "What's New",
+    reportIssue: "Report an Issue\u2026",
+    checkForUpdates: "Check for Updates\u2026",
+  },
 } as const;
 
 // Widen literal string types to plain `string` for locale compatibility

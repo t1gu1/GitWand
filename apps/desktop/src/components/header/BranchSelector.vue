@@ -24,13 +24,14 @@
  * against the wrapper class on this component's root, so clicks on
  * either the trigger OR the popover count as "inside".
  */
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "vue";
 import type { GitBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview } from "../../composables/useMergePreview";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
+import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
 import MergePreviewPanel from "../MergePreviewPanel.vue";
 import AiSparkle from "../AiSparkle.vue";
 
@@ -86,6 +87,20 @@ const showPopover = ref(false);
 const branchFilter = ref("");
 const showCreate = ref(false);
 const newBranchName = ref("");
+
+// External create-form trigger (currently used by the native macOS menu's
+// "New Branch…" item). Each bump of the injected counter opens the popover
+// and the inline create form. The input's `autofocus` does the rest.
+const createRequest = inject<Ref<number> | null>(BRANCH_CREATE_REQUEST_KEY, null);
+if (createRequest) {
+  watch(createRequest, () => {
+    showPopover.value = true;
+    showCreate.value = true;
+    branchFilter.value = "";
+    newBranchName.value = "";
+    emit("loadBranches");
+  });
+}
 
 const ai = useAIProvider();
 const {

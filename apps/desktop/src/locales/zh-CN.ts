@@ -1091,6 +1091,32 @@ const zhCN: Locale = {
     rangeHistory: "行 {0}–{1} 的历史",
   },
 
+  // ─── 原生 macOS 菜单栏 (v2.0)
+  menu: {
+    preferences: "设置…",
+    file: "文件",
+    edit: "编辑",
+    repository: "仓库",
+    view: "显示",
+    window: "窗口",
+    help: "帮助",
+    openRepository: "打开仓库…",
+    openRecent: "打开最近的",
+    noRecents: "没有最近使用的仓库",
+    clearRecents: "清除最近的",
+    closeWindow: "关闭窗口",
+    fetch: "获取",
+    pull: "拉取",
+    push: "推送",
+    newBranch: "新建分支…",
+    openOnForge: "在 GitHub 中打开",
+    toggleTheme: "切换浅色 / 深色模式",
+    documentation: "GitWand 文档",
+    whatsNew: "新功能",
+    reportIssue: "报告问题…",
+    checkForUpdates: "检查更新…",
+  },
+
 };
 
 export default zhCN;

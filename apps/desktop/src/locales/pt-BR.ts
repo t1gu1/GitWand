@@ -1105,6 +1105,32 @@ const ptBR: Locale = {
     rangeHistory: "Histórico das linhas {0}–{1}",
   },
 
+  // ─── Barra de menu nativa do macOS (v2.0)
+  menu: {
+    preferences: "Ajustes…",
+    file: "Arquivo",
+    edit: "Edição",
+    repository: "Repositório",
+    view: "Visualização",
+    window: "Janela",
+    help: "Ajuda",
+    openRepository: "Abrir repositório…",
+    openRecent: "Abrir recente",
+    noRecents: "Nenhum repositório recente",
+    clearRecents: "Limpar recentes",
+    closeWindow: "Fechar janela",
+    fetch: "Fetch",
+    pull: "Pull",
+    push: "Push",
+    newBranch: "Nova branch…",
+    openOnForge: "Abrir no GitHub",
+    toggleTheme: "Alternar modo claro/escuro",
+    documentation: "Documentação do GitWand",
+    whatsNew: "Novidades",
+    reportIssue: "Relatar um problema…",
+    checkForUpdates: "Verificar atualizações…",
+  },
+
 };
 
 export default ptBR;
