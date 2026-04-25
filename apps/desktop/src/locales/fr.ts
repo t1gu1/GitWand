@@ -89,6 +89,11 @@ const fr: Locale = {
     paletteViewChanges: "Vue\u00a0: Modifications",
     paletteViewLog: "Vue\u00a0: Historique",
     paletteViewGraph: "Vue\u00a0: Graphe",
+    // Tab strip + dropdown (v2.0)
+    tabStripAddTitle: "Ajouter un onglet",
+    tabStripOpenFolder: "Ouvrir un dossier",
+    tabStripClone: "Cloner depuis une URL",
+    tabStripFork: "Forker sur GitHub",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -542,6 +547,8 @@ const fr: Locale = {
     title: "Aucun d\u00e9p\u00f4t ouvert",
     subtitle: "S\u00e9lectionnez un d\u00e9p\u00f4t Git pour commencer",
     openButton: "Ouvrir un d\u00e9p\u00f4t",
+    cloneButton: "Cloner depuis une URL",
+    forkButton: "Forker sur GitHub",
     shortcut: "pour ouvrir rapidement",
     recentTitle: "R\u00e9cents",
     tipLabel: "Le saviez-vous ?",
@@ -1116,6 +1123,32 @@ const fr: Locale = {
     rangeHistory: "Historique des lignes {0}–{1}",
   },
 
+  // ─── Modales Clone & Fork (v2.0)
+  clone: {
+    title: "Cloner un référentiel",
+    urlLabel: "URL Git",
+    urlPlaceholder: "https://github.com/owner/repo.git",
+    parentLabel: "Dossier parent",
+    parentPlaceholder: "/Users/vous/Code",
+    browse: "Parcourir…",
+    willCloneInto: "Sera cloné dans :",
+    cloneButton: "Cloner",
+    cloning: "Clonage en cours…",
+  },
+
+  fork: {
+    title: "Forker sur GitHub",
+    hint: "Forke le référentiel sur votre compte GitHub, puis le clone avec `upstream` configuré sur le référentiel d'origine. Nécessite que GitHub CLI (`gh`) soit installé et authentifié.",
+    urlLabel: "URL du référentiel GitHub ou owner/repo",
+    urlPlaceholder: "https://github.com/owner/repo",
+    parentLabel: "Dossier parent",
+    parentPlaceholder: "/Users/vous/Code",
+    browse: "Parcourir…",
+    willForkInto: "Sera forké et cloné dans :",
+    forkButton: "Forker et cloner",
+    forking: "Fork en cours…",
+  },
+
   // ─── Barre de menu native macOS (v2.0)
   menu: {
     preferences: "Réglages…",
@@ -1129,6 +1162,8 @@ const fr: Locale = {
     openRecent: "Récents",
     noRecents: "Aucun référentiel récent",
     clearRecents: "Effacer les récents",
+    clone: "Cloner…",
+    fork: "Forker sur GitHub…",
     closeWindow: "Fermer la fenêtre",
     fetch: "Fetch",
     pull: "Pull",

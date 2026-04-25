@@ -3157,6 +3157,54 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ─── Clone & Fork (v2.0) ──────────────────────────────
+    // Synchronous shell-outs — see Rust mirror in lib.rs for the rationale
+    // around deferring real-time progress. Returns the destination path on
+    // success so the caller can openTab/openRepo immediately.
+
+    // POST /api/git-clone  { url, dest }
+    if (url.pathname === "/api/git-clone" && req.method === "POST") {
+      const { url: gitUrl, dest } = await readBody(req);
+      const u = (gitUrl || "").trim();
+      const d = (dest || "").trim();
+      if (!u) return jsonResponse(req, res, { error: "Empty URL" }, 400);
+      if (!d) return jsonResponse(req, res, { error: "Empty destination" }, 400);
+      const r = spawnSync(GIT, ["clone", u, d], { encoding: "utf-8" });
+      if (r.status !== 0) {
+        const detail = (r.stderr || r.stdout || "").trim() || "git clone failed";
+        return jsonResponse(req, res, { error: detail }, 500);
+      }
+      return jsonResponse(req, res, { dest: d });
+    }
+
+    // POST /api/gh-fork  { url, parentDir }
+    if (url.pathname === "/api/gh-fork" && req.method === "POST") {
+      const { url: ghUrl, parentDir } = await readBody(req);
+      const u = (ghUrl || "").trim();
+      const parent = (parentDir || "").trim();
+      if (!u) return jsonResponse(req, res, { error: "Empty URL" }, 400);
+      if (!parent) return jsonResponse(req, res, { error: "Empty destination" }, 400);
+      // Mirror of Rust `repo_name_from_url`: strip trailing slash + .git, then
+      // take the last segment after `/` or `:`. Lets us return the final path
+      // without parsing gh's stdout (which varies by version + locale).
+      const stripped = u.replace(/\/+$/, "").replace(/\.git$/, "");
+      const repoName = stripped.split(/[\/:]/).pop();
+      if (!repoName) {
+        return jsonResponse(req, res, { error: "Could not derive repo name from URL" }, 400);
+      }
+      const r = spawnSync(
+        GH,
+        ["repo", "fork", u, "--clone", "--remote-name=upstream"],
+        { cwd: resolve(parent), encoding: "utf-8" },
+      );
+      if (r.status !== 0) {
+        const detail = (r.stderr || r.stdout || "").trim() || "gh repo fork failed";
+        return jsonResponse(req, res, { error: detail }, 500);
+      }
+      const finalPath = `${parent.replace(/\/+$/, "")}/${repoName}`;
+      return jsonResponse(req, res, { dest: finalPath });
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);

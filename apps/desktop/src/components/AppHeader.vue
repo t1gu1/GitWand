@@ -85,6 +85,8 @@ const emit = defineEmits<{
   switchTab: [tabId: number];
   closeTab: [tabId: number];
   newTab: [];
+  openClone: [];
+  openFork: [];
   // ── Sync / publish actions ───────────────────────────────────
   push: [];
   pull: [];
@@ -275,6 +277,8 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         @switch-tab="(id) => emit('switchTab', id)"
         @close-tab="(id) => emit('closeTab', id)"
         @new-tab="emit('newTab')"
+        @open-clone="emit('openClone')"
+        @open-fork="emit('openFork')"
       />
     </div>
 

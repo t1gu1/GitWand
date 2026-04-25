@@ -376,14 +376,18 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 Fondations cross-platform et quick wins UI avant d'attaquer les grosses features.
 
-**Clone & Fork depuis l'UI**
+**Clone & Fork depuis l'UI ✅**
 
-Deux points d'entrée pour récupérer un repo sans passer par le terminal :
+Deux backends 3-couches (`git_clone`, `gh_fork` — Rust + dev-server + TS) + deux modales (`CloneModal.vue`, `ForkModal.vue`) basées sur `BaseModal`. Trois points d'entrée :
 
-- **Écran d'accueil** : boutons "Clone from URL" et "Fork on GitHub" à côté du bouton "Open folder" existant — visibles au premier lancement, naturels pour les nouveaux utilisateurs
-- **Tab strip `+`** : le bouton d'ouverture d'onglet devient un dropdown avec trois options : `📂 Open folder / ⬇ Clone from URL / ⑂ Fork on GitHub`
-- Clone : saisie d'URL git (HTTPS ou SSH), sélection du dossier de destination, `git clone` avec barre de progression
-- Fork : ouvre le repo GitHub dans le browser via `gh repo fork <url> --clone`, puis ouvre automatiquement le dossier dans GitWand avec le remote upstream configuré
+- **Écran d'accueil** ✅ : boutons "Clone from URL" et "Fork on GitHub" en row secondaire sous le primary "Open a repository" — visibles dès le premier lancement
+- **Tab strip `+`** ✅ : `RepoTabStrip` convertit en dropdown (click outside / Esc pour fermer) avec trois entrées : Open folder / Clone from URL / Fork on GitHub
+- **File menu** ✅ : items Clone… (`⌘⇧O`) et Fork on GitHub… réactivés (étaient différés en v1.9 lors du chantier menu bar)
+- **Clone** ✅ : URL Git (HTTPS ou SSH), parent dir picker, dest = `<parent>/<repo-name>` auto-dérivé. Spinner + libellé "Cloning…" pendant l'opération, ouverture auto dans GitWand au succès
+- **Fork** ✅ : URL repo GitHub, parent dir picker, dest auto-dérivé. Backend = `gh repo fork <url> --clone --remote-name=upstream`, donc `origin` = ton fork, `upstream` = le repo d'origine, prêt pour PR upstream
+- **i18n** ✅ : 25 nouvelles clés × 5 locales (`clone.*`, `fork.*`, `header.tabStrip*`, `empty.{clone,fork}Button`, `menu.{clone,fork}`)
+
+_Différé (polish)_ : pas de barre de progression temps-réel pendant le clone — `git_clone` est synchrone côté Rust + dev-server (aucun event Tauri/SSE introduit). Le spinner suffit pour les clones courants. Pour ajouter le progress, il faudrait introduire un primitif async + emit Tauri (`window.emit("git-clone-progress", …)`) + écouteur côté TS. Chantier en soi, à reprendre quand on aura un autre flux long-running (fetch sur gros monorepo, etc.).
 
 **AI providers — Codex CLI, Gemini CLI & MCP compatibility matrix**
 

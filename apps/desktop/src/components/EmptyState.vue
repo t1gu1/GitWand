@@ -8,6 +8,8 @@ import AiSparkle from "./AiSparkle.vue";
 const emit = defineEmits<{
   openFolder: [];
   openPath: [path: string];
+  openClone: [];
+  openFork: [];
 }>();
 
 const { history } = useFolderHistory();
@@ -102,6 +104,40 @@ onUnmounted(() => {
       </svg>
       {{ t('empty.openButton') }}
     </button>
+
+    <!-- Secondary actions: Clone / Fork (v2.0) -->
+    <div class="empty-secondary-row">
+      <button
+        type="button"
+        class="empty-btn-secondary"
+        @click="emit('openClone')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
+            stroke="currentColor"
+            stroke-width="1.6"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+        {{ t('empty.cloneButton') }}
+      </button>
+      <button
+        type="button"
+        class="empty-btn-secondary"
+        @click="emit('openFork')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="6" cy="5" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="18" cy="5" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <circle cx="12" cy="19" r="2.2" stroke="currentColor" stroke-width="1.6" />
+          <path d="M6 7.2v3a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          <path d="M12 13.2v3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        </svg>
+        {{ t('empty.forkButton') }}
+      </button>
+    </div>
 
     <!-- Rotating feature tip -->
     <div v-if="currentTip" class="empty-tip" role="note" aria-live="polite">
@@ -223,6 +259,40 @@ onUnmounted(() => {
 }
 
 .empty-btn:active { transform: translateY(0); box-shadow: var(--shadow-xs); }
+
+/* ─── Secondary actions row (Clone / Fork) ───────────── */
+
+.empty-secondary-row {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: calc(var(--space-2) * -1); /* tighten under the primary button */
+}
+
+.empty-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--transition-base), background var(--transition-base), color var(--transition-base), transform var(--transition-fast);
+}
+
+.empty-btn-secondary:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.empty-btn-secondary:active { transform: translateY(0); }
+
+.empty-btn-secondary svg { color: currentColor; }
 
 /* ─── Rotating tip ───────────────────────────────────── */
 

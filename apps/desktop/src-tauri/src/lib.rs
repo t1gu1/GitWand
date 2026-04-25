@@ -4474,6 +4474,101 @@ fn claude_cli_prompt(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+// ─── Clone & Fork (v2.0) ───────────────────────────────────
+//
+// Both commands are synchronous shell-outs that block on completion.
+// Real-time progress events are deliberately deferred — they'd require
+// introducing async commands + Tauri event emit + SSE on the dev-server,
+// which is a chantier of its own. The frontend shows a spinner while
+// these run; on a fast network a typical clone is sub-second to a few
+// seconds and the spinner is acceptable.
+
+/// Extract the bare repo name from a Git URL or `owner/repo` shorthand.
+/// Used to compute the final clone path after `gh repo fork --clone`,
+/// since gh doesn't accept an `--into` flag and writes to `<cwd>/<repo>`.
+fn repo_name_from_url(url: &str) -> Option<String> {
+    let trimmed = url.trim().trim_end_matches('/').trim_end_matches(".git");
+    if trimmed.is_empty() {
+        return None;
+    }
+    let last = trimmed.rsplit(['/', ':']).next()?;
+    if last.is_empty() {
+        None
+    } else {
+        Some(last.to_string())
+    }
+}
+
+/// `git clone <url> <dest>` — full clone, no progress events. `dest` must
+/// be an absolute path that does not yet exist (git refuses otherwise).
+#[tauri::command]
+fn git_clone(url: String, dest: String) -> Result<String, String> {
+    let url_trim = url.trim();
+    let dest_trim = dest.trim();
+    if url_trim.is_empty() {
+        return Err("Empty URL".to_string());
+    }
+    if dest_trim.is_empty() {
+        return Err("Empty destination".to_string());
+    }
+
+    let output = std::process::Command::new(git_binary())
+        .args(["clone", url_trim, dest_trim])
+        .output()
+        .map_err(|e| format!("Failed to spawn git clone: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.trim().to_string());
+    }
+    Ok(dest_trim.to_string())
+}
+
+/// `gh repo fork <url> --clone --remote-name=upstream` — forks on GitHub
+/// (creating the user's fork if needed) and clones it into `parent_dir`.
+/// Returns the absolute path of the cloned directory.
+#[tauri::command]
+fn gh_fork(url: String, parent_dir: String) -> Result<String, String> {
+    let url_trim = url.trim();
+    let parent_trim = parent_dir.trim();
+    if url_trim.is_empty() {
+        return Err("Empty URL".to_string());
+    }
+    if parent_trim.is_empty() {
+        return Err("Empty destination".to_string());
+    }
+
+    let repo_name = repo_name_from_url(url_trim)
+        .ok_or_else(|| "Could not derive repo name from URL".to_string())?;
+
+    let output = std::process::Command::new("gh")
+        .args([
+            "repo",
+            "fork",
+            url_trim,
+            "--clone",
+            "--remote-name=upstream",
+        ])
+        .current_dir(parent_trim)
+        .output()
+        .map_err(|e| format!("Failed to spawn gh: {} (is GitHub CLI installed?)", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else if !stdout.trim().is_empty() {
+            stdout.trim().to_string()
+        } else {
+            "gh repo fork failed".to_string()
+        };
+        return Err(detail);
+    }
+
+    Ok(format!("{}/{}", parent_trim.trim_end_matches('/'), repo_name))
+}
+
 /// Launch `claude login` in the user's native terminal emulator. We don't
 /// embed a PTY because this is a one-shot setup flow: the user validates
 /// in their browser and comes back to GitWand.
@@ -4700,6 +4795,8 @@ pub fn run() {
             git_delete_tag,
             git_push_tags,
             git_delete_remote_tag,
+            git_clone,
+            gh_fork,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

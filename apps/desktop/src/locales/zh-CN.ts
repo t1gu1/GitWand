@@ -100,6 +100,11 @@ const zhCN: Locale = {
     paletteViewChanges: "\u89c6\u56fe\uff1a\u66f4\u6539",
     paletteViewLog: "\u89c6\u56fe\uff1a\u5386\u53f2",
     paletteViewGraph: "\u89c6\u56fe\uff1a\u56fe\u8868",
+    // 标签页 + 下拉菜单 (v2.0)
+    tabStripAddTitle: "添加标签页",
+    tabStripOpenFolder: "打开文件夹",
+    tabStripClone: "从 URL 克隆",
+    tabStripFork: "在 GitHub 上 Fork",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -529,6 +534,8 @@ const zhCN: Locale = {
     title: "未打开仓库",
     subtitle: "选择一个 Git 仓库开始使用",
     openButton: "打开仓库",
+    cloneButton: "从 URL 克隆",
+    forkButton: "在 GitHub 上 Fork",
     shortcut: "快速打开",
     recentTitle: "最近",
     tipLabel: "你知道吗？",
@@ -1091,6 +1098,32 @@ const zhCN: Locale = {
     rangeHistory: "行 {0}–{1} 的历史",
   },
 
+  // ─── 克隆与 Fork 弹窗 (v2.0)
+  clone: {
+    title: "克隆仓库",
+    urlLabel: "Git URL",
+    urlPlaceholder: "https://github.com/owner/repo.git",
+    parentLabel: "父文件夹",
+    parentPlaceholder: "/Users/you/Code",
+    browse: "浏览…",
+    willCloneInto: "将克隆到：",
+    cloneButton: "克隆",
+    cloning: "克隆中…",
+  },
+
+  fork: {
+    title: "在 GitHub 上 Fork",
+    hint: "在你的 GitHub 账户中 Fork 此仓库，并克隆它，将 `upstream` 配置为原始仓库。需要安装并认证 GitHub CLI (`gh`)。",
+    urlLabel: "GitHub 仓库 URL 或 owner/repo",
+    urlPlaceholder: "https://github.com/owner/repo",
+    parentLabel: "父文件夹",
+    parentPlaceholder: "/Users/you/Code",
+    browse: "浏览…",
+    willForkInto: "将 Fork 并克隆到：",
+    forkButton: "Fork 并克隆",
+    forking: "Fork 中…",
+  },
+
   // ─── 原生 macOS 菜单栏 (v2.0)
   menu: {
     preferences: "设置…",
@@ -1104,6 +1137,8 @@ const zhCN: Locale = {
     openRecent: "打开最近的",
     noRecents: "没有最近使用的仓库",
     clearRecents: "清除最近的",
+    clone: "克隆…",
+    fork: "在 GitHub 上 Fork…",
     closeWindow: "关闭窗口",
     fetch: "获取",
     pull: "拉取",

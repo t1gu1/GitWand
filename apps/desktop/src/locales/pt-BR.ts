@@ -96,6 +96,11 @@ const ptBR: Locale = {
     paletteViewChanges: "Vis\u00e3o: Altera\u00e7\u00f5es",
     paletteViewLog: "Vis\u00e3o: Hist\u00f3rico",
     paletteViewGraph: "Vis\u00e3o: Gr\u00e1fico",
+    // Tab strip + dropdown (v2.0)
+    tabStripAddTitle: "Adicionar aba",
+    tabStripOpenFolder: "Abrir pasta",
+    tabStripClone: "Clonar de URL",
+    tabStripFork: "Fazer fork no GitHub",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -536,6 +541,8 @@ const ptBR: Locale = {
     title: "Nenhum repositório aberto",
     subtitle: "Selecione um repositório Git para começar",
     openButton: "Abrir um repositório",
+    cloneButton: "Clonar de URL",
+    forkButton: "Fazer fork no GitHub",
     shortcut: "para abrir rápido",
     recentTitle: "Recentes",
     tipLabel: "Você sabia?",
@@ -1105,6 +1112,32 @@ const ptBR: Locale = {
     rangeHistory: "Histórico das linhas {0}–{1}",
   },
 
+  // ─── Modais Clone & Fork (v2.0)
+  clone: {
+    title: "Clonar repositório",
+    urlLabel: "URL do Git",
+    urlPlaceholder: "https://github.com/owner/repo.git",
+    parentLabel: "Pasta pai",
+    parentPlaceholder: "/Users/voce/Code",
+    browse: "Procurar…",
+    willCloneInto: "Será clonado em:",
+    cloneButton: "Clonar",
+    cloning: "Clonando…",
+  },
+
+  fork: {
+    title: "Fazer fork no GitHub",
+    hint: "Faz fork do repositório na sua conta do GitHub e clona com `upstream` apontando para o repositório original. Requer GitHub CLI (`gh`) instalado e autenticado.",
+    urlLabel: "URL do repositório do GitHub ou owner/repo",
+    urlPlaceholder: "https://github.com/owner/repo",
+    parentLabel: "Pasta pai",
+    parentPlaceholder: "/Users/voce/Code",
+    browse: "Procurar…",
+    willForkInto: "Será forkado e clonado em:",
+    forkButton: "Fork e clonar",
+    forking: "Forkando…",
+  },
+
   // ─── Barra de menu nativa do macOS (v2.0)
   menu: {
     preferences: "Ajustes…",
@@ -1118,6 +1151,8 @@ const ptBR: Locale = {
     openRecent: "Abrir recente",
     noRecents: "Nenhum repositório recente",
     clearRecents: "Limpar recentes",
+    clone: "Clonar…",
+    fork: "Fazer fork no GitHub…",
     closeWindow: "Fechar janela",
     fetch: "Fetch",
     pull: "Pull",

@@ -236,7 +236,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  /* Sits above any other modal at z-index 100 (BaseModal, etc.) — the
+     FolderPicker is always a sub-modal triggered from another modal's
+     "Browse" button (CloneModal, ForkModal in browser dev mode), so it
+     must dominate whichever modal opened it. */
+  z-index: 200;
   backdrop-filter: blur(4px);
 }
 

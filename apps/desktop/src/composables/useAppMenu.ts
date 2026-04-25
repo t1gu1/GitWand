@@ -38,6 +38,8 @@ export interface AppMenuActions {
   openFolder: () => void;
   openRecentFolder: (path: string) => void;
   clearRecents: () => void;
+  openClone: () => void;
+  openFork: () => void;
   closeWindow: () => void;
   // Repository
   fetch: () => void;
@@ -161,6 +163,18 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
           action: () => actions.openFolder(),
         }),
         recentSubmenu,
+        await PredefinedMenuItem.new({ item: "Separator" }),
+        await MenuItem.new({
+          id: "open-clone",
+          text: t("menu.clone"),
+          accelerator: "CmdOrCtrl+Shift+O",
+          action: () => actions.openClone(),
+        }),
+        await MenuItem.new({
+          id: "open-fork",
+          text: t("menu.fork"),
+          action: () => actions.openFork(),
+        }),
         await PredefinedMenuItem.new({ item: "Separator" }),
         await MenuItem.new({
           id: "close-window",

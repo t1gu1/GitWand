@@ -28,6 +28,8 @@ import type { PaletteAction } from "./components/header/SearchPalette.vue";
 import BranchRenameModal from "./components/header/BranchRenameModal.vue";
 import BranchDeleteModal from "./components/header/BranchDeleteModal.vue";
 import BaseModal from "./components/BaseModal.vue";
+import CloneModal from "./components/CloneModal.vue";
+import ForkModal from "./components/ForkModal.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -793,6 +795,28 @@ function onPaletteSelectCommit(hash: string) {
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
 
+// ─── Clone & Fork modals (v2.0) ──────────────────────────
+const showCloneModal = ref(false);
+const showForkModal = ref(false);
+
+async function onCloned(path: string) {
+  openTab(path);
+  await openRepo(path);
+  if (viewMode.value === "history" || viewMode.value === "graph") {
+    await loadLog();
+  }
+}
+
+async function onForked(path: string) {
+  // Same flow as a clone — the upstream remote was already configured by
+  // `gh repo fork --remote-name=upstream` on the backend.
+  openTab(path);
+  await openRepo(path);
+  if (viewMode.value === "history" || viewMode.value === "graph") {
+    await loadLog();
+  }
+}
+
 // ─── Interactive rebase panel ────────────────────────────
 const showRebase = ref(false);
 
@@ -1074,6 +1098,12 @@ useAppMenu(
     openFolder: handleOpenFolder,
     openRecentFolder: handleOpenPath,
     clearRecents: clearFolderHistory,
+    openClone: () => {
+      showCloneModal.value = true;
+    },
+    openFork: () => {
+      showForkModal.value = true;
+    },
     closeWindow: () => {
       if (activeTabId.value !== null) closeTab(activeTabId.value);
     },
@@ -1150,6 +1180,8 @@ onUnmounted(() => {
       @switch-tab="switchTab"
       @close-tab="closeTab"
       @new-tab="handleOpenFolder"
+      @open-clone="showCloneModal = true"
+      @open-fork="showForkModal = true"
       @toggle-theme="toggleTheme"
       @push="doPush"
       @pull="() => doPull(pullMode === 'rebase')"
@@ -1229,7 +1261,13 @@ onUnmounted(() => {
 
       <main class="main">
         <!-- No repo loaded → EmptyState full screen -->
-        <EmptyState v-if="!hasRepo && !repoLoading" @open-folder="handleOpenFolder" @open-path="handleOpenPath" />
+        <EmptyState
+          v-if="!hasRepo && !repoLoading"
+          @open-folder="handleOpenFolder"
+          @open-path="handleOpenPath"
+          @open-clone="showCloneModal = true"
+          @open-fork="showForkModal = true"
+        />
 
         <template v-else>
           <div v-if="repoLoading" class="loading-overlay">
@@ -1435,6 +1473,20 @@ onUnmounted(() => {
       :cwd="repoFolderPath"
       @close="showStash = false"
       @refresh="repoRefresh()"
+    />
+
+    <!-- Clone modal (v2.0) -->
+    <CloneModal
+      v-if="showCloneModal"
+      @close="showCloneModal = false"
+      @cloned="onCloned"
+    />
+
+    <!-- Fork modal (v2.0) -->
+    <ForkModal
+      v-if="showForkModal"
+      @close="showForkModal = false"
+      @forked="onForked"
     />
 
     <!-- Tags panel -->

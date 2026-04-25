@@ -1451,6 +1451,48 @@ export async function gitDeleteRemoteTag(cwd: string, remote: string, name: stri
   if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git delete-remote-tag failed: ${res.status}`);
 }
 
+// ─── Clone & Fork (v2.0) ───────────────────────────────────
+// Synchronous on both backends — no real-time progress events. The caller
+// (CloneModal / ForkModal) shows a spinner while the promise settles.
+
+/**
+ * Run `git clone <url> <dest>`. Returns the destination path on success.
+ * `dest` must be absolute and not yet exist; git refuses otherwise.
+ */
+export async function gitClone(url: string, dest: string): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("git_clone", { url, dest });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-clone`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, dest }),
+  });
+  const body = (await res.json()) as { dest?: string; error?: string };
+  if (!res.ok || body.error) throw new Error(body.error ?? `git clone failed: ${res.status}`);
+  return body.dest ?? dest;
+}
+
+/**
+ * Run `gh repo fork <url> --clone --remote-name=upstream` inside `parentDir`.
+ * Returns the absolute path of the cloned directory (parentDir + /repoName).
+ * Requires the GitHub CLI (`gh`) to be installed and authenticated.
+ */
+export async function ghFork(url: string, parentDir: string): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("gh_fork", { url, parentDir });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/gh-fork`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, parentDir }),
+  });
+  const body = (await res.json()) as { dest?: string; error?: string };
+  if (!res.ok || body.error) throw new Error(body.error ?? `gh repo fork failed: ${res.status}`);
+  if (!body.dest) throw new Error("gh repo fork: missing dest in response");
+  return body.dest;
+}
+
 // ─── Stash Manager (Phase 8.2) ─────────────────────────────
 
 export interface StashEntry {

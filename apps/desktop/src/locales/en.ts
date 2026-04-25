@@ -95,6 +95,11 @@ const en = {
     paletteViewChanges: "View: Changes",
     paletteViewLog: "View: Log",
     paletteViewGraph: "View: Graph",
+    // Tab strip + dropdown (v2.0)
+    tabStripAddTitle: "Add a tab",
+    tabStripOpenFolder: "Open folder",
+    tabStripClone: "Clone from URL",
+    tabStripFork: "Fork on GitHub",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -548,6 +553,8 @@ const en = {
     title: "No repository open",
     subtitle: "Select a Git repository to get started",
     openButton: "Open a repository",
+    cloneButton: "Clone from URL",
+    forkButton: "Fork on GitHub",
     shortcut: "to open quickly",
     recentTitle: "Recent",
     tipLabel: "Did you know?",
@@ -1129,6 +1136,32 @@ const en = {
     deleteConfirm: "Delete",
   },
 
+  // ─── Clone & Fork modals (v2.0) ─────────────────────────
+  clone: {
+    title: "Clone repository",
+    urlLabel: "Git URL",
+    urlPlaceholder: "https://github.com/owner/repo.git",
+    parentLabel: "Parent folder",
+    parentPlaceholder: "/Users/you/Code",
+    browse: "Browse\u2026",
+    willCloneInto: "Will clone into:",
+    cloneButton: "Clone",
+    cloning: "Cloning\u2026",
+  },
+
+  fork: {
+    title: "Fork on GitHub",
+    hint: "Forks the repo on your GitHub account, then clones it with `upstream` set to the original repo. Requires the GitHub CLI (`gh`) to be installed and authenticated.",
+    urlLabel: "GitHub repo URL or owner/repo",
+    urlPlaceholder: "https://github.com/owner/repo",
+    parentLabel: "Parent folder",
+    parentPlaceholder: "/Users/you/Code",
+    browse: "Browse\u2026",
+    willForkInto: "Will fork & clone into:",
+    forkButton: "Fork & clone",
+    forking: "Forking\u2026",
+  },
+
   // ─── Native macOS menu bar (v2.0) ───────────────────────
   menu: {
     // App menu
@@ -1145,6 +1178,8 @@ const en = {
     openRecent: "Open Recent",
     noRecents: "No Recent Repositories",
     clearRecents: "Clear Recents",
+    clone: "Clone\u2026",
+    fork: "Fork on GitHub\u2026",
     closeWindow: "Close Window",
     // Repository
     fetch: "Fetch",

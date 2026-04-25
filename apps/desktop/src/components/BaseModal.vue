@@ -364,4 +364,21 @@ onUnmounted(() => {
 .bm-btn--danger:active:not(:disabled) {
   transform: translateY(0);
 }
+
+/* Disabled override for primary/danger — opacity: 0.5 alone reads weakly
+   on saturated backgrounds (especially in light mode the violet stays
+   very legible). Replace with a fully neutral state: muted bg + muted
+   text + no shadow. opacity: 1 to override the parent .bm-btn:disabled.
+   Specificity is (0,2,0) — matches .bm-btn:disabled, so order in source
+   is what wins; declared after to take effect.
+   Keep at the same (0,2,0) flat layer as other modifiers — never prefix
+   with .base-modal__footer or the override silently loses. */
+.bm-btn--primary:disabled,
+.bm-btn--danger:disabled {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+  box-shadow: none;
+  opacity: 1;
+}
 </style>

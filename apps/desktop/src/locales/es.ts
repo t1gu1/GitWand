@@ -95,6 +95,11 @@ const es: Locale = {
     paletteViewChanges: "Vista: Cambios",
     paletteViewLog: "Vista: Historial",
     paletteViewGraph: "Vista: Gr\u00e1fico",
+    // Tab strip + dropdown (v2.0)
+    tabStripAddTitle: "Agregar pesta\u00f1a",
+    tabStripOpenFolder: "Abrir carpeta",
+    tabStripClone: "Clonar desde URL",
+    tabStripFork: "Bifurcar en GitHub",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -535,6 +540,8 @@ const es: Locale = {
     title: "Ningún repositorio abierto",
     subtitle: "Selecciona un repositorio Git para empezar",
     openButton: "Abrir un repositorio",
+    cloneButton: "Clonar desde URL",
+    forkButton: "Bifurcar en GitHub",
     shortcut: "para abrir rápido",
     recentTitle: "Recientes",
     tipLabel: "¿Sabías que…?",
@@ -1104,6 +1111,32 @@ const es: Locale = {
     rangeHistory: "Historial de líneas {0}–{1}",
   },
 
+  // ─── Modales Clone & Fork (v2.0)
+  clone: {
+    title: "Clonar repositorio",
+    urlLabel: "URL de Git",
+    urlPlaceholder: "https://github.com/owner/repo.git",
+    parentLabel: "Carpeta padre",
+    parentPlaceholder: "/Users/usuario/Code",
+    browse: "Examinar…",
+    willCloneInto: "Se clonará en:",
+    cloneButton: "Clonar",
+    cloning: "Clonando…",
+  },
+
+  fork: {
+    title: "Bifurcar en GitHub",
+    hint: "Bifurca el repositorio en tu cuenta de GitHub y lo clona con `upstream` configurado al repositorio original. Requiere que GitHub CLI (`gh`) esté instalado y autenticado.",
+    urlLabel: "URL del repositorio de GitHub u owner/repo",
+    urlPlaceholder: "https://github.com/owner/repo",
+    parentLabel: "Carpeta padre",
+    parentPlaceholder: "/Users/usuario/Code",
+    browse: "Examinar…",
+    willForkInto: "Se bifurcará y clonará en:",
+    forkButton: "Bifurcar y clonar",
+    forking: "Bifurcando…",
+  },
+
   // ─── Barra de menú nativa de macOS (v2.0)
   menu: {
     preferences: "Ajustes…",
@@ -1117,6 +1150,8 @@ const es: Locale = {
     openRecent: "Abrir reciente",
     noRecents: "Sin repositorios recientes",
     clearRecents: "Borrar recientes",
+    clone: "Clonar…",
+    fork: "Bifurcar en GitHub…",
     closeWindow: "Cerrar ventana",
     fetch: "Fetch",
     pull: "Pull",
