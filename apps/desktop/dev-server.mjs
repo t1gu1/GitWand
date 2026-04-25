@@ -3157,6 +3157,38 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // GET /api/git-shortlog?cwd=...
+    // Mirror of Rust git_shortlog — full-history per-author summary.
+    if (url.pathname === "/api/git-shortlog" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      const r = spawnSync(GIT, ["shortlog", "-sne", "HEAD"], {
+        cwd: resolve(cwd),
+        encoding: "utf-8",
+      });
+      if (r.status !== 0) {
+        const detail = (r.stderr || r.stdout || "").trim() || "git shortlog failed";
+        return jsonResponse(req, res, { error: detail }, 500);
+      }
+      const entries = [];
+      for (const line of r.stdout.split("\n")) {
+        const trimmed = line.trimStart();
+        const tabIdx = trimmed.indexOf("\t");
+        if (tabIdx < 0) continue;
+        const count = parseInt(trimmed.slice(0, tabIdx).trim(), 10);
+        if (Number.isNaN(count)) continue;
+        const rest = trimmed.slice(tabIdx + 1).trim();
+        const lt = rest.lastIndexOf("<");
+        const gt = rest.lastIndexOf(">");
+        if (lt < 0 || gt <= lt) continue;
+        const name = rest.slice(0, lt).trim();
+        const email = rest.slice(lt + 1, gt);
+        entries.push({ name, email, count });
+      }
+      entries.sort((a, b) => b.count - a.count);
+      return jsonResponse(req, res, entries);
+    }
+
     // ─── Clone & Fork (v2.0) ──────────────────────────────
     // Synchronous shell-outs — see Rust mirror in lib.rs for the rationale
     // around deferring real-time progress. Returns the destination path on

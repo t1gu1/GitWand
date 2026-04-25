@@ -5,11 +5,13 @@ import {
   getGitBranches,
   gitRemoteInfo,
   gitFileCount,
+  getGitShortlog,
   readFile,
   ghListPrs,
   type GitLogEntry,
   type GitBranch,
   type RemoteInfo,
+  type ShortlogEntry,
 } from "../utils/backend";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
@@ -106,7 +108,13 @@ const mergedPrs = ref(0);
 const readmeContent = ref<string | null>(null);
 const readmeError = ref(false);
 const readmeTab = ref<"formatted" | "raw">("formatted");
-const contributorCount = ref(0);
+/**
+ * Full-history per-author commit counts. Populated from `git shortlog -sne HEAD`,
+ * which sums the entire HEAD history rather than just a recent window — way more
+ * accurate than aggregating `recentCommits` (biased toward who committed last).
+ * Sorted desc by count (already done by `-n` flag, defended in Rust as well).
+ */
+const allContributors = ref<ShortlogEntry[]>([]);
 const lastCommitDate = ref("");
 const weeklyCommits = ref(0);
 const previousWeekCommits = ref(0);
@@ -164,19 +172,22 @@ const commitsByType = computed(() => {
   };
 });
 
-/** Top contributors (max 3) with commit count in the loaded window. */
+/**
+ * All contributors with commit count over the entire HEAD history, plus a
+ * `pct` field (relative to the top contributor) for the bar visualization.
+ * No slicing — the panel scrolls horizontally to expose the whole list.
+ */
 const topContributors = computed(() => {
-  const counts = new Map<string, { name: string; email: string; count: number }>();
-  for (const c of recentCommits.value) {
-    const key = c.email || c.author;
-    const existing = counts.get(key);
-    if (existing) existing.count++;
-    else counts.set(key, { name: c.author, email: c.email, count: 1 });
-  }
-  const list = Array.from(counts.values()).sort((a, b) => b.count - a.count);
+  const list = allContributors.value;
   const max = list[0]?.count ?? 1;
-  return list.slice(0, 4).map((c) => ({ ...c, pct: Math.round((c.count / max) * 100) }));
+  return list.map((c) => ({
+    ...c,
+    pct: Math.round((c.count / max) * 100),
+  }));
 });
+
+/** Total contributor count — derived directly from the shortlog list. */
+const contributorCount = computed(() => allContributors.value.length);
 
 /** Commits per day for the last 14 days (oldest → newest). Used for bar chart. */
 const barChartDays = computed(() => {
@@ -364,15 +375,14 @@ async function loadDashboard() {
     ghListPrs(props.cwd, "open").catch(() => []),
     ghListPrs(props.cwd, "merged").catch(() => []),
     loadReadme(),
+    getGitShortlog(props.cwd).catch(() => [] as ShortlogEntry[]),
   ]);
 
   // Commits
   if (results[0].status === "fulfilled") {
     recentCommits.value = results[0].value;
-    // Unique authors
-    const authors = new Set(recentCommits.value.map((c) => c.email));
-    contributorCount.value = authors.size;
-    // Last commit date
+    // Last commit date (the shortlog index drives contributor count now;
+    // recentCommits still feeds the heatmap / sparkline / commit-types bar).
     if (recentCommits.value.length > 0) {
       lastCommitDate.value = recentCommits.value[0].date;
     }
@@ -410,6 +420,12 @@ async function loadDashboard() {
       const d = p.mergedAt || p.closedAt || p.updatedAt;
       return d && new Date(d).getTime() > weekAgo;
     }).length;
+  }
+  // Shortlog (full-history per-author) — drives contributorCount + the
+  // contributors panel. results[6] is loadReadme (no return value to
+  // capture); results[7] is the shortlog.
+  if (results[7].status === "fulfilled") {
+    allContributors.value = results[7].value;
   }
 
   loading.value = false;
@@ -772,15 +788,31 @@ watch(() => props.cwd, loadDashboard);
             <h3 class="panel-title">{{ t("dashboard.contributorsTitle") }}</h3>
           </div>
           <div class="contributors">
-            <div v-for="c in topContributors" :key="c.email" class="contrib">
-              <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.name) }}</span>
-              <div class="contrib-body">
-                <div class="contrib-name">{{ c.name }}</div>
-                <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+            <!-- Horizontal scrollable list (v2.0) — every contributor over the
+                 entire HEAD history, not just a recent window. Card width is
+                 ~33% so a third card peeks in to cue the scroll. -->
+            <div
+              v-if="topContributors.length > 0"
+              class="contributors-scroll"
+              role="list"
+              :aria-label="t('dashboard.contributorsTitle')"
+            >
+              <div
+                v-for="c in topContributors"
+                :key="c.email"
+                class="contrib"
+                role="listitem"
+                :title="`${c.name} <${c.email}> · ${c.count}`"
+              >
+                <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.name) }}</span>
+                <div class="contrib-body">
+                  <div class="contrib-name">{{ c.name }}</div>
+                  <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+                </div>
+                <div class="contrib-stat">{{ c.count }}</div>
               </div>
-              <div class="contrib-stat">{{ c.count }}</div>
             </div>
-            <div v-if="topContributors.length === 0" class="contrib-empty">
+            <div v-else class="contrib-empty">
               {{ t("dashboard.noContributors") }}
             </div>
 
@@ -1398,11 +1430,42 @@ button.stat-card:hover {
   gap: var(--space-3);
 }
 
+/* Horizontal scrollable rail (v2.0). The full contributor list lives here;
+   each card snaps to the start, and ~33% width means a third card peeks
+   in to make the scrollability obvious. `mask-image` fades the right edge
+   when there's overflow as an extra cue. */
+.contributors-scroll {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-3);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  /* Negative margin + matching padding lets the cards bleed to the panel
+     edges visually while keeping the scrollbar clear of the panel border. */
+  margin: 0 calc(var(--space-5) * -1);
+  padding: 0 var(--space-5) var(--space-2);
+}
+
 .contrib {
+  flex: 0 0 calc((100% - var(--space-3) * 2) / 3);
+  min-width: 180px;
+  scroll-snap-align: start;
   display: grid;
   grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.contrib:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .contrib-body { min-width: 0; }

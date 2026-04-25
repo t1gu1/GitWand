@@ -4474,6 +4474,63 @@ fn claude_cli_prompt(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+// ─── Shortlog (v2.0) ───────────────────────────────────────
+//
+// `git shortlog -sne HEAD` returns one line per author summed over the
+// entire HEAD history — way more accurate than aggregating a windowed
+// `git log -n 250` (which biases toward whoever committed recently).
+// Output looks like:
+//   "   134\tLaurent Guitton <laurent@example.com>"
+// where the leading whitespace + number is the count, then a tab, then
+// "Name <email>".
+
+#[derive(serde::Serialize)]
+struct ShortlogEntry {
+    name: String,
+    email: String,
+    count: u32,
+}
+
+fn parse_shortlog_line(line: &str) -> Option<ShortlogEntry> {
+    let trimmed = line.trim_start();
+    let (count_str, rest) = trimmed.split_once('\t')?;
+    let count = count_str.trim().parse::<u32>().ok()?;
+    // Split off the trailing "<email>"
+    let rest = rest.trim();
+    let lt = rest.rfind('<')?;
+    let gt = rest.rfind('>')?;
+    if gt <= lt {
+        return None;
+    }
+    let name = rest[..lt].trim().to_string();
+    let email = rest[lt + 1..gt].to_string();
+    Some(ShortlogEntry { name, email, count })
+}
+
+#[tauri::command]
+fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
+    let output = std::process::Command::new(git_binary())
+        .args(["shortlog", "-sne", "HEAD"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git shortlog: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(stderr.trim().to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut entries: Vec<ShortlogEntry> = stdout
+        .lines()
+        .filter_map(parse_shortlog_line)
+        .collect();
+    // `-n` already sorts by count desc, but be defensive in case git's
+    // locale or future versions tweak ordering.
+    entries.sort_by(|a, b| b.count.cmp(&a.count));
+    Ok(entries)
+}
+
 // ─── Clone & Fork (v2.0) ───────────────────────────────────
 //
 // Both commands are synchronous shell-outs that block on completion.
@@ -4797,6 +4854,7 @@ pub fn run() {
             git_delete_remote_tag,
             git_clone,
             gh_fork,
+            git_shortlog,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

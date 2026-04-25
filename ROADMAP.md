@@ -422,11 +422,14 @@ _Différés (autre chantier ou infra manquante)_ :
 - Open in Terminal `⌘⇧T` → terminal intégré non exposé comme action callable
 - Toggle Sidebar → sidebar layout-driven par `hasRepo`, pas de state de visibilité indépendant
 
-**Dashboard — Contributors amélioré**
-- **Stats globales** : remplacer `git log --max-count=250` par `git shortlog -sne HEAD` pour avoir les totaux sur tout l'historique, pas seulement la fenêtre récente
-- **Tous les contributeurs** : supprimer le `slice(0, 4)` actuel — afficher tous les auteurs triés par nombre de commits
-- **Layout horizontal scrollable** : passer la zone contributors en `flex-row` avec `overflow-x: auto` et `scroll-snap-type: x mandatory` — chaque carte fait ~33% de la largeur visible pour indiquer qu'il y a du contenu à droite
-- **Compact** : réduire la hauteur de chaque carte (avatar + nom + count + barre en une ligne dense)
+**Dashboard — Contributors amélioré ✅**
+
+Backend 3-couches `git_shortlog` (Rust + dev-server + TS wrapper `getGitShortlog`) qui wrap `git shortlog -sne HEAD` et parse `<count>\t<name> <email>` en `{ name, email, count }[]`. Frontend (`DashboardView.vue`) :
+
+- **Stats globales ✅** : `allContributors` ref alimenté depuis le shortlog full-history. `contributorCount` passe de `ref(0)` à `computed(() => allContributors.value.length)` — plus accurate qu'agréger une fenêtre de 250 commits
+- **Tous les contributeurs ✅** : `topContributors` ne slice plus, attache juste un `pct` (relatif au top contributor) à chaque entrée pour la barre
+- **Layout horizontal scrollable ✅** : `.contributors-scroll` en `flex-row` avec `overflow-x: auto`, `scroll-snap-type: x mandatory`, `scroll-snap-align: start` sur chaque carte. Largeur par carte = `(100% - 2×gap)/3` (3 visibles, le 4ème peeke), `min-width: 180px` pour ne pas écraser les noms longs
+- **Compact ✅** : carte = grid `28px 1fr auto` (avatar | nom+barre | count) avec border + bg, hover qui passe en `--color-accent-soft`. Stack d'avatars dans la stat card reste à `slice(0, 4)` (effet visuel pile, pas du data display)
 
 ---
 

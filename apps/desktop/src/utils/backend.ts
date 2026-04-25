@@ -1451,6 +1451,32 @@ export async function gitDeleteRemoteTag(cwd: string, remote: string, name: stri
   if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git delete-remote-tag failed: ${res.status}`);
 }
 
+// ─── Shortlog (v2.0) ───────────────────────────────────────
+
+export interface ShortlogEntry {
+  name: string;
+  email: string;
+  count: number;
+}
+
+/**
+ * `git shortlog -sne HEAD` — full-history per-author commit count.
+ * Returns entries sorted by count descending.
+ */
+export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
+  if (isTauri()) {
+    return tauriInvoke<ShortlogEntry[]>("git_shortlog", { cwd });
+  }
+  const res = await fetch(
+    `${DEV_SERVER}/api/git-shortlog?cwd=${encodeURIComponent(cwd)}`,
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `git shortlog failed: ${res.status}`);
+  }
+  return (await res.json()) as ShortlogEntry[];
+}
+
 // ─── Clone & Fork (v2.0) ───────────────────────────────────
 // Synchronous on both backends — no real-time progress events. The caller
 // (CloneModal / ForkModal) shows a spinner while the promise settles.
