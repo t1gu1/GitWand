@@ -1,5 +1,5 @@
 import { ref, computed } from "vue";
-import { claudeCliPrompt } from "../utils/backend";
+import { claudeCliPrompt, codexCliPrompt } from "../utils/backend";
 import { t } from "./useI18n";
 
 /**
@@ -8,6 +8,9 @@ import { t } from "./useI18n";
  * - `claude`         : direct Anthropic API with user-provided API key
  * - `claude-code-cli`: piggyback on the user's locally-installed Claude Code
  *                     CLI (uses their Max/Pro subscription, no API key needed)
+ * - `codex-cli`      : piggyback on the user's locally-installed OpenAI Codex
+ *                     CLI (`codex exec`) — uses their ChatGPT
+ *                     subscription via `codex login`, or OPENAI_API_KEY
  * - `openai-compat`  : any OpenAI-compatible endpoint
  * - `ollama`         : local Ollama instance
  */
@@ -15,6 +18,7 @@ export type AIProvider =
   | "none"
   | "claude"
   | "claude-code-cli"
+  | "codex-cli"
   | "openai-compat"
   | "ollama";
 
@@ -210,6 +214,18 @@ async function callClaudeCodeCli(
 }
 
 /**
+ * Call the local Codex CLI (`codex exec`). Uses the user's ChatGPT
+ * subscription via `codex login`, or `OPENAI_API_KEY` env.
+ */
+async function callCodexCli(
+  systemPrompt: string,
+  userPrompt: string,
+): Promise<string> {
+  const result = await codexCliPrompt(userPrompt, systemPrompt, undefined);
+  return result ?? "";
+}
+
+/**
  * Call Ollama's local API.
  */
 async function callOllama(
@@ -280,10 +296,11 @@ export function useAIProvider() {
     if (s.aiProvider === "claude" && !s.aiApiKey) return false;
     if (s.aiProvider === "openai-compat" && (!s.aiApiKey || !s.aiApiEndpoint)) return false;
     if (s.aiProvider === "ollama") return true; // Ollama doesn't need a key
-    // claude-code-cli: availability is verified at runtime via detectClaudeCli()
-    // so we optimistically consider it available here. The actual call will
-    // surface a clear error if the CLI is missing or not logged in.
+    // CLI providers: availability is verified at runtime via the matching
+    // detectXxxCli() — optimistically considered available here so the
+    // first actual call surfaces a clear error if missing / not logged in.
     if (s.aiProvider === "claude-code-cli") return true;
+    if (s.aiProvider === "codex-cli") return true;
     if (s.aiProvider === "none") return false;
     return true;
   });
@@ -309,6 +326,9 @@ export function useAIProvider() {
           break;
         case "claude-code-cli":
           rawResponse = await callClaudeCodeCli(systemPrompt, userPrompt);
+          break;
+        case "codex-cli":
+          rawResponse = await callCodexCli(systemPrompt, userPrompt);
           break;
         case "openai-compat":
           rawResponse = await callOpenAICompat(s, systemPrompt, userPrompt);
@@ -346,6 +366,8 @@ export function useAIProvider() {
         return callClaude(s, systemPrompt, userPrompt);
       case "claude-code-cli":
         return callClaudeCodeCli(systemPrompt, userPrompt);
+      case "codex-cli":
+        return callCodexCli(systemPrompt, userPrompt);
       case "openai-compat":
         return callOpenAICompat(s, systemPrompt, userPrompt);
       case "ollama":

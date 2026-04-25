@@ -389,12 +389,15 @@ Deux backends 3-couches (`git_clone`, `gh_fork` — Rust + dev-server + TS) + de
 
 _Différé (polish)_ : pas de barre de progression temps-réel pendant le clone — `git_clone` est synchrone côté Rust + dev-server (aucun event Tauri/SSE introduit). Le spinner suffit pour les clones courants. Pour ajouter le progress, il faudrait introduire un primitif async + emit Tauri (`window.emit("git-clone-progress", …)`) + écouteur côté TS. Chantier en soi, à reprendre quand on aura un autre flux long-running (fetch sur gros monorepo, etc.).
 
-**AI providers — Codex CLI, Gemini CLI & MCP compatibility matrix**
+**AI providers — Codex CLI ✅**
 
-- **Codex CLI** (`codex -q "<prompt>"`) ajouté comme provider subprocess dans `useAIProvider.ts`, au même titre que Claude Code CLI — option dans Settings > AI
-- **Gemini CLI** (`gemini`) idem, dès stabilisation du mode non-interactif Google
+- **Codex CLI ✅** : provider `codex-cli` ajouté à `useAIProvider.ts` (union, dispatcher `suggest()` + `rawPrompt()`, optimistic `isAvailable`). Backend 3-couches : `resolve_codex_binary` (PATH + npm install paths), `detect_codex_cli` (version + ping `codex exec --quiet ping` qui surface auth status), `codex_cli_prompt` (Rust + dev-server). Settings > AI : option dans le dropdown, status block (detecting / not_found / not_logged_in / connected) miroir de celui de Claude CLI, info-box explicative. Détection auto au mount pour griser l'option si non installé. 5 nouvelles clés i18n × 5 locales. Auth via `codex login` (abonnement ChatGPT) ou `OPENAI_API_KEY`.
 - Le provider "OpenAI-compatible" existant couvre déjà l'API OpenAI directe (`gpt-4o`, `o3`…) — pas de changement nécessaire de ce côté
-- **MCP compatibility matrix** : tester et documenter officiellement Cursor, Windsurf, Codex CLI (dès support MCP) ; adapter l'Agent Sessions panel (v2.2) pour détecter tous ces clients, pas uniquement Claude Code
+- **AIProvider type unifié** : `SettingsPanel.vue` redéclarait inline le type union (avec un drift facile) — replacé par un import depuis `useAIProvider`, single source of truth. Re-export depuis `SettingsPanel` pour ne pas casser les éventuels consommateurs
+
+_Différés_ :
+- **Gemini CLI** : reporté jusqu'à stabilisation du mode non-interactif Google (`gemini --quiet "..."` sans REPL hang). Dès que c'est stable, mêmes 3 couches que Codex à recopier
+- **MCP compatibility matrix** : déplacé dans le chantier v2.2 (Agent Sessions View) où il s'aligne naturellement — adapter le panel pour détecter Cursor / Windsurf / Codex CLI / etc. en plus de Claude Code, plus tester + documenter officiellement la compat de `@gitwand/mcp` avec chaque client
 
 **Distribution & signing**
 - ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0

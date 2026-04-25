@@ -4474,6 +4474,181 @@ fn claude_cli_prompt(
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
+// ─── Codex CLI provider (v2.0) ─────────────────────────────
+//
+// OpenAI Codex CLI integration — mirrors the Claude Code CLI flow but
+// shells out to `codex exec "<prompt>"` instead of `claude -p`. `codex
+// exec` is the official non-interactive entry point (the REPL-style
+// `codex` without subcommand would hang waiting for user input). No
+// `--quiet` flag — it doesn't exist on `codex exec` and adding one
+// fails with `unexpected argument '--quiet'`.
+//
+// Auth: either OAuth via `codex login` (uses ChatGPT subscription) or
+// `OPENAI_API_KEY` env var. The CLI surfaces a clear error at first call
+// when neither is set, so detection matches the Claude pattern: tiny ping
+// prompt that exits 0 when auth works.
+
+#[derive(serde::Serialize)]
+struct CodexCliInfo {
+    found: bool,
+    path: String,
+    version: String,
+    logged_in: bool,
+    status: String,
+    detail: String,
+}
+
+fn resolve_codex_binary() -> Option<String> {
+    // 1) PATH first
+    let which_cmd = if cfg!(windows) { "where" } else { "which" };
+    if let Ok(out) = std::process::Command::new(which_cmd).arg("codex").output() {
+        if out.status.success() {
+            let raw = String::from_utf8_lossy(&out.stdout);
+            let first = raw.lines().next().unwrap_or("").trim();
+            if !first.is_empty() && std::path::Path::new(first).exists() {
+                return Some(first.to_string());
+            }
+        }
+    }
+
+    // 2) Common npm install locations
+    let home = dirs::home_dir();
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(h) = home.as_ref() {
+        candidates.push(h.join(".local/bin/codex"));
+        candidates.push(h.join(".npm-global/bin/codex"));
+        candidates.push(h.join("AppData/Roaming/npm/codex.cmd"));
+        candidates.push(h.join("AppData/Roaming/npm/codex"));
+    }
+    candidates.push(PathBuf::from("/opt/homebrew/bin/codex"));
+    candidates.push(PathBuf::from("/usr/local/bin/codex"));
+    candidates.push(PathBuf::from("/usr/bin/codex"));
+
+    for c in candidates {
+        if c.exists() {
+            return Some(c.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+#[tauri::command]
+fn detect_codex_cli() -> Result<CodexCliInfo, String> {
+    let binary = match resolve_codex_binary() {
+        Some(b) => b,
+        None => {
+            return Ok(CodexCliInfo {
+                found: false,
+                path: String::new(),
+                version: String::new(),
+                logged_in: false,
+                status: "not_found".to_string(),
+                detail: "Binaire `codex` introuvable. Installez-le avec `npm install -g @openai/codex`."
+                    .to_string(),
+            });
+        }
+    };
+
+    let version = std::process::Command::new(&binary)
+        .arg("--version")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    // Lightweight ping. The CLI exits non-zero if auth (OAuth session or
+    // OPENAI_API_KEY) is missing, with stderr describing the problem.
+    let ping = std::process::Command::new(&binary)
+        .args(["exec", "ping"])
+        .output();
+
+    match ping {
+        Ok(out) if out.status.success() => Ok(CodexCliInfo {
+            found: true,
+            path: binary,
+            version,
+            logged_in: true,
+            status: "ok".to_string(),
+            detail: String::new(),
+        }),
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            let combined = if stderr.is_empty() { stdout } else { stderr };
+            let lower = combined.to_lowercase();
+            let looks_like_auth = lower.contains("login")
+                || lower.contains("authenticat")
+                || lower.contains("unauthor")
+                || lower.contains("api key")
+                || lower.contains("openai_api_key");
+            Ok(CodexCliInfo {
+                found: true,
+                path: binary,
+                version,
+                logged_in: false,
+                status: if looks_like_auth {
+                    "not_logged_in"
+                } else {
+                    "error"
+                }
+                .to_string(),
+                detail: combined,
+            })
+        }
+        Err(e) => Ok(CodexCliInfo {
+            found: true,
+            path: binary,
+            version,
+            logged_in: false,
+            status: "error".to_string(),
+            detail: format!("Impossible d'exécuter `codex`: {}", e),
+        }),
+    }
+}
+
+#[tauri::command]
+fn codex_cli_prompt(
+    prompt: String,
+    system_prompt: Option<String>,
+    cwd: Option<String>,
+) -> Result<String, String> {
+    let binary = resolve_codex_binary()
+        .ok_or_else(|| "Binaire `codex` introuvable".to_string())?;
+
+    // Codex CLI doesn't expose separate system/user channels; prepend the
+    // system prompt as a Markdown section, same shape as the Claude flow.
+    let full_prompt = match system_prompt {
+        Some(sys) if !sys.trim().is_empty() => {
+            format!("# System\n{}\n\n# User\n{}", sys.trim(), prompt.trim())
+        }
+        _ => prompt,
+    };
+
+    let mut cmd = std::process::Command::new(&binary);
+    cmd.args(["exec", &full_prompt]);
+    if let Some(dir) = cwd {
+        if !dir.trim().is_empty() {
+            cmd.current_dir(dir);
+        }
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run codex CLI: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        return Err(if detail.is_empty() {
+            "Codex CLI a échoué sans message".to_string()
+        } else {
+            detail
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 // ─── Shortlog (v2.0) ───────────────────────────────────────
 //
 // `git shortlog -sne HEAD` returns one line per author summed over the
@@ -4855,6 +5030,8 @@ pub fn run() {
             git_clone,
             gh_fork,
             git_shortlog,
+            detect_codex_cli,
+            codex_cli_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

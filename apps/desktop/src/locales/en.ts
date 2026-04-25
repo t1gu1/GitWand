@@ -849,6 +849,8 @@ const en = {
     aiProviderClaude: "Claude (Anthropic API)",
     aiProviderClaudeCli: "Claude Code CLI (Max/Pro subscription)",
     aiProviderClaudeCliNotFound: " \u2014 not detected",
+    aiProviderCodexCli: "OpenAI Codex CLI (ChatGPT subscription or API key)",
+    aiProviderCodexCliNotFound: " \u2014 not detected",
     aiProviderOpenAiCompat: "OpenAI-compatible API",
     aiProviderOllama: "Ollama (local)",
     aiProviderOllamaNotFound: " \u2014 not detected",
@@ -892,6 +894,10 @@ const en = {
     aiCliLoginWaiting: "Waiting for login\u2026",
     aiCliLoginButton: "Sign in (opens a terminal)",
     aiCliInfoBox: "GitWand runs `claude -p` locally. No API key required: the session uses the authentication stored by Claude Code on your machine.",
+    // Codex CLI provider hints
+    aiCodexCliConnectedHint: "Calls will use your ChatGPT subscription (or OPENAI_API_KEY).",
+    aiCodexCliLoginHint: "Run `codex login` (ChatGPT subscription) or set OPENAI_API_KEY in your shell.",
+    aiCodexCliInfoBox: "GitWand runs `codex exec` locally. Authenticate once with `codex login` (uses your ChatGPT Plus/Pro subscription) or export OPENAI_API_KEY.",
     // AI tab — OpenAI-compat
     aiCompatEndpoint: "API endpoint",
     aiCompatEndpointHint: "Compatible with OpenAI, Mistral, Groq, Azure, etc.",

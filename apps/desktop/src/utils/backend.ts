@@ -2367,6 +2367,75 @@ export async function claudeCliPrompt(
   return await res.text();
 }
 
+// ─── Codex CLI provider (v2.0) ─────────────────────────────
+// Mirrors the Claude CLI shape — same struct, different binary. Codex CLI
+// uses `codex exec "<prompt>"` for non-interactive runs and authenticates
+// via OAuth (`codex login`) or `OPENAI_API_KEY`.
+
+export interface CodexCliInfo {
+  found: boolean;
+  path: string;
+  version: string;
+  logged_in: boolean;
+  status: "ok" | "not_found" | "not_logged_in" | "error" | string;
+  detail: string;
+}
+
+/**
+ * Detect whether the OpenAI Codex CLI is installed and authenticated.
+ * Safe to call on app boot.
+ */
+export async function detectCodexCli(): Promise<CodexCliInfo> {
+  if (isTauri()) {
+    return tauriInvoke<CodexCliInfo>("detect_codex_cli");
+  }
+  try {
+    const res = await fetch(`${DEV_SERVER}/api/codex-cli-detect`);
+    if (res.ok) return (await res.json()) as CodexCliInfo;
+  } catch {
+    // Dev server unavailable
+  }
+  return {
+    found: false,
+    path: "",
+    version: "",
+    logged_in: false,
+    status: "not_found",
+    detail: "",
+  };
+}
+
+/**
+ * Run a prompt through the local Codex CLI (`codex exec`).
+ */
+export async function codexCliPrompt(
+  prompt: string,
+  systemPrompt?: string,
+  cwd?: string,
+): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("codex_cli_prompt", {
+      prompt,
+      systemPrompt,
+      cwd,
+    });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/codex-cli-prompt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, systemPrompt, cwd }),
+  });
+  if (!res.ok) {
+    let msg = `codex CLI error ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = body.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  return await res.text();
+}
+
 /**
  * Open the native terminal with `claude login` so the user can complete
  * the OAuth-style setup. Not a PTY integration — just a one-shot bootstrap.

@@ -2625,6 +2625,96 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ─── Codex CLI provider (v2.0) ─────────────────────────
+    // GET /api/codex-cli-detect
+    if (url.pathname === "/api/codex-cli-detect" && req.method === "GET") {
+      try {
+        const CODEX = resolveBin("codex");
+        const exists = (() => {
+          try { return existsSync(CODEX); } catch { return false; }
+        })();
+        let resolved = exists ? CODEX : "";
+        if (!resolved) {
+          try {
+            const r = spawnSync(process.platform === "win32" ? "where" : "which", ["codex"], { encoding: "utf-8" });
+            if (r.status === 0 && r.stdout.trim()) {
+              resolved = r.stdout.split(/\r?\n/)[0].trim();
+            }
+          } catch { /* ignore */ }
+        }
+
+        if (!resolved) {
+          return jsonResponse(req, res, {
+            found: false,
+            path: "",
+            version: "",
+            logged_in: false,
+            status: "not_found",
+            detail: "Binaire `codex` introuvable. Installez-le avec `npm install -g @openai/codex`.",
+          });
+        }
+
+        let version = "";
+        try {
+          const r = spawnSync(resolved, ["--version"], { encoding: "utf-8" });
+          if (r.status === 0) version = r.stdout.trim();
+        } catch { /* ignore */ }
+
+        let loggedIn = false;
+        let status = "error";
+        let detail = "";
+        try {
+          const r = spawnSync(resolved, ["exec", "ping"], { encoding: "utf-8" });
+          if (r.status === 0) {
+            loggedIn = true;
+            status = "ok";
+          } else {
+            const combined = (r.stderr || r.stdout || "").trim();
+            const lower = combined.toLowerCase();
+            const authy = lower.includes("login") || lower.includes("authenticat") || lower.includes("unauthor") || lower.includes("api key") || lower.includes("openai_api_key");
+            status = authy ? "not_logged_in" : "error";
+            detail = combined;
+          }
+        } catch (err) {
+          detail = `Impossible d'exécuter codex: ${err.message}`;
+        }
+
+        return jsonResponse(req, res, {
+          found: true,
+          path: resolved,
+          version,
+          logged_in: loggedIn,
+          status,
+          detail,
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/codex-cli-prompt  { prompt, systemPrompt?, cwd? }
+    if (url.pathname === "/api/codex-cli-prompt" && req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        const CODEX = resolveBin("codex");
+        const fullPrompt = body.systemPrompt && body.systemPrompt.trim()
+          ? `# System\n${body.systemPrompt.trim()}\n\n# User\n${(body.prompt || "").trim()}`
+          : (body.prompt || "");
+        const r = spawnSync(CODEX, ["exec", fullPrompt], {
+          cwd: body.cwd || undefined,
+          encoding: "utf-8",
+          maxBuffer: 20 * 1024 * 1024,
+        });
+        if (r.status !== 0) {
+          const detail = (r.stderr || r.stdout || "").trim() || "Codex CLI a échoué sans message";
+          return jsonResponse(req, res, { error: detail }, 500);
+        }
+        return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // POST /api/claude-cli-login  (opens a terminal with `claude login`)
     if (url.pathname === "/api/claude-cli-login" && req.method === "POST") {
       try {

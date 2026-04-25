@@ -8,19 +8,18 @@ import {
   supportedLocales,
   type SupportedLocale,
 } from "../locales";
-import { detectClaudeCli, claudeCliLogin, type ClaudeCliInfo } from "../utils/backend";
+import { detectClaudeCli, claudeCliLogin, type ClaudeCliInfo, detectCodexCli, type CodexCliInfo } from "../utils/backend";
 
 const { t, locale, isAuto, setLocale } = useI18n();
 const { theme, setTheme } = useTheme();
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
-export type AIProvider =
-  | "none"
-  | "claude"
-  | "claude-code-cli"
-  | "openai-compat"
-  | "ollama";
+// Single source of truth for the provider union — re-export so other files
+// importing from SettingsPanel don't break, but the canonical declaration
+// lives in `useAIProvider`.
+import type { AIProvider } from "../composables/useAIProvider";
+export type { AIProvider };
 
 const emit = defineEmits<{
   close: [];
@@ -204,6 +203,8 @@ function onAIProviderChange(val: AIProvider) {
   if (val === "claude-code-cli") {
     // Refresh detection when the user picks this provider.
     runClaudeCliDetect();
+  } else if (val === "codex-cli") {
+    runCodexCliDetect();
   } else if (val === "claude") {
     if (!settings.value.aiApiEndpoint || settings.value.aiApiEndpoint === "https://api.openai.com/v1") {
       updateSetting("aiApiEndpoint", "https://api.anthropic.com");
@@ -321,6 +322,33 @@ async function runClaudeCliDetect() {
   }
 }
 
+// ─── Codex CLI detection (v2.0) ─────────────────────────
+// Same shape as the Claude CLI block; no `runCodexCliLogin` because the
+// CLI's `codex login` flow is interactive and Laurent's existing
+// claudeCliLogin opens a terminal — for Codex, the user authenticates
+// once outside GitWand (browser OAuth or env var) and we re-detect on
+// demand. Adding a terminal-launch helper is a follow-up if needed.
+const codexCliInfo = ref<CodexCliInfo | null>(null);
+const codexCliDetecting = ref(false);
+
+async function runCodexCliDetect() {
+  codexCliDetecting.value = true;
+  try {
+    codexCliInfo.value = await detectCodexCli();
+  } catch (e) {
+    codexCliInfo.value = {
+      found: false,
+      path: "",
+      version: "",
+      logged_in: false,
+      status: "error",
+      detail: (e as Error).message,
+    };
+  } finally {
+    codexCliDetecting.value = false;
+  }
+}
+
 async function runClaudeCliLogin() {
   claudeCliLoginLoading.value = true;
   try {
@@ -348,10 +376,11 @@ async function runClaudeCliLogin() {
 
 onMounted(() => {
   detectOllama();
-  // Lazy-detect Claude CLI only when the user has that provider active,
-  // or run a background detect so the option can be highlighted in the
-  // dropdown. We do a one-shot detect at mount — it's fast (just `which`).
+  // Lazy-detect both CLI providers at mount so the dropdown can grey out
+  // missing ones without waiting for the user to pick the option first.
+  // Both are fast — just `which` + `--version`.
   runClaudeCliDetect();
+  runCodexCliDetect();
 });
 
 </script>
@@ -616,6 +645,9 @@ onMounted(() => {
                 <option value="claude-code-cli">
                   {{ t('settings.aiProviderClaudeCli') }}{{ claudeCliInfo && !claudeCliInfo.found ? t('settings.aiProviderClaudeCliNotFound') : '' }}
                 </option>
+                <option value="codex-cli">
+                  {{ t('settings.aiProviderCodexCli') }}{{ codexCliInfo && !codexCliInfo.found ? t('settings.aiProviderCodexCliNotFound') : '' }}
+                </option>
                 <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                 <option value="ollama" :disabled="!ollamaAvailable">
                   {{ t('settings.aiProviderOllama') }}{{ ollamaAvailable ? '' : t('settings.aiProviderOllamaNotFound') }}
@@ -799,6 +831,55 @@ onMounted(() => {
                   <circle cx="8" cy="8" r="7"/><path d="M8 7v4" stroke-linecap="round"/><circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none"/>
                 </svg>
                 <p>{{ t('settings.aiCliInfoBox') }}</p>
+              </div>
+            </template>
+
+            <!-- Codex CLI provider (v2.0) — same shape as Claude CLI block -->
+            <template v-if="settings.aiProvider === 'codex-cli'">
+              <div class="sp-row">
+                <div class="sp-label">{{ t('settings.aiCliStatus') }}</div>
+                <div class="sp-cli-status">
+                  <template v-if="codexCliDetecting">
+                    <span class="sp-hint">{{ t('settings.aiCliDetecting') }}</span>
+                  </template>
+                  <template v-else-if="!codexCliInfo || !codexCliInfo.found">
+                    <div class="sp-connect-error-block">
+                      <div class="sp-connect-error">
+                        {{ t('settings.aiCliNotFound') }} <code>codex</code> {{ t('settings.aiCliNotFoundSuffix') }}
+                      </div>
+                      <span class="sp-hint">
+                        {{ t('settings.aiCliInstallHint') }}
+                        <code>npm install -g @openai/codex</code>
+                        {{ t('settings.aiCliInstallHintSuffix') }}
+                      </span>
+                      <button class="sp-text-btn" @click="runCodexCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                  </template>
+                  <template v-else-if="codexCliInfo.logged_in">
+                    <div class="sp-connected-badge">
+                      <span class="sp-connected-dot"></span>
+                      <span>{{ t('settings.aiCliConnected', codexCliInfo.version || 'codex') }}</span>
+                      <button class="sp-disconnect-btn" @click="runCodexCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                    <span class="sp-hint">{{ t('settings.aiCodexCliConnectedHint') }}</span>
+                  </template>
+                  <template v-else>
+                    <div class="sp-connect-error-block">
+                      <div class="sp-connect-error">
+                        {{ t('settings.aiCliNotAuthenticated') }}
+                      </div>
+                      <span class="sp-hint">{{ codexCliInfo.detail || t('settings.aiCodexCliLoginHint') }}</span>
+                      <button class="sp-text-btn" @click="runCodexCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <div v-if="codexCliInfo?.logged_in" class="sp-info-box">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+                  <circle cx="8" cy="8" r="7"/><path d="M8 7v4" stroke-linecap="round"/><circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none"/>
+                </svg>
+                <p>{{ t('settings.aiCodexCliInfoBox') }}</p>
               </div>
             </template>
 
