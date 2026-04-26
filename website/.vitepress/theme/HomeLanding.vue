@@ -25,7 +25,7 @@ function setLocale(code: Locale) {
 }
 
 // ── Smart download URL (OS detection) ─────────────────────────────────────
-const LATEST = '1.10.0'
+const LATEST = '2.0.0'
 const RELEASES = 'https://github.com/devlint/GitWand/releases'
 
 // SSR-safe: start with the generic releases page, then switch to the
@@ -45,7 +45,7 @@ onMounted(() => {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v1.10.0 · Open Source · MIT',
+    badge: 'v2.0.0 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
@@ -141,7 +141,7 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparaison fonctionnalité par fonctionnalité avec les clients Git les plus populaires.',
   },
   en: {
-    badge: 'v1.10.0 · Open Source · MIT',
+    badge: 'v2.0.0 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
@@ -237,7 +237,7 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Feature-by-feature breakdown against the most popular Git clients on the market.',
   },
   es: {
-    badge: 'v1.10.0 · Open Source · MIT',
+    badge: 'v2.0.0 · Open Source · MIT',
     heroH1a: 'Git, sin',
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
@@ -333,7 +333,7 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparativa función a función con los clientes Git más populares del mercado.',
   },
   'pt-BR': {
-    badge: 'v1.10.0 · Open Source · MIT',
+    badge: 'v2.0.0 · Open Source · MIT',
     heroH1a: 'Git, sem',
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
@@ -429,7 +429,7 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparação recurso a recurso com os clientes Git mais populares do mercado.',
   },
   'zh-CN': {
-    badge: 'v1.10.0 · 开源 · MIT',
+    badge: 'v2.0.0 · 开源 · MIT',
     heroH1a: 'Git,告别',
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',

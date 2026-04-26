@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-26
+
+Major release. v2.0 introduces three desktop-first surfaces — a native macOS menu bar, in-app Clone & Fork, and an opt-in beta update channel — plus an OpenAI Codex CLI provider, a shortlog-driven Contributors widget, and a tightened follow-up pass on the menu bar that lights up Find in Log, Merge…, Open in Terminal, Toggle Sidebar, and Undo Last Operation.
+
+### Added — v2.0 surfaces
+
+- **Native macOS menu bar** — full File / Edit / Repository / View / Window / Help via `@tauri-apps/api/menu`. Built entirely from the frontend so labels come from `useI18n()` and rebuild on locale + repo open/close. Predefined OS items (Cut/Copy/Paste/Hide/Quit/Minimize/Fullscreen) keep first-responder routing intact — Cmd+Z stays webview-default for text undo. macOS-only via `navigator.platform` gate.
+- **Clone & Fork from the UI** — three entry points for `git clone <url> <dest>` and `gh repo fork <url> --clone --remote-name=upstream`: secondary buttons under the empty state, a `+` dropdown on the tab strip (teleported to body to escape the strip's overflow clip), and File menu items. Backends are 3-layer (Rust + dev-server + TS wrapper) per the project convention; modals are `BaseModal`-based with auto-derived destination paths.
+- **Auto-update channels (stable / beta)** — `Settings.updateChannel` ref and a new `fetchBetaUpdate(currentVersion)` that compares semver locally against `latest-beta.json`. Stable keeps the Tauri plugin's auto-install path; beta switches to a manual flow (open the GitHub release page) because `tauri-plugin-updater` doesn't support runtime endpoint override. CHANGELOG note: the GitHub Actions workflow still needs to publish `latest-beta.json` on `v*-beta.*` tags — tracked as a follow-up.
+- **OpenAI Codex CLI provider** — `codex-cli` added to `useAIProvider` mirroring the Claude Code CLI flow. Backend has `resolve_codex_binary` + `detect_codex_cli` + `codex_cli_prompt` (uses `codex exec "<prompt>"` — no `--quiet`, that flag doesn't exist on `exec`). Settings UI matches the Claude block: detect on mount, status states (not_found / not_logged_in / connected) with install hint.
+- **5 deferred menu items, now wired** — `Find in Log` (Cmd+F focuses the existing `CommitLog.searchQuery` input via a `LOG_FOCUS_SEARCH_KEY` provide/inject bridge after switching `viewMode` to "history"), `Merge…` (opens `AppHeader.openMergePopover()` via `MERGE_POPOVER_REQUEST_KEY`), `Open in Terminal` (Cmd+Shift+T mounts `GitTerminal` in a stash-overlay shell), `Toggle Sidebar` (Cmd+Shift+S, new `showSidebar` ref defaulted true), `Undo Last Operation` (Cmd+Shift+U opens the existing rewind popover via `UNDO_POPOVER_REQUEST_KEY`). Toggle Light/Dark Mode loses Cmd+Shift+T (now claimed by Open in Terminal per spec) — stays in the menu without an accelerator; the header chip remains the primary entry.
+
+### Changed — v2.0 surfaces
+
+- **Dashboard contributors** — backend `git_shortlog` (3 layers) replaces the windowed-log aggregation. `contributorCount` becomes a computed derived from `allContributors.length`, `topContributors` no longer slices to 4. Layout converts to a horizontal scroll rail: cards take `(100% - 2×gap)/3` with `min-width: 180px` and `scroll-snap-align: start`, so a fourth contributor peeks in to cue the scroll.
+- **`AIProvider` type unified** — `SettingsPanel.vue` redeclared the union inline and silently drifted from `useAIProvider.ts`. Replaced with a re-export so the canonical declaration has a single home.
+- **`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp`, `@gitwand/desktop`, `gitwand-website`** all bumped to `2.0.0` via `scripts/bump-version.sh`. `@gitwand/mcp/server.json` (root + packages[0] version) and `packages/mcp/src/server.ts` aligned.
+
 ### Added
 
 - **Commit context menu** — right-click any commit in the Log to get a full action menu. Twelve entries in four groups:
@@ -297,7 +315,8 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/devlint/GitWand/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/devlint/GitWand/releases/tag/v2.0.0
 [1.4.0]: https://github.com/devlint/GitWand/releases/tag/v1.4.0
 [1.2.0]: https://github.com/devlint/GitWand/releases/tag/v1.2.0
 [1.1.0]: https://github.com/devlint/GitWand/releases/tag/v1.1.0
