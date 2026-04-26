@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/state-of-merge-conflict-resolution-2026" class="blog-card">
+    <div class="blog-meta">Apr 26, 2026 · 12 min read</div>
+    <h2 class="blog-title">The state of automatic merge conflict resolution in 2026: a survey, and where GitWand is headed</h2>
+    <p class="blog-excerpt">Five families of techniques, from RCS in 1986 to ConGra in 2024 — textual diff, AST-based structural merge, semantic merge, refactoring-aware tools, and LLMs. What's in GitWand today, and the v2 roadmap that follows the literature.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/claude-code-gitwand-ai-agents" class="blog-card">
     <div class="blog-meta">Apr 24, 2026 · 9 min read</div>
     <h2 class="blog-title">Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare</h2>

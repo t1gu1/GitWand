@@ -397,7 +397,7 @@ _Différé (polish)_ : pas de barre de progression temps-réel pendant le clone 
 
 _Différés_ :
 - **Gemini CLI** : reporté jusqu'à stabilisation du mode non-interactif Google (`gemini --quiet "..."` sans REPL hang). Dès que c'est stable, mêmes 3 couches que Codex à recopier
-- **MCP compatibility matrix** : déplacé dans le chantier v2.2 (Agent Sessions View) où il s'aligne naturellement — adapter le panel pour détecter Cursor / Windsurf / Codex CLI / etc. en plus de Claude Code, plus tester + documenter officiellement la compat de `@gitwand/mcp` avec chaque client
+- **MCP compatibility matrix** : déplacé dans le chantier v2.8 (Agent Sessions View) où il s'aligne naturellement — adapter le panel pour détecter Cursor / Windsurf / Codex CLI / etc. en plus de Claude Code, plus tester + documenter officiellement la compat de `@gitwand/mcp` avec chaque client
 
 **Distribution & signing**
 - ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
@@ -440,11 +440,52 @@ Backend 3-couches `git_shortlog` (Rust + dev-server + TS wrapper `getGitShortlog
 
 ## v2.x — Roadmap
 
-> Pivot vers le multi-repo et l'écosystème agents. Chaque jalon est livrable indépendamment.
+> **Pivot dual-track** : la suite immédiate du produit s'organise sur deux pistes parallèles.
+>
+> 1. **Core engine sequence** (`@gitwand/core` v2.1 → v2.6) — séquence prioritaire qui rapatrie l'état de l'art de la résolution automatique de conflits Git (Histogram diff → tree-sitter structural merge → validation sémantique → LLM fallback opt-in → refactoring-aware). Détail dans [CORE-V2-ROADMAP.md](./CORE-V2-ROADMAP.md). Publiée via `workflow_dispatch` sans aligner desktop/cli/mcp, sauf v2.5 (tie-in desktop).
+> 2. **Desktop product track** (v2.7 → v2.12) — fonctionnalités desktop renumérotées pour faire de la place au chantier core. Workspaces, Agent Sessions, Launchpad, intégrations forge, performance, Voice Input. Aucune entrée n'est annulée — seule la cadence est ralentie le temps du chantier core.
+>
+> Chaque jalon des deux tracks est livrable indépendamment.
 
 ---
 
-### v2.1.0 — Workspaces + Hooks manager
+### Core engine — v2 sequence (priority track)
+
+Six releases minor de `@gitwand/core` détaillées dans [CORE-V2-ROADMAP.md](./CORE-V2-ROADMAP.md). Effort total estimé ~15-20 semaines, livrable continu. Chaque release accompagnée d'un article de blog (plan éditorial dans le doc dédié).
+
+**`@gitwand/core@2.1.0` — Histogram diff & block-move detection**
+
+Bascule du backend diff de LCS pur vers Histogram (Patience++ avec ancres rares). `lcs()` garde sa signature publique, `GITWAND_DIFF=lcs` pour rollback. Block-move detection via rolling hash Rabin-Karp, prépare le terrain pour v2.6. **+2-5 %** d'auto-résolution globale attendus, plus sur les cas avec refactor partiel.
+
+**`@gitwand/core@2.2.0` — Format profile registry + JSON Patch arrays**
+
+Résout le trou des tableaux JSON (`/dependencies`, `/scripts`, `tsconfig#/include`) qui retombaient en fallback textuel. Registre de profils par fichier (`package.json`, `tsconfig`, `helm/values`, Kubernetes Deployment…) avec stratégies par chemin JSON Pointer (`set` / `ordered-list` / `merge-keys`). RFC 6902 maison pour les opérations atomiques. **+10-15 %** d'auto-résolution sur les fichiers JSON/YAML monorepo.
+
+**`@gitwand/core@2.3.0` — Tree-sitter structural dispatcher (TS/JS/Python/Go/Rust)**
+
+Le grand saut. Merge entité-par-entité aligné Mergiraf/Weave : parse base/ours/theirs avec `web-tree-sitter`, apparie les entités top-level (fonctions, classes, méthodes, top-level statements) par signature canonique, fusionne entité-par-entité. Grammars en `optionalDependencies` avec WASM lazy-loaded. Adapter pattern pour le chargement Node / browser / Tauri. **+20-30 %** d'auto-résolution sur les conflits TS/JS/Python/Go/Rust.
+
+**`@gitwand/core@2.4.0` — Validation sémantique post-merge**
+
+Étend `validateMergedContent` (aujourd'hui marqueurs résiduels + `JSON.parse`/`yaml.parse`/`smol-toml`) avec une couche parse-tree validity multi-langage via tree-sitter. `tsc --noEmit` et `eslint` opt-in via `.gitwandrc` (`validation.level: "strict"`). Nouvelle dimension `postMergeRisk` dans `ConfidenceScore` qui retire rétroactivement les résolutions dont le résultat ne parse plus. **−50 %** de faux positifs (parse-tree-cassé) attendus.
+
+**`@gitwand/core@2.5.0` — LLM fallback opt-in via MCP** _(tag aligné — desktop tie-in)_
+
+Pattern `llm_proposed` priorité 998, **désactivé par défaut**. Sérialise le hunk + DecisionTrace partielle + contexte ±50 lignes, appelle un endpoint injecté par le consommateur (MCP server externe / API / custom), valide agressivement contre la pipeline v2.4 avant acceptation. Audit trail complet (modèle, hash du prompt, score de validation), `temperature: 0` pour reproductibilité. Nouveau `resolveAsync()` exporté côte à côte avec `resolve()` synchrone. **+10-20 %** global avec LLM activé, 0 % sans (rétro-compat stricte).
+
+**`@gitwand/core@2.6.0` — Refactoring-aware merge (expérimental)**
+
+Détection de 3 refactorings cibles via tree-sitter — rename local, rename top-level, move method — puis pipeline RefMerge invert/merge/replay (Ellis et al. TSE 2023). Opt-in. Couvre la classe « rename d'un symbole d'un côté + ajout d'un usage de l'ancien nom ailleurs » qu'aucun merge syntaxique ne résout. **+5 %** sur les cas spécifiques de rename, sinon stable.
+
+---
+
+### Desktop product track (v2.7 → v2.12, parallel)
+
+Renuméroté pour faire de la place à la séquence core ci-dessus. Cadence ralentie le temps du chantier. Aucune fonctionnalité n'est annulée.
+
+---
+
+### v2.7.0 — Workspaces + Hooks manager
 
 Fondations multi-repo (prérequis pour le Launchpad) et pouvoir utilisateur avancé.
 
@@ -455,7 +496,7 @@ Version locale du concept GitKraken Workspaces — sans cloud, sans compte, just
 - Grouper plusieurs repos dans un workspace nommé (par projet, par client, par squad)
 - **Actions groupées** : fetch all, pull all, status all en un clic
 - Ouvrir tous les repos du workspace d'un coup dans des onglets GitWand
-- Launchpad filtré par workspace (prépare v2.3)
+- Launchpad filtré par workspace (prépare v2.9)
 
 **Hooks manager**
 
@@ -466,7 +507,7 @@ Version locale du concept GitKraken Workspaces — sans cloud, sans compte, just
 
 ---
 
-### v2.2.0 — Agent Sessions View
+### v2.8.0 — Agent Sessions View
 
 Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel.
 
@@ -478,9 +519,9 @@ Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus
 
 ---
 
-### v2.3.0 — Launchpad
+### v2.9.0 — Launchpad
 
-_Dépend de v2.1.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos du workspace.
+_Dépend de v2.7.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos du workspace.
 
 - **PRs cross-repo** : liste unifiée de toutes les PRs ouvertes sur les repos dans le workspace (via `gh` CLI), avec statuts CI, reviewers, labels — sans ouvrir chaque repo un par un
 - **Issues cross-repo** : GitHub Issues agrégées (filtres : assignées à moi, mentionné, créées par moi)
@@ -490,7 +531,7 @@ _Dépend de v2.1.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-fi
 
 ---
 
-### v2.4.0 — Intégrations forge
+### v2.10.0 — Intégrations forge
 
 Ouvre GitWand aux utilisateurs non-GitHub.
 
@@ -501,7 +542,7 @@ Ouvre GitWand aux utilisateurs non-GitHub.
 
 ---
 
-### v2.5.0 — Performance à grande échelle
+### v2.11.0 — Performance à grande échelle
 
 - Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
 - Pagination lazy du log sur repos 100k+ commits
@@ -509,7 +550,7 @@ Ouvre GitWand aux utilisateurs non-GitHub.
 
 ---
 
-### v2.6.0 — Voice Input (expérimental)
+### v2.12.0 — Voice Input (expérimental)
 
 Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
 
