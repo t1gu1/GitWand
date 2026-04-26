@@ -5,6 +5,14 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.0.1 — April 2026
+
+### A friendlier update prompt
+
+The in-app update modal used to render the GitHub release notes as-is — a download table with platform/file rows and a raw "see the changelog" link. Useful for CI debugging, less so when you're being told a new GitWand is available. The modal now shows a sparkle, the version, a one-line teaser, and a link straight to this page anchored at the right heading. The release manifest still carries the technical body for future iterations, but the modal stops surfacing it.
+
+---
+
 ## v2.0.0 — April 2026
 
 ### Native macOS menu bar

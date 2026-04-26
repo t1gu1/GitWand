@@ -1137,7 +1137,7 @@ const zhCN: Locale = {
 
   // ─── 自动更新弹窗 (v2.0)
   update: {
-    title: "GitWand {0} 可用",
+    title: "更新",
     newBadge: "新版本",
     betaBadge: "Beta 版本",
     installAndRestart: "安装并重启",
@@ -1147,6 +1147,9 @@ const zhCN: Locale = {
     later: "稍后",
     noNotes: "无可用的发布说明。",
     manualHint: "Beta 版本不会自动安装：点击会打开 GitHub Releases 页面，你可以手动下载并运行安装程序。",
+    // 营销弹窗 (v2.0.1)
+    tagline: "了解此版本的新功能、改进与修复。",
+    viewChangelog: "查看完整更新日志",
   },
 
   // ─── 原生 macOS 菜单栏 (v2.0)

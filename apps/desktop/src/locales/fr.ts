@@ -1162,7 +1162,7 @@ const fr: Locale = {
 
   // ─── Modale de mise à jour auto (v2.0)
   update: {
-    title: "GitWand {0} disponible",
+    title: "Mise à jour",
     newBadge: "Nouvelle version",
     betaBadge: "Version bêta",
     installAndRestart: "Installer et redémarrer",
@@ -1172,6 +1172,9 @@ const fr: Locale = {
     later: "Plus tard",
     noNotes: "Aucune note de release disponible.",
     manualHint: "Les builds bêta ne sont pas auto-installés : cliquer ouvre la page GitHub Releases où vous pouvez télécharger et lancer l'installeur manuellement.",
+    // Modale marketing (v2.0.1)
+    tagline: "Découvrez les nouveautés, améliorations et correctifs de cette version.",
+    viewChangelog: "Voir le changelog complet",
   },
 
   // ─── Barre de menu native macOS (v2.0)

@@ -1151,7 +1151,7 @@ const ptBR: Locale = {
 
   // ─── Modal de atualização automática (v2.0)
   update: {
-    title: "GitWand {0} disponível",
+    title: "Atualização",
     newBadge: "Nova versão",
     betaBadge: "Versão beta",
     installAndRestart: "Instalar e reiniciar",
@@ -1161,6 +1161,9 @@ const ptBR: Locale = {
     later: "Mais tarde",
     noNotes: "Nenhuma nota de release disponível.",
     manualHint: "Builds beta não são auto-instalados: clicar abre a página do GitHub Releases onde você pode baixar e executar o instalador manualmente.",
+    // Modal marketing (v2.0.1)
+    tagline: "Descubra as novidades, melhorias e correções desta versão.",
+    viewChangelog: "Ver o changelog completo",
   },
 
   // ─── Barra de menu nativa do macOS (v2.0)

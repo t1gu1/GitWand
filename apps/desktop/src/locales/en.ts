@@ -1176,7 +1176,7 @@ const en = {
 
   // ─── Auto-update modal (v2.0) ───────────────────────────
   update: {
-    title: "GitWand {0} available",
+    title: "Update",
     newBadge: "New version",
     betaBadge: "Beta version",
     installAndRestart: "Install and restart",
@@ -1186,6 +1186,9 @@ const en = {
     later: "Later",
     noNotes: "No release notes available.",
     manualHint: "Beta builds aren\u2019t auto-installed: clicking opens the GitHub release page where you can download and run the installer manually.",
+    // Marketing modal copy (v2.0.1)
+    tagline: "Discover the new features, refinements, and fixes in this release.",
+    viewChangelog: "Read the full changelog",
   },
 
   // ─── Native macOS menu bar (v2.0) ───────────────────────

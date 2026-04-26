@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-04-26
+
+### Changed
+
+- **Update modal redesigned, marketing-first** — the in-app update prompt no longer renders the auto-generated release manifest body (download table + raw "see the changelog" link rendered as basic markdown). The modal now shows a sparkle hero, the new version, a localized tagline ("Discover the new features, refinements, and fixes in this release."), and a "Read the full changelog" link that anchors to the version's heading on `gitwand.devlint.fr/changelog`. Two new i18n keys (`update.tagline`, `update.viewChangelog`) across the 5 locales. The `update.body` field is still kept on `UpdateInfo` for a future iteration where we might publish hand-written marketing copy in the manifest.
+
 ## [2.0.0] - 2026-04-26
 
 Major release. v2.0 introduces three desktop-first surfaces — a native macOS menu bar, in-app Clone & Fork, and an opt-in beta update channel — plus an OpenAI Codex CLI provider, a shortlog-driven Contributors widget, and a tightened follow-up pass on the menu bar that lights up Find in Log, Merge…, Open in Terminal, Toggle Sidebar, and Undo Last Operation.
@@ -315,7 +321,8 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/devlint/GitWand/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/devlint/GitWand/releases/tag/v2.0.1
 [2.0.0]: https://github.com/devlint/GitWand/releases/tag/v2.0.0
 [1.4.0]: https://github.com/devlint/GitWand/releases/tag/v1.4.0
 [1.2.0]: https://github.com/devlint/GitWand/releases/tag/v1.2.0

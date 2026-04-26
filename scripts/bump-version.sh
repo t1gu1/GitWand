@@ -85,6 +85,16 @@ bump website/.vitepress/theme/HomeLanding.vue \
 bump website/.vitepress/theme/HomeLanding.vue \
   "s/v${OLD} · /v${NEW} · /g"
 
+# ── website/HomeLanding.vue: "What's new in vX.Y" CTA labels (5 locales) ────
+# These reference major.minor (e.g. "v2.0"), not the full semver, and the
+# format varies per locale: "What's new in v2.0", "Nouveautés v2.0",
+# "Novedades v2.0", "Novidades v2.0", "v2.0 新特性". We constrain the
+# substitution to lines containing the `whatsNew:` key so feature-card
+# content elsewhere in the file isn't accidentally rewritten. POSIX BRE.
+NEW_MM="${NEW%.*}"
+bump website/.vitepress/theme/HomeLanding.vue \
+  "/whatsNew: /s/v[0-9][0-9]*\\.[0-9][0-9]*/v${NEW_MM}/"
+
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
 echo "Done — $OLD → $NEW"

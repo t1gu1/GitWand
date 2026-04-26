@@ -25,7 +25,7 @@ function setLocale(code: Locale) {
 }
 
 // ── Smart download URL (OS detection) ─────────────────────────────────────
-const LATEST = '2.0.0'
+const LATEST = '2.0.1'
 const RELEASES = 'https://github.com/devlint/GitWand/releases'
 
 // SSR-safe: start with the generic releases page, then switch to the
@@ -45,13 +45,13 @@ onMounted(() => {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v2.0.0 · Open Source · MIT',
+    badge: 'v2.0.1 · Open Source · MIT',
     heroH1a: 'Git, sans',
     heroH1b: 'maux de tête.',
     heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
     download: 'Télécharger',
     github: 'GitHub',
-    whatsNew: 'Nouveautés v1.9',
+    whatsNew: 'Nouveautés v2.0',
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patterns de résolution',
@@ -141,13 +141,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparaison fonctionnalité par fonctionnalité avec les clients Git les plus populaires.',
   },
   en: {
-    badge: 'v2.0.0 · Open Source · MIT',
+    badge: 'v2.0.1 · Open Source · MIT',
     heroH1a: 'Git, without',
     heroH1b: 'the headaches.',
     heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
     download: 'Download',
     github: 'GitHub',
-    whatsNew: "What's new in v1.9",
+    whatsNew: "What's new in v2.0",
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'resolution patterns',
@@ -237,13 +237,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Feature-by-feature breakdown against the most popular Git clients on the market.',
   },
   es: {
-    badge: 'v2.0.0 · Open Source · MIT',
+    badge: 'v2.0.1 · Open Source · MIT',
     heroH1a: 'Git, sin',
     heroH1b: 'dolores de cabeza.',
     heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
     download: 'Descargar',
     github: 'GitHub',
-    whatsNew: 'Novedades v1.9',
+    whatsNew: 'Novedades v2.0',
     docs: 'Documentación →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patrones de resolución',
@@ -333,13 +333,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparativa función a función con los clientes Git más populares del mercado.',
   },
   'pt-BR': {
-    badge: 'v2.0.0 · Open Source · MIT',
+    badge: 'v2.0.1 · Open Source · MIT',
     heroH1a: 'Git, sem',
     heroH1b: 'dor de cabeça.',
     heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
     download: 'Baixar',
     github: 'GitHub',
-    whatsNew: 'Novidades v1.9',
+    whatsNew: 'Novidades v2.0',
     docs: 'Documentação →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'padrões de resolução',
@@ -429,13 +429,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparação recurso a recurso com os clientes Git mais populares do mercado.',
   },
   'zh-CN': {
-    badge: 'v2.0.0 · 开源 · MIT',
+    badge: 'v2.0.1 · 开源 · MIT',
     heroH1a: 'Git,告别',
     heroH1b: '烦恼。',
     heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
     download: '下载',
     github: 'GitHub',
-    whatsNew: 'v1.9 新特性',
+    whatsNew: 'v2.0 新特性',
     docs: '文档 →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: '种解决模式',
