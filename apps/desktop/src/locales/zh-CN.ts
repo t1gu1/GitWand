@@ -905,6 +905,12 @@ const zhCN: Locale = {
     spaces: "空格",
     notifications: "通知",
     notificationsHint: "显示通知提示（同步、推送、错误）",
+    // 更新通道 (v2.0)
+    updateChannelLabel: "更新通道",
+    updateChannelStable: "稳定版",
+    updateChannelBeta: "Beta（手动安装）",
+    updateChannelStableHint: "应用内自动安装。默认 — 推荐给大多数用户。",
+    updateChannelBetaHint: "通知你预发布版本。自动安装已禁用 — 点击「安装」会打开 GitHub Releases 页面。",
   },
 
   undoStack: {
@@ -1129,6 +1135,20 @@ const zhCN: Locale = {
     forking: "Fork 中…",
   },
 
+  // ─── 自动更新弹窗 (v2.0)
+  update: {
+    title: "GitWand {0} 可用",
+    newBadge: "新版本",
+    betaBadge: "Beta 版本",
+    installAndRestart: "安装并重启",
+    openReleasePage: "打开发布页",
+    installing: "安装中…",
+    downloading: "下载中…",
+    later: "稍后",
+    noNotes: "无可用的发布说明。",
+    manualHint: "Beta 版本不会自动安装：点击会打开 GitHub Releases 页面，你可以手动下载并运行安装程序。",
+  },
+
   // ─── 原生 macOS 菜单栏 (v2.0)
   menu: {
     preferences: "设置…",
@@ -1145,11 +1165,16 @@ const zhCN: Locale = {
     clone: "克隆…",
     fork: "在 GitHub 上 Fork…",
     closeWindow: "关闭窗口",
+    findInLog: "在历史中查找…",
     fetch: "获取",
     pull: "拉取",
     push: "推送",
     newBranch: "新建分支…",
+    merge: "合并…",
+    undoLastOp: "撤销上一个操作…",
+    openInTerminal: "在终端中打开",
     openOnForge: "在 GitHub 中打开",
+    toggleSidebar: "显示 / 隐藏侧边栏",
     toggleTheme: "切换浅色 / 深色模式",
     documentation: "GitWand 文档",
     whatsNew: "新功能",

@@ -916,6 +916,12 @@ const es: Locale = {
     spaces: "espacios",
     notifications: "Notificaciones",
     notificationsHint: "Mostrar notificaciones emergentes (sincronización, push, errores)",
+    // Canal de actualización (v2.0)
+    updateChannelLabel: "Canal de actualización",
+    updateChannelStable: "Estable",
+    updateChannelBeta: "Beta (instalación manual)",
+    updateChannelStableHint: "Instalación automática in-app. Por defecto — recomendado para la mayoría de usuarios.",
+    updateChannelBetaHint: "Te notifica de builds pre-release. La instalación automática está desactivada — al hacer clic en \"Instalar\" se abre la página de GitHub Releases.",
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1142,6 +1148,20 @@ const es: Locale = {
     forking: "Bifurcando…",
   },
 
+  // ─── Modal de actualización automática (v2.0)
+  update: {
+    title: "GitWand {0} disponible",
+    newBadge: "Nueva versión",
+    betaBadge: "Versión beta",
+    installAndRestart: "Instalar y reiniciar",
+    openReleasePage: "Abrir página de release",
+    installing: "Instalando…",
+    downloading: "Descargando…",
+    later: "Más tarde",
+    noNotes: "No hay notas de release disponibles.",
+    manualHint: "Los builds beta no se auto-instalan: al hacer clic se abre la página de GitHub Releases donde puedes descargar y ejecutar el instalador manualmente.",
+  },
+
   // ─── Barra de menú nativa de macOS (v2.0)
   menu: {
     preferences: "Ajustes…",
@@ -1158,11 +1178,16 @@ const es: Locale = {
     clone: "Clonar…",
     fork: "Bifurcar en GitHub…",
     closeWindow: "Cerrar ventana",
+    findInLog: "Buscar en el historial…",
     fetch: "Fetch",
     pull: "Pull",
     push: "Push",
     newBranch: "Nueva rama…",
+    merge: "Fusionar…",
+    undoLastOp: "Deshacer última operación…",
+    openInTerminal: "Abrir en Terminal",
     openOnForge: "Abrir en GitHub",
+    toggleSidebar: "Mostrar / ocultar barra lateral",
     toggleTheme: "Alternar modo claro/oscuro",
     documentation: "Documentación de GitWand",
     whatsNew: "Novedades",

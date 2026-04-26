@@ -29,11 +29,15 @@
  * right cluster, so keeping their markup here lets them share the
  * `header-right` position: relative anchor without plumbing portals.
  */
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, inject, watch, onMounted, onUnmounted, type Ref } from "vue";
 import type { Theme } from "../composables/useTheme";
 import type { GitBranch } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useUndoStack, type UndoEntry, type UndoOpType } from "../composables/useUndoStack";
+import {
+  MERGE_POPOVER_REQUEST_KEY,
+  UNDO_POPOVER_REQUEST_KEY,
+} from "../composables/branchPickerBridge";
 import RepoTabStrip from "./header/RepoTabStrip.vue";
 import HeaderLogo from "./header/HeaderLogo.vue";
 import BranchSelector from "./header/BranchSelector.vue";
@@ -223,6 +227,20 @@ watch(
   },
   { immediate: true },
 );
+
+// ─── External triggers (native menu → popovers) ─────────────────────
+// Counter-bump pattern: each ++ reopens the target popover. Lets the
+// macOS menu's Repository → Merge… and Undo Last Operation… items pop
+// the same UI the BranchMenu would, without lifting the popover state
+// up to App.vue.
+const mergeRequestCounter = inject<Ref<number> | null>(MERGE_POPOVER_REQUEST_KEY, null);
+const undoRequestCounter = inject<Ref<number> | null>(UNDO_POPOVER_REQUEST_KEY, null);
+if (mergeRequestCounter) {
+  watch(mergeRequestCounter, () => openMergePopover());
+}
+if (undoRequestCounter) {
+  watch(undoRequestCounter, () => openUndoPopover());
+}
 
 // ─── BranchMenu event handlers ─────────────────────────────────────
 function onBranchMenuMerge() {

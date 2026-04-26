@@ -401,8 +401,8 @@ _Différés_ :
 
 **Distribution & signing**
 - ✅ Signature macOS (Developer ID + notarization Apple) — v1.9.0
+- ✅ Auto-update channel (stable / beta) — `Settings.updateChannel` + `fetchBetaUpdate(currentVersion)` (manual fetch sur `latest-beta.json` + comparaison semver locale). Stable garde le path Tauri plugin (auto-install in-app), beta passe en mode "manual" : `UpdateModal` montre le même flux mais le bouton ouvre la GitHub release page au lieu de remplacer le binaire. Choix dicté par la limitation Tauri 2 (pas de runtime endpoint override sur `tauri-plugin-updater`). 15 nouvelles clés i18n (5 settings + namespace `update.*` 10) × 5 locales. _TODO infra_ : adapter le workflow GitHub Actions de release pour publier `latest-beta.json` quand le tag matche `v*-beta.*`
 - Signature Windows (Authenticode)
-- Auto-update channel (stable / beta)
 - Homebrew cask, winget, Flatpak
 
 **Barre de menu macOS native ✅**
@@ -417,13 +417,15 @@ Menus File / Edit / Repository / View / Window / Help construits côté JS via `
 - **Window ✅** : Minimize `⌘M`, Zoom, + window list auto via `setAsWindowsMenuForNSApp()`
 - **Help ✅** : GitWand Documentation (gitwand.devlint.fr), What's New (GitHub Releases), Report an Issue (GitHub Issues), Check for Updates… (branché sur `runUpdateCheck()`). Search box auto via `setAsHelpMenuForNSApp()`.
 
-_Différés (autre chantier ou infra manquante)_ :
-- Clone… / Fork… → autre chantier de v2.0.0
-- Undo/Redo sur l'undo stack → conflit sémantique avec le text-undo natif de Cmd+Z dans les inputs ; à reprendre avec un raccourci dédié
-- Find in Log `⌘F` → pas de handler Cmd+F dans l'app
-- Merge… → contextuel à la branche, mieux servi par le `BranchMenu`
-- Open in Terminal `⌘⇧T` → terminal intégré non exposé comme action callable
-- Toggle Sidebar → sidebar layout-driven par `hasRepo`, pas de state de visibilité indépendant
+_Différés à l'origine, repris dans des chantiers ultérieurs_ :
+- ~~Clone… / Fork…~~ ✅ chantier Clone & Fork v2.0.0 (items réactivés dans `useAppMenu.ts`, `⌘⇧O` pour Clone…)
+- ~~Find in Log `⌘F`~~ ✅ provide/inject `LOG_FOCUS_SEARCH_KEY` — bump du counter switche le viewMode sur "history" puis focus l'input `searchQuery` existant de `CommitLog` (qui était déjà câblé pour la recherche locale + IA)
+- ~~Merge…~~ ✅ provide/inject `MERGE_POPOVER_REQUEST_KEY` — `AppHeader` watch et appelle `openMergePopover()` (déjà existant, déclenché par `BranchMenu`)
+- ~~Open in Terminal `⌘⇧T`~~ ✅ `GitTerminal` rendu dans une overlay réutilisant le shell `stash-overlay`, ouvert via `showTerminal` ref
+- ~~Toggle Sidebar `⌘⇧S`~~ ✅ ref `showSidebar` (default true), `<aside class="sidebar" v-if="hasRepo && showSidebar">`
+- ~~Undo/Redo sur l'undo stack~~ ✅ découplé du `Cmd+Z` (qui reste sur le text-undo webview natif) — assigné à `⌘⇧U` qui ouvre le popover undo existant via `UNDO_POPOVER_REQUEST_KEY`. Pattern miroir de Merge
+
+_Effets de bord_ : `Toggle Light/Dark Mode` perd son raccourci `⌘⇧T` (récupéré par Open in Terminal per spec). Reste accessible via le menu sans accélérateur, et la chip dans le header est l'entrée primaire.
 
 **Dashboard — Contributors amélioré ✅**
 

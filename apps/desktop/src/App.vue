@@ -30,6 +30,7 @@ import BranchDeleteModal from "./components/header/BranchDeleteModal.vue";
 import BaseModal from "./components/BaseModal.vue";
 import CloneModal from "./components/CloneModal.vue";
 import ForkModal from "./components/ForkModal.vue";
+import GitTerminal from "./components/GitTerminal.vue";
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -45,13 +46,18 @@ import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
-import { BRANCH_CREATE_REQUEST_KEY } from "./composables/branchPickerBridge";
+import {
+  BRANCH_CREATE_REQUEST_KEY,
+  MERGE_POPOVER_REQUEST_KEY,
+  UNDO_POPOVER_REQUEST_KEY,
+  LOG_FOCUS_SEARCH_KEY,
+} from "./composables/branchPickerBridge";
 import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
-import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, installUpdate } from "./utils/backend";
+import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate } from "./utils/backend";
 import type { UpdateInfo } from "./utils/backend";
 import UpdateModal from "./components/UpdateModal.vue";
 
@@ -157,11 +163,18 @@ const prCwd = computed(() => repoFolderPath.value ?? "");
 const prPanel = usePrPanel(prCwd);
 provide(PR_PANEL_KEY, prPanel);
 
-// ─── Bridge: native menu → BranchSelector create form ────
-// The macOS menu's "New Branch…" item bumps this counter; BranchSelector
-// watches it and opens its inline create form (with autofocus).
+// ─── Bridges: native menu → owning components ────────────
+// Each counter is bumped by a menu action; the consumer watches and opens
+// its popover / focuses its input. See branchPickerBridge.ts for the
+// pattern. New bridges go in the same file — one symbol per surface.
 const branchCreateRequest = ref(0);
+const mergePopoverRequest = ref(0);
+const undoPopoverRequest = ref(0);
+const logFocusRequest = ref(0);
 provide(BRANCH_CREATE_REQUEST_KEY, branchCreateRequest);
+provide(MERGE_POPOVER_REQUEST_KEY, mergePopoverRequest);
+provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
+provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────
 const {
@@ -795,6 +808,15 @@ function onPaletteSelectCommit(hash: string) {
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
 
+// ─── Integrated git terminal (v2.0) ──────────────────────
+// Mounted as a docked panel below the main content when toggled on.
+const showTerminal = ref(false);
+
+// ─── Sidebar visibility (v2.0) ───────────────────────────
+// View menu → Toggle Sidebar. Defaults to visible; we hide when the user
+// wants more horizontal real estate for the diff / log views.
+const showSidebar = ref(true);
+
 // ─── Clone & Fork modals (v2.0) ──────────────────────────
 const showCloneModal = ref(false);
 const showForkModal = ref(false);
@@ -1077,11 +1099,27 @@ const pendingUpdate = ref<UpdateInfo | null>(null);
 const updateModalRef = ref<InstanceType<typeof UpdateModal> | null>(null);
 
 async function runUpdateCheck() {
-  const info = await checkForUpdates();
+  // Stable channel uses the Tauri plugin's auto-install path; beta channel
+  // fetches a separate manifest and points the user at the GitHub release
+  // for manual install (Tauri's plugin can't be retargeted at runtime).
+  const channel = settings.value?.updateChannel ?? "stable";
+  const info = channel === "beta"
+    ? await fetchBetaUpdate(__APP_VERSION__)
+    : await checkForUpdates();
   if (info) pendingUpdate.value = info;
 }
 
 async function onInstallUpdate() {
+  // Manual install path (beta channel): just open the GitHub release page.
+  // The user downloads + installs themselves; we close our modal.
+  if (pendingUpdate.value?.installMethod === "manual") {
+    if (pendingUpdate.value.downloadUrl) {
+      window.open(pendingUpdate.value.downloadUrl, "_blank");
+    }
+    pendingUpdate.value = null;
+    return;
+  }
+  // Auto-install path (stable channel): Tauri downloads + replaces in place.
   await installUpdate((fraction) => {
     updateModalRef.value?.setProgress(fraction);
   });
@@ -1131,6 +1169,25 @@ useAppMenu(
     checkForUpdates: runUpdateCheck,
     openSettings: () => {
       showSettings.value = true;
+    },
+    // ── 5 deferred items, now wired ──
+    openTerminal: () => {
+      showTerminal.value = true;
+    },
+    toggleSidebar: () => {
+      showSidebar.value = !showSidebar.value;
+    },
+    findInLog: () => {
+      // Switch to the log/history view first — focusing a hidden input
+      // would silently no-op because the element isn't mounted.
+      viewMode.value = "history";
+      logFocusRequest.value++;
+    },
+    openUndoStack: () => {
+      undoPopoverRequest.value++;
+    },
+    openMerge: () => {
+      mergePopoverRequest.value++;
     },
   },
   { hasRepo },
@@ -1206,7 +1263,7 @@ onUnmounted(() => {
     />
 
     <div class="app-body">
-      <aside class="sidebar" v-if="hasRepo">
+      <aside class="sidebar" v-if="hasRepo && showSidebar">
         <RepoSidebar
           :cwd="repoFolderPath ?? ''"
           :files="repoFiles"
@@ -1474,6 +1531,18 @@ onUnmounted(() => {
       @close="showStash = false"
       @refresh="repoRefresh()"
     />
+
+    <!-- Integrated git terminal (v2.0) — reuses the stash-overlay shell
+         so it lives in the same overlay layer as worktrees / submodules. -->
+    <div v-if="showTerminal && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showTerminal = false">
+      <div class="stash-overlay-body">
+        <GitTerminal
+          :cwd="repoFolderPath"
+          @close="showTerminal = false"
+          @refresh="repoRefresh()"
+        />
+      </div>
+    </div>
 
     <!-- Clone modal (v2.0) -->
     <CloneModal

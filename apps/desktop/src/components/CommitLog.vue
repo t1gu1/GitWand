@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+import { computed, ref, watch, inject, nextTick, onMounted, onUnmounted, type Ref } from "vue";
 import type { GitLogEntry } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useCommitSearch, filterCommitsLocal, type CommitMatch } from "../composables/useCommitSearch";
+import { LOG_FOCUS_SEARCH_KEY } from "../composables/branchPickerBridge";
 import AiSparkle from "./AiSparkle.vue";
 const { t, locale } = useI18n();
 
@@ -136,6 +137,23 @@ const ai = useAIProvider();
 const { isSearching: isAiSearching, searchAI, lastError: aiSearchError } = useCommitSearch();
 const searchQuery = ref("");
 const aiMatches = ref<CommitMatch[] | null>(null);
+const searchInputEl = ref<HTMLInputElement | null>(null);
+
+// External focus trigger (native Edit menu → Find in Log). Each bump of
+// the injected counter focuses + selects the search input. App.vue is
+// expected to switch viewMode to "history" before bumping so the input
+// is actually mounted.
+const focusRequest = inject<Ref<number> | null>(LOG_FOCUS_SEARCH_KEY, null);
+if (focusRequest) {
+  watch(focusRequest, () => {
+    nextTick(() => {
+      const el = searchInputEl.value;
+      if (!el) return;
+      el.focus();
+      el.select();
+    });
+  });
+}
 
 const displayedEntries = computed<GitLogEntry[]>(() => {
   if (aiMatches.value !== null) return aiMatches.value.map((m) => m.entry);
@@ -251,6 +269,7 @@ function authorColor(name: string): string {
         <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
       </svg>
       <input
+        ref="searchInputEl"
         v-model="searchQuery"
         type="text"
         class="log-search-input"

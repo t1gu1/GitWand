@@ -917,6 +917,12 @@ const ptBR: Locale = {
     spaces: "espaços",
     notifications: "Notificações",
     notificationsHint: "Mostrar notificações toast (sincronização, push, erros)",
+    // Canal de atualização (v2.0)
+    updateChannelLabel: "Canal de atualização",
+    updateChannelStable: "Estável",
+    updateChannelBeta: "Beta (instalação manual)",
+    updateChannelStableHint: "Instalação automática in-app. Padrão — recomendado para a maioria dos usuários.",
+    updateChannelBetaHint: "Notifica sobre builds pré-release. A instalação automática está desativada — clicar em \"Instalar\" abre a página do GitHub Releases.",
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1143,6 +1149,20 @@ const ptBR: Locale = {
     forking: "Forkando…",
   },
 
+  // ─── Modal de atualização automática (v2.0)
+  update: {
+    title: "GitWand {0} disponível",
+    newBadge: "Nova versão",
+    betaBadge: "Versão beta",
+    installAndRestart: "Instalar e reiniciar",
+    openReleasePage: "Abrir página de release",
+    installing: "Instalando…",
+    downloading: "Baixando…",
+    later: "Mais tarde",
+    noNotes: "Nenhuma nota de release disponível.",
+    manualHint: "Builds beta não são auto-instalados: clicar abre a página do GitHub Releases onde você pode baixar e executar o instalador manualmente.",
+  },
+
   // ─── Barra de menu nativa do macOS (v2.0)
   menu: {
     preferences: "Ajustes…",
@@ -1159,11 +1179,16 @@ const ptBR: Locale = {
     clone: "Clonar…",
     fork: "Fazer fork no GitHub…",
     closeWindow: "Fechar janela",
+    findInLog: "Buscar no histórico…",
     fetch: "Fetch",
     pull: "Pull",
     push: "Push",
     newBranch: "Nova branch…",
+    merge: "Mesclar…",
+    undoLastOp: "Desfazer última operação…",
+    openInTerminal: "Abrir no Terminal",
     openOnForge: "Abrir no GitHub",
+    toggleSidebar: "Mostrar / ocultar barra lateral",
     toggleTheme: "Alternar modo claro/escuro",
     documentation: "Documentação do GitWand",
     whatsNew: "Novidades",

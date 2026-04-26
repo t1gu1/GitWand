@@ -49,6 +49,8 @@ interface Settings {
   tabSize: number;
   notifications: boolean;
   blameAlgorithm: BlameAlgorithm;
+  // Auto-update channel (v2.0)
+  updateChannel: "stable" | "beta";
   // AI settings
   aiEnabled: boolean;
   aiProvider: AIProvider;
@@ -71,6 +73,7 @@ const defaultSettings: Settings = {
   fontSize: 12,
   tabSize: 4,
   notifications: true,
+  updateChannel: "stable",
   // AI defaults
   aiEnabled: false,
   aiProvider: "none",
@@ -485,6 +488,22 @@ onMounted(() => {
               <span>{{ t('settings.notifications') }}</span>
             </label>
             <span class="sp-hint">{{ t('settings.notificationsHint') }}</span>
+          </div>
+
+          <!-- Auto-update channel (v2.0) -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-update-channel">{{ t('settings.updateChannelLabel') }}</label>
+            <select
+              id="setting-update-channel" class="sp-select"
+              :value="settings.updateChannel"
+              @change="updateSetting('updateChannel', ($event.target as HTMLSelectElement).value as 'stable' | 'beta')"
+            >
+              <option value="stable">{{ t('settings.updateChannelStable') }}</option>
+              <option value="beta">{{ t('settings.updateChannelBeta') }}</option>
+            </select>
+            <span class="sp-hint">
+              {{ settings.updateChannel === 'beta' ? t('settings.updateChannelBetaHint') : t('settings.updateChannelStableHint') }}
+            </span>
           </div>
         </template>
 

@@ -941,6 +941,12 @@ const en = {
     spaces: "spaces",
     notifications: "Notifications",
     notificationsHint: "Show toast notifications (sync, push, errors)",
+    // Auto-update channel (v2.0)
+    updateChannelLabel: "Update channel",
+    updateChannelStable: "Stable",
+    updateChannelBeta: "Beta (manual install)",
+    updateChannelStableHint: "In-app auto-install. The default \u2014 recommended for most users.",
+    updateChannelBetaHint: "Notifies you of pre-release builds. Auto-install is disabled \u2014 clicking \u201cInstall\u201d opens the GitHub release page.",
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1168,6 +1174,20 @@ const en = {
     forking: "Forking\u2026",
   },
 
+  // ─── Auto-update modal (v2.0) ───────────────────────────
+  update: {
+    title: "GitWand {0} available",
+    newBadge: "New version",
+    betaBadge: "Beta version",
+    installAndRestart: "Install and restart",
+    openReleasePage: "Open release page",
+    installing: "Installing\u2026",
+    downloading: "Downloading\u2026",
+    later: "Later",
+    noNotes: "No release notes available.",
+    manualHint: "Beta builds aren\u2019t auto-installed: clicking opens the GitHub release page where you can download and run the installer manually.",
+  },
+
   // ─── Native macOS menu bar (v2.0) ───────────────────────
   menu: {
     // App menu
@@ -1187,13 +1207,19 @@ const en = {
     clone: "Clone\u2026",
     fork: "Fork on GitHub\u2026",
     closeWindow: "Close Window",
+    // Edit
+    findInLog: "Find in Log\u2026",
     // Repository
     fetch: "Fetch",
     pull: "Pull",
     push: "Push",
     newBranch: "New Branch\u2026",
+    merge: "Merge\u2026",
+    undoLastOp: "Undo Last Operation\u2026",
+    openInTerminal: "Open in Terminal",
     openOnForge: "Open on GitHub",
     // View
+    toggleSidebar: "Toggle Sidebar",
     toggleTheme: "Toggle Light/Dark Mode",
     // Help
     documentation: "GitWand Documentation",

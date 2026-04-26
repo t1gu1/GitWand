@@ -2649,6 +2649,73 @@ export interface UpdateInfo {
   version: string;
   /** Release notes in plain text / Markdown (may be empty) */
   body: string;
+  /**
+   * How the update is installed (v2.0):
+   *   - `auto`: Tauri plugin downloads + replaces the binary in place. Used
+   *     for the stable channel — endpoints are baked into tauri.conf.json,
+   *     so the plugin's `check()` only knows that one URL.
+   *   - `manual`: we fetched a separate manifest (e.g. `latest-beta.json`)
+   *     and the user has to download from the GitHub release page. The
+   *     plugin can't be told to use a different endpoint at runtime, so
+   *     manual is the honest path until either Tauri exposes that or we
+   *     run a redirect server.
+   */
+  installMethod: "auto" | "manual";
+  /** Browser-opens-this URL when `installMethod === "manual"`. */
+  downloadUrl?: string;
+}
+
+/**
+ * Compare two semver strings (X.Y.Z, optionally `-prerelease.N`).
+ * Returns -1 / 0 / +1. Pre-release < release for the same X.Y.Z.
+ * Crude string compare on the prerelease tail — adequate for our
+ * `1.7.0` vs `1.7.0-beta.1` case; not a full semver implementation.
+ */
+function compareVersions(a: string, b: string): number {
+  const parse = (v: string) => {
+    const stripped = v.replace(/^v/, "");
+    const [main, pre = ""] = stripped.split("-");
+    const parts = main.split(".").map((p) => parseInt(p, 10) || 0);
+    return { parts, pre };
+  };
+  const va = parse(a);
+  const vb = parse(b);
+  for (let i = 0; i < 3; i++) {
+    const da = va.parts[i] ?? 0;
+    const db = vb.parts[i] ?? 0;
+    if (da !== db) return da < db ? -1 : 1;
+  }
+  if (va.pre === vb.pre) return 0;
+  if (va.pre === "") return 1; // 1.7.0 > 1.7.0-beta.1
+  if (vb.pre === "") return -1;
+  return va.pre.localeCompare(vb.pre);
+}
+
+/** GitHub Pages-hosted manifest for the beta channel (v2.0). */
+const BETA_MANIFEST_URL = "https://devlint.github.io/GitWand/update/latest-beta.json";
+
+/**
+ * Fetch the beta manifest manually and return an `UpdateInfo` if it's
+ * newer than `currentVersion`. Used when the user opts into the beta
+ * channel — see UpdateInfo.installMethod for why this can't reuse the
+ * Tauri plugin's `check()`.
+ */
+export async function fetchBetaUpdate(currentVersion: string): Promise<UpdateInfo | null> {
+  try {
+    const res = await fetch(BETA_MANIFEST_URL, { cache: "no-store" });
+    if (!res.ok) return null;
+    const manifest = (await res.json()) as { version?: string; notes?: string };
+    if (!manifest.version) return null;
+    if (compareVersions(manifest.version, currentVersion) <= 0) return null;
+    return {
+      version: manifest.version,
+      body: manifest.notes ?? "",
+      installMethod: "manual",
+      downloadUrl: `https://github.com/devlint/GitWand/releases/tag/v${manifest.version}`,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Keep a reference to the Update object so installUpdate() can use it.
@@ -2674,7 +2741,11 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
     const update = await check();
     if (update?.available) {
       _pendingUpdate = update;
-      return { version: update.version, body: update.body ?? "" };
+      return {
+        version: update.version,
+        body: update.body ?? "",
+        installMethod: "auto",
+      };
     }
     return null;
   } catch {

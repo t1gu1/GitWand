@@ -31,6 +31,8 @@ export interface AppSettings {
   notifications: boolean;
   /** Diff algorithm used for git blame. "histogram" gives the best blame results for most codebases. */
   blameAlgorithm: BlameAlgorithm;
+  /** Auto-update channel (v2.0). "stable" = Tauri plugin auto-install; "beta" = manual fetch + browser-open. */
+  updateChannel: "stable" | "beta";
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -47,6 +49,7 @@ export const defaultAppSettings: AppSettings = {
   tabSize: 4,
   notifications: true,
   blameAlgorithm: "histogram",
+  updateChannel: "stable",
 };
 
 const SETTINGS_KEY = "gitwand-settings";

@@ -2,6 +2,9 @@
 import { ref, computed } from "vue";
 import BaseModal from "./BaseModal.vue";
 import type { UpdateInfo } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   update: UpdateInfo;
@@ -22,6 +25,15 @@ function setProgress(fraction: number) {
 defineExpose({ setProgress });
 
 const progressPct = computed(() => Math.round(progress.value * 100));
+
+/** Manual install path = beta channel — no in-app download/replace. */
+const isManual = computed(() => props.update.installMethod === "manual");
+
+const ctaLabel = computed(() => {
+  if (installing.value) return t("update.installing");
+  if (isManual.value) return t("update.openReleasePage");
+  return t("update.installAndRestart");
+});
 
 /** Render very basic markdown: bold, inline code, bullet lists */
 function renderBody(text: string): string {
@@ -46,14 +58,17 @@ function renderBody(text: string): string {
 }
 
 function onInstall() {
-  installing.value = true;
+  // Manual path closes the modal immediately after opening the browser
+  // (App.vue handles the window.open + state reset). Don't lock the UI
+  // into the "installing" state since there's no in-app progress to show.
+  if (!isManual.value) installing.value = true;
   emit("install");
 }
 </script>
 
 <template>
   <BaseModal
-    :title="`GitWand ${update.version} disponible`"
+    :title="t('update.title', update.version)"
     size="md"
     role="dialog"
     :closable="!installing"
@@ -61,22 +76,27 @@ function onInstall() {
   >
     <!-- Version badge -->
     <div class="um-header">
-      <span class="um-badge">Nouvelle version</span>
+      <span class="um-badge">{{ isManual ? t('update.betaBadge') : t('update.newBadge') }}</span>
       <span class="um-version">v{{ update.version }}</span>
     </div>
+
+    <!-- Beta channel hint — explains why the button opens a browser -->
+    <p v-if="isManual" class="um-manual-hint">
+      {{ t('update.manualHint') }}
+    </p>
 
     <!-- Release notes -->
     <div v-if="update.body" class="um-notes">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div class="um-notes__content" v-html="renderBody(update.body)" />
     </div>
-    <p v-else class="um-no-notes">Aucune note de release disponible.</p>
+    <p v-else class="um-no-notes">{{ t('update.noNotes') }}</p>
 
-    <!-- Download progress bar (visible during install) -->
+    <!-- Download progress bar (auto channel only) -->
     <div v-if="installing" class="um-progress">
       <div class="um-progress__bar" :style="{ width: progressPct + '%' }" />
       <span class="um-progress__label">
-        {{ progress > 0 ? `${progressPct}%` : "Téléchargement en cours…" }}
+        {{ progress > 0 ? `${progressPct}%` : t('update.downloading') }}
       </span>
     </div>
 
@@ -87,7 +107,7 @@ function onInstall() {
         :disabled="installing"
         @click="emit('close')"
       >
-        Plus tard
+        {{ t('update.later') }}
       </button>
       <button
         class="bm-btn bm-btn--primary"
@@ -95,7 +115,7 @@ function onInstall() {
         @click="onInstall"
       >
         <span v-if="installing" class="um-spinner" aria-hidden="true" />
-        {{ installing ? "Installation…" : "Installer et redémarrer" }}
+        {{ ctaLabel }}
       </button>
     </template>
   </BaseModal>
@@ -167,6 +187,18 @@ function onInstall() {
   color: var(--text-tertiary);
   font-size: 13px;
   margin-bottom: var(--space-4);
+}
+
+.um-manual-hint {
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent-soft, color-mix(in srgb, var(--accent) 8%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-secondary);
 }
 
 /* Progress bar */

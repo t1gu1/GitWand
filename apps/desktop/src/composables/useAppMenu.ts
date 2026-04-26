@@ -41,13 +41,19 @@ export interface AppMenuActions {
   openClone: () => void;
   openFork: () => void;
   closeWindow: () => void;
+  // Edit
+  findInLog: () => void;
   // Repository
   fetch: () => void;
   pull: () => void;
   push: () => void;
   newBranch: () => void;
+  openMerge: () => void;
   openOnForge: () => void;
+  openTerminal: () => void;
+  openUndoStack: () => void;
   // View
+  toggleSidebar: () => void;
   toggleTheme: () => void;
   // Help
   checkForUpdates: () => void;
@@ -95,6 +101,9 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
   /** Build (or rebuild) the entire menu and install it as the app menu. */
   async function build() {
     if (!enabled) return;
+
+    // Snapshot here once: Edit, Repository, View all gate items on this.
+    const hasRepo = state.hasRepo.value;
 
     // ── App menu (first submenu — macOS auto-renames it after the bundle)
     const appSubmenu = await Submenu.new({
@@ -185,7 +194,9 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
       ],
     });
 
-    // ── Edit menu — predefined only. Cmd+Z stays webview-default.
+    // ── Edit menu — predefined Cut/Copy/Paste/SelectAll + Find in Log.
+    // Cmd+Z stays webview-default (not claimed here) so text-undo in
+    // inputs keeps working naturally.
     const editSubmenu = await Submenu.new({
       text: t("menu.edit"),
       items: [
@@ -194,11 +205,19 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
         await PredefinedMenuItem.new({ item: "Paste" }),
         await PredefinedMenuItem.new({ item: "Separator" }),
         await PredefinedMenuItem.new({ item: "SelectAll" }),
+        await PredefinedMenuItem.new({ item: "Separator" }),
+        await MenuItem.new({
+          id: "edit-find-in-log",
+          text: t("menu.findInLog"),
+          accelerator: "CmdOrCtrl+F",
+          enabled: hasRepo,
+          action: () => actions.findInLog(),
+        }),
       ],
     });
 
-    // ── Repository menu — disabled when no repo loaded
-    const hasRepo = state.hasRepo.value;
+    // ── Repository menu — disabled when no repo loaded (uses `hasRepo`
+    // captured at the top of build() so all submenus share one snapshot).
     const repositorySubmenu = await Submenu.new({
       text: t("menu.repository"),
       enabled: hasRepo,
@@ -231,7 +250,27 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
           enabled: hasRepo,
           action: () => actions.newBranch(),
         }),
+        await MenuItem.new({
+          id: "repo-merge",
+          text: t("menu.merge"),
+          enabled: hasRepo,
+          action: () => actions.openMerge(),
+        }),
+        await MenuItem.new({
+          id: "repo-undo-last",
+          text: t("menu.undoLastOp"),
+          accelerator: "CmdOrCtrl+Shift+U",
+          enabled: hasRepo,
+          action: () => actions.openUndoStack(),
+        }),
         await PredefinedMenuItem.new({ item: "Separator" }),
+        await MenuItem.new({
+          id: "repo-open-terminal",
+          text: t("menu.openInTerminal"),
+          accelerator: "CmdOrCtrl+Shift+T",
+          enabled: hasRepo,
+          action: () => actions.openTerminal(),
+        }),
         await MenuItem.new({
           id: "repo-open-on-forge",
           text: t("menu.openOnForge"),
@@ -242,13 +281,22 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
     });
 
     // ── View menu
+    // Toggle Theme moved off Cmd+Shift+T (now claimed by Open in Terminal,
+    // matching the v2.0 spec). Theme stays accessible via the menu but
+    // without an accelerator — the header chip is the primary entry.
     const viewSubmenu = await Submenu.new({
       text: t("menu.view"),
       items: [
         await MenuItem.new({
+          id: "view-toggle-sidebar",
+          text: t("menu.toggleSidebar"),
+          accelerator: "CmdOrCtrl+Shift+S",
+          enabled: hasRepo,
+          action: () => actions.toggleSidebar(),
+        }),
+        await MenuItem.new({
           id: "view-toggle-theme",
           text: t("menu.toggleTheme"),
-          accelerator: "CmdOrCtrl+Shift+T",
           action: () => actions.toggleTheme(),
         }),
         await PredefinedMenuItem.new({ item: "Separator" }),
