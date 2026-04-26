@@ -1135,10 +1135,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/claude-code-gitwand-ai-agents" class="blog-teaser-card">
-          <div class="blog-teaser-meta">Apr 24, 2026 · 9 min read</div>
-          <h3 class="blog-teaser-title">Pairing Claude Code with GitWand: letting AI agents ship without the merge nightmare</h3>
-          <p class="blog-teaser-excerpt">How GitWand's MCP server closes the gap between an AI agent that can write code and one that can actually merge it — the preview-first pattern, the auto-resolve handoff, and where it still breaks.</p>
+        <a href="/blog/state-of-merge-conflict-resolution-2026" class="blog-teaser-card">
+          <div class="blog-teaser-meta">Apr 26, 2026 · 15 min read</div>
+          <h3 class="blog-teaser-title">The state of automatic merge conflict resolution in 2026: a survey, and where GitWand is headed</h3>
+          <p class="blog-teaser-excerpt">Where the field actually is in 2026 — textual diff, AST-based structural merge, semantic merge, refactoring-aware tools, and LLMs. A tour of the literature, what's in GitWand today, and the v2 roadmap.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

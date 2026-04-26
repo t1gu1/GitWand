@@ -66,6 +66,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'The state of merge conflict resolution in 2026', link: '/blog/state-of-merge-conflict-resolution-2026' },
             { text: 'Claude Code + GitWand: AI agents & merges', link: '/blog/claude-code-gitwand-ai-agents' },
             { text: 'Auto-merge failure modes', link: '/blog/auto-merge-failure-modes' },
             { text: 'Splitting a commit by hunks (v1.7.0)', link: '/blog/split-commit-by-hunks' },

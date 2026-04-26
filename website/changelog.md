@@ -5,6 +5,49 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.0.0 — April 2026
+
+### Native macOS menu bar
+
+GitWand has a proper File / Edit / Repository / View / Window / Help menu bar on macOS. Open repositories, clone or fork, find in log, merge, open the integrated Git terminal, toggle the sidebar — all from the system menu, with labels translated across the five supported locales. The menu rebuilds on locale change and on repo open/close, so repository-only items grey out when nothing is loaded.
+
+### Clone & Fork from the UI
+
+Three entry points for getting a repo without leaving the app: secondary buttons under the empty state, a `+` dropdown on the tab strip, and File menu items (`⌘⇧O` for Clone). Pick a parent folder, paste a Git URL, GitWand creates the subfolder named after the repo. Fork uses `gh repo fork --remote-name=upstream` so you get the right two-remote setup for upstream PRs out of the box — no terminal trip.
+
+### Beta update channel
+
+A new toggle in Settings → General opts you into the beta channel. Stable users keep the in-app one-click auto-install. Beta users get notified of pre-release builds and download from the GitHub release page manually — a deliberate split because the Tauri updater can't be retargeted at runtime, and we'd rather be honest about that than fake an auto-install path that doesn't exist.
+
+### OpenAI Codex CLI provider
+
+Pair GitWand with Codex the same way it pairs with Claude Code CLI. The app detects the `codex` binary, pings to check auth, then routes commit messages, branch-name suggestions, conflict resolution, PR descriptions, and the rest through `codex exec`. Works with your ChatGPT subscription via `codex login`, or with `OPENAI_API_KEY` — no extra setup, no API key entry in Settings.
+
+### Dashboard contributors — full history, scrollable
+
+Contributors on the Dashboard now reflect the entire HEAD history via `git shortlog -sne` instead of a windowed `git log -n 250` aggregation. The list scrolls horizontally with scroll-snap and a fourth card peeking in to cue the swipe — so you see every author who ever touched the repo, not just whoever committed last.
+
+### Five menu accelerators long overdue
+
+Small items that disproportionately reduce friction once they're wired:
+
+- **`⌘F`** — focus the search input in the commit log (and switch to the log view first if you weren't already there).
+- **`⌘⇧T`** — open the integrated Git terminal in an overlay.
+- **`⌘⇧S`** — toggle the sidebar to reclaim horizontal space for the diff.
+- **`⌘⇧U`** — open the undo / rewind popover (separate from `⌘Z`, which stays on text-undo so editing a commit message doesn't accidentally rewind a merge).
+- **Repository → Merge…** — opens the merge picker directly from the menu.
+
+Toggle Light/Dark Mode loses its `⌘⇧T` accelerator (now claimed by Open in Terminal per the v2 spec). Still in View, still on the header chip.
+
+### Fixes
+
+- `RepoTabStrip` `+` dropdown was clipped by the strip's `overflow-y: hidden` and silently invisible. The menu now teleports to `<body>` and positions itself via `getBoundingClientRect`.
+- `BaseModal` primary / danger buttons used `opacity: 0.5` for the disabled state, which read as "still active" against saturated backgrounds in light mode. Disabled now flips to neutral background + muted text.
+- Browser-mode `FolderPicker` opened *underneath* `CloneModal` and `ForkModal` because both layers used `z-index: 100`. The folder picker is bumped to `z-index: 200` — it always dominates the modal that triggered it.
+- `codex exec` doesn't accept `--quiet` (we'd added it on a hopeful guess); removed from detection ping and prompt calls.
+
+---
+
 ## v1.10.0 — April 2026
 
 ### In-app update modal
