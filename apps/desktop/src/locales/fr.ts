@@ -74,6 +74,7 @@ const fr: Locale = {
     mergeAborted: "Merge annul\u00e9",
     resolveConflicts: "r\u00e9solvez les conflits pour continuer",
     abortMerge: "Annuler le merge",
+    abortCherryPick: "Annuler le cherry-pick",
     // Search trigger
     searchTooltip: "Rechercher (\u2318K)",
     searchAriaLabel: "Ouvrir la recherche",

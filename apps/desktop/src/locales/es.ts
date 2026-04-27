@@ -80,6 +80,7 @@ const es: Locale = {
     mergeAborted: "Merge abortado",
     resolveConflicts: "resuelve los conflictos para continuar",
     abortMerge: "Abortar merge",
+    abortCherryPick: "Abortar cherry-pick",
     // Search trigger
     searchTooltip: "Buscar (\u2318K)",
     searchAriaLabel: "Abrir b\u00fasqueda",

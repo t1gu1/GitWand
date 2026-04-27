@@ -141,6 +141,10 @@ const {
   mergeBranch: doMergeRaw,
   mergeContinue: doMergeContinue,
   abortMerge: doAbortMerge,
+  cherryPick: doCherryPick,
+  cherryPickAbort: doCherryPickAbort,
+  cherryPickContinue: doCherryPickContinue,
+  isCherryPicking,
   discardFiles,
   addToGitignore,
   branches,
@@ -395,8 +399,12 @@ async function checkAndSaveIfResolved(filePath: string) {
     // Move to the next conflicted file, if any
     if (repoStatus.value && repoStatus.value.conflicted.length > 0) {
       await repoSelectFile(repoStatus.value.conflicted[0], false);
+    } else if (isCherryPicking.value) {
+      // Cherry-pick in progress — run cherry-pick --continue
+      await doCherryPickContinue();
+      // No merge-success modal for cherry-pick; a toast is enough
     } else {
-      // All conflicts resolved → finalize the merge commit, then show modal
+      // Merge in progress — finalize the merge commit, then show modal
       await doMergeContinue();
       showMergeSuccess.value = true;
     }
@@ -507,7 +515,7 @@ const {
   suggestTagWithAI,
   isTagAISuggesting,
   isAIAvailable,
-} = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh });
+} = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh, cherryPick: doCherryPick });
 
 // ─── Folder opening ─────────────────────────────────────
 async function handleOpenFolder() {
@@ -1352,7 +1360,7 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <!-- Merge conflict banner -->
+          <!-- Conflict banner (merge or cherry-pick) -->
           <div v-if="hasConflicts" class="conflict-banner" role="alert">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
               <path d="M9 1.5L16.5 15H1.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
@@ -1363,7 +1371,10 @@ onUnmounted(() => {
               {{ repoStats.conflicted }} {{ repoStats.conflicted > 1 ? t('header.conflicts') : t('header.conflict') }}
               — {{ t('header.resolveConflicts') }}
             </span>
-            <button class="conflict-abort-btn" @click="doAbortMerge">
+            <button v-if="isCherryPicking" class="conflict-abort-btn" @click="doCherryPickAbort">
+              {{ t('header.abortCherryPick') }}
+            </button>
+            <button v-else class="conflict-abort-btn" @click="doAbortMerge">
               {{ t('header.abortMerge') }}
             </button>
           </div>

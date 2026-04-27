@@ -85,6 +85,7 @@ const zhCN: Locale = {
     mergeAborted: "合并已中止",
     resolveConflicts: "请先解决冲突",
     abortMerge: "中止合并",
+    abortCherryPick: "中止 cherry-pick",
     // Search trigger
     searchTooltip: "\u641c\u7d22 (\u2318K)",
     searchAriaLabel: "\u6253\u5f00\u641c\u7d22",

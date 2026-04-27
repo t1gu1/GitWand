@@ -19,7 +19,6 @@ import {
   gitRevertCommit,
   gitCreateBranch,
   gitCreateTag,
-  gitCherryPick,
   gitRemoteInfo,
 } from "../utils/backend";
 import { useI18n } from "./useI18n";
@@ -45,13 +44,15 @@ interface Deps {
   loadLog: () => Promise<void>;
   loadBranches: () => void;
   repoRefresh: () => Promise<void>;
+  /** cherry-pick one or more commits (owned by useGitRepo — handles conflict flow). */
+  cherryPick: (hashes: string[]) => Promise<void>;
 }
 
 // ─── Composable ──────────────────────────────────────────
 
 export function useCommitActions(deps: Deps) {
   const { t } = useI18n();
-  const { repoFolderPath, repoError, loadLog, loadBranches, repoRefresh } = deps;
+  const { repoFolderPath, repoError, loadLog, loadBranches, repoRefresh, cherryPick } = deps;
   const tagAI = useTagSuggestion();
   const ai = useAIProvider();
 
@@ -200,22 +201,12 @@ export function useCommitActions(deps: Deps) {
     }
   }
 
-  // ── Cherry-pick (fire-and-forget) ─────────────────────
+  // ── Cherry-pick ────────────────────────────────────────
+  // Delegates to useGitRepo.cherryPick() which handles the full conflict
+  // resolution flow (switch to changes view, keep isCherryPicking=true, etc.)
 
   async function handleCherryPickCommit(entry: GitLogEntry) {
-    const cwd = repoFolderPath.value;
-    if (!cwd) return;
-    try {
-      const result = await gitCherryPick(cwd, [entry.hashFull]);
-      if (!result.success) {
-        repoError.value = result.conflicts
-          ? t("commitCtx.cherryPickConflicts")
-          : result.message || t("commitCtx.cherryPickFailed");
-      }
-      await loadLog();
-    } catch (err: any) {
-      repoError.value = err?.message ?? String(err);
-    }
+    await cherryPick([entry.hashFull]);
   }
 
   // ── View on forge (fire-and-forget) ───────────────────

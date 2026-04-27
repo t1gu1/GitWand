@@ -747,22 +747,46 @@ export function useGitRepo() {
 
   async function cherryPick(hashes: string[]) {
     if (!folderPath.value || hashes.length === 0) return;
+    stopAutoFetch();
+    stopStatusPoll();
     isCherryPicking.value = true;
     try {
       const result = await gitCherryPick(folderPath.value, hashes);
-      if (result.conflicts) {
-        error.value = "Cherry-pick has conflicts. Resolve them then continue.";
+      await refresh();
+
+      const hasConflictedFiles = status.value && status.value.conflicted.length > 0;
+      const serverSaysConflicts = result.conflicts === true;
+
+      if (hasConflictedFiles) {
+        // Stay in cherry-pick mode — isCherryPicking remains true until abort/continue
+        viewMode.value = "changes";
+        await selectFile(status.value!.conflicted[0], false);
+        return; // early return: do NOT reset isCherryPicking
+      } else if (serverSaysConflicts) {
+        if (folderPath.value) await loadStatus(folderPath.value);
+        if (status.value && status.value.conflicted.length > 0) {
+          viewMode.value = "changes";
+          await selectFile(status.value.conflicted[0], false);
+          return; // early return: do NOT reset isCherryPicking
+        } else {
+          viewMode.value = "changes";
+          error.value = `cherry-pick: ${result.message || "unknown error"}`;
+        }
       } else if (!result.success) {
-        error.value = `cherry-pick: ${result.message}`;
+        error.value = `cherry-pick: ${result.message || "unknown error"}`;
       } else {
         successMessage.value = "cherry-pick-done";
       }
-      await refresh();
       await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick: ${err.message}`;
     } finally {
-      isCherryPicking.value = false;
+      // Only reset flag when there are no ongoing conflicts
+      if (!hasConflicts.value) {
+        isCherryPicking.value = false;
+        startAutoFetch();
+        startStatusPoll();
+      }
     }
   }
 
@@ -772,8 +796,13 @@ export function useGitRepo() {
       await gitCherryPickAbort(folderPath.value);
       successMessage.value = "cherry-pick-aborted";
       await refresh();
+      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick abort: ${err.message}`;
+    } finally {
+      isCherryPicking.value = false;
+      startAutoFetch();
+      startStatusPoll();
     }
   }
 
@@ -782,17 +811,28 @@ export function useGitRepo() {
     isCherryPicking.value = true;
     try {
       const result = await gitCherryPickContinue(folderPath.value);
+      await refresh();
       if (result.success) {
         successMessage.value = "cherry-pick-done";
+        await loadLog();
+      } else if (result.conflicts) {
+        // More conflicts remain — stay in cherry-pick mode
+        if (status.value && status.value.conflicted.length > 0) {
+          viewMode.value = "changes";
+          await selectFile(status.value.conflicted[0], false);
+        }
+        return; // do NOT reset isCherryPicking
       } else {
         error.value = `cherry-pick continue: ${result.message}`;
       }
-      await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick continue: ${err.message}`;
     } finally {
-      isCherryPicking.value = false;
+      if (!hasConflicts.value) {
+        isCherryPicking.value = false;
+        startAutoFetch();
+        startStatusPoll();
+      }
     }
   }
 

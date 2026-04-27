@@ -80,6 +80,7 @@ const en = {
     mergeAborted: "Merge aborted",
     resolveConflicts: "resolve conflicts to continue",
     abortMerge: "Abort merge",
+    abortCherryPick: "Abort cherry-pick",
     // Search trigger
     searchTooltip: "Search (\u2318K)",
     searchAriaLabel: "Open search",
