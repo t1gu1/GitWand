@@ -18,7 +18,16 @@
  * ```
  */
 
-export { resolve } from "./resolver.js";
+export { resolve, resolveAsync } from "./resolver/index.js";
+
+// v2.3 — Merge structurel AST (tree-sitter) — TS/TSX/JS/JSX/Python/Go/Rust
+export {
+  tryStructuralMergeResolve,
+  isTypeScriptFile,       // backward compat
+  isStructuralLanguage,   // preferred
+  wrapStructuralResult,
+} from "./structural/index.js";
+export type { StructuralLoaderOptions, SupportedLanguage } from "./structural/index.js";
 export { parseConflictMarkers, classifyConflict } from "./parser.js";
 export { mergeNonOverlapping, computeDiff, lcs } from "./diff.js";
 

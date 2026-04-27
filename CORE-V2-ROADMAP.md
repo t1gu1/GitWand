@@ -35,7 +35,7 @@ Avant d'attaquer le tree-sitter dispatcher en 2.3.0, deux dettes à éponger :
 
 ---
 
-## v2.1.0 — Histogram diff & block-move detection
+## v2.1.0 — Histogram diff & block-move detection ✅
 
 > **Refondation algorithmique du moteur diff. Aucun nouveau pattern, mais qualité de fusion en hausse sur tous les cas non-overlapping et insertion-at-boundary.**
 
@@ -120,7 +120,7 @@ export { lcs, computeDiff, mergeNonOverlapping } from "./diff/index.js";
 
 ---
 
-## v2.2.0 — Format profile registry + JSON Patch arrays
+## v2.2.0 — Format profile registry + JSON Patch arrays ✅
 
 > **Élimine deux trous fonctionnels documentés du résolveur JSON et étend le YAML resolver. Pose les fondations d'une bibliothèque de profils par chemin.**
 
@@ -244,7 +244,7 @@ export {
 
 ---
 
-## v2.3.0 — Tree-sitter structural dispatcher (TS/JS/Python/Go/Rust)
+## v2.3.0 — Tree-sitter structural dispatcher (TS/JS/Python/Go/Rust) ✅
 
 > **Le saut qualitatif. Bascule de "moteur textuel + résolveurs format-aware" à "moteur structurel par défaut sur 5 langages, fallback textuel". Aligné Mergiraf/Weave sur le périmètre.**
 

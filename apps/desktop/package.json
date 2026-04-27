@@ -5,10 +5,11 @@
   "description": "GitWand Desktop — lightweight Git client with smart conflict resolution (Tauri + Vue 3)",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/copy-grammars.mjs && vite",
     "dev:server": "node dev-server.mjs",
-    "dev:web": "concurrently -k -n api,vite -c blue,green \"node dev-server.mjs\" \"vite\"",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev:web": "concurrently -k -n api,vite -c blue,green \"node dev-server.mjs\" \"node scripts/copy-grammars.mjs && vite\"",
+    "copy-grammars": "node scripts/copy-grammars.mjs",
+    "build": "node scripts/copy-grammars.mjs && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",
@@ -23,7 +24,9 @@
     "dompurify": "^3.2.0",
     "highlight.js": "^11.11.1",
     "markdown-it": "^14.1.0",
-    "vue": "^3.5.0"
+    "tree-sitter-wasms": "^0.1.13",
+    "vue": "^3.5.0",
+    "web-tree-sitter": "^0.26.8"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

@@ -35,9 +35,15 @@ importers:
       markdown-it:
         specifier: ^14.1.0
         version: 14.1.1
+      tree-sitter-wasms:
+        specifier: ^0.1.13
+        version: 0.1.13
       vue:
         specifier: ^3.5.0
         version: 3.5.32(typescript@5.9.3)
+      web-tree-sitter:
+        specifier: ^0.26.8
+        version: 0.26.8
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2.0.0
@@ -92,12 +98,18 @@ importers:
       '@types/node':
         specifier: ^25.5.0
         version: 25.5.0
+      tree-sitter-wasms:
+        specifier: ^0.1.13
+        version: 0.1.13
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.5.0)(jsdom@25.0.1)(yaml@2.8.3)
+      web-tree-sitter:
+        specifier: ^0.26.8
+        version: 0.26.8
 
   packages/mcp:
     dependencies:
@@ -1877,6 +1889,9 @@ packages:
     resolution: {integrity: sha512-L0Orpi8qGpRG//Nd+H90vFB+3iHnue1zSSGmNOOCh1GLJ7rUKVwV2HvijphGQS2UmhUZewS9VgvxYIdgr+fG1A==}
     hasBin: true
 
+  tree-sitter-wasms@0.1.13:
+    resolution: {integrity: sha512-wT+cR6DwaIz80/vho3AvSF0N4txuNx/5bcRKoXouOfClpxh/qqrF4URNLQXbbt8MaAxeksZcZd1j8gcGjc+QxQ==}
+
   trim-lines@3.0.1:
     resolution: {integrity: sha512-kRj8B+YHZCc9kQYdWfJB2/oUl9rA99qbowYYBtr4ui4mZyAQ2JpvVBd/6U2YloATfqBhBTSMhTpgBHtU0Mf3Rg==}
 
@@ -2063,6 +2078,9 @@ packages:
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
+
+  web-tree-sitter@0.26.8:
+    resolution: {integrity: sha512-4sUwi7ZyOrIk5KLgYLkc2A/F0LFMQnBhfb+2Cdl7ik4ePJ6JD+fk4ofI2sA5eGawBKBaK4Vntt7Ww5KcEsay4A==}
 
   webidl-conversions@7.0.0:
     resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
@@ -3820,6 +3838,8 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
+  tree-sitter-wasms@0.1.13: {}
+
   trim-lines@3.0.1: {}
 
   tslib@2.8.1: {}
@@ -4028,6 +4048,8 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
+
+  web-tree-sitter@0.26.8: {}
 
   webidl-conversions@7.0.0: {}
 

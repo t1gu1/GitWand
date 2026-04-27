@@ -453,11 +453,11 @@ Backend 3-couches `git_shortlog` (Rust + dev-server + TS wrapper `getGitShortlog
 
 Six releases minor de `@gitwand/core` détaillées dans [CORE-V2-ROADMAP.md](./CORE-V2-ROADMAP.md). Effort total estimé ~15-20 semaines, livrable continu. Chaque release accompagnée d'un article de blog (plan éditorial dans le doc dédié).
 
-**`@gitwand/core@2.1.0` — Histogram diff & block-move detection**
+**`@gitwand/core@2.1.0` — Histogram diff & block-move detection ✅**
 
 Bascule du backend diff de LCS pur vers Histogram (Patience++ avec ancres rares). `lcs()` garde sa signature publique, `GITWAND_DIFF=lcs` pour rollback. Block-move detection via rolling hash Rabin-Karp, prépare le terrain pour v2.6. **+2-5 %** d'auto-résolution globale attendus, plus sur les cas avec refactor partiel.
 
-**`@gitwand/core@2.2.0` — Format profile registry + JSON Patch arrays**
+**`@gitwand/core@2.2.0` — Format profile registry + JSON Patch arrays ✅**
 
 Résout le trou des tableaux JSON (`/dependencies`, `/scripts`, `tsconfig#/include`) qui retombaient en fallback textuel. Registre de profils par fichier (`package.json`, `tsconfig`, `helm/values`, Kubernetes Deployment…) avec stratégies par chemin JSON Pointer (`set` / `ordered-list` / `merge-keys`). RFC 6902 maison pour les opérations atomiques. **+10-15 %** d'auto-résolution sur les fichiers JSON/YAML monorepo.
 

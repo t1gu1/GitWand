@@ -1,5 +1,5 @@
 import { ref, computed } from "vue";
-import { resolve, parseGitwandrc, type MergeResult, type ConflictHunk, type GitWandOptions, type MergePolicy } from "@gitwand/core";
+import { resolve, resolveAsync, parseGitwandrc, type MergeResult, type ConflictHunk, type GitWandOptions, type MergePolicy } from "@gitwand/core";
 import {
   pickFolder,
   getConflictedFiles,
@@ -217,13 +217,33 @@ export function useGitWand() {
     }
 
     // Read each file (parallel — I/O bound, order preserved by Promise.all)
+    // resolveAsync attempts structural merge (tree-sitter AST-level) for
+    // supported languages (TS/TSX/JS/JSX/Python/Go/Rust), falling back
+    // transparently to the hunk-based resolver for everything else.
+    //
+    // Grammar WASM files are served from /grammars/ (copied to public/ by
+    // `pnpm copy-grammars` before the build, and by Vite dev server from
+    // public/ during development).  A customLoader is used here to bypass
+    // environment auto-detection (avoids the Tauri adapter's convertFileSrc
+    // path, which requires absolute filesystem paths unknown at runtime).
+    const structuralOpts = {
+      wasmPath: "/grammars/web-tree-sitter.wasm",
+      customLoader: async (grammarName: string): Promise<Uint8Array> => {
+        const response = await fetch(`/grammars/${grammarName}.wasm`);
+        if (!response.ok) {
+          throw new Error(`[gitwand] Failed to fetch grammar ${grammarName} (HTTP ${response.status})`);
+        }
+        return new Uint8Array(await response.arrayBuffer());
+      },
+    };
+
     const loaded: ConflictFile[] = await Promise.all(
       conflictedPaths.map(async (filePath) => {
         const content = await readFile(cwd, filePath);
         return {
           path: filePath,
           content,
-          result: resolve(content, filePath, resolveOptions.value),
+          result: await resolveAsync(content, filePath, resolveOptions.value, structuralOpts),
         };
       }),
     );

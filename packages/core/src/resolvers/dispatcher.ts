@@ -119,7 +119,23 @@ export interface FormatResolveResult {
    */
   reason: string;
   /** Résolveur utilisé (pour la trace) */
-  resolverUsed: "json" | "markdown" | "yaml" | "imports" | "vue" | "css" | "lockfile-npm" | "lockfile-yarn" | "lockfile-pnpm" | "cargo" | "dotenv" | "dockerfile" | "none";
+  resolverUsed: "json" | "markdown" | "yaml" | "imports" | "vue" | "css" | "lockfile-npm" | "lockfile-yarn" | "lockfile-pnpm" | "cargo" | "dotenv" | "dockerfile" | "structural" | "none";
+  /**
+   * v2.3 — Portée de la résolution.
+   *
+   * - `"hunk"` (défaut implicite) : `lines` remplace uniquement le hunk courant.
+   * - `"file"`                   : `fileContent` remplace **l'intégralité** du fichier
+   *   (court-circuite le découpage hunk). Utilisé par le résolveur structurel.
+   *
+   * Quand `scope === "file"`, le pipeline de `resolve()` / `resolveAsync()`
+   * doit interpréter `fileContent` plutôt que `lines`.
+   */
+  scope?: "hunk" | "file";
+  /**
+   * v2.3 — Contenu complet du fichier fusionné.
+   * Présent uniquement si `scope === "file"`.
+   */
+  fileContent?: string;
 }
 
 // ─── Main dispatcher ──────────────────────────────────────

@@ -23,6 +23,12 @@ import type {
   MergeStats,
   ValidationResult,
 } from "../types.js";
+import {
+  tryStructuralMergeResolve,
+  wrapStructuralResult,
+  isStructuralLanguage,
+  type StructuralLoaderOptions,
+} from "../structural/index.js";
 import { parseConflictMarkers, toConflictHunk } from "../parser.js";
 
 import { EMPTY_VALIDATION, validateMergedContent } from "./validation.js";
@@ -194,4 +200,42 @@ export function resolve(
     stats,
     validation,
   };
+}
+
+/**
+ * Async variant of `resolve()` — attempts structural (AST-based) merge for
+ * TypeScript/TSX files before falling back to the standard hunk-by-hunk engine.
+ *
+ * Structural merge requires `web-tree-sitter` as an **optional** peer dependency.
+ * If it is not installed, `resolveAsync()` behaves identically to `resolve()`.
+ *
+ * @param conflictedContent - File content with Git conflict markers
+ * @param filePath          - File path (format detection + grammar selection)
+ * @param userOptions       - GitWand options (same as `resolve()`)
+ * @param structuralOpts    - Optional tree-sitter loader overrides
+ */
+export async function resolveAsync(
+  conflictedContent: string,
+  filePath: string,
+  userOptions: GitWandOptions = {},
+  structuralOpts: StructuralLoaderOptions = {},
+): Promise<MergeResult> {
+  // Attempt structural merge for all supported languages (TS/JS/Python/Go/Rust…)
+  if (isStructuralLanguage(filePath)) {
+    try {
+      const merged = await tryStructuralMergeResolve(
+        conflictedContent,
+        filePath,
+        structuralOpts,
+      );
+      if (merged !== null) {
+        return wrapStructuralResult(conflictedContent, merged, filePath);
+      }
+    } catch {
+      // Structural merge failed unexpectedly — fall through to hunk-based resolver
+    }
+  }
+
+  // Fall back to the synchronous hunk-based resolver
+  return resolve(conflictedContent, filePath, userOptions);
 }
