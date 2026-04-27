@@ -146,11 +146,13 @@ async function loadWasmForEnv(
   opts: LoaderOptions,
 ): Promise<Uint8Array> {
   if (env === "node") {
-    const { loadGrammarBytes } = await import("./adapters/node.js");
+    // vite-ignore: Node-only adapter uses `createRequire` — never bundled for browser/Tauri
+    const { loadGrammarBytes } = await import(/* @vite-ignore */ "./adapters/node.js");
     return loadGrammarBytes(grammarName);
   }
   if (env === "tauri") {
-    const { loadGrammarBytes } = await import("./adapters/tauri.js");
+    // vite-ignore: Tauri adapter uses @tauri-apps/plugin-fs — not available in web builds
+    const { loadGrammarBytes } = await import(/* @vite-ignore */ "./adapters/tauri.js");
     return loadGrammarBytes(grammarName, { grammarDir: opts.grammarDir });
   }
   // browser

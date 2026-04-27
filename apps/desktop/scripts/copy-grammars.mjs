@@ -16,9 +16,12 @@
 import { copyFileSync, mkdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const __dirname = dirname(new URL(import.meta.url).pathname);
+// fileURLToPath handles Windows drive letters correctly (strips the leading "/"
+// from file:///D:/... that .pathname would leave, avoiding the D:\D:\ doubling).
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const destDir = join(__dirname, "..", "public", "grammars");
 mkdirSync(destDir, { recursive: true });

@@ -43,6 +43,14 @@ export default defineConfig({
     target: ["es2021", "chrome100", "safari14"],
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      // Mark Node.js built-ins as external so Rollup can analyse
+      // packages/core's node adapter (structural/parsers/adapters/node.ts)
+      // without erroring.  The adapter is only reached when env === "node",
+      // which never happens inside the Tauri webview — the desktop app always
+      // passes a customLoader that short-circuits env detection entirely.
+      external: (id: string) => id.startsWith("node:"),
+    },
   },
   test: {
     environment: "jsdom",
