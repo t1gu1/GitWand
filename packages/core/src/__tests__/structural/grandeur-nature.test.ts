@@ -319,7 +319,7 @@ describe("S5 — unsupported language: structural merge skipped for .css files",
     const result = await resolveAsync(CSS_CONFLICT, "styles.css");
     // Hunk-based: both sides changed differently → still a conflict
     expect(result.stats.totalConflicts).toBe(1);
-    // resolverUsed is NOT "structural"
-    expect(result.resolutions[0]?.resolverUsed).not.toBe("structural");
+    // structural merge is skipped for .css — resolution reason must not mention it
+    expect(result.resolutions[0]?.resolutionReason).not.toContain("structural");
   });
 });
