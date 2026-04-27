@@ -461,7 +461,7 @@ Bascule du backend diff de LCS pur vers Histogram (Patience++ avec ancres rares)
 
 Résout le trou des tableaux JSON (`/dependencies`, `/scripts`, `tsconfig#/include`) qui retombaient en fallback textuel. Registre de profils par fichier (`package.json`, `tsconfig`, `helm/values`, Kubernetes Deployment…) avec stratégies par chemin JSON Pointer (`set` / `ordered-list` / `merge-keys`). RFC 6902 maison pour les opérations atomiques. **+10-15 %** d'auto-résolution sur les fichiers JSON/YAML monorepo.
 
-**`@gitwand/core@2.3.0` — Tree-sitter structural dispatcher (TS/JS/Python/Go/Rust)**
+**`@gitwand/core@2.3.0` — Tree-sitter structural dispatcher (TS/JS/Python/Go/Rust)** ✅
 
 Le grand saut. Merge entité-par-entité aligné Mergiraf/Weave : parse base/ours/theirs avec `web-tree-sitter`, apparie les entités top-level (fonctions, classes, méthodes, top-level statements) par signature canonique, fusionne entité-par-entité. Grammars en `optionalDependencies` avec WASM lazy-loaded. Adapter pattern pour le chargement Node / browser / Tauri. **+20-30 %** d'auto-résolution sur les conflits TS/JS/Python/Go/Rust.
 
