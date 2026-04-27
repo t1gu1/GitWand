@@ -433,8 +433,8 @@ struct GitDiff {
 fn parse_diff_hunks(stdout: &str) -> (Vec<DiffHunk>, Option<String>) {
     let mut hunks: Vec<DiffHunk> = Vec::new();
     let mut current_hunk: Option<DiffHunk> = None;
-    let mut old_line_no = 0u32;
-    let mut new_line_no = 0u32;
+    let mut old_line_no = 0i32;
+    let mut new_line_no = 0i32;
     let mut detected_status: Option<String> = None;
 
     for line in stdout.lines() {
