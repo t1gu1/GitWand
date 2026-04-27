@@ -108,8 +108,8 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.5.0)(jsdom@25.0.1)(yaml@2.8.3)
       web-tree-sitter:
-        specifier: ^0.26.8
-        version: 0.26.8
+        specifier: ~0.20.7
+        version: 0.20.8
 
   packages/mcp:
     dependencies:
@@ -2078,6 +2078,9 @@ packages:
   w3c-xmlserializer@5.0.0:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
+
+  web-tree-sitter@0.20.8:
+    resolution: {integrity: sha512-weOVgZ3aAARgdnb220GqYuh7+rZU0Ka9k9yfKtGAzEYMa6GgiCzW9JjQRJyCJakvibQW+dfjJdihjInKuuCAUQ==}
 
   web-tree-sitter@0.26.8:
     resolution: {integrity: sha512-4sUwi7ZyOrIk5KLgYLkc2A/F0LFMQnBhfb+2Cdl7ik4ePJ6JD+fk4ofI2sA5eGawBKBaK4Vntt7Ww5KcEsay4A==}
@@ -4048,6 +4051,8 @@ snapshots:
   w3c-xmlserializer@5.0.0:
     dependencies:
       xml-name-validator: 5.0.0
+
+  web-tree-sitter@0.20.8: {}
 
   web-tree-sitter@0.26.8: {}
 
