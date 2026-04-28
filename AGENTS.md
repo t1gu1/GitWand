@@ -230,6 +230,64 @@ user-facing text directly in components.
 
 ---
 
+## Roadmap
+
+`roadmap.md` at the repo root is the canonical product roadmap.
+
+### Before starting any non-trivial feature
+
+Read `roadmap.md` first. Locate the relevant section (Shipped, In Progress, or
+Planned) to understand the intended scope, the already-decided design choices,
+and what has already been done. Do not re-design something that is already
+specified there.
+
+### When a feature ships (at tag time)
+
+Move the item from its current section into the nearest **Shipped** block with
+the correct version, exactly as the release tag names it. Keep the entry concise
+— one line or a short bullet group.
+
+If the shipped work introduces a new future dependency (a follow-up, a
+limitation to document, a next phase), add it to the appropriate planned section
+at the same time.
+
+---
+
+## Changelog
+
+### Root CHANGELOG.md — source of truth
+
+`CHANGELOG.md` at the repo root is the authoritative release history. It follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format:
+
+```
+## [Unreleased]
+
+## [X.Y.Z] - YYYY-MM-DD
+### Added / Changed / Fixed / …
+- entries…
+```
+
+**Every release tag must have a corresponding entry here**, written before
+`git tag vX.Y.Z` is run. Never tag without updating the CHANGELOG first.
+
+### website/changelog.md — narrative mirror
+
+`website/changelog.md` is the public-facing changelog on the marketing site. It
+uses an editorial/narrative format (prose sections, not raw bullet lists) rather
+than the technical Keep-a-Changelog format. It must cover **every version** from
+v0.0.1 forward — full history, no truncation.
+
+Rules:
+- Update `website/changelog.md` in the same commit as `CHANGELOG.md`, at every
+  tag. The two files must stay in sync.
+- Remove phantom versions (versions absent from the root `CHANGELOG.md`).
+- The editorial content can be richer than the root CHANGELOG, but must never
+  contradict it.
+- The frontmatter block (`title`, `description`) must be preserved.
+
+---
+
 ## Monorepo Commands
 
 ```bash

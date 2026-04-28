@@ -43,13 +43,15 @@ pnpm build
 
 ---
 
-## Étape 2 — Mettre à jour le CHANGELOG
+## Étape 2 — Mettre à jour CHANGELOG.md (racine)
 
 Ouvrir `CHANGELOG.md` (racine du repo) et :
 
 1. Renommer `## [Unreleased]` en `## [X.Y.Z] - YYYY-MM-DD`
 2. Ajouter une nouvelle section `## [Unreleased]` vide au-dessus
 3. Vérifier que toutes les features/fixes depuis la dernière release sont documentés
+4. Ajouter le lien de comparaison en bas du fichier :
+   `[X.Y.Z]: https://github.com/devlint/GitWand/releases/tag/vX.Y.Z`
 
 Format attendu (Keep a Changelog) :
 
@@ -62,6 +64,33 @@ Format attendu (Keep a Changelog) :
 ### Fixed
 - Context line detection bug in diff parser
 ```
+
+---
+
+## Étape 2b — Mettre à jour roadmap.md
+
+Ouvrir `roadmap.md` et :
+
+1. Déplacer les items livrés dans cette release depuis leur section actuelle
+   (In Progress / Planned) vers le bloc **Shipped** correspondant à la version.
+2. Si des follow-ups ou limitations ont été identifiés pendant le dev, les ajouter
+   dans la section planifiée appropriée.
+
+---
+
+## Étape 2c — Mettre à jour website/changelog.md
+
+`website/changelog.md` est le miroir éditorial public — format narratif (prose
+et sections thématiques), pas le format Keep a Changelog. Il doit couvrir **tout
+l'historique** depuis v0.0.1.
+
+1. Ajouter une nouvelle section `## vX.Y.Z — <Mois> <Année>` en tête (après le
+   frontmatter), dans le style éditorial déjà en place.
+2. Rédiger le contenu en prose narrative — titres de features, paragraphes
+   courts. Pas de listes à puces brutes reprises telles quelles du CHANGELOG.
+3. Vérifier que toutes les versions précédentes sont toujours présentes.
+
+> **Ne jamais inventer de versions** absentes du `CHANGELOG.md` racine.
 
 ---
 
@@ -95,7 +124,7 @@ git diff --stat
 ## Étape 4 — Commit + Tag + Push
 
 ```bash
-# Commit le bump de version + CHANGELOG
+# Commit le bump de version + CHANGELOG + roadmap + website changelog
 git add -A
 git commit -m "chore: bump version to X.Y.Z"
 
@@ -146,5 +175,7 @@ vsce publish
 - **Bump manuel** — toujours passer par `./scripts/bump-version.sh`, jamais éditer `package.json`, `Cargo.toml` ou `tauri.conf.json` à la main.
 - **Tag manquant** — sans le tag `vX.Y.Z`, `release.yml` et `publish.yml` ne se déclenchent pas.
 - **CHANGELOG oublié** — mettre à jour avant le commit de bump, pas après.
+- **roadmap.md oublié** — déplacer les shipped items dans le même commit de bump.
+- **website/changelog.md oublié** — doit être mis à jour dans le même commit.
 - **Push sans `--tags`** — `git push origin main` ne pousse pas les tags. Toujours `git push origin main --tags`.
 - **Tests non passés** — vérifier `pnpm test` avant de bumper, pas après.

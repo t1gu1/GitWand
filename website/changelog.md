@@ -56,64 +56,194 @@ Toggle Light/Dark Mode loses its `⌘⇧T` accelerator (now claimed by Open in T
 
 ---
 
-## v1.10.0 — April 2026
-
-### In-app update modal
-
-GitWand no longer hands off to the native OS update dialog. A new modal surfaces directly in the app when an update is available. It shows a version badge, the full release notes for the incoming version rendered from markdown (bold, inline code, bullet lists), and a real-time download progress bar with a percentage counter. Dismiss it and keep working — the update applies on next relaunch.
-
-### Fixes
-
-- Blame diff algorithm selector: fixed a type cast error that prevented saving the setting in `SettingsPanel`
-- `CommitLog`: resolved an emit overload that could cause a type error when selecting commits
-- `blameAlgo` select binding and `currentGitUser` initialisation: fixed two TS errors that surfaced in strict mode
-- macOS: fixed a base64 compatibility issue with binary data returned from the Rust backend
-
----
-
-## v1.9.0 — April 2026
-
-### Commit context menu — 12 actions
-
-Right-click any commit in the log to get a full action menu: checkout, reset (soft / mixed / hard) with mode hints, revert, create a new branch from that commit, tag it (with AI suggestion), cherry-pick it to the current branch, open it on GitHub/GitLab, and copy the short or full SHA.
-
-### Tags manager
-
-A dedicated Tags panel lists all local and remote tags with their target commit, date, and type (annotated vs lightweight). Push a single tag or all at once, delete locally and optionally from remote with a single confirmation. A new **AI Suggest** button reads the commits since the last tag and proposes the next semantic version with a one-line description.
-
-### Trailers (Signed-off-by / Reviewed-by)
-
-The commit panel now has a collapsible **Certification & review** section. Add a `Signed-off-by` line with one click — pre-filled from your Git identity — and a `Reviewed-by` line for co-review attribution. Each field has a `?` button with a plain-language explanation of what the trailer means.
-
-### Conventional Commits prefix picker
-
-A row of chips above the commit message input lets you pick a prefix (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`) with one click. The selected prefix is prepended to the message automatically and persisted until you change it.
-
-### Advanced file history
-
-The File History panel gains two major features on the **Log** tab:
-
-- **Pickaxe search** — filter the file's history to commits that added or removed a given string (`-S` exact match) or a regex (`-G`).
-- **Line-range history** — click the clock icon on any blame block to view only the commits that touched those specific lines (`git log -L`).
-
-On the **Blame** tab, a new inline `<select>` lets you switch the diff algorithm between `histogram` (default, best results), `patience`, and `myers` without leaving the view.
-
-### Fork & triangular workflow
-
-The sync button now shows an `↑N fork` badge when your push remote differs from your upstream (triangular / fork workflow). The badge reflects the number of commits you're ahead of your fork remote, keeping origin pushes and upstream pulls clearly separated.
-
-### Post-merge branch cleanup
-
-After a successful merge, GitWand offers to delete the merged branch in the same modal. A checkbox lets you also delete the corresponding remote branch in one step — no separate trip to the branch list.
-
-### macOS code signing & notarization
-
-GitWand is now signed with an Apple Developer ID certificate and notarized by Apple. Gatekeeper no longer blocks the app on first launch, and the repeated macOS permission dialogs in development mode are gone.
-
----
-
 ## v1.8.0 — April 2026
 
-Design system & modal foundations, image diff, folder tree diff, worktrees, submodules, commit split by hunks, MCP server on official registry.
+### Shared design chrome — BaseModal everywhere
 
-[Full history on GitHub →](https://github.com/devlint/GitWand/releases)
+Ten modals — `EditCommitOverlay`, `MergeSuccessModal`, `PrReviewModal`, `RebaseEditor`, `SettingsPanel`, `SplitCommitModal`, `StashManager`, `BranchRenameModal`, `BranchDeleteModal`, `SearchPalette` — all now share a single `BaseModal` wrapper that handles the backdrop, focus-trap, Esc-to-close, and footer layout in one place. Accessibility fixes apply everywhere at once; duplicated chrome is gone.
+
+### AppHeader rebuilt as composable blocks
+
+The 1654-line `AppHeader.vue` monolith is split into focused components: `SyncSplitButton`, `BranchSelector`, `BranchMenu`, `SearchTrigger + SearchPalette`, `RepoTabStrip`, and `HeaderLogo`. Each is typed, i18n'd across all 5 locales, and independently testable. The `⌘K` command palette surfaces branches, commits, and quick actions from anywhere in the app.
+
+### Merge editor — line numbers and minimap
+
+The merge editor gains per-line numbering on code and conflict panels, plus a right-side canvas minimap that highlights auto-resolvable vs manual conflicts. Click any region in the minimap to jump to that conflict — particularly useful across large merges with dozens of hunks.
+
+### PR intelligence panel redesign
+
+The intelligence panel replaces emoji section icons with accent-soft tiles, upgrades the scope grid to stat cards with a radial hover gradient, and unifies file/hotspot/AI flag rows with a `border-left` severity strip. The conflict summary became a success/danger banner. Loading states use a dot spinner; reduced-motion preferences disable all transforms and animations.
+
+### Branch rename and delete modals
+
+`BranchRenameModal` and `BranchDeleteModal` replace the inline `rename()` / `confirm()` flows. The delete modal includes a type-the-name guard for unmerged branches. Backed by a new `git_rename_branch` primitive with the full three-layer implementation (Rust + dev-server + TypeScript wrapper).
+
+---
+
+## v1.7.0 — April 2026
+
+### Split commit by hunks
+
+A new "Split this commit…" entry in the commit log's context menu opens a modal that lets you break a single commit into two by picking individual lines across files. Each file shows as a collapsible row with diff stats and a hunk count; expand it to pick which lines go into the first commit, with the rest flowing into the second automatically. Large commits (> 3 files) get an "Expand all / Collapse all" toolbar.
+
+Split is also wired into interactive rebase: pick a commit, switch its action to `split`, and the rebase halts at that commit, opens the split modal with the commit preloaded, then resumes after you confirm. Splitting a merge commit is blocked at every entry point — doing so would silently drop the second parent and flatten history.
+
+### Correct patch headers for file lifecycle events
+
+Added and deleted files were causing `git apply --cached` to fail with "does not exist in index" when a split touched a file creation or deletion. The diff now carries `status` and `oldPath` from `git_show`, and `patchBuilder` emits the correct extended headers (`new file mode`, `deleted file mode`, `rename from/to`) to match.
+
+### Fix: context-line detection in git_show parser
+
+The final site that still used `!starts_with('\\')` to detect context lines — at line 1811 of the `git_show` parser — is now corrected to `starts_with(' ')`. Empty strings were misclassified as context lines, producing phantom context in splits touching empty-line boundaries.
+
+---
+
+## v1.6.3 — April 2026
+
+### Worktree manager
+
+Create, list, and remove Git worktrees from a dedicated overlay panel. Each worktree shows its branch, HEAD SHA, path, and status badges (main / locked / bare). "Open in tab" opens any worktree as a first-class repo tab, enabling parallel work on two branches without stashing or switching. Every non-current branch in the branch popover gains a one-click worktree shortcut (⧉ icon) for a two-click "open this branch without touching my working tree" flow.
+
+### Submodule panel
+
+A new "Submodules" header button lists all submodules declared in `.gitmodules` with live status badges (clean / modified / not initialized). "Init & Update all" runs `git submodule update --init --recursive`. "Open in tab" opens any initialized submodule as a standalone repo tab. An inline warning banner counts uninitialized submodules and doubles as a one-click init trigger.
+
+### Auto-update infrastructure fixes
+
+Several gaps in the auto-update setup that had been preventing `.sig` file generation and installer delivery on all platforms are resolved: `createUpdaterArtifacts: true` added to `tauri.conf.json`, permissions (`updater:default`, `process:default`, `process:allow-restart`) added to `capabilities/default.json`, the updater endpoint simplified to a static `latest.json`, and the release workflow corrected to use the cryptographically-signed manifest produced by `tauri-action` rather than a hand-crafted one with empty signature fields.
+
+---
+
+## v1.6.2 — April 2026
+
+### Image diff viewer
+
+Binary image files (PNG, JPG, WebP, GIF, SVG) now render in the commit diff with four comparison modes: side-by-side with dimension and size metadata, overlay with opacity control, blink alternating the two images to reveal pixel-level deltas, and a draggable reveal slider. A 20 MB per-side guardrail skips oversized images with an explicit notice. SVG files render as text, not raster. A new `read_file_at_revision(path, rev)` backend command fetches file bytes at any git revision, enabling comparisons across `HEAD^`, branches, stashes, and anything in between.
+
+### Folder tree in commit diff
+
+The file list in `CommitDiffViewer` gains a flat ↔ tree toggle. Tree mode shows an expandable folder tree with per-folder aggregates and a click-to-filter that narrows the list to a folder's descendants with a breadcrumb and clear button. The sidebar column is now resizable by dragging its left edge (180–600 px, double-click to reset, persisted in `localStorage`). Full keyboard navigation on the tree.
+
+---
+
+## v1.6.1 — April 2026
+
+### MCP Registry — ownership verification fix
+
+`@gitwand/mcp@1.6.0` was published without the `mcpName` field required by the MCP Registry for ownership verification, causing the initial submission to fail with HTTP 400. This patch adds `"mcpName": "io.github.devlint/gitwand"` to `packages/mcp/package.json` and re-publishes as `1.6.1`. The registry listing is now live at `registry.modelcontextprotocol.io`.
+
+---
+
+## v1.5.1 — April 2026
+
+### Release build fix — tauri-bundler binary crash
+
+The `parity_probe` test binary was declared as `[[bin]]` with `required-features`. The Tauri bundler auto-discovers every `[[bin]]` entry and tries to embed it as a sidecar regardless of whether the feature flag is enabled, which caused release builds to fail on every platform with "does not exist". The probe is moved to `[[example]]`, which the bundler ignores. Source moves from `src-tauri/src/bin/` to `src-tauri/examples/`.
+
+### macOS permission dialogs — repeated prompts fixed
+
+Opening the home directory was triggering a `.join(".git").exists()` probe on every child entry, hitting macOS TCC for `Documents`, `Desktop`, `Downloads`, `Pictures`, `Movies`, `Music`, and `Library` on each listing. A `MACOS_TCC_PROTECTED` guard now skips the `.git` probe for these well-known system folders — they're never git repos anyway.
+
+### i18n sweep — composable error strings
+
+The remaining hardcoded French error strings in the AI-powered composables (`useCommitMessage`, `useBranchName`, `useReleaseNotes`, and nine others) now route through the `errors.*` i18n namespace across all 5 locales.
+
+---
+
+## v1.5.0 — April 2026
+
+### XSS hardening
+
+All `v-html` usage now routes through a shared `useSafeHtml` / `useMarkdown` composable that sanitizes output with DOMPurify. README rendering, PR bodies, commit-message previews, and every other bit of user- or Git-authored markup is filtered through a conservative DOMPurify profile with a URI allow-list, `target="_blank" rel="noopener noreferrer"` hardening, and `javascript:` protocol blocking.
+
+### English-first UI
+
+The desktop app now defaults to English, with French as a secondary locale kept in sync. The locale registry's source of truth moves from `fr.ts` to `en.ts`. The Settings panel still lets you force either language; the OS locale is respected automatically.
+
+### `.gitwandrc` — `generatedFiles` option
+
+Users can now declare extra glob patterns in `.gitwandrc` (e.g., `"dist/**"`, `"**/*.generated.ts"`) that GitWand treats as generated when applying the `generated_file` resolver. Patterns are additive on top of the built-in list.
+
+### Post-merge validation — YAML + TOML
+
+The `validateMergedContent` contract is extended with format-specific parsers. Invalid YAML or TOML after a merge is surfaced as a `syntaxError` with a `YAML: …` / `TOML: …` prefix, matching the existing JSON behaviour.
+
+### LCS memory — 35× reduction
+
+The diff engine's LCS now runs a hybrid `Int32Array` DP under 4 million cells and switches to Hirschberg's divide-and-conquer above that threshold. Measured on 3000×3000 inputs: ~36 MB → ~1 MB. Tie-break behaviour is preserved so existing diffs are byte-identical.
+
+### Parallel conflict loading
+
+Conflicted files are now read in parallel (bounded concurrency) instead of serially in both the desktop app and the CLI. Throughput scales with file count on large merges.
+
+---
+
+## v1.4.0 — April 2026
+
+### AI everywhere
+
+Fourteen AI-powered features shipped across the v1.4 cycle: branch-name suggestion from staged diff or a description; PR title and description from the `currentBranch..base` diff; hunk-level critique in the PR review panel; natural-language conflict explanations in the merge editor; pre-merge risk summary; stash message from unstaged diff; semantic squash grouping in interactive rebase; AI-ranked Absorb target selection; natural-language commit search; blame context ("why did this line change?"); AI release notes generator; and rotating localised feature tips on the empty state.
+
+### Conflict engine — pattern registry
+
+The classification pipeline is rewritten around a prioritised pattern registry. Each pattern declares its `priority`, `requires` (diff3 / diff2 / both), `detect`, `confidence`, `explanation`, `passReason`, and `failReason`. Two new patterns are added: `reorder_only` (pure permutations, auto-resolved) and `insertion_at_boundary` (pure insertions on both sides with an intact base, auto-resolved). Confidence scoring is tuned with boosters, penalties, and stricter guarding on `complex`.
+
+### Auto-update check
+
+The app checks for new versions against the GitHub Releases feed on launch and shows a toast with a changelog link when a new version is available. The current version is visible in the footer / About section.
+
+---
+
+## v1.2.0 — April 2026
+
+### Interactive rebase
+
+Drag-and-drop reorder in the log, per-commit actions (squash, edit message, drop, fixup), multi-select squash with combined message, rebase onto branch from the UI, and in-flight conflict handling (continue / abort / skip).
+
+### Absorb
+
+Right-click any modified file to absorb it into an existing commit. GitWand finds the best candidate via `git blame`, or you can do a partial absorb by selecting specific hunks. Inspired by GitButler's absorb workflow.
+
+### AI commit messages
+
+A dropdown in the commit area analyses the staged diff and produces a summary and description. Provider-agnostic: Claude Code CLI, Claude API, OpenAI-compatible, and Ollama are all supported. Regenerate, shorten, expand, switch language — without leaving the commit panel.
+
+### Universal Undo
+
+An operation stack covering commit, merge, rebase, cherry-pick, stash, and discard. One-click undo via `git reset` / `git reflog`. The history panel lets you jump back to any prior state.
+
+---
+
+## v1.1.0 — April 2026
+
+### MCP server
+
+`@gitwand/mcp` ships with 5 tools (`gitwand_status`, `gitwand_resolve_conflicts`, `gitwand_preview_merge`, `gitwand_explain_hunk`, `gitwand_apply_resolution`) and 3 resources over stdio transport. Compatible with Claude Code, Claude Desktop, Cursor, and Windsurf. Includes `/resolve` and `/preview` slash commands for Claude Code.
+
+### CLI — enriched JSON output
+
+The CLI now emits confidence scores, decision traces, `pendingHunks` with ours/theirs/base, and post-merge validation results in `--json` mode.
+
+### Partial resolution
+
+The desktop app can now apply all automatically-resolvable hunks even when some hunks remain manual — you don't have to wait until everything is resolved before committing the safe ones.
+
+---
+
+## v1.0.0 — 2026
+
+### Full desktop Git client + conflict engine
+
+The first production release. The core engine covers 8 conflict patterns (same_change, one_side_change, delete_no_change, whitespace_only, non_overlapping, value_only_change, generated_file, complex), LCS 3-way merge, diff2 + diff3 format support, composite confidence scoring, configurable merge policies via `.gitwandrc`, and a full format-aware resolver suite (JSON/JSONC, Markdown, YAML, Vue SFC, CSS/SCSS, TS/JS imports, npm/yarn/pnpm lockfiles).
+
+The desktop app ships a complete Git workflow: staging, commit, push/pull, branches, merge editor, advanced diff, history, DAG graph, file history, blame, time-travel diff, merge preview, cherry-pick, stash, amend, repo switcher, multi-tabs, terminal, PR workflow via `gh` CLI, inline code review, intelligence panel, AI suggestions (Claude / OpenAI / Ollama), i18n in FR and EN, and dark/light/system theme.
+
+332 tests, a 20-fixture real-world corpus, and benchmarks at 249k ops/s on a single conflict. CI/CD runs on macOS universal, Linux, and Windows.
+
+---
+
+## v0.0.1 — April 2026
+
+### First public build
+
+The initial release proved out the core idea: a TypeScript conflict-resolution engine with 5 automatic patterns (same_change, one_side_change, delete_no_change, whitespace_only, non_overlapping), a CLI with `--ci / --json` structured output, a VS Code extension with inline diagnostics and CodeLens annotations, and a CI pipeline across Node 18, 20, and 22. 28 tests covering all patterns against real-world fixtures (package.json, Laravel routes, Vue SFC, CSS, .env files).
