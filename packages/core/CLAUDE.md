@@ -16,10 +16,10 @@ pnpm build          # Compilation TypeScript
 
 ## Règle fondamentale — Compatibilité browser/Node/Tauri
 
-**Ce package ne doit jamais importer de modules Node.js natifs.** Il doit rester compatible browser, Node.js ET Tauri (WebView).
+**Ce package ne doit jamais importer statiquement de modules Node.js natifs.** Il doit rester compatible browser, Node.js ET Tauri (WebView).
 
 ```typescript
-// ❌ INTERDIT — casse la compatibilité browser
+// ❌ INTERDIT — import statique, casse la compatibilité browser
 import * as fs from 'fs'
 import * as path from 'path'
 import { execSync } from 'child_process'
@@ -27,6 +27,21 @@ import { execSync } from 'child_process'
 // ✅ Autorisé
 // Manipulation de strings, algorithmes purs, web-tree-sitter (WASM)
 ```
+
+### Exception architecturale — adaptateurs d'environnement (`structural/parsers/adapters/`)
+
+`structural/parsers/adapters/node.ts` contient des imports Node.js (`node:fs/promises`, `node:path`, etc.). Ce fichier **ne constitue pas une violation** car :
+
+1. Il est chargé **uniquement via un import dynamique** gardé par `detectEnvironment()` dans `loader.ts` :
+   ```typescript
+   if (env === "node") {
+     const { loadGrammarBytes } = await import(/* @vite-ignore */ "./adapters/node.js");
+   }
+   ```
+2. Le commentaire `/* @vite-ignore */` empêche Vite de bundler ce fichier dans les builds browser/Tauri.
+3. En environnement browser (`detectEnvironment()` retourne `"browser"`), cette branche n'est jamais exécutée.
+
+**Règle :** tout nouvel import Node.js dans ce package doit suivre ce même pattern — import dynamique, guard `detectEnvironment()`, commentaire `@vite-ignore`. Ne jamais ajouter d'import statique Node.js.
 
 Avant tout `npm install` ou ajout d'import, vérifier que la dépendance ne tire pas transitoirement un module Node natif.
 
@@ -41,6 +56,8 @@ Avant tout `npm install` ou ajout d'import, vérifier que la dépendance ne tire
 | `ConflictType` | Union string des noms de patterns (`"same_change"` \| `"one_side_change"` \| … \| `"complex"`) |
 | `PatternPlugin` | Interface que chaque pattern implémente (voir §Patterns) |
 | `FormatResolveResult` | `{ lines: string[] \| null, reason: string, resolverUsed: string }` |
+
+**Note :** `generated_file` est un type spécial absent du registre `PATTERNS` dans `classifier.ts`. Il est injecté directement par l'orchestrateur après détection via `structural/generated-detection.ts`. Ne pas créer de PatternPlugin pour ce type.
 
 ---
 

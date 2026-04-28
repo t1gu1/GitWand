@@ -119,6 +119,9 @@ export interface FormatResolveResult {
    */
   reason: string;
   /** Résolveur utilisé (pour la trace) */
+  // "structural" is not routed here — it is injected by the top-level
+  // orchestrator (resolver.ts) when structural/generated-detection identifies
+  // the file as machine-generated. It does not pass through tryFormatAwareResolve().
   resolverUsed: "json" | "markdown" | "yaml" | "imports" | "vue" | "css" | "lockfile-npm" | "lockfile-yarn" | "lockfile-pnpm" | "cargo" | "dotenv" | "dockerfile" | "structural" | "none";
   /**
    * v2.3 — Portée de la résolution.

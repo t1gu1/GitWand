@@ -61,13 +61,16 @@
   },
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies",
+    "clean": "rm -rf dist *.vsix"
   },
   "dependencies": {
     "@gitwand/core": "workspace:*"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
     "typescript": "^5.4.0"
   },
   "license": "MIT"

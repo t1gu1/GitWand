@@ -32,8 +32,7 @@ export {
  * `@gitwand/core` est utilisé en pratique.
  */
 function shouldUseLegacy(): boolean {
-  if (typeof process === "undefined") return false;
-  return process.env?.GITWAND_DIFF === "lcs";
+  return (typeof import.meta !== "undefined" && import.meta.env?.GITWAND_DIFF === "lcs");
 }
 
 /**

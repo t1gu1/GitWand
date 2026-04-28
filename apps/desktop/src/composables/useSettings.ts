@@ -12,6 +12,7 @@
 import { ref } from "vue";
 import type { DiffMode } from "../utils/diffMode";
 import type { BlameAlgorithm } from "../utils/backend";
+import type { AIProvider } from "./useAIProvider";
 
 // ─── Types ────────────────────────────────────────────────
 
@@ -33,6 +34,22 @@ export interface AppSettings {
   blameAlgorithm: BlameAlgorithm;
   /** Auto-update channel (v2.0). "stable" = Tauri plugin auto-install; "beta" = manual fetch + browser-open. */
   updateChannel: "stable" | "beta";
+  /** Language used for AI-generated commit messages. "" = follow UI locale. */
+  commitMessageLang: string;
+  /** Whether AI features are enabled. */
+  aiEnabled: boolean;
+  /** Active AI provider. */
+  aiProvider: AIProvider;
+  /** API key for Claude / OpenAI providers. */
+  aiApiKey: string;
+  /** API endpoint override (Claude / OpenAI-compatible). */
+  aiApiEndpoint: string;
+  /** Model name for Claude / OpenAI providers. */
+  aiModel: string;
+  /** Ollama base URL. */
+  aiOllamaUrl: string;
+  /** Ollama model name. */
+  aiOllamaModel: string;
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -50,6 +67,14 @@ export const defaultAppSettings: AppSettings = {
   notifications: true,
   blameAlgorithm: "histogram",
   updateChannel: "stable",
+  commitMessageLang: "",
+  aiEnabled: false,
+  aiProvider: "none",
+  aiApiKey: "",
+  aiApiEndpoint: "https://api.anthropic.com",
+  aiModel: "claude-sonnet-4-20250514",
+  aiOllamaUrl: "http://localhost:11434",
+  aiOllamaModel: "codellama",
 };
 
 const SETTINGS_KEY = "gitwand-settings";
