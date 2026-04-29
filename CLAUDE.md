@@ -12,8 +12,8 @@ GitWand est un client Git desktop natif avec un moteur de résolution automatiqu
 |---|---|---|
 | `apps/desktop` | `@gitwand/desktop` | 2.0.1 |
 | `packages/core` | `@gitwand/core` | 2.4.0 |
-| `packages/cli` | `@gitwand/cli` | 2.3.0 |
-| `packages/mcp` | `@gitwand/mcp` | 2.3.0 |
+| `packages/cli` | `@gitwand/cli` | 2.4.1 |
+| `packages/mcp` | `@gitwand/mcp` | 2.4.1 |
 | `packages/vscode` | `gitwand-vscode` | 1.2.0 |
 
 ## Architecture monorepo
