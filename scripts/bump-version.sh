@@ -71,6 +71,10 @@ bump apps/desktop/src-tauri/tauri.conf.json \
 bump packages/mcp/server.json \
   "s/\"version\": \"${OLD}\"/\"version\": \"${NEW}\"/g"
 
+# ── website/.well-known MCP server card ──────────────────────────────────────
+bump website/public/.well-known/mcp/server-card.json \
+  "s/\"version\": \"${OLD}\"/\"version\": \"${NEW}\"/"
+
 # ── packages/mcp/src/server.ts ───────────────────────────────────────────────
 bump packages/mcp/src/server.ts \
   "s/version: \"${OLD}\"/version: \"${NEW}\"/"
