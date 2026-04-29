@@ -5,6 +5,38 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.4.1 — April 2026
+
+### Semantic validation lands in core
+
+The headline change is invisible from the merge editor: GitWand's resolver now refuses to ship a resolution that breaks the file's parse tree. Every candidate fix is fed through tree-sitter for the file's language, and resolutions that produce parse errors are either retried with another pattern or surfaced as manual conflicts. A new `postMergeRisk` dimension on `ConfidenceScore` (weight −0.20) retroactively demotes any resolution whose output doesn't parse cleanly — so the score you see in the trace is the score *after* validation.
+
+Validation now ships in three tiers. `off` skips the parse-tree pass entirely — useful for raw-throughput batch resolves. `balanced` is the new default (renamed from `standard`) and runs the parse-tree check. `strict`, opt-in via `.gitwandrc`, layers `tsc --noEmit` and `eslint` on top through the new `adapters/strict-node.ts`. External-tool errors come back as a typed `ExternalValidationResult { tool, errors, passed }` instead of the previous loose `strictErrors` shape, so consumers can render per-tool diagnostics rather than concatenating strings.
+
+The async resolver got the same treatment: `resolveAsync()` now populates `externalValidation` on every return path, regardless of which tier ran. Five new corpus fixtures (F31–F35) cover the v2.4 surface, and two new test suites (`v2-core-scenarios.test.ts` and `validation-parse-tree.test.ts`, 1,100 lines together) hold the line at **841/841 passing**.
+
+This closes the v2.4 entry on the [CORE-V2-ROADMAP](https://github.com/devlint/GitWand/blob/main/CORE-V2-ROADMAP.md). The expected impact, per the roadmap target, is a roughly 50 % drop in parse-tree-broken false positives.
+
+### In-app Help Panel
+
+A new Help button in the header — mirrored in the macOS menu bar — opens a multilingual overlay covering Getting Started, Conflicts, Shortcuts, Workflow, AI features, and an FAQ. Press `Esc` to dismiss. Translated across all five locales.
+
+### Agent discovery surfaces on the website
+
+`gitwand.devlint.fr` now publishes the surfaces AI tooling looks for: an MCP server card, Agent Skills entries, an RFC 8288 `api-catalog` link, WebMCP browser-tool declarations, and explicit AI usage signals in `robots.txt`. The result is that an agent visiting the site can find `@gitwand/mcp` and its install path on its own — no human in the loop. The `server-card.json` is wired into `bump-version.sh`, so the version stays aligned with every release.
+
+### Fixes
+
+The post-merge "Delete «branch»" button was offering to delete `master`, `main`, or `develop` if you'd just merged them — now those mainline names are filtered out, and only feature/PR branches are eligible for cleanup.
+
+The Histogram-diff opt-out flag was reading `import.meta.env.GITWAND_DIFF`, which isn't typed on `ImportMeta` without Vite types — `tsc --build` was breaking in CI. Replaced with a `typeof process`-guarded `process.env` lookup that works under Node.js without breaking browser/Tauri.
+
+`@gitwand/cli` and `@gitwand/mcp` were stuck at 2.3.0 because `bump-version.sh` deliberately skips packages whose version drifts from `@gitwand/core`. The resync brings them to 2.4.1 alongside core, and the publish workflow's `[ version == tag ]` precondition now passes. `server.json`, `server.ts`, and `server-card.json` are aligned in the same commit.
+
+A small but annoying Rust panic in the diff line-counter — caused by an unsigned int going negative — is also fixed.
+
+---
+
 ## v2.0.1 — April 2026
 
 ### A friendlier update prompt

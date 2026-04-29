@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-04-29
+
+Implementation pass on the v2.4 entry of the [CORE-V2-ROADMAP](./CORE-V2-ROADMAP.md) — the resolver gains a parse-tree validation layer, a third validation tier (`off` / `balanced` / `strict`), and a `postMergeRisk` dimension on `ConfidenceScore` that retroactively demotes resolutions whose output doesn't parse. Plus an in-app Help Panel, agent-discovery surfaces on the marketing site, and a fix for the merge-success modal that was offering to delete `master` / `main` / `develop`.
+
+### Added
+
+- **`@gitwand/core@2.4.1` — Semantic post-merge validation (CORE-V2-ROADMAP v2.4)**
+  - **Validation tiers** — `ValidationLevel` is now `off | balanced | strict`. `standard` is renamed to `balanced`; the new `off` skips the parse-tree pass entirely for raw-throughput resolves.
+  - **Parse-tree validation** — new `validate-parse-tree.ts` runs each candidate resolution through tree-sitter for the file's language and refuses resolutions that introduce parse errors. `ValidationResult` exposes `parseTreeErrors` + `parseTreeErrorRanges` so callers can report which bytes broke.
+  - **External validators (`strict` tier)** — new `validate-strict.ts` and `adapters/strict-node.ts` plumb `tsc --noEmit` and `eslint` as opt-in external validators when `validation.level: "strict"` is set in `.gitwandrc`. The previous loose `strictErrors` field is replaced by a typed `ExternalValidationResult { tool, errors, passed }`, so consumers can render per-tool diagnostics instead of concatenating strings.
+  - **`postMergeRisk` score dimension** — `makeScore()` accepts a new `postMergeRisk` parameter (weight −0.20). Resolutions whose output fails parse-tree or external validation are retroactively demoted in the confidence score. Closes the v2.4 roadmap target of −50 % parse-tree-broken false positives.
+  - **`resolveAsync()` shape** — handles `validationLevel='off'` and populates `externalValidation` on every return path so async consumers always get a complete `ValidationResult` regardless of which tier ran.
+  - **+5 corpus fixtures (F31–F35)** per the +5/release principle, plus two new test suites: `v2-core-scenarios.test.ts` (829 lines, end-to-end coverage from v2.1 to v2.4) and `validation-parse-tree.test.ts` (274 lines). **841/841 tests passing.**
+- **In-app Help Panel** — header button, menu bar entry, and `Esc` key open a `HelpView` overlay covering Getting Started, Conflicts, Shortcuts, Workflow, AI features, and an FAQ. Translated across all 5 locales.
+- **Agent discovery surfaces on the website** — `gitwand.devlint.fr` now publishes the surfaces AI tooling looks for: an MCP server card (`server-card.json`, wired into `bump-version.sh` so the version stays aligned automatically), Agent Skills entries, an RFC 8288 `api-catalog` link in the homepage `<head>`, WebMCP browser-tool declarations, and explicit AI usage signals in `robots.txt`. Agents scanning the site can discover and install `@gitwand/mcp` without a human in the loop.
+- **Repository-level AI agent docs** — top-level `AGENTS.md` and `CLAUDE.md`, plus per-package `CLAUDE.md` for `apps/desktop`, `apps/desktop/src`, `apps/desktop/src-tauri`, `packages/core`, `packages/cli`, `packages/mcp`, `packages/vscode`. New `.claude/skills/` for `add-pattern`, `add-resolver`, `add-tauri-command`, `i18n-sync`, and `release` flows.
+- **AI settings in the desktop store** — `commitMessageLang`, `aiEnabled`, `aiProvider`, `aiApiKey`, `aiApiEndpoint`, `aiModel`, `aiOllamaUrl`, `aiOllamaModel` added to `AppSettings` with defaults.
+
+### Changed
+
+- **Resolver split** — `resolver/index.ts` reorganised so validation lives in dedicated modules (`validate-parse-tree.ts`, `validate-strict.ts`, `validation.ts`) instead of inline. The entry-point shrinks; new modules are independently testable.
+
+### Fixed
+
+- **Branch-deletion offer guards protected branches** — `MergeSuccessModal` used to propose deleting whatever branch had just been merged, including `master` / `main` / `develop`. The post-merge cleanup now only fires for feature/PR branches; mainline names stay put.
+- **`process.env` instead of `import.meta.env` for `GITWAND_DIFF`** — the Histogram-diff opt-out flag was reading `import.meta.env.GITWAND_DIFF`, which isn't typed on `ImportMeta` without Vite types. `tsc --build` was failing in CI. Replaced with a `typeof process !== 'undefined'`-guarded `process.env` lookup so the flag works under Node.js without breaking browser/Tauri builds.
+- **`@gitwand/cli` and `@gitwand/mcp` resync to 2.4.1** — both packages were stuck at 2.3.0 because `bump-version.sh` skips packages whose version drifts from `@gitwand/core`. The resync brings them to 2.4.1 alongside core; the publish workflow's `[ version == tag ]` precondition now passes. `server.json`, `server.ts`, and `server-card.json` aligned in the same commit.
+- **Diff line counters use signed integers** — fixes a panic in the Rust diff parser when removed-line counts went negative.
+
 ## [2.0.1] - 2026-04-26
 
 ### Changed
@@ -321,7 +350,8 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/devlint/GitWand/compare/v2.4.1...HEAD
+[2.4.1]: https://github.com/devlint/GitWand/releases/tag/v2.4.1
 [2.0.1]: https://github.com/devlint/GitWand/releases/tag/v2.0.1
 [2.0.0]: https://github.com/devlint/GitWand/releases/tag/v2.0.0
 [1.4.0]: https://github.com/devlint/GitWand/releases/tag/v1.4.0

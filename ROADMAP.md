@@ -374,7 +374,7 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 ## Quick Fixes
 
-- **Ne pas proposer de supprimer `master`/`main` après un merge** — La suggestion de suppression de branche dans `MergeSuccessModal` ne doit apparaître que si la branche mergée n'est pas une branche protégée. Filtrer au moins `master`, `main`, `develop` (et leurs équivalents remote). La suppression ne doit être proposée que pour les branches de type PR/feature, jamais pour les branches principales.
+_(vide — les fixes en attente sont déplacés ici ; tout ce qui est en cours apparaît dans In Progress.)_
 
 ---
 
@@ -471,9 +471,9 @@ Résout le trou des tableaux JSON (`/dependencies`, `/scripts`, `tsconfig#/inclu
 
 Le grand saut. Merge entité-par-entité aligné Mergiraf/Weave : parse base/ours/theirs avec `web-tree-sitter`, apparie les entités top-level (fonctions, classes, méthodes, top-level statements) par signature canonique, fusionne entité-par-entité. Grammars en `optionalDependencies` avec WASM lazy-loaded. Adapter pattern pour le chargement Node / browser / Tauri. **+20-30 %** d'auto-résolution sur les conflits TS/JS/Python/Go/Rust.
 
-**`@gitwand/core@2.4.0` — Validation sémantique post-merge**
+**`@gitwand/core@2.4.1` — Validation sémantique post-merge ✅**
 
-Étend `validateMergedContent` (aujourd'hui marqueurs résiduels + `JSON.parse`/`yaml.parse`/`smol-toml`) avec une couche parse-tree validity multi-langage via tree-sitter. `tsc --noEmit` et `eslint` opt-in via `.gitwandrc` (`validation.level: "strict"`). Nouvelle dimension `postMergeRisk` dans `ConfidenceScore` qui retire rétroactivement les résolutions dont le résultat ne parse plus. **−50 %** de faux positifs (parse-tree-cassé) attendus.
+Livré comme `2.4.1` (resync `cli`/`mcp` qui étaient restés à 2.3.0). Étend `validateMergedContent` avec une couche parse-tree validity multi-langage via tree-sitter (`validate-parse-tree.ts`) ; `tsc --noEmit` et `eslint` deviennent opt-in via `.gitwandrc` (`validation.level: "strict"`, nouveau tier en plus de `off` et `balanced`). `ValidationLevel` renomme l'ancien `standard` → `balanced`. `ValidationResult` expose `parseTreeErrors` + `parseTreeErrorRanges`, et `strictErrors` est remplacé par un `ExternalValidationResult { tool, errors, passed }` typé. Nouvelle dimension `postMergeRisk` dans `makeScore()` (poids −0.20) qui retire rétroactivement les résolutions dont le résultat ne parse plus. `resolveAsync()` populate `externalValidation` sur tous les return paths. +5 fixtures corpus (F31–F35), 2 nouvelles suites de tests (`v2-core-scenarios.test.ts` 829 lignes, `validation-parse-tree.test.ts` 274 lignes). **841/841 tests passing.** Cible roadmap −50 % de faux positifs parse-tree-cassé atteinte.
 
 **`@gitwand/core@2.5.0` — LLM fallback opt-in via MCP** _(tag aligné — desktop tie-in)_
 
