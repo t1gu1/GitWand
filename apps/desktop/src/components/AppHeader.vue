@@ -123,6 +123,7 @@ const emit = defineEmits<{
   openSearch: [];
   undoPerformed: [];
   toggleTheme: [];
+  openHelp: [];
 }>();
 
 // ─── Merge-into picker popover (triggered by BranchMenu) ──────────
@@ -489,6 +490,20 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           </svg>
           <svg v-else width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M14 9.3A6 6 0 016.7 2 6 6 0 1014 9.3z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+        <!-- Help -->
+        <button
+          class="btn btn--icon"
+          :aria-label="t('header.openHelp')"
+          :title="t('header.openHelp')"
+          @click="emit('openHelp')"
+        >
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4" />
+            <path d="M8 11v.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M8 5.5c1 0 1.8.8 1.8 1.8S9 8.6 8 8.6V9.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </button>
 

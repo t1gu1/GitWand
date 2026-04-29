@@ -57,6 +57,7 @@ export interface AppMenuActions {
   toggleTheme: () => void;
   // Help
   checkForUpdates: () => void;
+  openHelp: () => void;
   // App
   openSettings: () => void;
 }
@@ -321,7 +322,7 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
         await MenuItem.new({
           id: "help-documentation",
           text: t("menu.documentation"),
-          action: () => window.open(URL_DOCUMENTATION, "_blank"),
+          action: () => actions.openHelp(),
         }),
         await MenuItem.new({
           id: "help-whats-new",

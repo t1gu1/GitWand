@@ -11,6 +11,7 @@ import CommitDiffViewer from "./components/CommitDiffViewer.vue";
 import FileHistoryViewer from "./components/FileHistoryViewer.vue";
 import CommitGraph from "./components/CommitGraph.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
+import HelpView from "./components/HelpView.vue";
 import PrDetailView from "./components/PrDetailView.vue";
 import PrCreateView from "./components/PrCreateView.vue";
 import DashboardView from "./components/DashboardView.vue";
@@ -821,6 +822,9 @@ function onPaletteSelectCommit(hash: string) {
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
 
+// ─── Help panel ─────────────────────────────────────────
+const showHelp = ref(false);
+
 // ─── Integrated git terminal (v2.0) ──────────────────────
 // Mounted as a docked panel below the main content when toggled on.
 const showTerminal = ref(false);
@@ -921,6 +925,10 @@ function cancelSwitchStash() {
  */
 function onGlobalKeydown(e: KeyboardEvent) {
   if (e.key !== "Escape") return;
+  if (showHelp.value) {
+    showHelp.value = false;
+    return;
+  }
   if (pendingSwitchBranch.value) {
     cancelSwitchStash();
     return;
@@ -1180,6 +1188,9 @@ useAppMenu(
     },
     toggleTheme,
     checkForUpdates: runUpdateCheck,
+    openHelp: () => {
+      showHelp.value = true;
+    },
     openSettings: () => {
       showSettings.value = true;
     },
@@ -1273,6 +1284,7 @@ onUnmounted(() => {
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true"
       @open-search="handleOpenSearch"
+      @open-help="showHelp = true"
     />
 
     <div class="app-body">
@@ -1650,6 +1662,12 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Help panel -->
+    <HelpView
+      v-if="showHelp"
+      @close="showHelp = false"
+    />
 
     <!-- Settings panel -->
     <SettingsPanel
