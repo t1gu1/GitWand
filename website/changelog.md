@@ -33,7 +33,60 @@ The Histogram-diff opt-out flag was reading `import.meta.env.GITWAND_DIFF`, whic
 
 `@gitwand/cli` and `@gitwand/mcp` were stuck at 2.3.0 because `bump-version.sh` deliberately skips packages whose version drifts from `@gitwand/core`. The resync brings them to 2.4.1 alongside core, and the publish workflow's `[ version == tag ]` precondition now passes. `server.json`, `server.ts`, and `server-card.json` are aligned in the same commit.
 
-A small but annoying Rust panic in the diff line-counter — caused by an unsigned int going negative — is also fixed.
+---
+
+## v2.3.0 — April 2026
+
+The umbrella tag for three back-to-back `@gitwand/core` releases — v2.1, v2.2, v2.3 — that take the resolver from "good with text diff" to "good with the structure of the file." Plus cherry-pick from the log with full conflict-resolution flow, and a hardened auto-update manifest publish in CI.
+
+### `@gitwand/core@2.1.0` — Histogram diff
+
+The underlying diff routine now uses **Histogram diff** (rare-anchor splitting with forward/backward extension, JGit-style), replacing the pure DP / Hirschberg backend that shipped through 2.0.x. The new alignment is more stable on real source code, which directly lifts the success rate of `non_overlapping` and `insertion_at_boundary` patterns — corpus fixtures that previously fell into `complex` are now auto-resolved end-to-end.
+
+The change is opaque to consumers: `lcs(a, b)`, `computeDiff(base, branch)`, and `mergeNonOverlapping(base, ours, theirs)` keep their public signatures. Set `GITWAND_DIFF=lcs` at call time to roll back to the legacy backend (debug, reproducibility, perf comparison). On runtimes without `process.env`, Histogram is always used.
+
+A primitive `detectBlockMove(base, ours, theirs)` (Rabin-Karp rolling hash with token-diversity and literal anti-collision filters) ships alongside it — no scoring impact in 2.1, but it's the foundation for the v2.6 refactoring-aware merge. `ConfidenceScore.dimensions` gains an optional `algorithmStability` field reserved for the same purpose; default 0 keeps numeric output identical to v1.4 for all existing patterns.
+
+### `@gitwand/core@2.2.0` — Format profile registry & JSON Patch
+
+The JSON and YAML resolvers gain a registry of **format profiles** that annotate JSON Pointer paths with a merge strategy. The result is that two long-standing functional gaps disappear:
+
+- **JSON arrays** at `/dependencies`, `/scripts`, `/keywords`, `/files`, etc. now merge semantically (set-by-identity or merge-keys) instead of bailing out on `Array.isArray`.
+- **YAML sequences** in `helm/values.yaml` and Kubernetes manifests (containers, volumes, env vars, ports) merge by `name` (or `port` / `host` per resource) instead of failing on a single divergent line.
+
+Five built-in profiles ship in 2.2: `package.json`, `tsconfig.json` (and `tsconfig.<variant>.json`), `composer.json`, `helm/values.yaml`, and a generic `kubernetes` profile that matches manifests under `k8s/`, `kubernetes/`, `manifests/`, or with conventional basenames. `registerFormatProfile(profile)` registers a custom profile and returns an unregister function for clean teardown in tests.
+
+Under the hood, this version also ships a minimal in-house **RFC 6902 (JSON Patch)** implementation: `diffJson(base, target)` produces an op sequence (`add` / `remove` / `replace`), `applyJsonPatch(doc, ops)` applies it immutably, and `mergeJsonPatches(ours, theirs)` returns the concat when paths are disjoint or `null` plus a list of conflicting paths otherwise. The round-trip property `applyJsonPatch(base, diffJson(base, x)) ≡ x` is verified on 100 random JSON inputs. `move` and `copy` are deliberately not supported — express them via `add` + `remove`.
+
+A new `GitWandOptions.disableFormatProfiles?: boolean` (default `false`) reverts the JSON and YAML resolvers to their v2.1 behaviour, useful when a third-party profile causes unexpected silent deletions, or for A/B comparison on a specific repo.
+
+### `@gitwand/core@2.3.0` — Tree-sitter structural merge
+
+The big one. GitWand now does an **AST-based first pass** for TypeScript, TSX, JavaScript, JSX, Python, Go, and Rust files: parse `base` / `ours` / `theirs` with `web-tree-sitter`, pair top-level entities (functions, classes, methods, top-level statements) by canonical signature, and merge entity-by-entity — the same approach as Mergiraf and Weave. When the structural pass yields `null`, the existing hunk-based engine takes over, so there's no loss of coverage on cases the structural merge can't handle.
+
+Three things make this stay browser-compatible. `web-tree-sitter` is an *optional* peer dependency (`>=0.20.0`) — consumers who don't need structural merge don't pay for the WASM. Grammars come from `tree-sitter-wasms` and load lazily, behind a loader that supports both v0.20 and v0.26 API shapes. And the loader uses three environment adapters (`structural/parsers/adapters/{node,browser,tauri}.ts`) so the package keeps zero static Node.js imports; the Node-specific path is dynamic and guarded.
+
+The async entry point `resolveAsync()` runs the structural pass and falls back to `resolve()` when needed. The synchronous `resolve()` keeps its v2.2 contract for callers that don't want to wait on WASM init.
+
+### Cherry-pick from the log, with conflict resolution
+
+The right-click *Cherry-pick* entry in the commit log used to call `git cherry-pick` and assume it succeeded. It now treats conflicts as a first-class state: `isCherryPicking` stays `true` while there are unresolved conflicts, the desktop switches to the changes view and selects the first conflicted file (mirroring `mergeBranch()`), and auto-fetch/poll pause for the duration. `cherryPickContinue()` handles multi-pass conflicts — it keeps the cherry-pick mode active until everything is resolved. The conflict banner button reads *Annuler le cherry-pick* or *Annuler le merge* depending on which operation is in flight. New i18n key `header.abortCherryPick` across all five locales.
+
+### Polish
+
+- Test regression: the CSS resolver's reason string explicitly skips the structural merge path. Stylesheets aren't AST-parseable in the way the structural dispatcher expects, so the test pins this contract.
+- The release workflow's auto-update manifest publish gains a fallback endpoint and tighter retry semantics — a transient hiccup on the primary endpoint no longer fails the whole release.
+- The README and website drop the macOS Gatekeeper workaround. The app has been Developer-ID-signed and notarized since v1.9.0, so the manual `xattr -d com.apple.quarantine` step is no longer needed.
+
+### Fixes
+
+A Rust panic in the diff line-counter — caused by removed-line counts going negative on an unsigned int — is fixed; the counter now uses signed integers.
+
+The PR create form's base-branch detection used to fail because the branch list was still empty when the form opened. The form now waits for the list and uses the raw branch name instead of the display string, so candidate-base resolution works.
+
+Untracked file diffs now render in the UI — the desktop falls back to parsing the diff output for files Git doesn't yet track.
+
+The Vite alias points at `packages/core` source instead of the prebuilt dist, so a fresh clone runs the desktop dev server without an extra build step.
 
 ---
 
