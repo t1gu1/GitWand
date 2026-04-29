@@ -17,6 +17,7 @@
 import type {
   ConflictHunk,
   ConflictType,
+  ExternalValidationResult,
   GitWandOptions,
   HunkResolution,
   MergeResult,
@@ -32,6 +33,8 @@ import {
 import { parseConflictMarkers, toConflictHunk } from "../parser.js";
 
 import { EMPTY_VALIDATION, validateMergedContent } from "./validation.js";
+import { checkParseTreeValid, applyPostMergeRiskPenalty } from "./validate-parse-tree.js";
+import { runStrictValidation } from "./validate-strict.js";
 import { isGeneratedFile, reclassifyIfGenerated } from "./generated-detection.js";
 import {
   CONFIDENCE_ORDER,
@@ -205,9 +208,28 @@ export function resolve(
 /**
  * Async variant of `resolve()` — attempts structural (AST-based) merge for
  * TypeScript/TSX files before falling back to the standard hunk-by-hunk engine.
+ * Additionally runs parse-tree validation (v2.4) and optionally strict validation
+ * (tsc/eslint) when `validationLevel: "strict"` is configured.
  *
  * Structural merge requires `web-tree-sitter` as an **optional** peer dependency.
- * If it is not installed, `resolveAsync()` behaves identically to `resolve()`.
+ * If it is not installed, `resolveAsync()` behaves identically to `resolve()` with
+ * the addition of the parse-tree validation pass.
+ *
+ * ### v2.4 — Parse-tree validation & retraction
+ *
+ * After hunk-based resolution produces a `mergedContent`, `resolveAsync()` re-parses
+ * it with tree-sitter. If the tree contains ERROR nodes (indicating the merged code is
+ * syntactically broken), every auto-resolved hunk is **retracted**:
+ *
+ * - `resolution.autoResolved` → `false`
+ * - `resolution.resolvedLines` → `null`
+ * - `hunk.confidence.dimensions.postMergeRisk` → `100`
+ * - `validation.parseTreeValid` → `false`
+ * - `mergedContent` → `null` (conflicts restored as markers)
+ *
+ * This eliminates the class of false-positives where the resolver auto-merged code
+ * that compiles/runs fine locally but is syntactically invalid (e.g. from two hunks
+ * interacting unexpectedly).
  *
  * @param conflictedContent - File content with Git conflict markers
  * @param filePath          - File path (format detection + grammar selection)
@@ -220,7 +242,9 @@ export async function resolveAsync(
   userOptions: GitWandOptions = {},
   structuralOpts: StructuralLoaderOptions = {},
 ): Promise<MergeResult> {
-  // Attempt structural merge for all supported languages (TS/JS/Python/Go/Rust…)
+  const options = { ...DEFAULT_OPTIONS, ...userOptions };
+
+  // ─── 1. Tentative de merge structurel (v2.3) ──────────────────────────────
   if (isStructuralLanguage(filePath)) {
     try {
       const merged = await tryStructuralMergeResolve(
@@ -229,13 +253,84 @@ export async function resolveAsync(
         structuralOpts,
       );
       if (merged !== null) {
-        return wrapStructuralResult(conflictedContent, merged, filePath);
+        const result = wrapStructuralResult(conflictedContent, merged, filePath);
+        // Validation parse-tree sur le résultat structurel (devrait toujours passer,
+        // mais on vérifie quand même par cohérence).
+        const parseTreeValid = await checkParseTreeValid(result.mergedContent ?? "", filePath, structuralOpts);
+        return {
+          ...result,
+          validation: { ...result.validation, parseTreeValid, externalValidation: null },
+        };
       }
     } catch {
       // Structural merge failed unexpectedly — fall through to hunk-based resolver
     }
   }
 
-  // Fall back to the synchronous hunk-based resolver
-  return resolve(conflictedContent, filePath, userOptions);
+  // ─── 2. Résolution hunk-par-hunk (synchrone) ─────────────────────────────
+  const result = resolve(conflictedContent, filePath, userOptions);
+
+  // Rien à valider si la résolution n'est pas complète
+  if (result.mergedContent === null) {
+    return result;
+  }
+
+  // ─── 3. v2.4 — Validation parse-tree ─────────────────────────────────────
+  //   Skipped when validationLevel === "off" (performance mode).
+  if (options.validationLevel === "off") {
+    return { ...result, validation: { ...result.validation, parseTreeValid: null, externalValidation: null } };
+  }
+
+  const parseTreeValid = await checkParseTreeValid(result.mergedContent, filePath, structuralOpts);
+
+  if (parseTreeValid === false) {
+    // Parse-tree invalide → rétraction de toutes les résolutions automatiques.
+    // On ne peut pas savoir quel hunk a cassé la syntaxe sans une analyse fine,
+    // donc on est conservatif : tout remettre en conflits manuels.
+    const retractedResolutions = result.resolutions.map((r) =>
+      r.autoResolved ? applyPostMergeRiskPenalty(r) : r,
+    );
+
+    return {
+      ...result,
+      // mergedContent = null indique aux consommateurs que des conflits subsistent.
+      // Le contenu original (avec marqueurs) est conservé dans conflictedContent
+      // par l'appelant — ici on expose uniquement la MergeResult enrichie.
+      mergedContent: null,
+      resolutions: retractedResolutions,
+      stats: {
+        ...result.stats,
+        autoResolved: 0,
+        remaining: result.stats.totalConflicts,
+      },
+      validation: {
+        ...result.validation,
+        isValid: false,
+        parseTreeValid: false,
+      },
+    };
+  }
+
+  // ─── 4. v2.4 — Validation stricte opt-in (tsc / eslint) ─────────────────
+  let externalValidation: ExternalValidationResult | null = null;
+  if (options.validationLevel === "strict") {
+    const tools: Array<"tsc" | "eslint"> = options.validationTools ?? ["tsc"];
+    const strictResult = await runStrictValidation(result.mergedContent, filePath, tools);
+    const failedTool = (strictResult.toolsFailed[0] ?? strictResult.toolsRun[0] ?? "tsc") as "tsc" | "eslint";
+    externalValidation = {
+      tool: failedTool,
+      errors: strictResult.errors,
+      passed: strictResult.errors.length === 0,
+    };
+  }
+
+  return {
+    ...result,
+    validation: {
+      ...result.validation,
+      parseTreeValid,
+      externalValidation,
+      ...(externalValidation && !externalValidation.passed ? { isValid: false } : {}),
+    },
+  };
 }

@@ -943,6 +943,125 @@ const F30: CorpusFixture = {
   expectedResolved: true,
 };
 
+// ─── v2.4 — Fixtures « parse-tree validation » ──────────────
+//
+// Cas où la validation parse-tree (tree-sitter) est pertinente :
+// résolutions qui produisent du code potentiellement invalide ou
+// qui testent la robustesse du moteur face à la rétraction.
+//
+// Principe #6 (roadmap) : +5 fixtures par release. Ces fixtures
+// sont annotées `expectedResolved: false` quand la rétraction parse-tree
+// devrait invalider la résolution — mais comme tree-sitter est optional,
+// le comportement réel peut varier selon l'environnement.
+
+const F31: CorpusFixture = {
+  id: "F31",
+  description: "v2.4 — same_change sur une ligne TypeScript complète (parse safe)",
+  filePath: "src/index.ts",
+  category: "trivial",
+  input: [
+    `<<<<<<< ours`,
+    `export const VERSION = "2.4.0";`,
+    `||||||| base`,
+    `export const VERSION = "2.3.0";`,
+    `=======`,
+    `export const VERSION = "2.4.0";`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "same_change",
+  expectedResolved: true,
+  expectedOutput: `export const VERSION = "2.4.0";`,
+};
+
+const F32: CorpusFixture = {
+  id: "F32",
+  description: "v2.4 — one_side_change : ours ajoute un type annotation (parse safe)",
+  filePath: "src/parser.ts",
+  category: "trivial",
+  input: [
+    `<<<<<<< ours`,
+    `export function parse(input: string): ParseResult {`,
+    `  return { ok: true };`,
+    `}`,
+    `||||||| base`,
+    `export function parse(input) {`,
+    `  return { ok: true };`,
+    `}`,
+    `=======`,
+    `export function parse(input) {`,
+    `  return { ok: true };`,
+    `}`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "one_side_change",
+  expectedResolved: true,
+};
+
+const F33: CorpusFixture = {
+  id: "F33",
+  description: "v2.4 — insertion_at_boundary : deux imports TS ajoutés côté différent (parse safe)",
+  filePath: "src/utils.ts",
+  category: "structural",
+  input: [
+    `<<<<<<< ours`,
+    `import { A } from "./a";`,
+    `import { B } from "./b";`,
+    `import { X } from "./x";`,
+    `||||||| base`,
+    `import { A } from "./a";`,
+    `import { B } from "./b";`,
+    `=======`,
+    `import { A } from "./a";`,
+    `import { B } from "./b";`,
+    `import { Y } from "./y";`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "insertion_at_boundary",
+  expectedResolved: true,
+};
+
+const F34: CorpusFixture = {
+  id: "F34",
+  description: "v2.4 — complex : deux modifications incompatibles d'une signature TS",
+  filePath: "src/api.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `export async function fetchUser(id: string, opts?: RequestInit): Promise<User> {`,
+    `  return fetch(\`/api/users/\${id}\`, opts).then(r => r.json());`,
+    `}`,
+    `||||||| base`,
+    `export async function fetchUser(id: string): Promise<User> {`,
+    `  return fetch(\`/api/users/\${id}\`).then(r => r.json());`,
+    `}`,
+    `=======`,
+    `export async function fetchUser(id: number): Promise<User> {`,
+    `  return fetch(\`/api/users/\${id}\`).then(r => r.json());`,
+    `}`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F35: CorpusFixture = {
+  id: "F35",
+  description: "v2.4 — value_only_change : hash de commit dans un lockfile TS (diff2, parse safe)",
+  filePath: "src/generated/checksums.ts",
+  category: "semantic",
+  // diff2 : pas de base — le détecteur heuristique de valeurs volatiles s'applique
+  input: [
+    `<<<<<<< ours`,
+    `export const SCHEMA_HASH = "a1b2c3d4e5f67890";`,
+    `=======`,
+    `export const SCHEMA_HASH = "f9e8d7c6b5a43210";`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "value_only_change",
+  expectedResolved: true,
+};
+
 // ─── Export ─────────────────────────────────────────────────
 
 export const CORPUS: CorpusFixture[] = [
@@ -954,6 +1073,8 @@ export const CORPUS: CorpusFixture[] = [
   F21, F22, F23, F24, F25,
   // v2.2
   F26, F27, F28, F29, F30,
+  // v2.4
+  F31, F32, F33, F34, F35,
 ];
 
 /** Résumé par catégorie */

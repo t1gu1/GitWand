@@ -49,12 +49,14 @@ export type Confidence = "certain" | "high" | "medium" | "low";
  * - `fileFrequency`      : v1.4 — pénalité si le fichier a déjà des hunks complexes (0–100)
  * - `baseAvailability`   : v1.4 — bonus si la base diff3/zdiff3 est disponible (0 ou 100)
  *
- * Formule v1.4 :
+ * Formule v2.4 :
  *   `score = typeClassification
  *           − dataRisk        × 0.40
  *           − scopeImpact     × 0.15
  *           − fileFrequency   × 0.10
- *           + baseAvailability × 0.05`
+ *           + baseAvailability × 0.05
+ *           − algorithmStability × 0.10
+ *           − postMergeRisk   × 0.20`
  *
  * Label dérivé :
  * - score ≥ 92 → `"certain"`
@@ -99,6 +101,13 @@ export interface ConfidenceScore {
      * pour la rétro-compat stricte.
      */
     algorithmStability?: number;
+    /**
+     * v2.4 — Risque post-merge détecté par validation parse-tree (tree-sitter).
+     * 0 = parse tree valide, 100 = erreurs de syntaxe détectées après résolution.
+     * Optionnel — uniquement set quand la validation parse-tree est exécutée et échoue.
+     * Lorsque non nul, la résolution est rétractée (hunk remis en marqueurs de conflit).
+     */
+    postMergeRisk?: number;
   };
   /** Facteurs ayant augmenté le score (justifications de haute confiance) */
   boosters: string[];
@@ -226,6 +235,18 @@ export interface HunkResolution {
 // ─── Phase 7.2 — Validation post-merge ───────────────────
 
 /**
+ * v2.4 — Résultat d'une validation externe (tsc --noEmit / eslint).
+ */
+export interface ExternalValidationResult {
+  /** Outil de validation utilisé */
+  tool: "tsc" | "eslint";
+  /** Messages d'erreur remontés par l'outil */
+  errors: string[];
+  /** `true` si aucune erreur remontée */
+  passed: boolean;
+}
+
+/**
  * Résultat de la validation du contenu fusionné.
  * Détecte les problèmes résiduels après résolution.
  */
@@ -234,10 +255,32 @@ export interface ValidationResult {
   hasResidualMarkers: boolean;
   /** Marqueurs trouvés (exemples, pas la liste exhaustive) */
   residualMarkerLines: number[];
-  /** Erreur de syntaxe pour les fichiers structurés (JSON) — null si valide ou non applicable */
+  /** Erreur de syntaxe pour les fichiers structurés (JSON/YAML/TOML) — null si valide ou non applicable */
   syntaxError: string | null;
   /** Le contenu fusionné est-il valide ? */
   isValid: boolean;
+  /**
+   * v2.4 — Résultat de la validation parse-tree via tree-sitter.
+   * - `true`  : l'arbre syntaxique ne contient aucun nœud d'erreur
+   * - `false` : des erreurs syntaxiques ont été détectées → rétraction activée
+   * - `null`  : non évalué (sync, langage non supporté, ou web-tree-sitter absent)
+   */
+  parseTreeValid?: boolean | null;
+  /**
+   * v2.4 — Nombre de nœuds ERROR dans l'arbre syntaxique (0 si aucun ou non évalué).
+   */
+  parseTreeErrors?: number;
+  /**
+   * v2.4 — Positions des nœuds ERROR dans le contenu fusionné.
+   * Vide si aucune erreur ou si la validation parse-tree n'a pas été exécutée.
+   */
+  parseTreeErrorRanges?: Array<{ start: number; end: number }>;
+  /**
+   * v2.4 — Résultat de la validation stricte (tsc --noEmit / eslint).
+   * `null` si la validation stricte n'a pas été activée.
+   * Opt-in via `.gitwandrc` `validation.level: "strict"`.
+   */
+  externalValidation?: ExternalValidationResult | null;
 }
 
 /** Résultat complet de l'analyse et résolution d'un fichier */
@@ -306,6 +349,18 @@ export interface GitWandOptions {
    * Exemple : `["src/**\/*.generated.ts", "*.pb.go", "api/openapi-client/**"]`.
    */
   generatedFiles?: string[];
+  /**
+   * v2.4 — Niveau de validation post-merge.
+   * - `"balanced"` (défaut) : marqueurs résiduels + syntaxe JSON/YAML/TOML + parse-tree tree-sitter (async)
+   * - `"strict"` : + tsc --noEmit et/ou eslint (opt-in, Node.js uniquement)
+   * - `"off"` : désactive toute validation post-merge
+   */
+  validationLevel?: import("./config.js").ValidationLevel;
+  /**
+   * v2.4 — Outils externes utilisés en mode `validationLevel: "strict"`.
+   * Défaut : `["tsc"]`. Ignoré si `validationLevel !== "strict"`.
+   */
+  validationTools?: Array<"tsc" | "eslint">;
   /**
    * v2.2 — Désactive globalement les FormatProfile.
    *

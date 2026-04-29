@@ -37,18 +37,19 @@ export function labelFromScore(score: number): Confidence {
 /**
  * Construit un ConfidenceScore à partir des dimensions et des justifications.
  *
- * Formule v2.1 :
+ * Formule v2.4 :
  *   `score = typeClassification
  *           − dataRisk           × 0.40
  *           − scopeImpact        × 0.15
  *           − fileFrequency      × 0.10
  *           + baseAvailability   × 0.05
- *           − algorithmStability × 0.10`
+ *           − algorithmStability × 0.10
+ *           − postMergeRisk      × 0.20`
  *
- * Tous les paramètres après `penalties` sont optionnels (défaut 0). Quand un
- * pattern n'set pas `algorithmStability`, son score est numériquement
- * identique à v1.4 — la dimension est *présente dans le type* mais reste à 0
- * tant que les producteurs (block-move detection en v2.6) ne l'alimentent pas.
+ * Tous les paramètres après `penalties` sont optionnels (défaut 0). Les
+ * dimensions optionnelles (`algorithmStability`, `postMergeRisk`) ne sont
+ * poussées dans l'objet `dimensions` que lorsqu'elles sont non-nulles, pour
+ * que les snapshots de tests existants restent verts.
  */
 export function makeScore(
   typeClassification: number,
@@ -59,6 +60,7 @@ export function makeScore(
   fileFrequency = 0,
   baseAvailability = 0,
   algorithmStability = 0,
+  postMergeRisk = 0,
 ): ConfidenceScore {
   const raw =
     typeClassification
@@ -66,12 +68,9 @@ export function makeScore(
     - si                  * 0.15
     - fileFrequency       * 0.10
     + baseAvailability    * 0.05
-    - algorithmStability  * 0.10;
+    - algorithmStability  * 0.10
+    - postMergeRisk       * 0.20;
   const score = Math.round(Math.max(0, Math.min(100, raw)));
-  // On ne pousse `algorithmStability` dans `dimensions` que s'il est non-zéro,
-  // pour que les snapshots de tests existants (qui asserent l'objet exact)
-  // restent verts. Les nouveaux consommateurs peuvent toujours le lire (le
-  // type le marque optionnel).
   const dimensions: ConfidenceScore["dimensions"] = {
     typeClassification,
     dataRisk,
@@ -81,6 +80,9 @@ export function makeScore(
   };
   if (algorithmStability !== 0) {
     dimensions.algorithmStability = algorithmStability;
+  }
+  if (postMergeRisk !== 0) {
+    dimensions.postMergeRisk = postMergeRisk;
   }
   return {
     score,

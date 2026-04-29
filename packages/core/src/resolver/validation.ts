@@ -96,7 +96,18 @@ export function validateMergedContent(content: string, filePath: string): Valida
 
   const isValid = !hasResidualMarkers && syntaxError === null;
 
-  return { hasResidualMarkers, residualMarkerLines, syntaxError, isValid };
+  // parseTreeValid est null ici car validateMergedContent est synchrone.
+  // La validation parse-tree (tree-sitter, async) est effectuée séparément
+  // dans resolveAsync() via checkParseTreeValid().
+  return {
+    hasResidualMarkers,
+    residualMarkerLines,
+    syntaxError,
+    isValid,
+    parseTreeValid: null,
+    parseTreeErrors: 0,
+    parseTreeErrorRanges: [],
+  };
 }
 
 /** Validation vide (pour les cas où le contenu n'est pas encore fusionné). */
@@ -105,4 +116,7 @@ export const EMPTY_VALIDATION: ValidationResult = {
   residualMarkerLines: [],
   syntaxError: null,
   isValid: true,
+  parseTreeValid: null,
+  parseTreeErrors: 0,
+  parseTreeErrorRanges: [],
 };

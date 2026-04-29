@@ -36,6 +36,19 @@
  * Ou dans `package.json` sous la clé `"gitwand"`.
  */
 
+// ─── ValidationLevel ──────────────────────────────────────
+
+/**
+ * Niveau de validation post-merge.
+ *
+ * | Niveau      | Ce qui est vérifié                                                        |
+ * |-------------|---------------------------------------------------------------------------|
+ * | `balanced`  | Marqueurs résiduels + syntaxe JSON/YAML/TOML + parse-tree tree-sitter     |
+ * | `strict`    | Balanced + `tsc --noEmit` et/ou `eslint` (Node.js uniquement, opt-in)    |
+ * | `off`       | Aucune validation post-merge (performances max, risque accru)             |
+ */
+export type ValidationLevel = "balanced" | "strict" | "off";
+
 // ─── MergePolicy ─────────────────────────────────────────
 
 /**
@@ -213,6 +226,21 @@ export interface GitWandrcConfig {
    * S'ajoutent aux built-ins (lockfiles, bundles, `dist/`…) sans les remplacer.
    */
   generatedFiles?: string[];
+  /**
+   * v2.4 — Validation post-merge.
+   * - `level: "balanced"` (défaut) : marqueurs résiduels + syntaxe + parse-tree
+   * - `level: "strict"` : + tsc --noEmit et/ou eslint (Node.js uniquement, opt-in)
+   * - `level: "off"` : désactive toute validation post-merge
+   *
+   * ```json
+   * { "validation": { "level": "strict", "tools": ["tsc", "eslint"] } }
+   * ```
+   */
+  validation?: {
+    level?: ValidationLevel;
+    /** Outils externes activés en mode strict. Défaut : ["tsc"]. */
+    tools?: Array<"tsc" | "eslint">;
+  };
 }
 
 /**
@@ -260,6 +288,27 @@ export function parseGitwandrc(json: string): GitWandrcConfig | null {
       );
       if (generatedFiles.length > 0) {
         result.generatedFiles = generatedFiles;
+      }
+    }
+
+    // v2.4 — Validation post-merge.
+    if (parsed.validation && typeof parsed.validation === "object") {
+      const validLevels: ValidationLevel[] = ["balanced", "strict", "off"];
+      const validTools = ["tsc", "eslint"] as const;
+      const val: GitWandrcConfig["validation"] = {};
+
+      if (validLevels.includes(parsed.validation.level)) {
+        val.level = parsed.validation.level as ValidationLevel;
+      }
+      if (Array.isArray(parsed.validation.tools)) {
+        const tools = parsed.validation.tools.filter(
+          (t: unknown): t is "tsc" | "eslint" =>
+            typeof t === "string" && (validTools as readonly string[]).includes(t),
+        );
+        if (tools.length > 0) val.tools = tools;
+      }
+      if (Object.keys(val).length > 0) {
+        result.validation = val;
       }
     }
 

@@ -35,6 +35,9 @@ export const DEFAULT_OPTIONS: Required<GitWandOptions> = {
   generatedFiles: [],
   // v2.2 — profils de format actifs par défaut
   disableFormatProfiles: false,
+  // v2.4 — validation post-merge
+  validationLevel: "balanced",
+  validationTools: ["tsc"],
 };
 
 /** Ordre de confiance pour comparaison. */
