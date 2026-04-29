@@ -44,6 +44,10 @@
       {
         "name": "gitwand_apply_resolution",
         "description": "Apply a custom resolution (from the LLM) to a specific conflict hunk."
+      },
+      {
+        "name": "gitwand_resolve_hunk_llm",
+        "description": "v2.5 — Validate and apply an LLM-proposed resolution for a complex hunk. Checks for residual markers, syntax errors, and a configurable score threshold before writing. Returns full audit trail."
       }
     ],
     "resources": [

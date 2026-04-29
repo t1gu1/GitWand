@@ -241,6 +241,35 @@ export interface GitWandrcConfig {
     /** Outils externes activés en mode strict. Défaut : ["tsc"]. */
     tools?: Array<"tsc" | "eslint">;
   };
+  /**
+   * v2.5 — Configuration du fallback LLM (sans le champ `endpoint`, injecté programmatiquement).
+   *
+   * Le champ `endpoint` de `LlmFallbackConfig` ne peut pas être sérialisé dans un fichier JSON.
+   * Il doit être injecté via `GitWandOptions.llmFallback.endpoint` dans le code consommateur.
+   *
+   * ```jsonc
+   * {
+   *   "llmFallback": {
+   *     "enabled": false,
+   *     "model": "claude-sonnet-4-6",
+   *     "maxTokens": 4000,
+   *     "temperature": 0.0,
+   *     "contextLines": 50,
+   *     "minPostMergeScore": 80,
+   *     "minMode": "strict"
+   *   }
+   * }
+   * ```
+   */
+  llmFallback?: {
+    enabled?: boolean;
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    contextLines?: number;
+    minPostMergeScore?: number;
+    minMode?: ValidationLevel;
+  };
 }
 
 /**
@@ -292,8 +321,8 @@ export function parseGitwandrc(json: string): GitWandrcConfig | null {
     }
 
     // v2.4 — Validation post-merge.
+    const validLevels: ValidationLevel[] = ["balanced", "strict", "off"];
     if (parsed.validation && typeof parsed.validation === "object") {
-      const validLevels: ValidationLevel[] = ["balanced", "strict", "off"];
       const validTools = ["tsc", "eslint"] as const;
       const val: GitWandrcConfig["validation"] = {};
 
@@ -309,6 +338,30 @@ export function parseGitwandrc(json: string): GitWandrcConfig | null {
       }
       if (Object.keys(val).length > 0) {
         result.validation = val;
+      }
+    }
+
+    // v2.5 — LLM fallback config (sans endpoint, injecté programmatiquement).
+    if (parsed.llmFallback && typeof parsed.llmFallback === "object") {
+      const llm = parsed.llmFallback;
+      const fallback: NonNullable<GitWandrcConfig["llmFallback"]> = {};
+
+      if (typeof llm.enabled === "boolean") fallback.enabled = llm.enabled;
+      if (typeof llm.model === "string" && llm.model.length > 0) fallback.model = llm.model;
+      if (typeof llm.maxTokens === "number" && llm.maxTokens > 0) fallback.maxTokens = llm.maxTokens;
+      if (typeof llm.temperature === "number" && llm.temperature >= 0 && llm.temperature <= 2) {
+        fallback.temperature = llm.temperature;
+      }
+      if (typeof llm.contextLines === "number" && llm.contextLines > 0) {
+        fallback.contextLines = llm.contextLines;
+      }
+      if (typeof llm.minPostMergeScore === "number" && llm.minPostMergeScore >= 0 && llm.minPostMergeScore <= 100) {
+        fallback.minPostMergeScore = llm.minPostMergeScore;
+      }
+      if (validLevels.includes(llm.minMode)) fallback.minMode = llm.minMode as ValidationLevel;
+
+      if (Object.keys(fallback).length > 0) {
+        result.llmFallback = fallback;
       }
     }
 

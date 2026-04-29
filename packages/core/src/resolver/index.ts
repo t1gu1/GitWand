@@ -45,6 +45,8 @@ import {
 } from "./policy.js";
 import { dispatchFormatAware } from "./format-dispatch.js";
 import { assembleResolution } from "./assemble.js";
+import { setLlmFallbackEnabled } from "../patterns/llm-proposed.js";
+import { runLlmFallbackPhase } from "./llm-pipeline.js";
 
 /**
  * Résout automatiquement un hunk de conflit.
@@ -268,11 +270,24 @@ export async function resolveAsync(
   }
 
   // ─── 2. Résolution hunk-par-hunk (synchrone) ─────────────────────────────
+  //   Si le LLM fallback est activé, on positionne le flag avant la classification
+  //   pour que `llmProposed.detect()` retourne true sur les hunks complex.
+  //   Le flag est réinitialisé immédiatement après `resolve()` — il ne doit pas
+  //   persister entre appels (module-level state, potentiellement partagé).
+  const llmEnabled = !!(options.llmFallback?.enabled && options.llmFallback?.endpoint);
+  if (llmEnabled) setLlmFallbackEnabled(true);
   const result = resolve(conflictedContent, filePath, userOptions);
+  if (llmEnabled) setLlmFallbackEnabled(false);
 
-  // Rien à valider si la résolution n'est pas complète
+  if (options.verbose && llmEnabled && result.resolutions.some((r) => !r.autoResolved && r.hunk.type === "llm_proposed")) {
+    console.error("[GitWand] LLM fallback activé — phase 5 en attente des hunks llm_proposed non résolus.");
+  }
+
+  // Rien à valider si la résolution n'est pas complète et pas de LLM fallback
   if (result.mergedContent === null) {
-    return result;
+    if (!llmEnabled) return result;
+    // Phase 5 — LLM fallback pour les hunks llm_proposed non résolus
+    return runLlmFallbackPhase(conflictedContent, result, filePath, options, structuralOpts);
   }
 
   // ─── 3. v2.4 — Validation parse-tree ─────────────────────────────────────

@@ -28,6 +28,7 @@ export type ConflictType =
   | "value_only_change"         // Même structure, seule une valeur change (hash, version, timestamp…)
   | "reorder_only"              // v1.4 — mêmes lignes, ordre différent (permutation pure)
   | "insertion_at_boundary"     // v1.4 — insertions pures des deux côtés, base intacte
+  | "llm_proposed"              // v2.5 — résolution proposée par LLM fallback (opt-in, priority 998)
   | "complex";                  // Conflit réel nécessitant intervention humaine
 
 /** Niveau de confiance discret (label seuil, utilisé dans les options) */
@@ -131,6 +132,108 @@ export interface TraceStep {
   reason: string;
 }
 
+// ─── v2.5 — LLM fallback ──────────────────────────────────
+
+/**
+ * v2.5 — Endpoint LLM injecté par le consommateur.
+ *
+ * `@gitwand/core` n'effectue jamais de requête HTTP directe.
+ * C'est le consommateur (CLI, desktop, extension) qui fournit
+ * cette interface et décide du transport (API, MCP, Ollama local…).
+ *
+ * Exemple d'implémentation dans le CLI :
+ * ```ts
+ * const endpoint: LlmEndpoint = {
+ *   async call(prompt) {
+ *     return myAnthropicClient.complete(prompt);
+ *   }
+ * };
+ * ```
+ */
+export interface LlmEndpoint {
+  /**
+   * Appelle le LLM avec un prompt structuré et retourne la réponse textuelle.
+   * @param prompt - Prompt complet (hunk sérialisé + contexte + instructions)
+   * @returns Résolution proposée par le LLM (texte brut, lignes de code)
+   */
+  call(prompt: string): Promise<string>;
+}
+
+/**
+ * v2.5 — Configuration du fallback LLM.
+ *
+ * Placée dans `GitWandOptions.llmFallback` ou parsée depuis `.gitwandrc`.
+ * Le champ `endpoint` est injecté programmatiquement (non sérialisable).
+ */
+export interface LlmFallbackConfig {
+  /**
+   * Active le fallback LLM pour les hunks complexes non résolus.
+   * Défaut : `false`. Doit être explicitement opté.
+   */
+  enabled: boolean;
+  /**
+   * Endpoint LLM injecté par le consommateur.
+   * Requis si `enabled: true` — sans lui, le fallback est silencieusement skippé.
+   * Non présent dans `.gitwandrc` (injecté programmatiquement).
+   */
+  endpoint?: LlmEndpoint;
+  /**
+   * Nom du modèle (hint informatif, passé à l'endpoint par le consommateur).
+   * Défaut : `"claude-sonnet-4-6"`.
+   */
+  model?: string;
+  /**
+   * Nombre maximum de tokens dans la réponse LLM.
+   * Défaut : `4000`.
+   */
+  maxTokens?: number;
+  /**
+   * Température pour l'appel LLM (0.0 = déterministe).
+   * Défaut : `0.0` — reproductibilité recommandée.
+   */
+  temperature?: number;
+  /**
+   * Nombre de lignes de contexte autour du hunk incluses dans le prompt.
+   * Défaut : `50`.
+   */
+  contextLines?: number;
+  /**
+   * Score de validation post-merge minimum (0–100) pour accepter la résolution LLM.
+   * Sous ce seuil, la résolution est refusée et le hunk reste `complex`.
+   * Défaut : `80`.
+   */
+  minPostMergeScore?: number;
+  /**
+   * Niveau de validation imposé pour les résolutions LLM.
+   * Recommandation forte : garder `"strict"` (tsc + eslint) pour limiter les hallucinations.
+   * Défaut : `"strict"`.
+   */
+  minMode?: import("./config.js").ValidationLevel;
+}
+
+/**
+ * v2.5 — Trace d'un appel LLM dans la DecisionTrace.
+ * Produite uniquement quand `llm_proposed` est le type sélectionné.
+ *
+ * Audit trail complet pour la traçabilité et la reproductibilité.
+ */
+export interface LlmTrace {
+  /** Horodatage ISO 8601 de l'appel LLM */
+  calledAt: string;
+  /** Modèle invoqué (tel que renvoyé par l'endpoint ou fourni dans la config) */
+  model: string;
+  /** Latence en millisecondes (temps entre envoi du prompt et réception de la réponse) */
+  latencyMs: number;
+  /** Hash SHA-256 du prompt (hex, pour audit de reproductibilité) */
+  promptHash: string;
+  /** Réponse brute tronquée (500 premiers caractères, pour debug sans exposer le code) */
+  rawResponseTruncated: string;
+  /** Score de validation post-merge obtenu (0–100) */
+  validationScore: number;
+  /** La résolution LLM a-t-elle été acceptée ? (`false` = fallback sur `complex`) */
+  accepted: boolean;
+}
+
 /**
  * Trace complète du raisonnement de classification d'un hunk.
  *
@@ -148,6 +251,11 @@ export interface DecisionTrace {
   summary: string;
   /** La base (diff3) était-elle disponible ? Conditionne les vérifications fines */
   hasBase: boolean;
+  /**
+   * v2.5 — Trace de l'appel LLM (uniquement si `selected === "llm_proposed"`).
+   * `undefined` pour tous les autres types de conflit.
+   */
+  llmTrace?: LlmTrace;
 }
 
 // ─── Phase v1.4 — Pattern Registry ──────────────────────────
@@ -373,4 +481,24 @@ export interface GitWandOptions {
    * Défaut: `false` (profils actifs).
    */
   disableFormatProfiles?: boolean;
+  /**
+   * v2.5 — Configuration du fallback LLM pour les hunks `complex` non résolus.
+   *
+   * Désactivé par défaut (`enabled: false`). Pour activer, fournir également
+   * un `endpoint` qui implémente `LlmEndpoint.call(prompt)`.
+   *
+   * N'a d'effet qu'avec `resolveAsync()` — `resolve()` synchrone ignore cette option
+   * (avec un warning si `verbose: true`).
+   *
+   * ```ts
+   * await resolveAsync(content, filePath, {
+   *   llmFallback: {
+   *     enabled: true,
+   *     endpoint: { call: async (p) => myLlmClient.complete(p) },
+   *     minPostMergeScore: 80,
+   *   }
+   * });
+   * ```
+   */
+  llmFallback?: LlmFallbackConfig;
 }

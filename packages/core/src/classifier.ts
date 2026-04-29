@@ -20,6 +20,7 @@ import whitespaceOnly      from "./patterns/whitespace-only.js";
 import reorderOnly              from "./patterns/reorder-only.js";
 import insertionAtBoundary      from "./patterns/insertion-at-boundary.js";
 import valueOnlyChange          from "./patterns/value-only-change.js";
+import llmProposed         from "./patterns/llm-proposed.js";  // v2.5 — priority 998
 import complex             from "./patterns/complex.js";
 
 // ─── Registre ────────────────────────────────────────────────
@@ -38,6 +39,7 @@ const PATTERNS: PatternPlugin[] = [
   reorderOnly,          // priority 55  ← v1.4
   insertionAtBoundary,  // priority 57  ← v1.4
   valueOnlyChange,      // priority 60
+  llmProposed,          // priority 998 ← v2.5 (OFF par défaut, activé par resolveAsync)
   complex,              // priority 999 (fallback — detect() always true)
 ];
 
@@ -105,6 +107,7 @@ function buildSummary(type: ConflictType, h: ClassifyInput): string {
     case "reorder_only":         return "Mêmes lignes, ordre différent — résolution : accepter l'ordre theirs.";
     case "insertion_at_boundary": return "Insertions pures des deux côtés — résolution par union.";
     case "value_only_change":    return "Même structure, valeur(s) volatile(s) différente(s) — résolution : accepter theirs.";
+    case "llm_proposed":         return "LLM fallback activé — résolution déléguée à l'endpoint LLM configuré.";
     case "complex":              return "Conflit complexe — toutes les heuristiques automatiques ont échoué.";
     default:                     return `Type détecté : ${type}.`;
   }

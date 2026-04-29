@@ -38,6 +38,8 @@ export const DEFAULT_OPTIONS: Required<GitWandOptions> = {
   // v2.4 — validation post-merge
   validationLevel: "balanced",
   validationTools: ["tsc"],
+  // v2.5 — LLM fallback (désactivé par défaut)
+  llmFallback: { enabled: false },
 };
 
 /** Ordre de confiance pour comparaison. */

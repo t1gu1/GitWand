@@ -1062,6 +1062,276 @@ const F35: CorpusFixture = {
   expectedResolved: true,
 };
 
+// ─── v2.5 — Fixtures LLM fallback candidates ────────────────
+//
+// Ces fixtures documentent les conflits que le LLM fallback est censé
+// améliorer. Sans LLM activé, ils restent tous "complex" et non résolus.
+// Les tests async dans llm-proposed.test.ts valident la résolution avec mock.
+
+const F36: CorpusFixture = {
+  id: "F36",
+  description: "v2.5 — complex : signature de fonction refactorisée des deux côtés (TS, diff3)",
+  filePath: "src/api/handler.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `export async function handleRequest(ctx: RequestContext, opts?: HandlerOptions): Promise<Response> {`,
+    `||||||| base`,
+    `export function handleRequest(ctx: Context): Response {`,
+    `=======`,
+    `export async function handleRequest(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F37: CorpusFixture = {
+  id: "F37",
+  description: "v2.5 — complex : bloc try/catch réorganisé différemment des deux côtés (TS, diff3)",
+  filePath: "src/utils/fetch.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `  try {`,
+    `    const data = await fetchWithRetry(url, { retries: 3 });`,
+    `    return data.json();`,
+    `  } catch (err) {`,
+    `    logger.error("fetch failed", { url, err });`,
+    `    throw new FetchError(url, err);`,
+    `  }`,
+    `||||||| base`,
+    `  try {`,
+    `    return await fetch(url).then(r => r.json());`,
+    `  } catch (err) {`,
+    `    throw err;`,
+    `  }`,
+    `=======`,
+    `  const res = await fetch(url, { signal: AbortSignal.timeout(5000) });`,
+    `  if (!res.ok) throw new HttpError(res.status, url);`,
+    `  return res.json();`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F38: CorpusFixture = {
+  id: "F38",
+  description: "v2.5 — complex : interface TS — les deux côtés modifient le même champ existant (diff3)",
+  filePath: "src/types/config.ts",
+  category: "complex",
+  // Les deux côtés changent le type de "host" — modification incompatible, pas une insertion pure
+  input: [
+    `<<<<<<< ours`,
+    `export interface Config {`,
+    `  host: URL;`,
+    `  port: number;`,
+    `}`,
+    `||||||| base`,
+    `export interface Config {`,
+    `  host: string;`,
+    `  port: number;`,
+    `}`,
+    `=======`,
+    `export interface Config {`,
+    `  host: string | URL;`,
+    `  port: number;`,
+    `}`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F39: CorpusFixture = {
+  id: "F39",
+  description: "v2.5 — complex : switch/case enrichi des deux côtés (TS, diff3)",
+  filePath: "src/reducers/app.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `    case "SET_USER":`,
+    `      return { ...state, user: action.payload, isAuthenticated: true };`,
+    `    case "CLEAR_USER":`,
+    `      return { ...state, user: null, isAuthenticated: false };`,
+    `||||||| base`,
+    `    case "SET_USER":`,
+    `      return { ...state, user: action.payload };`,
+    `=======`,
+    `    case "SET_USER":`,
+    `      return { ...state, user: action.payload, lastLogin: Date.now() };`,
+    `    case "UPDATE_USER":`,
+    `      return { ...state, user: { ...state.user, ...action.payload } };`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F40: CorpusFixture = {
+  id: "F40",
+  description: "v2.5 — complex : SQL query refactorisée (diff2, schema change)",
+  filePath: "src/db/queries.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `  const rows = await db.query(`,
+    `    "SELECT id, email, role FROM users WHERE active = true AND created_at > $1",`,
+    `    [sinceDate]`,
+    `  );`,
+    `=======`,
+    `  const rows = await db.query(`,
+    `    "SELECT u.id, u.email, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.is_active = 1",`,
+    `  );`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F41: CorpusFixture = {
+  id: "F41",
+  description: "v2.5 — complex : configuration Vite/rollup divergente (diff3)",
+  filePath: "vite.config.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `  build: {`,
+    `    target: "es2022",`,
+    `    outDir: "dist",`,
+    `    sourcemap: true,`,
+    `    minify: "esbuild",`,
+    `  },`,
+    `||||||| base`,
+    `  build: {`,
+    `    target: "es2020",`,
+    `    outDir: "dist",`,
+    `  },`,
+    `=======`,
+    `  build: {`,
+    `    target: "esnext",`,
+    `    outDir: "public/build",`,
+    `    sourcemap: false,`,
+    `    rollupOptions: { external: ["fs", "path"] },`,
+    `  },`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F42: CorpusFixture = {
+  id: "F42",
+  description: "v2.5 — complex : test Vitest restructuré des deux côtés (diff3)",
+  filePath: "src/__tests__/auth.test.ts",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `  it("rejects expired tokens", async () => {`,
+    `    const token = createToken({ exp: Date.now() - 1000 });`,
+    `    await expect(verifyToken(token)).rejects.toThrow(TokenExpiredError);`,
+    `  });`,
+    `||||||| base`,
+    `  it("rejects invalid tokens", async () => {`,
+    `    await expect(verifyToken("bad")).rejects.toThrow();`,
+    `  });`,
+    `=======`,
+    `  it("rejects expired tokens", async () => {`,
+    `    vi.setSystemTime(new Date("2020-01-01"));`,
+    `    const token = await signToken({ sub: "user1" }, { expiresIn: "1s" });`,
+    `    vi.setSystemTime(new Date("2020-01-02"));`,
+    `    await expect(verifyToken(token)).rejects.toThrow("TokenExpired");`,
+    `  });`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F43: CorpusFixture = {
+  id: "F43",
+  description: "v2.5 — complex : Rust match arm enrichi (diff3)",
+  filePath: "src-tauri/src/commands.rs",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `        GitOperation::Merge => merge_branch(&repo, &args.branch, MergeStrategy::Ours)?,`,
+    `        GitOperation::Rebase => rebase_onto(&repo, &args.branch)?,`,
+    `||||||| base`,
+    `        GitOperation::Merge => merge_branch(&repo, &args.branch)?,`,
+    `=======`,
+    `        GitOperation::Merge => merge_branch(&repo, &args.branch, MergeStrategy::Recursive)?,`,
+    `        GitOperation::CherryPick => cherry_pick(&repo, &args.commit_sha)?,`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F44: CorpusFixture = {
+  id: "F44",
+  description: "v2.5 — complex : CSS media query conflictuelle (diff2)",
+  filePath: "src/styles/responsive.css",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `@media (max-width: 768px) {`,
+    `  .container { padding: 0 16px; max-width: 100%; }`,
+    `  .sidebar { display: none; }`,
+    `  .main { grid-column: 1 / -1; }`,
+    `}`,
+    `=======`,
+    `@media (max-width: 640px) {`,
+    `  .container { padding: 0 12px; }`,
+    `  .nav { flex-direction: column; }`,
+    `}`,
+    `@media (max-width: 768px) {`,
+    `  .sidebar { position: fixed; transform: translateX(-100%); }`,
+    `}`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
+const F45: CorpusFixture = {
+  id: "F45",
+  description: "v2.5 — complex : Python class method overriding (diff3)",
+  filePath: "src/models/user.py",
+  category: "complex",
+  input: [
+    `<<<<<<< ours`,
+    `    def validate(self, data: dict) -> ValidationResult:`,
+    `        errors = []`,
+    `        if not data.get("email"):`,
+    `            errors.append(ValidationError("email", "required"))`,
+    `        if len(data.get("password", "")) < 12:`,
+    `            errors.append(ValidationError("password", "min_length:12"))`,
+    `        return ValidationResult(errors)`,
+    `||||||| base`,
+    `    def validate(self, data: dict) -> bool:`,
+    `        return bool(data.get("email") and data.get("password"))`,
+    `=======`,
+    `    def validate(self, data: dict) -> ValidationResult:`,
+    `        schema = UserSchema()`,
+    `        return schema.validate(data)`,
+    `>>>>>>> theirs`,
+  ].join("\n"),
+  expectedType: "complex",
+  expectedResolved: false,
+  expectedOutput: null,
+};
+
 // ─── Export ─────────────────────────────────────────────────
 
 export const CORPUS: CorpusFixture[] = [
@@ -1075,6 +1345,9 @@ export const CORPUS: CorpusFixture[] = [
   F26, F27, F28, F29, F30,
   // v2.4
   F31, F32, F33, F34, F35,
+  // v2.5 — LLM fallback candidates (complex sans LLM, résolus avec LLM mocké)
+  F36, F37, F38, F39, F40,
+  F41, F42, F43, F44, F45,
 ];
 
 /** Résumé par catégorie */

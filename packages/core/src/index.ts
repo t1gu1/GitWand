@@ -112,7 +112,16 @@ export type {
   TraceStep,
   // Phase 7.2
   ValidationResult,
+  ExternalValidationResult,
+  // v2.5 — LLM fallback
+  LlmEndpoint,
+  LlmFallbackConfig,
+  LlmTrace,
 } from "./types.js";
+
+// v2.5 — LLM fallback resolver (consommateurs souhaitant invoquer directement)
+export { tryLlmFallbackResolve } from "./resolvers/llm-fallback.js";
+export type { LlmResolveResult } from "./resolvers/llm-fallback.js";
 
 export type { JsonMergeResult } from "./resolvers/json.js";
 export type { MarkdownMergeResult, MarkdownSection } from "./resolvers/markdown.js";
