@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useI18n } from "../composables/useI18n";
 import BaseModal from "./BaseModal.vue";
 
@@ -9,6 +9,22 @@ const props = defineProps<{
   /** The branch that was just merged — offered for deletion as a cleanup step. */
   mergedBranch?: string;
 }>();
+
+/** Branches that must never be offered for deletion after a merge. */
+const PROTECTED_BRANCHES = new Set([
+  "master", "main", "develop", "dev", "trunk", "release", "production", "prod",
+]);
+
+/**
+ * Returns true if the merged branch is a protected branch (main line branches
+ * like master / main / develop). We never offer to delete these after a merge.
+ */
+const isProtectedBranch = computed(() => {
+  if (!props.mergedBranch) return false;
+  // Strip remote prefix (e.g. "origin/main" → "main")
+  const local = props.mergedBranch.replace(/^[^/]+\//, "");
+  return PROTECTED_BRANCHES.has(local.toLowerCase());
+});
 
 const emit = defineEmits<{
   close: [];
@@ -51,8 +67,8 @@ async function handleDeleteBranch() {
       <p class="msm-desc">{{ t('merge.successDesc') }}</p>
     </div>
 
-    <!-- Branch cleanup offer -->
-    <div v-if="mergedBranch" class="msm-cleanup">
+    <!-- Branch cleanup offer — hidden for protected branches (master, main, develop…) -->
+    <div v-if="mergedBranch && !isProtectedBranch" class="msm-cleanup">
       <label class="msm-cleanup-label">
         <input type="checkbox" v-model="alsoDeleteRemote" class="msm-cleanup-check" />
         <span>{{ t('merge.deleteAlsoRemote') }}</span>

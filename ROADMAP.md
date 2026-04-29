@@ -372,6 +372,12 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 ---
 
+## Quick Fixes
+
+- **Ne pas proposer de supprimer `master`/`main` après un merge** — La suggestion de suppression de branche dans `MergeSuccessModal` ne doit apparaître que si la branche mergée n'est pas une branche protégée. Filtrer au moins `master`, `main`, `develop` (et leurs équivalents remote). La suppression ne doit être proposée que pour les branches de type PR/feature, jamais pour les branches principales.
+
+---
+
 ## Next — v2.0.0 — Distribution & polish
 
 Fondations cross-platform et quick wins UI avant d'attaquer les grosses features.
