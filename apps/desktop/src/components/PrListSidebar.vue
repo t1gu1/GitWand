@@ -142,12 +142,28 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
       @click="panel.success.value = null"
     >{{ panel.success.value }}</div>
 
+    <!-- Identity loading/error banner (only shown when a user filter is active) -->
+    <div
+      v-if="panel.filterMode.value !== 'all' && !panel.currentUser.value"
+      class="pls-identity-banner"
+    >
+      <template v-if="panel.currentUserLoading.value">
+        <div class="pls-spinner pls-spinner--sm" aria-hidden="true"></div>
+        <span>{{ t('pr.list.identityLoading') }}</span>
+      </template>
+      <template v-else-if="panel.currentUserError.value">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>{{ t('pr.list.identityError') }}</span>
+        <button class="pls-identity-retry" @click="panel.loadCurrentUser()">{{ t('pr.list.identityRetry') }}</button>
+      </template>
+    </div>
+
     <!-- List -->
     <div v-if="panel.loading.value" class="pls-placeholder">
       <div class="pls-spinner" aria-hidden="true"></div>
       <span>{{ t('pr.list.loading') }}</span>
     </div>
-    <div v-else-if="panel.displayedPrs.value.length === 0" class="pls-placeholder">
+    <div v-else-if="panel.displayedPrs.value.length === 0 && (panel.filterMode.value === 'all' || panel.currentUser.value)" class="pls-placeholder">
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.4" aria-hidden="true">
         <circle cx="18" cy="18" r="3" />
         <circle cx="6" cy="6" r="3" />
@@ -348,6 +364,41 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   background: var(--color-bg-secondary);
   color: var(--color-accent);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* ─── Identity banner ────────────────────────────────────── */
+.pls-identity-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-5) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  flex-shrink: 0;
+}
+.pls-spinner--sm {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+  flex-shrink: 0;
+}
+.pls-identity-retry {
+  margin-left: auto;
+  padding: 1px 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pls-identity-retry:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-subtle);
 }
 
 /* ─── New PR button ──────────────────────────────────────── */

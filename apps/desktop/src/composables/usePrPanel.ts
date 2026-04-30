@@ -59,6 +59,8 @@ export function usePrPanel(cwd: Ref<string>) {
   /** 'all' = no user filter | 'assigned' = assignees | 'reviews' = review_requested */
   const filterMode = ref<'all' | 'assigned' | 'reviews'>('all');
   const currentUser = ref<string | null>(null);
+  const currentUserLoading = ref(false);
+  const currentUserError = ref<string | null>(null);
 
   // Create PR form
   const showCreateForm = ref(false);
@@ -138,13 +140,18 @@ export function usePrPanel(cwd: Ref<string>) {
   const displayedPrs = computed<PullRequest[]>(() => {
     if (filterMode.value === 'all') return prs.value;
     const me = currentUser.value;
-    // currentUser not yet resolved — keep showing all PRs rather than an empty list
-    if (!me) return prs.value;
+    // Identity not yet resolved — return empty so the loading/error state is visible
+    if (!me) return [];
+    const meLower = me.toLowerCase();
     if (filterMode.value === 'assigned') {
-      return prs.value.filter((pr) => pr.assignees.includes(me));
+      return prs.value.filter((pr) =>
+        pr.assignees.some((a) => a.toLowerCase() === meLower),
+      );
     }
     // reviews: requested reviewer
-    return prs.value.filter((pr) => pr.reviewRequested.includes(me));
+    return prs.value.filter((pr) =>
+      pr.reviewRequested.some((r) => r.toLowerCase() === meLower),
+    );
   });
 
   // ─── Parse unified diff ─────────────────────────────────
@@ -501,16 +508,33 @@ export function usePrPanel(cwd: Ref<string>) {
   }
 
   // ─── Init ───────────────────────────────────────────────
+  async function loadCurrentUser() {
+    if (currentUserLoading.value) return;
+    currentUserLoading.value = true;
+    currentUserError.value = null;
+    try {
+      const login = await ghCurrentUser();
+      currentUser.value = login;
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      currentUserError.value = msg;
+      console.error('[usePrPanel] ghCurrentUser failed:', msg);
+    } finally {
+      currentUserLoading.value = false;
+    }
+  }
+
   async function init() {
     await loadRemote();
     await loadPrs();
-    // Load current user in background for "assigned to me" filter
-    ghCurrentUser().then((login) => { currentUser.value = login; }).catch(() => {});
+    // Load current user in background for "assigned / reviews" filter
+    loadCurrentUser();
   }
 
   return {
     // State
-    remote, prs, loading, error, success, filterState, filterMode, currentUser,
+    remote, prs, loading, error, success, filterState, filterMode,
+    currentUser, currentUserLoading, currentUserError,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, prDiffFiles, prComments, prReviews,
@@ -521,7 +545,7 @@ export function usePrPanel(cwd: Ref<string>) {
     // Computed
     commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
     // Actions
-    init, loadRemote, loadPrs, selectPr, loadDiff,
+    init, loadRemote, loadPrs, loadCurrentUser, selectPr, loadDiff,
     createPr, checkoutPr, mergePr,
     handleCreateComment, handleReplyComment, handleEditComment,
     handleDeleteComment, handleApplySuggestion, handleAddToReview, handleSubmitReview,
