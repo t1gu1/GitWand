@@ -3015,7 +3015,7 @@ fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
             "pr", "list",
             "--state", st,
             "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests",
-            "--limit", "50",
+            "--limit", "300",
         ])
         .current_dir(&cwd)
         .output()

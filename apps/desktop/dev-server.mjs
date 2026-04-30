@@ -1832,12 +1832,18 @@ const server = createServer(async (req, res) => {
         if (!token) return jsonResponse(req, res, { error: "No GitHub token found. Run: gh auth login" }, 401);
         const nwo = getRepoNwo(resolve(cwd));
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo from git remote origin" }, 400);
-        const resp = await githubFetch(`/repos/${nwo}/pulls?state=${state}&per_page=50`, token);
-        if (!resp.ok) {
-          const text = await resp.text();
-          return jsonResponse(req, res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
+        // Paginate up to 300 PRs (3 pages × 100)
+        let raw = [];
+        for (let page = 1; page <= 3; page++) {
+          const resp = await githubFetch(`/repos/${nwo}/pulls?state=${state}&per_page=100&page=${page}`, token);
+          if (!resp.ok) {
+            const text = await resp.text();
+            return jsonResponse(req, res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
+          }
+          const page_data = await resp.json();
+          raw = raw.concat(page_data);
+          if (page_data.length < 100) break; // last page
         }
-        const raw = await resp.json();
         const prs = raw.map((pr) => ({
           number: pr.number,
           title: pr.title,
