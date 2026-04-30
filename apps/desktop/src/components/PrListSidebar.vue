@@ -317,7 +317,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
 /* ─── User filter row (All / Assigned / Reviews) ─── */
 .pls-user-filter {
   display: grid;
-  grid-template-columns: auto 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   padding: 2px;
   background: var(--color-bg-tertiary);
