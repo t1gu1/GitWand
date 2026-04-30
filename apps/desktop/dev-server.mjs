@@ -3225,6 +3225,34 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // GET /api/git-unpushed-tags?cwd=<path>&remote=<remote>
+    if (url.pathname === "/api/git-unpushed-tags" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const remote = url.searchParams.get("remote") || "origin";
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      try {
+        const repoCwd = resolve(cwd);
+        // local tags
+        const localR = spawnSync(GIT, ["tag", "-l"], { cwd: repoCwd, encoding: "utf-8" });
+        const localTags = new Set(
+          (localR.stdout || "").split("\n").map(s => s.trim()).filter(Boolean)
+        );
+        if (localTags.size === 0) return jsonResponse(req, res, []);
+        // remote tags
+        const remoteR = spawnSync(GIT, ["ls-remote", "--tags", "--refs", remote], { cwd: repoCwd, encoding: "utf-8" });
+        const remoteTags = new Set(
+          (remoteR.stdout || "")
+            .split("\n")
+            .map(l => { const p = l.split("\t")[1]; return p ? p.replace("refs/tags/", "").trim() : ""; })
+            .filter(Boolean)
+        );
+        const unpushed = [...localTags].filter(t => !remoteTags.has(t)).sort();
+        return jsonResponse(req, res, unpushed);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // POST /api/git-delete-tag  { cwd, name }
     if (url.pathname === "/api/git-delete-tag" && req.method === "POST") {
       const { cwd, name } = await readBody(req);

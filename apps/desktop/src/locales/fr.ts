@@ -115,6 +115,7 @@ const fr: Locale = {
     tooltipClean: "\u00c0 jour \u2014 cliquer pour fetch",
     forkBadgeTooltip: "Commits en avance sur votre fork ({0}) — poussez pour synchroniser",
     tooltipDiverged: "Divergence \u2014 choisir la strat\u00e9gie d\u2019int\u00e9gration",
+    tooltipOffline: "Pas de connexion réseau",
   },
 
   // ─── Branch menu (header dropdown) ─────────────────────
@@ -847,6 +848,10 @@ const fr: Locale = {
     tabGit: "Git",
     tabEditor: "\u00c9diteur",
     tabAi: "IA",
+    tabLogs: "Journaux",
+    logsTitle: "Journal d'activité",
+    logsEmpty: "Aucune erreur enregistrée.",
+    logsClear: "Effacer",
     aiEnable: "Activer les suggestions IA",
     aiEnableHint: "Propose des r\u00e9solutions intelligentes pour les conflits complexes (confiance < 60%)",
     aiPrivacyNote: "L'IA analyse le contexte du conflit (base/ours/theirs, messages de commit, nom de fichier) pour proposer une r\u00e9solution. Votre code n'est envoy\u00e9 qu'au provider s\u00e9lectionn\u00e9. Aucune suggestion n'est appliqu\u00e9e automatiquement.",
@@ -1308,6 +1313,23 @@ const fr: Locale = {
       q5: "Comment signaler un bug ?",
       a5: "Utilisez Aide → Signaler un problème pour ouvrir un formulaire GitHub pré-rempli, ou rendez-vous sur github.com/devlint/GitWand/issues.",
     },
+  },
+  push: {
+    tagsConfirm: {
+      title: "Tags non poussés détectés",
+      desc: "{0} tag(s) local/aux n'ont pas encore été poussés.",
+      withTags: "Pousser avec les tags",
+      withoutTags: "Pousser sans les tags",
+      more: "de plus…",
+    },
+  },
+  error: {
+    viewLogs: "Voir les journaux",
+    hasErrors: "Des erreurs se sont produites — cliquez pour voir",
+  },
+  offline: {
+    label: "Hors ligne",
+    tooltip: "Pas de connexion réseau — les opérations distantes sont désactivées",
   },
 };
 

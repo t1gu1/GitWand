@@ -122,6 +122,7 @@ const ptBR: Locale = {
     tooltipClean: "Atualizado \u2014 clique para fetch",
     forkBadgeTooltip: "Commits à frente do seu fork ({0}) — push para sincronizar",
     tooltipDiverged: "Divergência \u2014 escolha como integrar",
+    tooltipOffline: "Sem conexão de rede",
   },
 
   // ─── Branch menu (header dropdown) ─────────────────────
@@ -837,6 +838,10 @@ const ptBR: Locale = {
     tabGit: "Git",
     tabEditor: "Editor",
     tabAi: "IA",
+    tabLogs: "Registros",
+    logsTitle: "Registro de atividade",
+    logsEmpty: "Nenhum erro registrado.",
+    logsClear: "Limpar",
     aiEnable: "Ativar sugestões de IA",
     aiEnableHint: "Propõe resoluções inteligentes para conflitos complexos (confiança < 60%)",
     aiPrivacyNote: "A IA analisa o contexto do conflito (base/ours/theirs, mensagens de commit, nome do arquivo) para propor uma resolução. Seu código é enviado apenas ao provedor selecionado. Nenhuma sugestão é aplicada automaticamente.",
@@ -1296,6 +1301,23 @@ const ptBR: Locale = {
       q5: "Como reporto um bug?",
       a5: "Use Ajuda → Relatar um problema ou acesse github.com/devlint/GitWand/issues.",
     },
+  },
+  push: {
+    tagsConfirm: {
+      title: "Tags não enviadas detectadas",
+      desc: "{0} tag(s) local/ais ainda não foram enviadas ao remoto.",
+      withTags: "Enviar com tags",
+      withoutTags: "Enviar sem tags",
+      more: "mais…",
+    },
+  },
+  error: {
+    viewLogs: "Ver registros",
+    hasErrors: "Ocorreram erros — clique para ver",
+  },
+  offline: {
+    label: "Offline",
+    tooltip: "Sem conexão de rede — as operações remotas estão desativadas",
   },
 };
 

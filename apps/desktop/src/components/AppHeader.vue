@@ -70,6 +70,8 @@ const props = defineProps<{
   isPulling: boolean;
   /** Whether a fetch is in flight (drives the sync-split spinner). */
   isFetching?: boolean;
+  /** True when the device has no network connectivity. */
+  isOffline?: boolean;
   // Branch popover
   branches: GitBranch[];
   branchesLoading: boolean;
@@ -80,6 +82,8 @@ const props = defineProps<{
   // Tabs (repo strip)
   tabs: RepoTab[];
   activeTabId: number | null;
+  /** Number of accumulated errors; drives the badge on the settings button. */
+  errorCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -359,6 +363,14 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       <!-- Right cluster: sync action, branch menu, search, theme, settings -->
       <div class="header-right">
         <template v-if="hasRepo">
+          <!-- Offline indicator pill -->
+          <div v-if="isOffline" class="offline-pill" :title="t('offline.tooltip')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 2l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M9.5 4.5A6 6 0 0114 10M4.1 6.5A6 6 0 003 10M6.5 9.5A2 2 0 019.5 12M8 14v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('offline.label') }}</span>
+          </div>
           <SyncSplitButton
             :ahead-count="aheadCount"
             :behind-count="behindCount"
@@ -370,6 +382,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :is-fetching="isFetching ?? false"
             :can-push="canPush"
             :can-pull="canPull"
+            :is-offline="isOffline"
             @push="emit('push')"
             @pull="emit('pull')"
             @sync="emit('sync')"
@@ -509,19 +522,22 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         </button>
 
         <!-- Settings -->
-        <button
-          class="btn btn--icon"
-          :aria-label="t('settings.title')"
-          :title="t('settings.title')"
-          @click="emit('openSettings')"
-        >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-            <circle cx="5.5" cy="4" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
-            <circle cx="10.5" cy="8" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
-            <circle cx="7" cy="12" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
-          </svg>
-        </button>
+        <div class="settings-btn-wrap">
+          <button
+            class="btn btn--icon"
+            :aria-label="t('settings.title')"
+            :title="t('settings.title')"
+            @click="emit('openSettings')"
+          >
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+              <circle cx="5.5" cy="4" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
+              <circle cx="10.5" cy="8" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
+              <circle cx="7" cy="12" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
+            </svg>
+          </button>
+          <span v-if="(props.errorCount ?? 0) > 0" class="settings-error-dot" :title="t('error.hasErrors')" />
+        </div>
       </div>
     </div>
   </header>
@@ -905,5 +921,39 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   text-align: center;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+/* ─── Settings error dot ─────────────────────────────── */
+.settings-btn-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.settings-error-dot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-danger, #f38ba8);
+  border: 1.5px solid var(--color-bg-secondary);
+  pointer-events: none;
+}
+
+/* ─── Offline pill ───────────────────────────────────── */
+.offline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  user-select: none;
 }
 </style>

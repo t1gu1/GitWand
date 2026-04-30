@@ -45,6 +45,7 @@ import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
+import { useNetworkStatus } from "./composables/useNetworkStatus";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
 import {
@@ -53,11 +54,12 @@ import {
   UNDO_POPOVER_REQUEST_KEY,
   LOG_FOCUS_SEARCH_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo } from "./utils/backend";
+import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
+const { isOffline } = useNetworkStatus();
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate } from "./utils/backend";
 import type { UpdateInfo } from "./utils/backend";
 import UpdateModal from "./components/UpdateModal.vue";
@@ -266,6 +268,7 @@ let errorTimer: ReturnType<typeof setTimeout> | null = null;
 watch(repoError, (val) => {
   if (errorTimer) { clearTimeout(errorTimer); errorTimer = null; }
   if (val) {
+    pushErrorLog(val);
     errorTimer = setTimeout(() => { repoError.value = null; }, 3000);
   }
 });
@@ -791,7 +794,7 @@ const paletteActions = computed<PaletteAction[]>(() => {
  */
 function onPaletteAction(id: string) {
   switch (id) {
-    case "push": doPush(); break;
+    case "push": handlePush(); break;
     case "pull": doPull(pullMode.value === "rebase"); break;
     case "sync": doSync(); break;
     case "fetch": doFetch(); break;
@@ -821,6 +824,36 @@ function onPaletteSelectCommit(hash: string) {
 
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
+const settingsInitialTab = ref<"general" | "git" | "editor" | "ai" | "logs" | undefined>(undefined);
+
+// ─── Error log (persisted, feeds SettingsPanel Logs tab) ─
+const LOG_KEY = "gitwand-error-log";
+const MAX_LOG = 200;
+
+interface ErrorLogEntry { ts: number; msg: string; }
+
+function loadErrorLog(): ErrorLogEntry[] {
+  try {
+    const raw = localStorage.getItem(LOG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+function saveErrorLog(log: ErrorLogEntry[]) {
+  try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch { /* ignore */ }
+}
+
+const errorLog = ref<ErrorLogEntry[]>(loadErrorLog());
+
+function pushErrorLog(msg: string) {
+  errorLog.value = [{ ts: Date.now(), msg }, ...errorLog.value].slice(0, MAX_LOG);
+  saveErrorLog(errorLog.value);
+}
+
+function clearErrorLog() {
+  errorLog.value = [];
+  saveErrorLog([]);
+}
 
 // ─── Help panel ─────────────────────────────────────────
 const showHelp = ref(false);
@@ -869,6 +902,52 @@ const pendingWorktreeBranch = ref<string | undefined>(undefined);
 
 // ─── Submodule panel ─────────────────────────────────────
 const showSubmodules = ref(false);
+
+// ─── Push + tags confirmation modal ─────────────────────
+const pushTagsConfirm = ref(false);
+const pendingUnpushedTags = ref<string[]>([]);
+
+/**
+ * Intercepts the normal push flow:
+ * 1. Checks for unpushed local tags.
+ * 2. If any exist, shows a confirmation modal instead of pushing immediately.
+ * 3. Otherwise falls through to the regular push.
+ */
+async function handlePush() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    const remoteInfo = await gitRemoteInfo(cwd).catch(() => null);
+    const remote = remoteInfo?.name || "origin";
+    const unpushed = await gitUnpushedTags(cwd, remote).catch(() => [] as string[]);
+    if (unpushed.length > 0) {
+      pendingUnpushedTags.value = unpushed;
+      pushTagsConfirm.value = true;
+      return;
+    }
+  } catch { /* best-effort — fall through to normal push */ }
+  await doPush();
+}
+
+async function confirmPushWithTags() {
+  const cwd = repoFolderPath.value;
+  pushTagsConfirm.value = false;
+  await doPush();
+  if (cwd) {
+    const remoteInfo = await gitRemoteInfo(cwd).catch(() => null);
+    const remote = remoteInfo?.name || "origin";
+    await gitPushTags(cwd, remote, "all").catch((err: any) => {
+      repoError.value = `push tags: ${err?.message ?? err}`;
+    });
+  }
+  pendingUnpushedTags.value = [];
+}
+
+async function confirmPushWithoutTags() {
+  pushTagsConfirm.value = false;
+  pendingUnpushedTags.value = [];
+  await doPush();
+}
 
 // ─── Stash-and-switch modal (Phase 1.3.3) ──────────────
 const pendingSwitchBranch = ref<string | null>(null);
@@ -1264,7 +1343,7 @@ onUnmounted(() => {
       @open-clone="showCloneModal = true"
       @open-fork="showForkModal = true"
       @toggle-theme="toggleTheme"
-      @push="doPush"
+      @push="handlePush"
       @pull="() => doPull(pullMode === 'rebase')"
       @fetch="doFetch"
       @sync="doSync"
@@ -1272,7 +1351,9 @@ onUnmounted(() => {
       @rebase-onto-remote="doRebaseOntoRemote"
       @merge-remote="doMergeRemote"
       @merge-branch="doMerge"
-      @open-settings="showSettings = true"
+      @open-settings="settingsInitialTab = undefined; showSettings = true"
+      :error-count="errorLog.length"
+      :is-offline="isOffline"
       @switch-branch="handleSwitchBranch"
       @create-branch="createBranch"
       @delete-branch="deleteBranch"
@@ -1358,19 +1439,24 @@ onUnmounted(() => {
           </div>
 
           <template v-else>
-          <div v-if="repoError" class="error-banner" role="alert">
-            <svg class="error-icon" width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <circle cx="9" cy="9" r="8" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M9 5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="9" cy="12" r="1" fill="currentColor"/>
-            </svg>
-            <span class="error-text">{{ repoError }}</span>
-            <button class="error-close" @click="repoError = null" :aria-label="t('common.close')">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-                <path d="M3.646 3.646a.5.5 0 01.708 0L7 6.293l2.646-2.647a.5.5 0 01.708.708L7.707 7l2.647 2.646a.5.5 0 01-.708.708L7 7.707l-2.646 2.647a.5.5 0 01-.708-.708L6.293 7 3.646 4.354a.5.5 0 010-.708z"/>
+          <Transition name="error-toast">
+            <div v-if="repoError" class="error-toast" role="alert">
+              <svg class="error-toast-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M7 4v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <circle cx="7" cy="9.5" r="0.75" fill="currentColor"/>
               </svg>
-            </button>
-          </div>
+              <span class="error-toast-text">{{ repoError }}</span>
+              <button class="error-toast-logs" @click="settingsInitialTab = 'logs'; showSettings = true" :title="t('error.viewLogs')">
+                {{ t('error.viewLogs') }}
+              </button>
+              <button class="error-toast-close" @click="repoError = null" :aria-label="t('common.close')">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                  <path d="M2.646 2.646a.5.5 0 01.708 0L6 5.293l2.646-2.647a.5.5 0 01.708.708L6.707 6l2.647 2.646a.5.5 0 01-.708.708L6 6.707 3.354 9.354a.5.5 0 01-.708-.708L5.293 6 2.646 3.354a.5.5 0 010-.708z"/>
+                </svg>
+              </button>
+            </div>
+          </Transition>
 
           <!-- Conflict banner (merge or cherry-pick) -->
           <div v-if="hasConflicts" class="conflict-banner" role="alert">
@@ -1401,7 +1487,7 @@ onUnmounted(() => {
             :behind="behindCount"
             :needs-publish="needsPublish"
             @change-view="onViewModeChange"
-            @push="doPush"
+            @push="handlePush"
             @sync="() => doPull(pullMode === 'rebase')"
           />
 
@@ -1612,6 +1698,42 @@ onUnmounted(() => {
       @open-tab="(path) => { openTab(path); showSubmodules = false; }"
     />
 
+    <!-- Push + unpushed tags confirmation modal -->
+    <BaseModal
+      v-if="pushTagsConfirm"
+      :title="t('push.tagsConfirm.title')"
+      size="sm"
+      role="alertdialog"
+      @close="pushTagsConfirm = false"
+    >
+      <template #title-icon>
+        <div class="ptc-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </div>
+      </template>
+
+      <p class="ptc-desc">{{ t('push.tagsConfirm.desc', pendingUnpushedTags.length) }}</p>
+      <ul class="ptc-tag-list">
+        <li v-for="tag in pendingUnpushedTags.slice(0, 8)" :key="tag" class="ptc-tag">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 2h6l6 6-6 6-6-6V2z"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+          {{ tag }}
+        </li>
+        <li v-if="pendingUnpushedTags.length > 8" class="ptc-tag ptc-tag--more">
+          +{{ pendingUnpushedTags.length - 8 }} {{ t('push.tagsConfirm.more') }}
+        </li>
+      </ul>
+
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="pushTagsConfirm = false">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--ghost" @click="confirmPushWithoutTags">{{ t('push.tagsConfirm.withoutTags') }}</button>
+        <button class="bm-btn bm-btn--primary" @click="confirmPushWithTags">{{ t('push.tagsConfirm.withTags') }}</button>
+      </template>
+    </BaseModal>
+
     <!-- Stash-and-switch modal (asks for a stash label before switching branches) -->
     <div v-if="pendingSwitchBranch" class="switch-stash-overlay overlay-backdrop" @click.self="cancelSwitchStash">
       <div class="switch-stash-modal" role="dialog" aria-modal="true">
@@ -1666,12 +1788,15 @@ onUnmounted(() => {
     <!-- Settings panel -->
     <SettingsPanel
       v-if="showSettings"
+      :error-log="errorLog"
+      :initial-tab="settingsInitialTab"
       @close="onSettingsClose"
       @update:commit-signature="onCommitSignatureChange"
       @update:diff-mode="onDiffModeChange"
       @update:pull-mode="onPullModeChange"
       @update:font-size="onFontSizeChange"
       @update:tab-size="onTabSizeChange"
+      @clear-logs="clearErrorLog"
     />
 
     <!-- Command palette (Cmd/Ctrl+K) — teleports to body, so position
@@ -1894,49 +2019,70 @@ onUnmounted(() => {
   color: var(--color-text-muted);
 }
 
-.error-banner {
+.error-toast {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: var(--color-danger-bg);
-  border-left: 3px solid var(--color-danger);
-  color: var(--color-danger);
-  font-size: 13px;
-  font-weight: 500;
-  flex-shrink: 0;
-  animation: slideDown 0.25s ease-out;
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-100%); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.error-icon {
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-danger-bg, rgba(243,139,168,.12));
+  border-bottom: 1px solid var(--color-danger, #f38ba8);
+  color: var(--color-danger, #f38ba8);
+  font-size: var(--font-size-sm);
   flex-shrink: 0;
 }
 
-.error-text {
+.error-toast-icon {
+  flex-shrink: 0;
+}
+
+.error-toast-text {
   flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.error-close {
+.error-toast-logs {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--color-danger, #f38ba8);
+  font-size: var(--font-size-sm);
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.8;
+}
+.error-toast-logs:hover { opacity: 1; }
+
+.error-toast-close {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--radius-xs);
   background: none;
-  color: var(--color-danger);
+  border: none;
+  color: var(--color-danger, #f38ba8);
   opacity: 0.6;
-  transition: opacity var(--transition-fast), background var(--transition-fast);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
 }
-.error-close:hover {
-  opacity: 1;
-  background: var(--color-danger-bg);
+.error-toast-close:hover { opacity: 1; }
+
+/* slide-down enter/leave for Transition */
+.error-toast-enter-active,
+.error-toast-leave-active {
+  transition: max-height 0.2s ease, opacity 0.2s ease;
+  max-height: 60px;
+  overflow: hidden;
+}
+.error-toast-enter-from,
+.error-toast-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* ─── Merge conflict banner ──────────────────────────── */
@@ -2070,6 +2216,53 @@ onUnmounted(() => {
   z-index: 45;
   padding: 24px;
   /* backdrop tint + blur come from the global .overlay-backdrop class */
+}
+
+/* ─── Push-tags confirmation modal ──────────────────────── */
+.ptc-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.ptc-desc {
+  margin: 0 0 var(--space-4);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  line-height: var(--line-height-snug);
+}
+
+.ptc-tag-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.ptc-tag {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.ptc-tag--more {
+  font-family: inherit;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
 }
 
 .switch-stash-modal {

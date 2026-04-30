@@ -2594,6 +2594,49 @@ fn git_push_tags(cwd: String, remote: String, mode: String, tag_name: Option<Str
     Ok(())
 }
 
+
+/// Returns local tag names that are not present on the given remote.
+/// Uses `git tag -l` vs `git ls-remote --tags --refs <remote>`.
+#[tauri::command]
+fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<String>, String> {
+    use std::collections::HashSet;
+
+    // Local tags
+    let local_out = std::process::Command::new(git_binary())
+        .args(["tag", "-l"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git tag: {}", e))?;
+    let local_tags: HashSet<String> = String::from_utf8_lossy(&local_out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if local_tags.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Remote tags (git ls-remote --tags --refs <remote>)
+    let remote_out = std::process::Command::new(git_binary())
+        .args(["ls-remote", "--tags", "--refs", &remote])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git ls-remote: {}", e))?;
+    let remote_tags: HashSet<String> = String::from_utf8_lossy(&remote_out.stdout)
+        .lines()
+        .filter_map(|l| {
+            let r = l.split('\t').nth(1)?;
+            Some(r.trim_start_matches("refs/tags/").trim().to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut unpushed: Vec<String> = local_tags.difference(&remote_tags).cloned().collect();
+    unpushed.sort();
+    Ok(unpushed)
+}
+
 /// Delete a tag on a remote (git push <remote> --delete <tag>).
 #[tauri::command]
 fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
@@ -5079,6 +5122,7 @@ pub fn run() {
             git_list_tags,
             git_delete_tag,
             git_push_tags,
+            git_unpushed_tags,
             git_delete_remote_tag,
             git_clone,
             gh_fork,

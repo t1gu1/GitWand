@@ -21,6 +21,18 @@ export type SwitchBehavior = "stash" | "ask" | "refuse";
 import type { AIProvider } from "../composables/useAIProvider";
 export type { AIProvider };
 
+export interface ErrorLogEntry {
+  ts: number;
+  msg: string;
+}
+
+const props = defineProps<{
+  /** Accumulated error log passed down from App.vue */
+  errorLog?: ErrorLogEntry[];
+  /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
+  initialTab?: "general" | "git" | "editor" | "ai" | "logs";
+}>();
+
 const emit = defineEmits<{
   close: [];
   "update:commitSignature": [enabled: boolean];
@@ -28,6 +40,7 @@ const emit = defineEmits<{
   "update:pullMode": [mode: PullMode];
   "update:fontSize": [size: number];
   "update:tabSize": [size: number];
+  clearLogs: [];
 }>();
 
 // ─── Settings state (persisted in localStorage) ────────
@@ -107,14 +120,15 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "git" | "editor" | "ai";
-const activeSettingsTab = ref<SettingsTab>("general");
+type SettingsTab = "general" | "git" | "editor" | "ai" | "logs";
+const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "general", icon: "general" },
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
   { id: "ai", icon: "ai" },
+  { id: "logs", icon: "logs" },
 ];
 
 // ─── Language ──────────────────────────────────────────
@@ -433,7 +447,15 @@ onMounted(() => {
           <svg v-else-if="tab.icon === 'ai'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
           </svg>
-          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : t('settings.tabAi') }}</span>
+          <!-- Logs icon -->
+          <svg v-else-if="tab.icon === 'logs'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
+          </svg>
+          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : t('settings.tabLogs') }}</span>
+          <!-- Error count badge on Logs tab -->
+          <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-tab-badge">
+            {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
+          </span>
         </button>
       </div>
     </template>
@@ -1000,6 +1022,23 @@ onMounted(() => {
           </template>
         </template>
 
+        <!-- ═══ LOGS ═══ -->
+        <template v-if="activeSettingsTab === 'logs'">
+          <div class="sp-logs-header">
+            <h3 class="sp-section-title">{{ t('settings.logsTitle') }}</h3>
+            <button v-if="(props.errorLog?.length ?? 0) > 0" class="bm-btn bm-btn--ghost" @click="emit('clearLogs')">
+              {{ t('settings.logsClear') }}
+            </button>
+          </div>
+          <div v-if="!props.errorLog?.length" class="sp-logs-empty">{{ t('settings.logsEmpty') }}</div>
+          <ul v-else class="sp-logs-list">
+            <li v-for="entry in [...(props.errorLog ?? [])].reverse()" :key="entry.ts" class="sp-log-entry">
+              <span class="sp-log-time">{{ new Date(entry.ts).toLocaleTimeString() }}</span>
+              <span class="sp-log-msg">{{ entry.msg }}</span>
+            </li>
+          </ul>
+        </template>
+
     </div>
   </BaseModal>
 </template>
@@ -1395,4 +1434,67 @@ onMounted(() => {
 .sp-disconnect-btn:hover {
   background: rgba(243, 139, 168, 0.15);
 }
+
+/* ─── Tab badge ────────────────────────────────────────── */
+.sp-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-error, #f38ba8);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+/* ─── Logs tab ─────────────────────────────────────────── */
+.sp-logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.sp-logs-empty {
+  padding: var(--space-8) 0;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.sp-logs-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sp-log-entry {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.sp-log-time {
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-log-msg {
+  color: var(--color-error, #f38ba8);
+  word-break: break-word;
+}
+
 </style>

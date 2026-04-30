@@ -26,6 +26,8 @@ const props = defineProps<{
   /** Fork / triangular workflow: push remote when it differs from upstream. */
   pushRemote?: string | null;
   aheadPushCount?: number;
+  /** True when the device has no network — disables all remote operations. */
+  isOffline?: boolean;
 }>();
 
 /** True when a fork setup is detected (push remote ≠ upstream). */
@@ -69,6 +71,7 @@ const isPrimaryActive = computed(() => action.value.state !== "clean");
 const isBusy = computed(() => props.isPushing || props.isPulling || props.isFetching);
 
 const primaryDisabled = computed(() => {
+  if (props.isOffline) return true;
   if (isBusy.value) return true;
   const a = action.value;
   if (a.state === "publish") return !props.canPush;
@@ -159,6 +162,7 @@ onUnmounted(() => {
 
 // Tooltip: varies by state.
 const primaryTitle = computed(() => {
+  if (props.isOffline) return t("syncAction.tooltipOffline");
   const a = action.value;
   if (a.state === "clean") return t("syncAction.tooltipClean");
   if (a.state === "diverged") return t("syncAction.tooltipDiverged");
@@ -268,7 +272,7 @@ const primaryTitle = computed(() => {
       type="button"
       class="btn btn--sync sync-split__chevron"
       :class="{ 'btn--sync-active': isPrimaryActive, 'sync-split__chevron--open': showDropdown }"
-      :disabled="isBusy"
+      :disabled="isBusy || isOffline"
       :aria-label="t('syncAction.fetch')"
       aria-haspopup="menu"
       :aria-expanded="showDropdown ? 'true' : 'false'"
@@ -286,6 +290,7 @@ const primaryTitle = computed(() => {
         type="button"
         role="menuitem"
         class="sync-split__menu-item"
+        :disabled="isOffline"
         @click="onDropdownItemClick(item.id)"
       >
         {{ t(item.labelKey as LocaleKey) }}

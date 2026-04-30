@@ -1405,6 +1405,16 @@ export async function gitListTags(cwd: string): Promise<GitTag[]> {
   return raw.map(t => ({ name: t.name, hash: t.hash, isAnnotated: t.is_annotated, date: t.date, message: t.message }));
 }
 
+/** Returns names of local tags that have not been pushed to the given remote. */
+export async function gitUnpushedTags(cwd: string, remote = "origin"): Promise<string[]> {
+  if (isTauri()) {
+    return tauriInvoke<string[]>("git_unpushed_tags", { cwd, remote });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-unpushed-tags?cwd=${encodeURIComponent(cwd)}&remote=${encodeURIComponent(remote)}`);
+  if (!res.ok) throw new Error(`git unpushed-tags failed: ${res.status}`);
+  return res.json();
+}
+
 export async function gitDeleteTag(cwd: string, name: string): Promise<void> {
   if (isTauri()) {
     await tauriInvoke("git_delete_tag", { cwd, name });

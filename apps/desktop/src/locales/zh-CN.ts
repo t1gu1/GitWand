@@ -126,6 +126,7 @@ const zhCN: Locale = {
     tooltipClean: "\u5df2\u662f\u6700\u65b0 \u2014 \u70b9\u51fb\u6293\u53d6",
     forkBadgeTooltip: "领先于您的 fork ({0}) 的提交 — push 以同步",
     tooltipDiverged: "\u5df2\u5206\u5c90 \u2014 \u8bf7\u9009\u62e9\u6574\u5408\u65b9\u5f0f",
+    tooltipOffline: "无网络连接",
   },
 
   // ─── Branch menu (header dropdown) ─────────────────────
@@ -825,6 +826,10 @@ const zhCN: Locale = {
     tabGit: "Git",
     tabEditor: "编辑器",
     tabAi: "AI",
+    tabLogs: "日志",
+    logsTitle: "活动日志",
+    logsEmpty: "没有记录错误。",
+    logsClear: "清空",
     aiEnable: "启用 AI 建议",
     aiEnableHint: "为复杂冲突（置信度 < 60%）提出智能解决方案",
     aiPrivacyNote: "AI 会分析冲突上下文（base/ours/theirs、提交信息、文件名）以提出解决方案。你的代码只会发送给你选择的服务商。任何建议都不会自动应用。",
@@ -1282,6 +1287,23 @@ const zhCN: Locale = {
       q5: "如何报告错误？",
       a5: "使用帮助 → 报告问题，或访问 github.com/devlint/GitWand/issues。",
     },
+  },
+  push: {
+    tagsConfirm: {
+      title: "检测到未推送的标签",
+      desc: "{0} 个本地标签尚未推送到远端。",
+      withTags: "连同标签一起推送",
+      withoutTags: "不推送标签",
+      more: "更多…",
+    },
+  },
+  error: {
+    viewLogs: "查看日志",
+    hasErrors: "发生了错误 — 点击查看",
+  },
+  offline: {
+    label: "离线",
+    tooltip: "无网络连接 — 远程操作已禁用",
   },
 };
 

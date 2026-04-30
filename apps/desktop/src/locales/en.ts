@@ -121,6 +121,7 @@ const en = {
     tooltipClean: "Up to date \u2014 click to fetch",
     forkBadgeTooltip: "Commits ahead of your fork ({0}) — push to sync your fork",
     tooltipDiverged: "Diverged \u2014 choose how to integrate",
+    tooltipOffline: "No network connection",
   },
 
   // ─── Branch menu (header dropdown) ─────────────────────
@@ -853,6 +854,10 @@ const en = {
     tabGit: "Git",
     tabEditor: "Editor",
     tabAi: "AI",
+    tabLogs: "Logs",
+    logsTitle: "Activity log",
+    logsEmpty: "No errors recorded.",
+    logsClear: "Clear",
     // AI tab (header block)
     aiEnable: "Enable AI suggestions",
     aiEnableHint: "Proposes smart resolutions for complex conflicts (confidence < 60%)",
@@ -1329,6 +1334,23 @@ const en = {
       q5: "How do I report a bug?",
       a5: "Use Help \u2192 Report an Issue to open a pre-filled GitHub issue form, or visit github.com/devlint/GitWand/issues.",
     },
+  },
+  push: {
+    tagsConfirm: {
+      title: "Unpushed tags detected",
+      desc: "{0} local tag(s) haven't been pushed to the remote.",
+      withTags: "Push with tags",
+      withoutTags: "Push without tags",
+      more: "more…",
+    },
+  },
+  error: {
+    viewLogs: "View logs",
+    hasErrors: "Errors occurred — click to view",
+  },
+  offline: {
+    label: "Offline",
+    tooltip: "No network connection — remote operations are disabled",
   },
 } as const;
 
