@@ -1852,6 +1852,8 @@ const server = createServer(async (req, res) => {
           additions: pr.additions ?? 0,
           deletions: pr.deletions ?? 0,
           labels: (pr.labels ?? []).map((l) => l.name),
+          assignees: (pr.assignees ?? []).map((a) => a.login).filter(Boolean),
+          review_requested: (pr.requested_reviewers ?? []).map((r) => r.login).filter(Boolean),
         }));
         return jsonResponse(req, res, prs);
       } catch (err) {

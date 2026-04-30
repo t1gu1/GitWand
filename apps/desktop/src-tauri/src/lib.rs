@@ -3002,6 +3002,8 @@ struct PullRequest {
     additions: i64,
     deletions: i64,
     labels: Vec<String>,
+    assignees: Vec<String>,
+    review_requested: Vec<String>,
 }
 
 /// List open pull requests using `gh` CLI.
@@ -3012,7 +3014,7 @@ fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
         .args([
             "pr", "list",
             "--state", st,
-            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels",
+            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests",
             "--limit", "50",
         ])
         .current_dir(&cwd)
@@ -3133,6 +3135,44 @@ fn parse_single_pr(json: &str) -> Result<PullRequest, String> {
         }
     }
 
+    // Parse assignees array [{login:"..."}]
+    let mut assignees = Vec::new();
+    if let Some(pos) = json.find("\"assignees\"") {
+        let rest = &json[pos..];
+        if let Some(arr_start) = rest.find('[') {
+            if let Some(arr_end) = rest[arr_start..].find(']') {
+                let arr = &rest[arr_start..arr_start + arr_end + 1];
+                let mut search = 0;
+                while let Some(lpos) = arr[search..].find("\"login\"") {
+                    let abs = search + lpos;
+                    if let Some(v) = extract_json_string(&arr[abs..], "login") {
+                        if !v.is_empty() { assignees.push(v); }
+                    }
+                    search = abs + 7;
+                }
+            }
+        }
+    }
+
+    // Parse reviewRequests array [{requestedReviewer:{login:"..."}}]
+    let mut review_requested = Vec::new();
+    if let Some(pos) = json.find("\"reviewRequests\"") {
+        let rest = &json[pos..];
+        if let Some(arr_start) = rest.find('[') {
+            if let Some(arr_end) = rest[arr_start..].find(']') {
+                let arr = &rest[arr_start..arr_start + arr_end + 1];
+                let mut search = 0;
+                while let Some(lpos) = arr[search..].find("\"login\"") {
+                    let abs = search + lpos;
+                    if let Some(v) = extract_json_string(&arr[abs..], "login") {
+                        if !v.is_empty() { review_requested.push(v); }
+                    }
+                    search = abs + 7;
+                }
+            }
+        }
+    }
+
     Ok(PullRequest {
         number: get_num("number"),
         title: get_str("title"),
@@ -3147,6 +3187,8 @@ fn parse_single_pr(json: &str) -> Result<PullRequest, String> {
         additions: get_num("additions"),
         deletions: get_num("deletions"),
         labels,
+        assignees,
+        review_requested,
     })
 }
 

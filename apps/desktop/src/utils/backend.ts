@@ -1734,6 +1734,10 @@ export interface PullRequest {
   additions: number;
   deletions: number;
   labels: string[];
+  /** Logins of users assigned to this PR. */
+  assignees: string[];
+  /** Logins of users requested as reviewers (pending review). */
+  reviewRequested: string[];
 }
 
 /**
@@ -1756,6 +1760,8 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
         additions: number;
         deletions: number;
         labels: string[];
+        assignees: string[];
+        review_requested: string[];
       }>
     >("gh_list_prs", { cwd, state });
     return raw.map((pr) => ({
@@ -1772,6 +1778,8 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
       additions: pr.additions,
       deletions: pr.deletions,
       labels: pr.labels,
+      assignees: pr.assignees ?? [],
+      reviewRequested: pr.review_requested ?? [],
     }));
   }
   // Browser dev mode — call dev server
@@ -1793,6 +1801,8 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
     additions: pr.additions,
     deletions: pr.deletions,
     labels: pr.labels,
+    assignees: pr.assignees ?? [],
+    reviewRequested: pr.review_requested ?? [],
   }));
 }
 
@@ -1837,6 +1847,8 @@ export async function ghCreatePr(
       additions: raw.additions,
       deletions: raw.deletions,
       labels: raw.labels,
+      assignees: [],
+      reviewRequested: [],
     };
   }
   // Browser dev mode — call dev server (uses GitHub REST API directly)
@@ -1863,6 +1875,8 @@ export async function ghCreatePr(
     additions: raw.additions,
     deletions: raw.deletions,
     labels: raw.labels,
+    assignees: [],
+    reviewRequested: [],
   };
 }
 

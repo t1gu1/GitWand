@@ -56,7 +56,8 @@ export function usePrPanel(cwd: Ref<string>) {
   const error = ref<string | null>(null);
   const success = ref<string | null>(null);
   const filterState = ref<"open" | "closed" | "all">("open");
-  const filterMine = ref(false);
+  /** 'all' = no user filter | 'assigned' = assignees | 'reviews' = review_requested */
+  const filterMode = ref<'all' | 'assigned' | 'reviews'>('all');
   const currentUser = ref<string | null>(null);
 
   // Create PR form
@@ -135,8 +136,13 @@ export function usePrPanel(cwd: Ref<string>) {
   );
 
   const displayedPrs = computed<PullRequest[]>(() => {
-    if (!filterMine.value || !currentUser.value) return prs.value;
-    return prs.value.filter((pr) => pr.author === currentUser.value);
+    const me = currentUser.value;
+    if (!me || filterMode.value === 'all') return prs.value;
+    if (filterMode.value === 'assigned') {
+      return prs.value.filter((pr) => pr.assignees.includes(me));
+    }
+    // reviews: requested reviewer
+    return prs.value.filter((pr) => pr.reviewRequested.includes(me));
   });
 
   // ─── Parse unified diff ─────────────────────────────────
@@ -499,7 +505,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   return {
     // State
-    remote, prs, loading, error, success, filterState, filterMine, currentUser,
+    remote, prs, loading, error, success, filterState, filterMode, currentUser,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, prDiffFiles, prComments, prReviews,

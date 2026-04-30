@@ -324,6 +324,42 @@ function toggleMine() {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
+/* ─── User filter row (All / Assigned / Reviews) ─── */
+.pls-user-filter {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pls-uf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.pls-uf-btn:hover {
+  color: var(--color-text);
+}
+.pls-uf-btn--active {
+  background: var(--color-bg-secondary);
+  color: var(--color-accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
 /* ─── New PR button ──────────────────────────────────────── */
 .pls-new-btn {
   display: inline-flex;
