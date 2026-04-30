@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-05-01
+
+Desktop patch — PR filter pipeline fixed end-to-end, offline mode, error log tab, and several UX polish items that had accumulated post-v2.5.0.
+
+### Added
+
+- **PR filter — Assignées / Reviews** — new `filterMode` ref (`'all' | 'assigned' | 'reviews'`) replaces the old `filterMine` boolean. Three equal-width buttons in the PR sidebar let you switch between all PRs, those assigned to you, and those requesting your review. `displayedPrs` filters client-side on `pr.assignees` / `pr.reviewRequested` (case-insensitive comparison).
+- **PR filter — identity banner** — when a user filter is active but `currentUser` hasn't resolved yet, the sidebar shows a slim loading indicator; on failure it shows an error message with a **Retry** button. `currentUserLoading` and `currentUserError` are now exposed on the `PrPanelState` return object.
+- **Offline mode** — new `useNetworkStatus()` composable wires `window online/offline` events to an `isOffline` ref. `SyncSplitButton` disables all remote actions (push, pull, fetch, merge remote) and shows a tooltip when offline. `AppHeader` renders an "Offline" pill and passes `isOffline` down the tree.
+- **Error log tab in Settings** — blocking red error banner replaced by a non-blocking slim toast with a "View logs" link. A discrete red dot on the settings button signals unread errors. Settings gains a **Logs** tab with a timestamped, reversed-chronological list (max 200 entries) and a Clear button. `errorLog` is persisted to `localStorage`.
+
+### Fixed
+
+- **`ghCurrentUser()` dev-server URL** — fetch was calling `/api/gh-current-user` (hitting Vite on port 5173, which served `index.html`) instead of `${DEV_SERVER}/api/gh-current-user`. All other endpoints correctly used the `DEV_SERVER` prefix; this one was missed. Result: `currentUser` was always `null` in dev mode, so the Assignées/Reviews filters silently showed all PRs.
+- **`ghCurrentUser()` error swallowing** — `.catch(() => {})` replaced by `loadCurrentUser()` which logs to the console and sets `currentUserError`. `displayedPrs` now returns `[]` (not all PRs) when a user filter is active but identity isn't resolved, making failures visible rather than hiding them behind an unfiltered list.
+- **PR list limit** — `gh pr list` was capped at 50 results, silently dropping older PRs on busy repos. Raised to `--limit 300` in Rust. Dev-server paginates 3 × 100 via `per_page=100&page=N`, stopping early when the last page has fewer than 100 results.
+- **PR list reload on repo switch** — `watch(cwd)` in `usePrPanel` now calls `init()` after resetting state, so switching repos while the PR tab is open correctly reloads the PR list and re-resolves the current user for the new repo.
+- **User filter buttons equal width** — `grid-template-columns` fixed from `auto 1fr 1fr` to `repeat(3, 1fr)`.
+- **Locale keys alignment** — `filterMineTitle` / `emptyMine` (removed) and `identityLoading` / `identityError` / `identityRetry` (added) synced across all 5 locales (en, fr, es, pt-BR, zh-CN).
+
 ## [2.4.1] - 2026-04-29
 
 Implementation pass on the v2.4 entry of the [CORE-V2-ROADMAP](./CORE-V2-ROADMAP.md) — the resolver gains a parse-tree validation layer, a third validation tier (`off` / `balanced` / `strict`), and a `postMergeRisk` dimension on `ConfidenceScore` that retroactively demotes resolutions whose output doesn't parse. Plus an in-app Help Panel, agent-discovery surfaces on the marketing site, and a fix for the merge-success modal that was offering to delete `master` / `main` / `develop`.
