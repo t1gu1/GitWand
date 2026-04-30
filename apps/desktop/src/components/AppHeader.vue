@@ -298,6 +298,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         @new-tab="emit('newTab')"
         @open-clone="emit('openClone')"
         @open-fork="emit('openFork')"
+        @open-recent="(path) => emit('openRepo', path)"
       />
     </div>
 
@@ -882,7 +883,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   height: 26px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg-secondary); /* white in light (#fff) vs #f4f4f8 bg → contraste visible */
   color: var(--color-accent);
   cursor: pointer;
   opacity: 0;

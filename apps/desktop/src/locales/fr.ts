@@ -96,6 +96,8 @@ const fr: Locale = {
     tabStripOpenFolder: "Ouvrir un dossier",
     tabStripClone: "Cloner depuis une URL",
     tabStripFork: "Forker sur GitHub",
+    tabStripRecentSection: "Repos récents",
+    tabStripNoRecent: "Aucun dépôt récent",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -689,9 +691,11 @@ const fr: Locale = {
       filterClosed: "Fermées",
       filterAll: "Toutes",
       refresh: "Rafraîchir",
+      filterMineTitle: "Assignées à moi",
       newBtn: "+ Nouvelle PR",
       loading: "Chargement\u2026",
       empty: "Aucune PR trouvée.",
+      emptyMine: "Aucune PR qui vous est assignée.",
       stateOpen: "Open",
       stateMerged: "Merged",
       stateClosed: "Closed",
@@ -826,6 +830,13 @@ const fr: Locale = {
       suggestionCopied: "Suggestion copiée (lignes {0}\u2013{1})",
       commentAddedToReview: "Commentaire ajouté à la review ({0} en attente)",
       reviewSubmitted: "Review soumise ({0})",
+    },
+    error: {
+      noToken: "Authentification GitHub requise — lancez `gh auth login` dans votre terminal.",
+      noRemote: "Aucune remote GitHub — vérifiez que ce dépôt a une origin GitHub.",
+      ghNotInstalled: "GitHub CLI non installé — installez-le depuis cli.github.com.",
+      unknown: "Impossible de charger les pull requests.",
+      retry: "Réessayer",
     },
   },
 

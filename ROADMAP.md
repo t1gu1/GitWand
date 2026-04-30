@@ -522,9 +522,9 @@ Renuméroté pour faire de la place à la séquence core ci-dessus. Cadence rale
 
 ---
 
-### v2.7.0 — Workspaces + Hooks manager
+### v2.7.0 — Workspaces + Hooks manager + Worktree first-class
 
-Fondations multi-repo (prérequis pour le Launchpad) et pouvoir utilisateur avancé.
+Fondations multi-repo (prérequis pour le Launchpad), pouvoir utilisateur avancé, et worktrees élevés au rang de primitive workflow.
 
 **Workspaces multi-repo (local)**
 
@@ -542,17 +542,41 @@ Version locale du concept GitKraken Workspaces — sans cloud, sans compte, just
 - Partage cross-repo via `~/.gitconfig` (vs copie dans chaque `$GIT_DIR/hooks`)
 - Cohérent avec la philosophie "rendre visuel ce que le terminal cache"
 
+**Worktree first-class UI** _(Codexia-inspired — upgrade de v1.6.3)_
+
+Le manager worktree de v1.6.3 crée / liste / supprime. Ici on passe au paradigme "une tâche = un worktree" en faisant des worktrees une unité de navigation à part entière de l'app :
+
+- **Tab = worktree** : chaque worktree peut s'ouvrir dans un onglet GitWand indépendant (diff, log, staging) — pas de navigation back/forth ; coexistence visuelle immédiate
+- **Quick-create "New task"** : raccourci `⌘⇧N` → saisir un nom de tâche → crée un worktree + branche en un seul geste, l'ouvre dans un nouvel onglet
+- **Status cross-worktrees** : bandeau dans le workspace panel montrant tous les worktrees du repo courant — branche, ahead/behind, fichiers modifiés — d'un coup d'œil (prépare v2.8 Agent Sessions)
+- **Cleanup assisté** : détection des worktrees dont la branche a été mergée — proposition de suppression groupée depuis le manager
+- **Intégration workspace** : les worktrees d'un repo sont listés dans le workspace panel (v2.7 Workspaces ci-dessus) comme entités de premier niveau
+
 ---
 
-### v2.8.0 — Agent Sessions View
+### v2.8.0 — Agent Sessions View + Scheduled AI tasks
 
-Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel.
+Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel. Complété par une couche d'automatisation IA planifiée.
+
+**Agent Sessions View**
 
 - **Panel "Agents"** dans la sidebar : liste les sessions MCP actives (Claude Code, Cursor, Windsurf…) travaillant sur les worktrees du repo courant
 - Chaque carte : worktree associé, branche, statut (ahead/behind, uncommitted changes), outil agent détecté
-- **Intégration worktree** : ouvrir le worktree d'un agent en un clic dans un onglet GitWand — voir son diff en live
+- **Intégration worktree** : ouvrir le worktree d'un agent en un clic dans un onglet GitWand — voir son diff en live (s'appuie sur le status cross-worktrees de v2.7)
 - **Lancer une session** : raccourci pour démarrer Claude Code (`claude`) sur un worktree vierge depuis GitWand directement
 - Complète le MCP server existant : les agents voient GitWand, GitWand voit les agents
+
+**Scheduled AI tasks** _(Codexia-inspired)_
+
+Couche d'automatisation légère : des tâches IA récurrentes déclenchées par un événement Git ou une heure, sans intervention manuelle. Chaque tâche est opt-in, configurable par repo, journalisée dans l'onglet Logs (v2.5 Quick Fix).
+
+- **Tâches prédéfinies** :
+  - _Auto-resolve on merge/rebase_ : dès qu'un conflit est détecté, lancer `gitwand_resolve_conflicts` automatiquement, notifier les résultats en toast
+  - _Nightly pull + rebase_ : `git pull --rebase` à heure configurée sur les repos du workspace — résolution auto des triviaux, alerte si complexes
+  - _Release notes on tag_ : quand un tag `v*.*.*` est créé, générer et enregistrer les release notes dans un fichier (`CHANGELOG.md`) via `useReleaseNotes`
+  - _AI commit batch_ : pour un ensemble de fichiers staged en fin de journée, proposer un message de commit AI avant la fermeture de l'app
+- **Scheduler UI** dans Settings > Automatisations : liste des tâches, toggle, heure ou événement déclencheur, dernière exécution, journal compact
+- **Implémentation** : pas de daemon externe — utilise les lifecycle hooks Tauri (app focus/blur, window close) + un timer tick côté TS pour les tâches horaires. Les tâches réseau restent désactivées si `offline` (voir Quick Fix Mode hors-ligne)
 
 ---
 
@@ -568,14 +592,26 @@ _Dépend de v2.7.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-fi
 
 ---
 
-### v2.10.0 — Intégrations forge
+### v2.10.0 — Intégrations forge + MCP catalog
 
-Ouvre GitWand aux utilisateurs non-GitHub.
+Ouvre GitWand aux utilisateurs non-GitHub, et à l'écosystème MCP grandissant.
+
+**Forge integrations**
 
 - GitLab MRs : API REST/GraphQL native (lister, reviewer, merger)
 - Bitbucket PRs : Support Bitbucket Cloud
 - Multi-compte GitHub/GitLab (personnel + pro)
 - Draft PR convert depuis l'app
+
+**MCP catalog in-app** _(Codexia-inspired)_
+
+Rend l'écosystème MCP Registry directement navigable depuis GitWand — sans passer par un terminal ou une page web.
+
+- **Onglet "MCP" dans Settings** : liste des serveurs MCP disponibles sur le registry officiel (recherche, catégories, étoiles)
+- **One-click install** : ajouter un serveur MCP à la config Claude Code / Cursor / Windsurf depuis GitWand — génère ou met à jour le `.mcp.json` / `claude_desktop_config.json` cible
+- **Installed vs available** : différencie clairement ce qui est déjà configuré vs ce qui peut être ajouté ; badge "Official" pour les serveurs indexés sur le MCP Registry
+- **`@gitwand/mcp` en vedette** : la carte GitWand est épinglée en haut avec statut de connexion live, version, et raccourci "Reconfigurer"
+- **Implémentation** : appels à l'API publique du MCP Registry (même endpoint que `mcp-publisher`) via `fetch` côté Tauri — pas de serveur proxy intermédiaire
 
 ---
 

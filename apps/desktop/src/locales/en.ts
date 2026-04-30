@@ -102,6 +102,8 @@ const en = {
     tabStripOpenFolder: "Open folder",
     tabStripClone: "Clone from URL",
     tabStripFork: "Fork on GitHub",
+    tabStripRecentSection: "Recent repos",
+    tabStripNoRecent: "No recent repositories",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -694,9 +696,11 @@ const en = {
       filterClosed: "Closed",
       filterAll: "All",
       refresh: "Refresh",
+      filterMineTitle: "Assigned to me",
       newBtn: "+ New PR",
       loading: "Loading\u2026",
       empty: "No PR found.",
+      emptyMine: "No PR assigned to you.",
       stateOpen: "Open",
       stateMerged: "Merged",
       stateClosed: "Closed",
@@ -831,6 +835,13 @@ const en = {
       suggestionCopied: "Suggestion copied (lines {0}\u2013{1})",
       commentAddedToReview: "Comment added to review ({0} pending)",
       reviewSubmitted: "Review submitted ({0})",
+    },
+    error: {
+      noToken: "GitHub authentication required \u2014 run `gh auth login` in your terminal.",
+      noRemote: "No GitHub remote found \u2014 make sure this repo has a GitHub origin.",
+      ghNotInstalled: "GitHub CLI not installed \u2014 install it from cli.github.com.",
+      unknown: "Failed to load pull requests.",
+      retry: "Retry",
     },
   },
 

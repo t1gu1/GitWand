@@ -1594,29 +1594,23 @@ onUnmounted(() => {
       @create-tag="showTags = false; commitActionModal.type = 'tag'; commitActionModal.entry = repoLog[0] ?? null;"
     />
 
-    <!-- Worktree manager overlay -->
-    <div v-if="showWorktrees && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showWorktrees = false">
-      <div class="stash-overlay-body">
-        <WorktreeManager
-          :cwd="repoFolderPath"
-          :branches="branches"
-          :suggested-branch="pendingWorktreeBranch"
-          @close="showWorktrees = false; pendingWorktreeBranch = undefined;"
-          @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; }"
-        />
-      </div>
-    </div>
+    <!-- Worktree manager (uses BaseModal internally → own Teleport + backdrop) -->
+    <WorktreeManager
+      v-if="showWorktrees && repoFolderPath"
+      :cwd="repoFolderPath"
+      :branches="branches"
+      :suggested-branch="pendingWorktreeBranch"
+      @close="showWorktrees = false; pendingWorktreeBranch = undefined;"
+      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; }"
+    />
 
-    <!-- Submodule panel overlay -->
-    <div v-if="showSubmodules && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showSubmodules = false">
-      <div class="stash-overlay-body">
-        <SubmodulePanel
-          :cwd="repoFolderPath"
-          @close="showSubmodules = false"
-          @open-tab="(path) => { openTab(path); showSubmodules = false; }"
-        />
-      </div>
-    </div>
+    <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
+    <SubmodulePanel
+      v-if="showSubmodules && repoFolderPath"
+      :cwd="repoFolderPath"
+      @close="showSubmodules = false"
+      @open-tab="(path) => { openTab(path); showSubmodules = false; }"
+    />
 
     <!-- Stash-and-switch modal (asks for a stash label before switching branches) -->
     <div v-if="pendingSwitchBranch" class="switch-stash-overlay overlay-backdrop" @click.self="cancelSwitchStash">

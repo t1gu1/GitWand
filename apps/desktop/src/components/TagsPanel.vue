@@ -122,7 +122,7 @@ async function pushAllTags() {
     <!-- Toolbar -->
     <template #toolbar>
       <div class="tp-toolbar">
-        <button class="bm-btn bm-btn--ghost tp-btn-sm" @click="emit('create-tag')">
+        <button class="bm-btn bm-btn--ghost" @click="emit('create-tag')">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
@@ -130,7 +130,7 @@ async function pushAllTags() {
         </button>
         <button
           v-if="hasRemote"
-          class="bm-btn bm-btn--ghost tp-btn-sm"
+          class="bm-btn bm-btn--ghost"
           :disabled="busyPushAll || tags.length === 0"
           @click="pushAllTags"
         >
@@ -239,11 +239,6 @@ async function pushAllTags() {
   gap: var(--space-2);
 }
 
-.tp-btn-sm {
-  font-size: var(--font-size-sm);
-  padding: var(--space-1) var(--space-3);
-  gap: var(--space-1);
-}
 
 /* ─── List ──────────────────────────────────────────────── */
 .tp-list {

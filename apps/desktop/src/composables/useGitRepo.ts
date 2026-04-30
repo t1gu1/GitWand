@@ -323,6 +323,7 @@ export function useGitRepo() {
     selectedCommitHash.value = null;
     commitDiffs.value = [];
     log.value = [];
+    branches.value = [];        // ← reset so the palette doesn't show stale branches from the previous repo
     selectedFilePath.value = null;
     diff.value = null;
 

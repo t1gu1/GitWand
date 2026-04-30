@@ -107,6 +107,8 @@ const zhCN: Locale = {
     tabStripOpenFolder: "打开文件夹",
     tabStripClone: "从 URL 克隆",
     tabStripFork: "在 GitHub 上 Fork",
+    tabStripRecentSection: "最近的仓库",
+    tabStripNoRecent: "没有最近的仓库",
   },
 
   // ─── Sync split button (header primary action) ─────────
@@ -668,9 +670,11 @@ const zhCN: Locale = {
       filterClosed: "已关闭",
       filterAll: "全部",
       refresh: "刷新",
+      filterMineTitle: "分配给我",
       newBtn: "+ 新 PR",
       loading: "加载中…",
       empty: "未找到 PR。",
+      emptyMine: "没有分配给你的 PR。",
       stateOpen: "Open",
       stateMerged: "Merged",
       stateClosed: "Closed",
@@ -805,6 +809,13 @@ const zhCN: Locale = {
       suggestionCopied: "建议已复制（行 {0}\u2013{1}）",
       commentAddedToReview: "评论已加入 review（{0} 待定）",
       reviewSubmitted: "Review 已提交（{0}）",
+    },
+    error: {
+      noToken: "需要 GitHub 认证 — 在终端运行 `gh auth login`。",
+      noRemote: "未找到 GitHub 远程仓库 — 请确认此仓库有 GitHub origin。",
+      ghNotInstalled: "未安装 GitHub CLI — 请从 cli.github.com 安装。",
+      unknown: "加载 pull request 失败。",
+      retry: "重试",
     },
   },
 

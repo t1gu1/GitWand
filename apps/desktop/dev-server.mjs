@@ -1804,6 +1804,24 @@ const server = createServer(async (req, res) => {
 
     // ─── GitHub REST API endpoints (no gh binary needed) ──────
 
+    // GET /api/gh-current-user — returns the authenticated GitHub login
+    if (url.pathname === "/api/gh-current-user" && req.method === "GET") {
+      try {
+        const token = getGithubToken();
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token found. Run: gh auth login" }, 401);
+        const resp = await githubFetch("/user", token);
+        if (!resp.ok) {
+          const text = await resp.text();
+          return jsonResponse(req, res, { error: `GitHub API ${resp.status}: ${text}` }, 500);
+        }
+        const data = await resp.json();
+        return jsonResponse(req, res, data.login ?? "");
+      } catch (err) {
+        console.error("[gh-current-user]", err.message);
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // GET /api/gh-list-prs?cwd=<path>&state=<open|closed|all>
     if (url.pathname === "/api/gh-list-prs" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");

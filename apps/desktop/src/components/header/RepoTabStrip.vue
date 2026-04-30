@@ -28,8 +28,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { RepoTab } from "../../composables/useRepoTabs";
 import { useI18n } from "../../composables/useI18n";
+import { useFolderHistory } from "../../composables/useFolderHistory";
 
 const { t } = useI18n();
+const { history: repoHistory } = useFolderHistory();
 
 const props = defineProps<{
   tabs: RepoTab[];
@@ -42,8 +44,17 @@ const emit = defineEmits<{
   newTab: [];
   openClone: [];
   openFork: [];
+  openRecent: [path: string];
   closeOtherTabs: [tabId: number];
 }>();
+
+// Top-5 recent repos not already open as a tab — shown in the + dropdown.
+const recentRepos = computed(() => {
+  const openPaths = new Set(props.tabs.map((t) => t.path));
+  return repoHistory.value
+    .filter((e) => !openPaths.has(e.path))
+    .slice(0, 5);
+});
 
 // ─── + button dropdown (v2.0) ────────────────────────────
 //
@@ -252,6 +263,28 @@ function onCloseClick(e: MouseEvent, tabId: number) {
           </svg>
           {{ t('header.tabStripFork') }}
         </button>
+
+        <!-- Recent repos section -->
+        <div class="repo-tab-new-separator" role="separator" aria-hidden="true"></div>
+        <div class="repo-tab-new-section-label">{{ t('header.tabStripRecentSection') }}</div>
+        <template v-if="recentRepos.length > 0">
+          <button
+            v-for="entry in recentRepos"
+            :key="entry.path"
+            type="button"
+            role="menuitem"
+            class="repo-tab-new-item repo-tab-new-item--recent"
+            :title="entry.path"
+            @click="closeMenu(); emit('openRecent', entry.path)"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 3.5A1.5 1.5 0 013.5 2h3.586a1.5 1.5 0 011.06.44l.915.914a1 1 0 00.707.293H12.5A1.5 1.5 0 0114 5.147V12.5A1.5 1.5 0 0112.5 14h-9A1.5 1.5 0 012 12.5v-9z" stroke="currentColor" stroke-width="1.2" />
+            </svg>
+            <span class="repo-tab-new-item__name">{{ entry.name }}</span>
+            <span v-if="entry.pinned" class="repo-tab-new-item__pin" aria-hidden="true">★</span>
+          </button>
+        </template>
+        <div v-else class="repo-tab-new-empty">{{ t('header.tabStripNoRecent') }}</div>
       </div>
     </Teleport>
   </div>
@@ -425,6 +458,43 @@ function onCloseClick(e: MouseEvent, tabId: number) {
 }
 
 .repo-tab-new-item:hover svg {
+  color: var(--color-accent);
+}
+
+/* ─── Recent section ───────────────────────────────────── */
+.repo-tab-new-separator {
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-2) 0;
+}
+
+.repo-tab-new-section-label {
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.repo-tab-new-empty {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.repo-tab-new-item--recent .repo-tab-new-item__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-tab-new-item__pin {
+  flex-shrink: 0;
+  font-size: 10px;
   color: var(--color-accent);
 }
 </style>

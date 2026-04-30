@@ -4716,6 +4716,25 @@ fn parse_shortlog_line(line: &str) -> Option<ShortlogEntry> {
     Some(ShortlogEntry { name, email, count })
 }
 
+/// Returns the GitHub login of the currently authenticated `gh` user.
+/// Calls `gh api user --jq .login` — fast, no repo context needed.
+#[tauri::command]
+fn gh_current_user() -> Result<String, String> {
+    let output = std::process::Command::new("gh")
+        .args(["api", "user", "--jq", ".login"])
+        .output()
+        .map_err(|e| format!("Failed to run gh: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("gh api user failed: {}", stderr.trim()));
+    }
+    let login = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if login.is_empty() {
+        return Err("gh returned empty login — run `gh auth login`".to_string());
+    }
+    Ok(login)
+}
+
 #[tauri::command]
 fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
     let output = std::process::Command::new(git_binary())
@@ -5064,6 +5083,7 @@ pub fn run() {
             git_clone,
             gh_fork,
             git_shortlog,
+            gh_current_user,
             detect_codex_cli,
             codex_cli_prompt,
         ])

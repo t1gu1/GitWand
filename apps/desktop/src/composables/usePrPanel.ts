@@ -9,6 +9,7 @@
 import { ref, computed, watch, type Ref } from "vue";
 import {
   ghListPrs,
+  ghCurrentUser,
   ghCreatePr,
   ghCheckoutPr,
   ghMergePr,
@@ -55,6 +56,8 @@ export function usePrPanel(cwd: Ref<string>) {
   const error = ref<string | null>(null);
   const success = ref<string | null>(null);
   const filterState = ref<"open" | "closed" | "all">("open");
+  const filterMine = ref(false);
+  const currentUser = ref<string | null>(null);
 
   // Create PR form
   const showCreateForm = ref(false);
@@ -131,6 +134,11 @@ export function usePrPanel(cwd: Ref<string>) {
       : null,
   );
 
+  const displayedPrs = computed<PullRequest[]>(() => {
+    if (!filterMine.value || !currentUser.value) return prs.value;
+    return prs.value.filter((pr) => pr.author === currentUser.value);
+  });
+
   // ─── Parse unified diff ─────────────────────────────────
   function parseUnifiedDiff(rawDiff: string): GitDiff[] {
     const files: GitDiff[] = [];
@@ -193,7 +201,16 @@ export function usePrPanel(cwd: Ref<string>) {
     try {
       prs.value = await ghListPrs(cwd.value, filterState.value);
     } catch (err: any) {
-      error.value = err.message;
+      const msg: string = err.message ?? "";
+      if (msg.includes("gh auth") || msg.includes("authentication") || msg.includes("token") || msg.includes("401")) {
+        error.value = t("pr.error.noToken");
+      } else if (msg.includes("not found") || msg.includes("404") || msg.includes("remote")) {
+        error.value = t("pr.error.noRemote");
+      } else if (msg.includes("gh") && (msg.includes("installed") || msg.includes("not found") || msg.includes("ENOENT"))) {
+        error.value = t("pr.error.ghNotInstalled");
+      } else {
+        error.value = msg || t("pr.error.unknown");
+      }
       prs.value = [];
     } finally {
       loading.value = false;
@@ -476,11 +493,13 @@ export function usePrPanel(cwd: Ref<string>) {
   async function init() {
     await loadRemote();
     await loadPrs();
+    // Load current user in background for "assigned to me" filter
+    ghCurrentUser().then((login) => { currentUser.value = login; }).catch(() => {});
   }
 
   return {
     // State
-    remote, prs, loading, error, success, filterState,
+    remote, prs, loading, error, success, filterState, filterMine, currentUser,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, prDiffFiles, prComments, prReviews,
@@ -489,7 +508,7 @@ export function usePrPanel(cwd: Ref<string>) {
     conflictPreview, conflictLoading, conflictError,
     hotspots, hotspotsLoading, totalRepoFiles, fileHistory, fileHistoryLoading,
     // Computed
-    commentsForFile, commentCount, mergeReadiness, selectedDiff,
+    commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
     // Actions
     init, loadRemote, loadPrs, selectPr, loadDiff,
     createPr, checkoutPr, mergePr,

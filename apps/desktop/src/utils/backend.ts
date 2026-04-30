@@ -1695,6 +1695,21 @@ export async function gitRemoteInfo(cwd: string): Promise<RemoteInfo> {
   }
 }
 
+/**
+ * Returns the GitHub login of the currently authenticated user (via `gh` CLI or token).
+ */
+export async function ghCurrentUser(): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("gh_current_user");
+  }
+  const resp = await fetch("/api/gh-current-user");
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({ error: resp.statusText }));
+    throw new Error(body.error ?? `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
 export interface PullRequest {
   number: number;
   title: string;
