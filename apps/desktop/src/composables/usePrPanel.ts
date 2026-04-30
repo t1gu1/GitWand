@@ -136,8 +136,10 @@ export function usePrPanel(cwd: Ref<string>) {
   );
 
   const displayedPrs = computed<PullRequest[]>(() => {
+    if (filterMode.value === 'all') return prs.value;
     const me = currentUser.value;
-    if (!me || filterMode.value === 'all') return prs.value;
+    // currentUser not yet resolved — keep showing all PRs rather than an empty list
+    if (!me) return prs.value;
     if (filterMode.value === 'assigned') {
       return prs.value.filter((pr) => pr.assignees.includes(me));
     }
@@ -294,12 +296,15 @@ export function usePrPanel(cwd: Ref<string>) {
     }
   });
 
-  // Reset when repo changes
-  watch(cwd, () => {
+  // Reset + reload when repo changes
+  watch(cwd, (newCwd) => {
     selectedPr.value = null;
     prs.value = [];
     remote.value = null;
     resetDetail();
+    // Re-initialise for the new repo (loads remote + prs + current user).
+    // Guard: only when cwd is set AND the PR view may already be visible.
+    if (newCwd) init();
   });
 
   // ─── PR actions ─────────────────────────────────────────
