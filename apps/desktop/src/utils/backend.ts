@@ -1712,7 +1712,7 @@ export async function ghCurrentUser(): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("gh_current_user");
   }
-  const resp = await fetch("/api/gh-current-user");
+  const resp = await fetch(`${DEV_SERVER}/api/gh-current-user`);
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({ error: resp.statusText }));
     throw new Error(body.error ?? `HTTP ${resp.status}`);
