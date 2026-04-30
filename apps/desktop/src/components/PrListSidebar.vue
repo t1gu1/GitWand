@@ -45,8 +45,8 @@ function setFilter(v: "open" | "closed" | "all") {
   panel.loadPrs();
 }
 
-function toggleMine() {
-  panel.filterMine.value = !panel.filterMine.value;
+function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
+  panel.filterMode.value = mode;
 }
 </script>
 
@@ -71,33 +71,50 @@ function toggleMine() {
         </button>
       </div>
 
-      <!-- Segmented filter -->
-      <div class="pls-filter-row">
-        <div class="pls-segmented" role="tablist" :aria-label="t('pr.list.title')">
-          <button
-            v-for="opt in filterOptions"
-            :key="opt.value"
-            type="button"
-            role="tab"
-            :aria-selected="panel.filterState.value === opt.value"
-            :class="['pls-seg', { 'pls-seg--active': panel.filterState.value === opt.value }]"
-            @click="setFilter(opt.value)"
-          >
-            {{ t(opt.labelKey) }}
-          </button>
-        </div>
-        <!-- "Assigned to me" toggle -->
+      <!-- State filter -->
+      <div class="pls-segmented" role="tablist" :aria-label="t('pr.list.title')">
+        <button
+          v-for="opt in filterOptions"
+          :key="opt.value"
+          type="button"
+          role="tab"
+          :aria-selected="panel.filterState.value === opt.value"
+          :class="['pls-seg', { 'pls-seg--active': panel.filterState.value === opt.value }]"
+          @click="setFilter(opt.value)"
+        >
+          {{ t(opt.labelKey) }}
+        </button>
+      </div>
+      <!-- User filter: All / Assigned / Reviews -->
+      <div class="pls-user-filter" role="tablist" :aria-label="t('pr.list.userFilterLabel')">
         <button
           type="button"
-          :class="['pls-mine-btn', { 'pls-mine-btn--active': panel.filterMine.value }]"
-          :title="t('pr.list.filterMineTitle')"
-          :aria-pressed="panel.filterMine.value"
-          @click="toggleMine"
+          role="tab"
+          :aria-selected="panel.filterMode.value === 'all'"
+          :class="['pls-uf-btn', { 'pls-uf-btn--active': panel.filterMode.value === 'all' }]"
+          @click="setUserFilter('all')"
+        >{{ t('pr.list.filterAll2') }}</button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="panel.filterMode.value === 'assigned'"
+          :class="['pls-uf-btn', { 'pls-uf-btn--active': panel.filterMode.value === 'assigned' }]"
+          :title="t('pr.list.filterAssignedTitle')"
+          @click="setUserFilter('assigned')"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="8" r="4" />
-            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-          </svg>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          {{ t('pr.list.filterAssigned') }}
+        </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="panel.filterMode.value === 'reviews'"
+          :class="['pls-uf-btn', { 'pls-uf-btn--active': panel.filterMode.value === 'reviews' }]"
+          :title="t('pr.list.filterReviewsTitle')"
+          @click="setUserFilter('reviews')"
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          {{ t('pr.list.filterReviews') }}
         </button>
       </div>
     </header>
@@ -137,7 +154,11 @@ function toggleMine() {
         <circle cx="6" cy="18" r="3" />
         <path d="M6 9v6M18 15V9a3 3 0 0 0-3-3H9" />
       </svg>
-      <span>{{ panel.filterMine.value ? t('pr.list.emptyMine') : t('pr.list.empty') }}</span>
+      <span>{{
+        panel.filterMode.value === 'assigned' ? t('pr.list.emptyAssigned') :
+        panel.filterMode.value === 'reviews'  ? t('pr.list.emptyReviews') :
+        t('pr.list.empty')
+      }}</span>
     </div>
     <div v-else class="pls-list">
       <button
@@ -260,12 +281,6 @@ function toggleMine() {
 }
 
 /* ─── Segmented filter ───────────────────────────────────── */
-.pls-filter-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
 .pls-segmented {
   flex: 1;
   display: grid;
@@ -275,31 +290,6 @@ function toggleMine() {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-}
-
-/* "Assigned to me" toggle */
-.pls-mine-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-}
-.pls-mine-btn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-.pls-mine-btn--active {
-  background: var(--color-accent-soft);
-  border-color: var(--color-accent);
-  color: var(--color-accent);
 }
 
 .pls-seg {
