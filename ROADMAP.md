@@ -374,7 +374,38 @@ Reste de la veine Git 2.53 / 2.54 — wrapping de commande + UI, pas de changeme
 
 ## Quick Fixes
 
-_(vide — les fixes en attente sont déplacés ici ; tout ce qui est en cours apparaît dans In Progress.)_
+_Post-v2.5.0 — à traiter en priorité avant les features v2.x._
+
+### Bugs
+
+- **Recherche globale — stale au changement de repo** : la liste des branches dans la recherche globale n'est pas invalidée quand on change de dépôt. En cliquant sur la recherche, on voit encore les branches du repo précédent. Fix : re-fetcher / réinitialiser le store de recherche lors du changement de repo actif.
+
+- **Liste des PR vide alors que des PR existent** : GitWand ne trouve pas les PR sur certains repos qui en ont pourtant. Vérifier l'appel API (endpoint, auth token, mapping des remotes), logguer l'erreur, ajouter un état d'erreur explicite dans la sidebar PR ("Impossible de charger les PR — vérifier le token GitHub dans les settings").
+
+### UX / Polishing
+
+- **Bouton `+` (nouveau repo) — afficher les repos favoris** : quand on clique sur le `+` en haut de la sidebar, proposer en dessous des actions (Ouvrir / Cloner / Forker) une section "Repos récents / favoris" identique à la page d'accueil, séparée par un `<hr>`. Évite de naviguer vers l'accueil pour rouvrir un repo connu.
+
+- **Push/Sync avec un tag non poussé — demander confirmation** : quand un ou plusieurs tags locaux n'ont pas encore été poussés vers origin, afficher une modale de confirmation avant le push : "Ce repo a N tag(s) non poussé(s) — voulez-vous les inclure ?" avec un bouton "Pousser avec les tags" et "Ignorer les tags".
+
+- **Modale Tags — boutons d'action plus grands** : les boutons "Nouveau tag" et "Pousser tout vers origin" sont trop petits par rapport aux standards des autres actions de l'app. Les aligner en hauteur / padding avec les boutons d'action secondaires du design system.
+
+- **Bouton Rembobiner — fond blanc en Light mode** : dans la liste de l'historique des opérations, le bouton Rembobiner utilise un fond transparent qui ne contraste pas correctement en mode clair. Appliquer `background: white` (ou `var(--color-surface)`) en Light mode.
+
+- **Sidebar PR — filtre "assignées à moi"** : comme pour les commits (filtre auteur), ajouter dans la sidebar PR un filtre rapide pour n'afficher que les PRs assignées à l'utilisateur connecté. Réutiliser le même pattern de composant que le filtre auteur des commits.
+
+- **Bandeau d'erreur rouge — remplacer par un log dans les Settings** : supprimer le bandeau rouge affiché en haut de l'app. À la place : (1) ajouter un onglet **Logs** dans le panneau Settings ; (2) chaque erreur y est loggée sur une ligne `[timestamp] message` ; (3) une icône discrète dans la barre d'état (⚠ ou point rouge) signale qu'il y a des erreurs non lues — clic → ouvre l'onglet Logs.
+
+### Feature — Mode hors-ligne
+
+Quand la connexion internet est absente ou instable, GitWand ne doit pas figer ni afficher des spinners infinis. Toutes les opérations purement locales doivent rester disponibles :
+
+- Navigation dans les commits, les branches, le diff des fichiers, les hunks de conflit
+- Résolution de conflits via `@gitwand/core` (synchrone, pas de réseau)
+- Visualisation de l'historique, du log, du stash, des tags locaux
+- Les opérations réseau (push, pull, fetch, PR, clone) affichent un état "Hors-ligne" clair (icône + tooltip) et sont désactivées — pas de spinner infini
+- Détecter la connectivité via `tauri-plugin-network` ou un ping timeout court sur le remote ; basculer automatiquement en mode hors-ligne et revenir dès que la connexion revient (sans redémarrer l'app)
+- Documenter les opérations disponibles hors-ligne dans la doc utilisateur
 
 ---
 
