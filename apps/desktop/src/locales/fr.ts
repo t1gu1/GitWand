@@ -145,6 +145,7 @@ const fr: Locale = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graphe",
+    tabDashboard: "Tableau de bord",
     stashTitle: "Gestionnaire de stash",
     // Log scope toggle (current branch vs all refs)
     logScopeLabel: "Portée du log",

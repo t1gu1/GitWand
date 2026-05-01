@@ -151,6 +151,7 @@ const es: Locale = {
     tabBranches: "Ramas",
     tabLog: "Historial",
     tabGraph: "Gráfico",
+    tabDashboard: "Panel",
     stashTitle: "Gestor de stash",
     logScopeLabel: "Ámbito del historial",
     logScopeCurrent: "Rama actual",

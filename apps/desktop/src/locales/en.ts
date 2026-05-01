@@ -151,6 +151,7 @@ const en = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graph",
+    tabDashboard: "Dashboard",
     stashTitle: "Stash manager",
     // Log scope toggle (current branch vs all refs)
     logScopeLabel: "Log scope",

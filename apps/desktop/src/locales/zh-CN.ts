@@ -155,6 +155,7 @@ const zhCN: Locale = {
     tabBranches: "分支",
     tabLog: "日志",
     tabGraph: "图谱",
+    tabDashboard: "概览",
     stashTitle: "储藏管理",
     logScopeLabel: "日志范围",
     logScopeCurrent: "当前分支",

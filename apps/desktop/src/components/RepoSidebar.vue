@@ -539,21 +539,8 @@ function formatActivityDate(dateStr: string): string {
 
 <template>
   <nav class="repo-sidebar" :aria-label="t('sidebar.tabChanges')">
-    <!-- View mode tabs -->
+    <!-- ── Navigation tabs (content-switching) ─────────────────── -->
     <div class="view-tabs">
-      <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'dashboard' }"
-        @click="emit('changeView', 'dashboard')"
-        title="Dashboard"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="vertical-align: -2px;">
-          <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-          <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-          <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-          <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
-        </svg>
-      </button>
       <button
         class="view-tab"
         :class="{ 'view-tab--active': viewMode === 'changes' }"
@@ -580,63 +567,8 @@ function formatActivityDate(dateStr: string): string {
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"
-        title="Pull Requests"
       >
         PRs
-      </button>
-      <!-- Divider: stash isn't a view, it opens a modal.
-           Visually breaks from the tabs that swap content. -->
-      <div class="view-tab-divider" aria-hidden="true"></div>
-      <button
-        class="view-tab-action view-tab-action--stash"
-        @click="emit('openStash')"
-        :title="t('sidebar.stashTitle')"
-        :aria-label="t('sidebar.stashTitle')"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 8v13H3V8" />
-          <path d="M1 3h22v5H1z" />
-          <path d="M10 12h4" />
-        </svg>
-        <span v-if="stashCount > 0" class="view-tab-action__badge">{{ stashCount }}</span>
-      </button>
-      <button
-        class="view-tab-action"
-        @click="emit('openTags')"
-        :title="t('tags.title')"
-        :aria-label="t('tags.title')"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
-        </svg>
-      </button>
-      <!-- Workspaces -->
-      <button
-        class="view-tab-action"
-        @click="emit('openWorkspace')"
-        :title="t('workspace.title')"
-        :aria-label="t('workspace.title')"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-          <rect x="1" y="4" width="14" height="10" rx="2"/>
-          <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <!-- Agent Sessions -->
-      <button
-        class="view-tab-action"
-        @click="emit('openAgents')"
-        :title="t('agents.sidebarTooltip')"
-        :aria-label="t('agents.title')"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="11" width="18" height="11" rx="2"/>
-          <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
-          <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
-          <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
-          <path d="M9 20h6"/>
-        </svg>
       </button>
     </div>
 
@@ -1087,6 +1019,73 @@ function formatActivityDate(dateStr: string): string {
         </div>
       </div>
     </div>
+    <!-- ── Footer toolbar (utility actions + dashboard) ───────── -->
+    <div class="sidebar-footer">
+      <button
+        class="sf-btn"
+        :class="{ 'sf-btn--active': viewMode === 'dashboard' }"
+        @click="emit('changeView', 'dashboard')"
+        :title="t('sidebar.tabDashboard')"
+        :aria-label="t('sidebar.tabDashboard')"
+      >
+        <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
+        </svg>
+      </button>
+      <div class="sf-sep" aria-hidden="true"></div>
+      <button
+        class="sf-btn"
+        @click="emit('openStash')"
+        :title="t('sidebar.stashTitle')"
+        :aria-label="t('sidebar.stashTitle')"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 8v13H3V8"/>
+          <path d="M1 3h22v5H1z"/>
+          <path d="M10 12h4"/>
+        </svg>
+        <span v-if="stashCount > 0" class="sf-btn__badge">{{ stashCount }}</span>
+      </button>
+      <button
+        class="sf-btn"
+        @click="emit('openTags')"
+        :title="t('tags.title')"
+        :aria-label="t('tags.title')"
+      >
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
+        </svg>
+      </button>
+      <button
+        class="sf-btn"
+        @click="emit('openWorkspace')"
+        :title="t('workspace.title')"
+        :aria-label="t('workspace.title')"
+      >
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <rect x="1" y="4" width="14" height="10" rx="2"/>
+          <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button
+        class="sf-btn"
+        @click="emit('openAgents')"
+        :title="t('agents.sidebarTooltip')"
+        :aria-label="t('agents.title')"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
+          <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
+          <path d="M9 20h6"/>
+        </svg>
+      </button>
+    </div>
   </nav>
 
   <!-- Context menu (Teleport to body to avoid overflow clipping) -->
@@ -1190,48 +1189,65 @@ function formatActivityDate(dateStr: string): string {
   border-bottom-color: var(--color-accent);
 }
 
-/* Vertical separator between the view-tabs (which swap content)
-   and trailing actions like Stash (which open a modal). */
-.view-tab-divider {
-  flex: 0 0 auto;
-  width: 1px;
-  align-self: stretch;
-  margin: var(--space-3) var(--space-2);
-  background: var(--color-border);
+/* ── Footer toolbar ────────────────────────────────────────── */
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--color-bg-secondary, var(--color-surface-alt, rgba(0,0,0,0.03)));
 }
 
-/* Icon-only action button sitting in the tab row but explicitly
-   NOT a tab — it never takes the active state, opens a modal. */
-.view-tab-action {
+.sf-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+.sf-btn {
   position: relative;
-  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-3);
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm, 5px);
   background: none;
   color: var(--color-text-muted);
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--transition-hover), background var(--transition-hover), border-color var(--transition-hover);
+  transition: color var(--transition-hover), background var(--transition-hover);
+  flex-shrink: 0;
 }
 
-.view-tab-action:hover {
+.sf-btn:hover {
   color: var(--color-text);
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-tertiary, rgba(0,0,0,0.06));
 }
 
-.view-tab-action__badge {
+.sf-btn--active {
+  color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(99,102,241,0.1));
+}
+
+.sf-btn--active:hover {
+  background: var(--color-accent-soft, rgba(99,102,241,0.15));
+}
+
+.sf-btn__badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  font-size: 10px;
+  top: 1px;
+  right: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
   font-weight: var(--font-weight-semibold);
-  line-height: 16px;
+  line-height: 14px;
   text-align: center;
   background: var(--color-accent);
   color: var(--color-accent-text);

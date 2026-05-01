@@ -152,6 +152,7 @@ const ptBR: Locale = {
     tabBranches: "Branches",
     tabLog: "Histórico",
     tabGraph: "Grafo",
+    tabDashboard: "Painel",
     stashTitle: "Gerenciador de stash",
     logScopeLabel: "Escopo do histórico",
     logScopeCurrent: "Branch atual",
