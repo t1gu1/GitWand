@@ -207,14 +207,14 @@ describe("tryLlmFallbackResolve — endpoint mock", () => {
     expect(result.reason).toMatch(/erreur|network timeout/i);
   });
 
-  it("LlmTrace — promptHash est un hash SHA-256 hexadécimal (64 chars)", async () => {
+  it("LlmTrace — promptHash est un hash hexadécimal non-vide (FNV-1a, 16 chars)", async () => {
     const endpoint = makeMockEndpoint("```\n  level: \"warn\",\n```");
     const result = await tryLlmFallbackResolve(MOCK_HUNK, "src/config.ts", "", {
       enabled: true,
       endpoint,
     });
 
-    expect(result.llmTrace.promptHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.llmTrace.promptHash).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("LlmTrace — rawResponseTruncated est ≤ 500 chars", async () => {
@@ -321,7 +321,7 @@ describe("resolveAsync — avec llmFallback enabled et endpoint mock", () => {
     const hunk = result.resolutions[0].hunk;
     expect(hunk.trace.llmTrace).toBeDefined();
     expect(hunk.trace.llmTrace!.accepted).toBe(true);
-    expect(hunk.trace.llmTrace!.promptHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(hunk.trace.llmTrace!.promptHash).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("reste non résolu si l'endpoint retourne CANNOT_RESOLVE", async () => {

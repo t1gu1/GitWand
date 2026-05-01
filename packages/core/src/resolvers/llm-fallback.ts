@@ -29,15 +29,29 @@ export interface LlmResolveResult {
 // ─── Helpers internes ──────────────────────────────────────
 
 /**
- * Calcule le hash SHA-256 d'une chaîne en hexadécimal.
- * Utilise Web Crypto (browser + Node.js ≥ 18 + Tauri) — pas de `node:crypto`.
+ * Calcule un hash FNV-1a 64-bit (simulé en double uint32) d'une chaîne.
+ *
+ * Remplace l'implémentation WebCrypto (SHA-256) qui n'est pas disponible comme
+ * global sur Node.js < 19 (globalThis.crypto devient global en Node 19 seulement).
+ * packages/core doit rester compatible browser+Node+Tauri sans import Node.js natif.
+ *
+ * FNV-1a est largement suffisant pour le promptHash d'audit — stable, déterministe,
+ * pas de dépendance d'environnement.
  */
-async function sha256Hex(text: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hashBuffer = await globalThis.crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+function sha256Hex(text: string): string {
+  // FNV-1a 64-bit simulé via deux uint32 (hi + lo) pour réduire les collisions
+  let hi = 0x6295c58d;
+  let lo = 0x62b82175;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    lo ^= c;
+    // Multiply by FNV prime 0x00000100000001B3 split as (hi:0x100, lo:0x000001B3)
+    const loNew = Math.imul(lo, 0x000001b3) >>> 0;
+    const hiNew = (Math.imul(lo, 0x100) + Math.imul(hi, 0x000001b3)) >>> 0;
+    lo = loNew;
+    hi = hiNew;
+  }
+  return hi.toString(16).padStart(8, "0") + lo.toString(16).padStart(8, "0");
 }
 
 /**
@@ -197,7 +211,7 @@ export async function tryLlmFallbackResolve(
   }
 
   const prompt = buildPrompt(hunk, filePath, fileContext, config);
-  const promptHash = await sha256Hex(prompt);
+  const promptHash = sha256Hex(prompt);
   const t0 = Date.now();
 
   let rawResponse: string;
