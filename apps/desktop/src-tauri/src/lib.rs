@@ -3283,6 +3283,8 @@ fn gh_create_pr(
         additions: 0,
         deletions: 0,
         labels: Vec::new(),
+        assignees: Vec::new(),
+        review_requested: Vec::new(),
     })
 }
 
