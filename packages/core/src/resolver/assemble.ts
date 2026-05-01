@@ -16,6 +16,7 @@ import type { ConflictHunk, GitWandOptions } from "../types.js";
 import type { MergePolicy, PolicyConfig } from "../config.js";
 import { mergeNonOverlapping } from "../diff.js";
 import { stripVolatileValues } from "./generated-detection.js";
+import { getLastRefMergeResult } from "../patterns/refactoring-aware-merge.js";
 
 /**
  * Applique la stratégie textuelle correspondant au type de hunk.
@@ -175,6 +176,28 @@ export function assembleResolution(
         reason: "Fichier auto-généré — le fichier sera régénéré après merge. Résolution : accepter theirs. Suggestion : relancer le build/install.",
       };
     }
+
+    case "refactoring_aware_merge": {
+      // v2.6 — Récupérer le résultat RefMerge mis en cache par detect()
+      // (évite de recalculer la détection + merge + rejeu une deuxième fois)
+      const cached = getLastRefMergeResult();
+      if (cached?.lines !== null && cached?.lines !== undefined) {
+        return { lines: cached.lines, reason: cached.reason };
+      }
+      // Fallback si le cache est invalide (ne devrait pas arriver)
+      return {
+        lines: null,
+        reason: "RefMerge : résultat non disponible en cache — résolution manuelle requise.",
+      };
+    }
+
+    case "llm_proposed":
+      // La résolution effective est gérée par runLlmFallbackPhase() dans resolveAsync().
+      // assembleResolution() n'est pas censé être appelé directement pour llm_proposed.
+      return {
+        lines: null,
+        reason: "llm_proposed : résolution différée au pipeline LLM asynchrone.",
+      };
 
     case "complex":
       return {

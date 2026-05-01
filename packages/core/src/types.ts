@@ -29,6 +29,7 @@ export type ConflictType =
   | "reorder_only"              // v1.4 — mêmes lignes, ordre différent (permutation pure)
   | "insertion_at_boundary"     // v1.4 — insertions pures des deux côtés, base intacte
   | "llm_proposed"              // v2.5 — résolution proposée par LLM fallback (opt-in, priority 998)
+  | "refactoring_aware_merge"  // v2.6 — RefMerge : détection/inversion/rejeu de refactorings (expérimental, opt-in)
   | "complex";                  // Conflit réel nécessitant intervention humaine
 
 /** Niveau de confiance discret (label seuil, utilisé dans les options) */
@@ -232,6 +233,46 @@ export interface LlmTrace {
   validationScore: number;
   /** La résolution LLM a-t-elle été acceptée ? (`false` = fallback sur `complex`) */
   accepted: boolean;
+}
+
+// ─── Phase v2.6 — Refactoring-aware merge ────────────────────
+
+/**
+ * v2.6 — Catégories de refactoring détectables par le moteur RefMerge.
+ *
+ * | Kind               | Description                                                      |
+ * |--------------------|------------------------------------------------------------------|
+ * | `rename-local`     | Variable ou paramètre renommé uniformément dans une fonction     |
+ * | `rename-top-level` | Fonction ou classe renommée + tous ses usages mis à jour         |
+ * | `move-method`      | Méthode déplacée d'une classe vers une autre                     |
+ */
+export type RefactoringKind =
+  | "rename-local"       // variable/param renommée uniformément dans une fonction
+  | "rename-top-level"   // fonction/classe renommée + usages mis à jour
+  | "move-method";       // méthode déplacée d'une classe vers une autre
+
+/**
+ * v2.6 — Un refactoring détecté entre la base et une branche.
+ *
+ * Produit par `detectRefactorings()` dans `src/refactoring/detect.ts`.
+ * Consommé par `invertRefactorings()` et `replayRefactorings()`.
+ */
+export interface Refactoring {
+  kind: RefactoringKind;
+  /** Ancien nom du symbole (avant refactoring) */
+  oldName: string;
+  /** Nouveau nom du symbole — défini pour `rename-local` et `rename-top-level` */
+  newName?: string;
+  /** Pour `move-method` : classe d'origine du symbole */
+  sourceClass?: string;
+  /** Pour `move-method` : classe de destination du symbole */
+  targetClass?: string;
+  /**
+   * Portée lexicale du refactoring.
+   * Pour `rename-local` : nom de la fonction parente.
+   * Non défini pour les refactorings top-level.
+   */
+  scope?: string;
 }
 
 /**
@@ -501,4 +542,29 @@ export interface GitWandOptions {
    * ```
    */
   llmFallback?: LlmFallbackConfig;
+  /**
+   * v2.6 — Moteur de résolution RefMerge (expérimental, opt-in).
+   *
+   * Quand activé, le moteur tente de détecter les refactorings (rename, move-method)
+   * entre la base et chaque branche avant de lancer la résolution textuelle classique.
+   * Les refactorings détectés sont inversés, le merge textuel est appliqué, puis les
+   * refactorings sont rejoués sur le résultat.
+   *
+   * Désactivé par défaut (`enabled: false`).
+   *
+   * ```ts
+   * await resolveAsync(content, filePath, {
+   *   refactoringAware: { enabled: true, maxRefactoringsPerSide: 5 }
+   * });
+   * ```
+   */
+  refactoringAware?: {
+    /** Activer le moteur RefMerge (défaut: false) */
+    enabled?: boolean;
+    /**
+     * Nombre maximum de refactorings détectés par branche (ours/theirs).
+     * Au-delà, le hunk tombe en fallback `complex`. Défaut: 10.
+     */
+    maxRefactoringsPerSide?: number;
+  };
 }

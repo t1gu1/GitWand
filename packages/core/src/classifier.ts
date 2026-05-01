@@ -20,7 +20,8 @@ import whitespaceOnly      from "./patterns/whitespace-only.js";
 import reorderOnly              from "./patterns/reorder-only.js";
 import insertionAtBoundary      from "./patterns/insertion-at-boundary.js";
 import valueOnlyChange          from "./patterns/value-only-change.js";
-import llmProposed         from "./patterns/llm-proposed.js";  // v2.5 — priority 998
+import llmProposed         from "./patterns/llm-proposed.js";    // v2.5 — priority 998
+import refactoringAwareMerge from "./patterns/refactoring-aware-merge.js"; // v2.6 — priority 970
 import complex             from "./patterns/complex.js";
 
 // ─── Registre ────────────────────────────────────────────────
@@ -38,9 +39,10 @@ const PATTERNS: PatternPlugin[] = [
   whitespaceOnly,       // priority 50
   reorderOnly,          // priority 55  ← v1.4
   insertionAtBoundary,  // priority 57  ← v1.4
-  valueOnlyChange,      // priority 60
-  llmProposed,          // priority 998 ← v2.5 (OFF par défaut, activé par resolveAsync)
-  complex,              // priority 999 (fallback — detect() always true)
+  valueOnlyChange,        // priority 60
+  refactoringAwareMerge, // priority 970 ← v2.6 (OFF par défaut, activé par resolve())
+  llmProposed,            // priority 998 ← v2.5 (OFF par défaut, activé par resolveAsync)
+  complex,               // priority 999 (fallback — detect() always true)
 ];
 
 // ─── Trace builder ───────────────────────────────────────────

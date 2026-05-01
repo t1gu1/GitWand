@@ -51,6 +51,8 @@ const TYPE_LABELS: Record<ConflictType, string> = {
   reorder_only: "Same lines, different order (pure reordering)",
   insertion_at_boundary: "Pure insertions on both sides, base intact",
   complex: "Complex conflict",
+  llm_proposed: "LLM-proposed resolution (experimental)",
+  refactoring_aware_merge: "Refactoring-aware merge (experimental)",
 };
 
 /** Icônes par type */
@@ -65,6 +67,8 @@ const TYPE_ICONS: Record<ConflictType, string> = {
   reorder_only: "\u2713",
   insertion_at_boundary: "\u2713",
   complex: "\u2717",
+  llm_proposed: "\u2713",
+  refactoring_aware_merge: "\u2713",
 };
 
 // ─── Diagnostics Provider ───────────────────────────────────────

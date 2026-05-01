@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-05-01
+
+`@gitwand/core@2.6.0` closes the v2.6 entry of the [CORE-V2-ROADMAP](./CORE-V2-ROADMAP.md): a refactoring-aware merge pipeline that detects concurrent rename / move-method refactorings and resolves the resulting conflicts via an invert → merge → replay strategy (inspired by Ellis et al. TSE 2023). Opt-in via `refactoringAware.enabled: true`. Otherwise fully backward-compatible — the new code path is completely silent by default.
+
+### Added
+
+- **`@gitwand/core@2.6.0` — Refactoring-aware merge (CORE-V2-ROADMAP v2.6)**
+  - **`RefactoringKind` / `Refactoring` types** — new exported types describing a detected refactoring: `kind` (`"rename-local" | "rename-top-level" | "move-method"`), `oldName`, `newName`, `scope` (enclosing function for local renames), `sourceClass` / `targetClass` (for method moves).
+  - **`refactoringAware` option in `GitWandOptions`** — opt-in flag (`enabled?: boolean`) and quota (`maxRefactoringsPerSide?: number`, default 10). Added to `GitWandrcConfig` for `.gitwandrc` support.
+  - **`packages/core/src/refactoring/detect.ts`** — pure-TypeScript refactoring detector. Tokenises base and branch, finds removed/added identifiers, applies simultaneous bijective substitution (with permutation search for same-count ambiguous groups), and confirms via full token-sequence equality. Also parses class method sets for move-method detection via a brace-depth line parser.
+  - **`packages/core/src/refactoring/invert.ts`** — applies refactorings in reverse: `rename-top-level` → global identifier replacement; `rename-local` → scoped replacement (signature + body) using `findScopeRange`; `move-method` → no-op (structural only). Multiple refactorings applied in reverse order to handle rename chains.
+  - **`packages/core/src/refactoring/replay.ts`** — `mergeRefactorings()` deduplicates detected refactorings from both branches (ours wins on conflict); `replayRefactorings()` applies the merged refactoring set forward on the merged text.
+  - **`packages/core/src/refactoring/orchestration.ts`** — `tryRefMerge(input, max)`: Phase 1 detect (ours + theirs), Phase 2 invert both branches to base nomenclature, Phase 3 classic 3-way merge on the inverted versions (`mergeInverted` cascades: same_change → one_side_change → LCS non-overlapping), Phase 4 replay the merged refactoring set. Full try/catch — always safe to call. Exposes `RefMergeResult { lines, reason, oursRefs, theirsRefs }`.
+  - **Pattern plugin `refactoring_aware_merge` (priority 970)** — registered in the classifier after all text patterns (10–60) but before `llm_proposed` (998) and `complex` (999). Disabled by default; activated by `resolve()` when `options.refactoringAware.enabled`. Module-level flag/cache pattern (same as `llm-proposed`): `detect()` runs the full RefMerge pipeline and caches the result; `assembleResolution()` reads the cache to avoid recomputation.
+  - **21 new tests** — `src/__tests__/refactoring/refactoring-pipeline.test.ts` (F-R01–F-R21) covering `detectRefactorings` (rename-local, rename-top-level, multi-rename, move-method, identical, non-bijective), `invertRefactorings` + `replayRefactorings`, `mergeRefactorings` ours-wins, `tryRefMerge` positive and negative cases, and `resolve()` integration with `refactoringAware.enabled`. **898/898 tests passing.**
+
+### Fixed
+
+- **`packages/vscode` build** — `TYPE_LABELS` and `TYPE_ICONS` in `extension.ts` were missing `llm_proposed` and `refactoring_aware_merge` keys, causing `Record<ConflictType, string>` exhaustiveness errors. Both keys added to both maps.
+- **Multi-rename detection** — `detectRenames()` now handles simultaneous same-count renames (e.g. two function parameters renamed in one commit) via permutation search over ambiguous groups, rather than silently skipping them.
+- **`rename-local` inversion scope** — `findScopeRange()` now returns the range from the `function` keyword (not just the body `{`) so that parameter names in the function signature are also inverted, not just the body.
+
 ## [2.5.1] - 2026-05-01
 
 Desktop patch — PR filter pipeline fixed end-to-end, offline mode, error log tab, and several UX polish items that had accumulated post-v2.5.0.
@@ -26,6 +48,31 @@ Desktop patch — PR filter pipeline fixed end-to-end, offline mode, error log t
 - **PR list reload on repo switch** — `watch(cwd)` in `usePrPanel` now calls `init()` after resetting state, so switching repos while the PR tab is open correctly reloads the PR list and re-resolves the current user for the new repo.
 - **User filter buttons equal width** — `grid-template-columns` fixed from `auto 1fr 1fr` to `repeat(3, 1fr)`.
 - **Locale keys alignment** — `filterMineTitle` / `emptyMine` (removed) and `identityLoading` / `identityError` / `identityRetry` (added) synced across all 5 locales (en, fr, es, pt-BR, zh-CN).
+
+## [2.5.0] - 2026-04-30
+
+`@gitwand/core@2.5.0` closes the v2.5 entry of the [CORE-V2-ROADMAP](./CORE-V2-ROADMAP.md): a LLM fallback that resolves `complex` conflicts through a generative model when the deterministic engine cannot. Plus desktop search reliability, PR list stability, and accumulated UX polish.
+
+### Added
+
+- **`@gitwand/core@2.5.0` — LLM fallback for `complex` conflicts (CORE-V2-ROADMAP v2.5)**
+  - **`llm_proposed` ConflictType** — new entry added to the `ConflictType` union; appears in traces when a generative model produced the resolution.
+  - **`LlmEndpoint` / `LlmFallbackConfig` / `LlmTrace` types** — typed interfaces for injecting a model endpoint, configuring the fallback pipeline (model, maxTokens, temperature, contextLines, minPostMergeScore, minMode), and tracing LLM calls for audit (calledAt, model, latencyMs, promptHash, rawResponseTruncated, validationScore, accepted).
+  - **Pattern plugin `llm_proposed` (priority 998)** — registered in the classifier immediately before the `complex` fallback (priority 999). Skipped by the synchronous `resolve()` — only active in `resolveAsync()`.
+  - **`tryLlmFallbackResolve()` resolver** — `resolvers/llm-fallback.ts`. Constructs a context-aware prompt (configurable `contextLines`), calls `endpoint.call(prompt)`, validates the response with `validateMergedContent()` (score ≥ `minPostMergeScore` threshold), and falls back to `complex` if the score is below threshold. Accepts if the validation passes.
+  - **`resolveAsync()` wiring** — the async resolver calls `tryLlmFallbackResolve()` on every hunk classified as `complex` when `llmFallback.enabled: true`. The synchronous `resolve()` logs a warning if `llmFallback.enabled` but continues without LLM.
+  - **MCP tool `resolve_hunk`** — `@gitwand/mcp` gains a `resolve_hunk` tool that exposes the full `resolveAsync()` pipeline (structural merge → pattern classifier → LLM fallback) to any MCP client (Claude Code, Claude Desktop, Cursor, Windsurf). Three parameters: `ours`, `theirs`, `base` (optional). Returns `type`, `confidence`, `resolution`, `explanation`, and `llmTrace` when applicable.
+  - **+10 corpus fixtures (F36–F45)** and a dedicated `v2.5-llm-fallback.test.ts` test suite. **841/841 tests passing** (core package).
+- **Desktop — repos récents et favoris** — `useRecentRepos` composable stores the last 10 opened repositories and up to 5 pinned favorites. The empty-state view and the repo-switcher dropdown now surface this list with direct open buttons.
+- **Desktop — push confirmation pour les tags non poussés** — `SyncSplitButton` détecte si des tags locaux n'ont pas encore de remote counterpart et affiche une modale de confirmation avant le push (« pousser également les N tags en attente ? »).
+
+### Fixed
+
+- **Recherche globale stale au changement de repo** — `useGlobalSearch` ne réinitialisait pas ses résultats quand `cwd` changeait. Un `watch(cwd, reset)` efface maintenant l'index et les résultats stale à chaque changement de dépôt.
+- **Liste PR vide + état d'erreur explicite** — `usePrPanel` affichait une liste vide sans feedback quand le chargement échouait. L'état d'erreur est maintenant exposé comme `prError: ref<string | null>` et rendu dans le panneau avec un bouton Retry.
+- **Boutons modale Tags plus grands** — les boutons dans la modale Tags utilisent maintenant `size="md"` (padding horizontal 20 px) au lieu du `size="sm"` par défaut, alignant la taille avec les autres modales de l'app.
+- **Bouton Rembobiner — fond correct en Light mode** — la couleur de fond du bouton Rembobiner utilisait `var(--color-danger-bg)` qui retournait transparent en Light mode. Remplacé par `var(--color-danger)` avec `opacity: 0.12` pour un fond visible dans les deux thèmes.
+- **Design modales Worktree et Submodule harmonisé** — `WorktreeModal` et `SubmodulePanel` migrent vers `BaseModal` (backdrop uniforme, focus-trap, Esc-to-close, footer layout partagé) en remplacement des overlays ad-hoc.
 
 ## [2.4.1] - 2026-04-29
 

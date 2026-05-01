@@ -117,7 +117,20 @@ export type {
   LlmEndpoint,
   LlmFallbackConfig,
   LlmTrace,
+  // v2.6 — Refactoring-aware merge
+  RefactoringKind,
+  Refactoring,
 } from "./types.js";
+
+// v2.6 — Refactoring-aware merge pipeline
+export {
+  detectRefactorings,
+  invertRefactorings,
+  replayRefactorings,
+  mergeRefactorings,
+  tryRefMerge,
+} from "./refactoring/index.js";
+export type { RefMergeResult } from "./refactoring/index.js";
 
 // v2.5 — LLM fallback resolver (consommateurs souhaitant invoquer directement)
 export { tryLlmFallbackResolve } from "./resolvers/llm-fallback.js";

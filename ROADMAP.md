@@ -510,9 +510,9 @@ Livré comme `2.4.1` (resync `cli`/`mcp` qui étaient restés à 2.3.0). Étend 
 
 Pattern `llm_proposed` priorité 998, **désactivé par défaut**. Sérialise le hunk + DecisionTrace partielle + contexte ±50 lignes, appelle un endpoint injecté par le consommateur (MCP server externe / API / custom), valide agressivement contre la pipeline v2.4 avant acceptation. Audit trail complet (modèle, hash du prompt, score de validation), `temperature: 0` pour reproductibilité. Nouveau `resolveAsync()` exporté côte à côte avec `resolve()` synchrone. **+10-20 %** global avec LLM activé, 0 % sans (rétro-compat stricte).
 
-**`@gitwand/core@2.6.0` — Refactoring-aware merge (expérimental)**
+**`@gitwand/core@2.6.0` — Refactoring-aware merge (expérimental) ✅**
 
-Détection de 3 refactorings cibles via tree-sitter — rename local, rename top-level, move method — puis pipeline RefMerge invert/merge/replay (Ellis et al. TSE 2023). Opt-in. Couvre la classe « rename d'un symbole d'un côté + ajout d'un usage de l'ancien nom ailleurs » qu'aucun merge syntaxique ne résout. **+5 %** sur les cas spécifiques de rename, sinon stable.
+Détection de 3 refactorings cibles — rename local, rename top-level, move method — via tokenisation et substitution bijective simultanée (avec recherche par permutation pour les groupes ambigus de même count). Pipeline RefMerge invert/merge/replay (Ellis et al. TSE 2023). Opt-in via `refactoringAware.enabled: true`. Pattern plugin priorité 970, désactivé par défaut. Cache module-level pour éviter le double calcul detect+assemble. Couvre la classe « rename d'un symbole d'un côté + ajout d'un usage de l'ancien nom ailleurs » qu'aucun merge syntaxique ne résout. **898/898 tests passing. +5 %** sur les cas spécifiques de rename, sinon stable.
 
 ---
 

@@ -40,6 +40,8 @@ export const DEFAULT_OPTIONS: Required<GitWandOptions> = {
   validationTools: ["tsc"],
   // v2.5 — LLM fallback (désactivé par défaut)
   llmFallback: { enabled: false },
+  // v2.6 — RefMerge (désactivé par défaut)
+  refactoringAware: { enabled: false },
 };
 
 /** Ordre de confiance pour comparaison. */

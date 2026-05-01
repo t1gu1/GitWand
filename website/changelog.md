@@ -5,6 +5,54 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.6.0 — May 2026
+
+### Refactoring-aware merge
+
+The conflict resolver has a new trick: it now understands that two branches can make incompatible changes to a file not because they edited the same lines with conflicting intent, but simply because one branch renamed a variable while the other added new uses of the old name. These are the conflicts that look scary but aren't — and they've been invisible to every merge algorithm until now.
+
+`@gitwand/core@2.6.0` introduces a four-phase pipeline for this. When a hunk resists all the standard patterns, the refactoring detector kicks in. It tokenises the base, ours, and theirs versions, identifies tokens that disappeared from one side and appeared on the other, and confirms via a full bijective substitution check that the token sequence maps cleanly. It handles three refactoring kinds: local variable / parameter renames (scoped to the enclosing function), top-level function and class renames (applied globally), and method moves between classes. Once the refactoring is confirmed, both branches are inverted back to the base nomenclature, merged with the standard 3-way engine (which now operates on code that agrees on all names), and the refactoring is replayed forward on the result. The whole pipeline runs inside a try/catch — if anything is uncertain, it degrades to `complex` without touching the conflict.
+
+The feature is opt-in. Set `refactoringAware: { enabled: true }` in your `GitWandOptions` or `.gitwandrc`. With it disabled (the default), the code path is completely silent and adds zero overhead.
+
+A technical note on a non-obvious edge case this release also fixes: when two parameters are renamed simultaneously in the same commit (`a` → `left`, `b` → `right`), both appear with the same occurrence count, which the original bijective algorithm misclassified as ambiguous. The fix uses permutation search over same-count candidate groups and validates each assignment against the full token sequence — correct result, negligible cost at the scales these hunks actually appear.
+
+---
+
+## v2.5.1 — May 2026
+
+### PR filter — finally working end-to-end
+
+The "Assignées" and "Reviews" filter buttons in the PR sidebar were silently showing all PRs regardless of the selection. Three separate bugs compounded to produce this failure. First, `ghCurrentUser()` was fetching from `/api/gh-current-user` (pointing at Vite's dev server on port 5173, which served back `index.html`), so JSON parsing threw `Unexpected token '<'` and the identity resolved to `null`. Second, the old error handler was `.catch(() => {})` — which swallowed the failure completely and showed all PRs as if the filter were off. Third, busy repos like Dendreo have more than 50 open PRs, and the `--limit 50` cap in the Rust backend silently dropped older ones; PR #9023 (assigned to Laurent) never appeared in any list. All three are fixed: the URL now carries the `${DEV_SERVER}` prefix used by every other endpoint; the error lands in a visible `currentUserError` ref with a Retry button in the UI; and the limit is raised to 300 in Rust and paginated 3 × 100 in the dev-server.
+
+### Offline mode
+
+A new `useNetworkStatus()` composable wires the browser's `online` / `offline` events to an `isOffline` ref that propagates through the app. When offline, `SyncSplitButton` disables all remote actions (push, pull, fetch, merge remote) and shows a tooltip explaining why. The app header shows an "Offline" pill. No more mystery failures when the laptop is on a train.
+
+### Error log replaces the blocking banner
+
+The red error banner that blocked the header whenever the app encountered an unhandled error is gone. In its place: a slim, non-blocking toast with a "View logs" link, a discrete red dot on the settings button to signal unread entries, and a dedicated Logs tab in Settings that shows a timestamped, reverse-chronological list (max 200 entries) with a Clear button. Errors are persisted to `localStorage` so they survive a reload.
+
+---
+
+## v2.5.0 — April 2026
+
+### LLM fallback for complex conflicts
+
+The core engine gets its biggest new capability since tree-sitter structural merge: a generative model fallback for the hunks that the deterministic patterns can't touch. When `llmFallback.enabled: true` is set in `GitWandOptions`, every hunk classified as `complex` by the pattern engine is routed to a model endpoint you supply — any API that accepts a prompt string and returns a string. The resolver constructs a context-aware prompt (configurable window of surrounding lines), calls the model, validates the output through the parse-tree and post-merge scoring pipeline, and accepts the resolution if its score clears the `minPostMergeScore` threshold. Below threshold, it falls back cleanly to `complex` and surfaces the hunk for manual review.
+
+The new `llm_proposed` ConflictType appears in decision traces whenever a model resolution was accepted. The full audit trail — model name, latency, prompt hash, truncated raw response, validation score, accepted/rejected — is recorded in `LlmTrace` and attached to the hunk's `DecisionTrace`, so you can see exactly what happened and reproduce it.
+
+The synchronous `resolve()` continues to work exactly as before — it never calls the model. The LLM path is only active in `resolveAsync()`, so the performance characteristics of the standard pipeline are unchanged.
+
+`@gitwand/mcp` gains a `resolve_hunk` tool that exposes this full pipeline to any MCP client. Pass `ours`, `theirs`, and optionally `base`, and get back `type`, `confidence`, `resolution`, `explanation`, and `llmTrace` when a model was involved. Ten new corpus fixtures (F36–F45) cover the v2.5 surface.
+
+### Desktop polish
+
+Recent and pinned repositories now appear on the empty state and in the repo-switcher dropdown — no more hunting for a path you just had open. Push confirmation detects unpushed local tags and offers to include them. Two visual fixes: the Tags modal buttons were too small (now `size="md"` to match the rest of the app), and the Rewind button had a transparent background in Light mode (now uses `opacity: 0.12` on the danger color). The Worktree and Submodule panels have been migrated to `BaseModal` for visual consistency with every other overlay in the app.
+
+---
+
 ## v2.4.1 — April 2026
 
 ### Semantic validation lands in core

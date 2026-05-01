@@ -46,6 +46,7 @@ import {
 import { dispatchFormatAware } from "./format-dispatch.js";
 import { assembleResolution } from "./assemble.js";
 import { setLlmFallbackEnabled } from "../patterns/llm-proposed.js";
+import { setRefMergeEnabled } from "../patterns/refactoring-aware-merge.js";
 import { runLlmFallbackPhase } from "./llm-pipeline.js";
 
 /**
@@ -111,6 +112,12 @@ export function resolve(
   userOptions: GitWandOptions = {},
 ): MergeResult {
   const options = { ...DEFAULT_OPTIONS, ...userOptions };
+
+  // v2.6 — RefMerge opt-in : activer le pattern avant classification, désactiver après
+  const refEnabled = !!(options.refactoringAware?.enabled);
+  if (refEnabled) {
+    setRefMergeEnabled(true, options.refactoringAware?.maxRefactoringsPerSide ?? 10);
+  }
 
   const { segments } = parseConflictMarkers(conflictedContent);
 
@@ -189,6 +196,9 @@ export function resolve(
     remaining: hunks.length - autoResolvedCount,
     byType,
   };
+
+  // v2.6 — Désactiver le flag RefMerge après traitement
+  if (refEnabled) setRefMergeEnabled(false);
 
   const mergedContent = allResolved ? outputLines.join("\n") : null;
 

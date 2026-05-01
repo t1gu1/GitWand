@@ -270,6 +270,26 @@ export interface GitWandrcConfig {
     minPostMergeScore?: number;
     minMode?: ValidationLevel;
   };
+  /**
+   * v2.6 — Moteur RefMerge (expérimental, opt-in).
+   *
+   * ```jsonc
+   * {
+   *   "refactoringAware": {
+   *     "enabled": true,
+   *     "maxRefactoringsPerSide": 10
+   *   }
+   * }
+   * ```
+   */
+  refactoringAware?: {
+    /** Activer le moteur RefMerge (défaut: false) */
+    enabled?: boolean;
+    /**
+     * Nombre maximum de refactorings par branche avant fallback `complex`. Défaut: 10.
+     */
+    maxRefactoringsPerSide?: number;
+  };
 }
 
 /**
@@ -362,6 +382,21 @@ export function parseGitwandrc(json: string): GitWandrcConfig | null {
 
       if (Object.keys(fallback).length > 0) {
         result.llmFallback = fallback;
+      }
+    }
+
+    // v2.6 — RefMerge config (expérimental, opt-in).
+    if (parsed.refactoringAware && typeof parsed.refactoringAware === "object") {
+      const ra = parsed.refactoringAware;
+      const refactoringAware: NonNullable<GitWandrcConfig["refactoringAware"]> = {};
+
+      if (typeof ra.enabled === "boolean") refactoringAware.enabled = ra.enabled;
+      if (typeof ra.maxRefactoringsPerSide === "number" && ra.maxRefactoringsPerSide > 0) {
+        refactoringAware.maxRefactoringsPerSide = ra.maxRefactoringsPerSide;
+      }
+
+      if (Object.keys(refactoringAware).length > 0) {
+        result.refactoringAware = refactoringAware;
       }
     }
 
