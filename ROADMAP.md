@@ -522,7 +522,7 @@ Renuméroté pour faire de la place à la séquence core ci-dessus. Cadence rale
 
 ---
 
-### v2.7.0 — Workspaces + Hooks manager + Worktree first-class
+### ✅ v2.7.0 — Workspaces + Hooks manager + Worktree first-class
 
 Fondations multi-repo (prérequis pour le Launchpad), pouvoir utilisateur avancé, et worktrees élevés au rang de primitive workflow.
 
@@ -554,7 +554,7 @@ Le manager worktree de v1.6.3 crée / liste / supprime. Ici on passe au paradigm
 
 ---
 
-### v2.8.0 — Agent Sessions View + Scheduled AI tasks
+### ✅ v2.8.0 — Agent Sessions View + Scheduled AI tasks
 
 Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel. Complété par une couche d'automatisation IA planifiée.
 

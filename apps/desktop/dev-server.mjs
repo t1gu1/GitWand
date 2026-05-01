@@ -10,7 +10,7 @@
 
 import { createServer } from "node:http";
 import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
 import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
 
@@ -2935,6 +2935,247 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ─── Git Hooks ──────────────────────────────────────────────
+
+    const HOOK_NAMES_ORDER = [
+      "pre-commit","prepare-commit-msg","commit-msg","post-commit",
+      "pre-push","pre-rebase","post-checkout","post-merge",
+      "pre-receive","update","post-receive","post-update","post-rewrite",
+      "applypatch-msg","pre-applypatch","post-applypatch","pre-auto-gc","sendemail-validate",
+    ];
+
+    // GET /api/git-hook-list?cwd=<path>
+    if (url.pathname === "/api/git-hook-list" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const hooksDir = join(cwd, ".git", "hooks");
+        if (!existsSync(hooksDir)) return jsonResponse(req, res, []);
+        const files = readdirSync(hooksDir).filter(f => !f.endsWith(".sample"));
+        const seen = new Set();
+        const entries = [];
+        for (const fname of files) {
+          const isDisabled = fname.endsWith(".disabled");
+          const name = isDisabled ? fname.slice(0, -".disabled".length) : fname;
+          if (seen.has(name)) continue;
+          seen.add(name);
+          const fpath = join(hooksDir, fname);
+          const stat = statSync(fpath);
+          const executable = (stat.mode & 0o111) !== 0;
+          const content = readFileSync(fpath, "utf-8");
+          const preview = content.split("\n").find(l => l.trim()) || "";
+          entries.push({ name, enabled: !isDisabled, executable, preview: preview.slice(0, 80) });
+        }
+        entries.sort((a, b) => {
+          const ai = HOOK_NAMES_ORDER.indexOf(a.name);
+          const bi = HOOK_NAMES_ORDER.indexOf(b.name);
+          if (ai >= 0 && bi >= 0) return ai - bi;
+          if (ai >= 0) return -1;
+          if (bi >= 0) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        return jsonResponse(req, res, entries);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-hook-toggle  { cwd, name, enabled }
+    if (url.pathname === "/api/git-hook-toggle" && req.method === "POST") {
+      try {
+        const { cwd, name, enabled } = await readBody(req);
+        if (!name || name.includes("/") || name.includes("\\") || name.includes(".")) {
+          return jsonResponse(req, res, { error: "Invalid hook name" }, 400);
+        }
+        const hooksDir = join(resolve(cwd), ".git", "hooks");
+        const enabledPath = join(hooksDir, name);
+        const disabledPath = join(hooksDir, `${name}.disabled`);
+        if (enabled && existsSync(disabledPath)) renameSync(disabledPath, enabledPath);
+        else if (!enabled && existsSync(enabledPath)) renameSync(enabledPath, disabledPath);
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-hook-create  { cwd, name, content }
+    if (url.pathname === "/api/git-hook-create" && req.method === "POST") {
+      try {
+        const { cwd, name, content } = await readBody(req);
+        if (!name || name.includes("/") || name.includes("\\") || name.includes(".")) {
+          return jsonResponse(req, res, { error: "Invalid hook name" }, 400);
+        }
+        const hooksDir = join(resolve(cwd), ".git", "hooks");
+        mkdirSync(hooksDir, { recursive: true });
+        const script = content.startsWith("#!") ? content : `#!/usr/bin/env bash\n${content}`;
+        writeFileSync(join(hooksDir, name), script, { mode: 0o755 });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-hook-delete  { cwd, name }
+    if (url.pathname === "/api/git-hook-delete" && req.method === "POST") {
+      try {
+        const { cwd, name } = await readBody(req);
+        if (!name || name.includes("/") || name.includes("\\") || name.includes(".")) {
+          return jsonResponse(req, res, { error: "Invalid hook name" }, 400);
+        }
+        const hooksDir = join(resolve(cwd), ".git", "hooks");
+        const enabledPath = join(hooksDir, name);
+        const disabledPath = join(hooksDir, `${name}.disabled`);
+        if (existsSync(enabledPath)) unlinkSync(enabledPath);
+        if (existsSync(disabledPath)) unlinkSync(disabledPath);
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // ─── Workspaces ─────────────────────────────────────────────
+
+    // GET /api/workspace-read?path=<dir>
+    if (url.pathname === "/api/workspace-read" && req.method === "GET") {
+      try {
+        const dir = resolve(url.searchParams.get("path") || "");
+        const file = join(dir, ".gitwand-workspace.json");
+        if (!existsSync(file)) return jsonResponse(req, res, { error: "No workspace file found" }, 404);
+        return jsonResponse(req, res, JSON.parse(readFileSync(file, "utf-8")));
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/workspace-write  { path, workspace }
+    if (url.pathname === "/api/workspace-write" && req.method === "POST") {
+      try {
+        const { path: dir, workspace } = await readBody(req);
+        const file = join(resolve(dir), ".gitwand-workspace.json");
+        writeFileSync(file, JSON.stringify(workspace, null, 2));
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/workspace-status-all  { repos: [{ path, name }] }
+    if (url.pathname === "/api/workspace-status-all" && req.method === "POST") {
+      try {
+        const { repos } = await readBody(req);
+        const statuses = repos.map(repo => {
+          try {
+            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repo.path, encoding: "utf-8" }).trim();
+            let ahead = 0, behind = 0;
+            try {
+              const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: repo.path, encoding: "utf-8" }).trim().split(/\s+/);
+              ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+            } catch {}
+            const modified = execSync("git status --porcelain --untracked-files=no", { cwd: repo.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean).length;
+            return { path: repo.path, name: repo.name, branch, ahead, behind, modified, error: null };
+          } catch (e) {
+            return { path: repo.path, name: repo.name, branch: "", ahead: 0, behind: 0, modified: 0, error: e.message };
+          }
+        });
+        return jsonResponse(req, res, statuses);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/workspace-fetch-all  { repos }
+    if (url.pathname === "/api/workspace-fetch-all" && req.method === "POST") {
+      try {
+        const { repos } = await readBody(req);
+        for (const repo of repos) {
+          try { execSync("git fetch --all --prune", { cwd: repo.path, encoding: "utf-8" }); } catch {}
+        }
+        // Return updated statuses
+        const statuses = repos.map(repo => {
+          try {
+            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repo.path, encoding: "utf-8" }).trim();
+            let ahead = 0, behind = 0;
+            try {
+              const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: repo.path, encoding: "utf-8" }).trim().split(/\s+/);
+              ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+            } catch {}
+            const modified = execSync("git status --porcelain --untracked-files=no", { cwd: repo.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean).length;
+            return { path: repo.path, name: repo.name, branch, ahead, behind, modified, error: null };
+          } catch (e) {
+            return { path: repo.path, name: repo.name, branch: "", ahead: 0, behind: 0, modified: 0, error: e.message };
+          }
+        });
+        return jsonResponse(req, res, statuses);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/workspace-pull-all  { repos }
+    if (url.pathname === "/api/workspace-pull-all" && req.method === "POST") {
+      try {
+        const { repos } = await readBody(req);
+        for (const repo of repos) {
+          try { execSync("git pull --ff-only", { cwd: repo.path, encoding: "utf-8" }); } catch {}
+        }
+        const statuses = repos.map(repo => {
+          try {
+            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repo.path, encoding: "utf-8" }).trim();
+            let ahead = 0, behind = 0;
+            try {
+              const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: repo.path, encoding: "utf-8" }).trim().split(/\s+/);
+              ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+            } catch {}
+            const modified = execSync("git status --porcelain --untracked-files=no", { cwd: repo.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean).length;
+            return { path: repo.path, name: repo.name, branch, ahead, behind, modified, error: null };
+          } catch (e) {
+            return { path: repo.path, name: repo.name, branch: "", ahead: 0, behind: 0, modified: 0, error: e.message };
+          }
+        });
+        return jsonResponse(req, res, statuses);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // GET /api/git-worktree-status-all?cwd=<path>
+    if (url.pathname === "/api/git-worktree-status-all" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const raw = execSync("git worktree list --porcelain", { cwd, encoding: "utf-8" });
+        const worktrees = [];
+        let cur = null;
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("worktree ")) {
+            if (cur) worktrees.push(cur);
+            cur = { path: line.slice("worktree ".length) };
+          } else if (cur && line.startsWith("branch ")) {
+            cur.branch = line.slice("branch ".length).replace("refs/heads/", "");
+          } else if (cur && line === "detached") {
+            cur.branch = "(detached)";
+          }
+        }
+        if (cur) worktrees.push(cur);
+
+        const statuses = worktrees.map(wt => {
+          try {
+            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: wt.path, encoding: "utf-8" }).trim();
+            let ahead = 0, behind = 0;
+            try {
+              const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: wt.path, encoding: "utf-8" }).trim().split(/\s+/);
+              ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+            } catch {}
+            const modified = execSync("git status --porcelain --untracked-files=no", { cwd: wt.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean).length;
+            return { path: wt.path, name: wt.branch || branch, branch, ahead, behind, modified, error: null };
+          } catch (e) {
+            return { path: wt.path, name: wt.branch || "", branch: "", ahead: 0, behind: 0, modified: 0, error: e.message };
+          }
+        });
+        return jsonResponse(req, res, statuses);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // ─── Worktrees ──────────────────────────────────────────────
 
     // GET /api/git-worktree-list?cwd=<path>
@@ -3001,6 +3242,70 @@ const server = createServer(async (req, res) => {
       try {
         const { cwd } = await readBody(req);
         execSync("git worktree prune", { cwd: resolve(cwd), encoding: "utf-8" });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // ─── Agent Sessions ─────────────────────────────────────────
+
+    // GET /api/agent-session-list?cwd=<path>
+    if (url.pathname === "/api/agent-session-list" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const wtRaw = execSync("git worktree list --porcelain", { cwd, encoding: "utf-8" });
+        const worktrees = [];
+        let cur = {};
+        for (const line of wtRaw.split("\n")) {
+          if (line.startsWith("worktree ")) {
+            if (cur.path) worktrees.push(cur);
+            cur = { path: line.slice(9).trim() };
+          } else if (line.startsWith("branch ")) {
+            cur.branch = line.slice(7).trim().replace("refs/heads/", "");
+          }
+        }
+        if (cur.path) worktrees.push(cur);
+
+        const AGENT_DIRS = { claude: ".claude", cursor: ".cursor", windsurf: ".windsurf" };
+        const sessions = [];
+        for (const wt of worktrees) {
+          let tool = null;
+          for (const [name, dir] of Object.entries(AGENT_DIRS)) {
+            if (existsSync(join(wt.path, dir))) { tool = name; break; }
+          }
+          if (!tool && existsSync(join(wt.path, ".mcp.json"))) tool = "other";
+          if (!tool) continue;
+
+          let ahead = 0, behind = 0;
+          try {
+            const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: wt.path, encoding: "utf-8" }).trim().split(/\s+/);
+            ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+          } catch {}
+
+          let modified = 0;
+          try {
+            const st = execSync("git status --porcelain --untracked-files=no", { cwd: wt.path, encoding: "utf-8" });
+            modified = st.split("\n").filter(Boolean).length;
+          } catch {}
+
+          let branch = wt.branch || "";
+          try { branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: wt.path, encoding: "utf-8" }).trim(); } catch {}
+
+          sessions.push({ path: wt.path, branch, tool, active: false, ahead, behind, modified });
+        }
+        return jsonResponse(req, res, sessions);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/agent-session-launch  { cwd, tool }
+    if (url.pathname === "/api/agent-session-launch" && req.method === "POST") {
+      try {
+        const { cwd, tool } = await readBody(req);
+        const binary = tool === "cursor" ? "cursor" : tool === "windsurf" ? "windsurf" : "claude";
+        spawn(binary, [], { cwd: resolve(cwd), detached: true, stdio: "ignore" }).unref();
         return jsonResponse(req, res, {});
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);

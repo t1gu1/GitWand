@@ -5,6 +5,37 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.8.0 — May 2026
+
+### Agent Sessions View + Scheduled AI tasks
+
+GitWand now sees the AI agents working on your repos — and can act on your behalf while you sleep.
+
+**Agent Sessions View** answers the question "what is my AI agent actually doing right now?" A new panel in the sidebar detects running Claude Code, Cursor, and Windsurf processes by examining their working directories, cross-referenced against your repo's worktrees. Each card shows the tool, branch, ahead/behind/modified status, and whether the session is currently live (animated pulse indicator). One click opens the worktree in a GitWand tab so you can watch the diff evolve in real time, or launch a fresh Claude Code session on any worktree directly from GitWand.
+
+**Scheduled AI tasks** is a lightweight automation layer with no daemon, no cloud, and no configuration files — four opt-in tasks that integrate cleanly with the Git events you already work with:
+
+- **Auto-resolve on conflict** fires the moment a `MERGE_HEAD` appears, runs the conflict resolver automatically, and logs the result.
+- **Nightly pull + rebase** runs `git pull --rebase` at the hour and minute you choose — once per day, skipped if you're offline.
+- **Release notes on tag** triggers when you push a `v*` tag and generates a CHANGELOG entry via the AI provider already configured in Settings.
+- **AI commit batch** watches for staged files as you switch away from the app or close it, and surfaces an AI commit message suggestion so it's ready when you return.
+
+All tasks have a toggle, show their last-run timestamp, and log every action to the Logs tab. AI-dependent tasks disable themselves gracefully when AI is turned off.
+
+## v2.7.0 — May 2026
+
+### Workspaces, Hooks manager, and Worktree first-class
+
+Three pillars that together make GitWand the command center for multi-repo engineering workflows.
+
+**Workspaces** bring the multi-repo dashboard you've always wanted — without any cloud, account, or proprietary sync. Drop a `.gitwand-workspace.json` in a directory (commitable if you like), group your repos by project or squad, and get a single view of every repo's branch, ahead/behind count, and modified file count. Fetch all, pull all, or open all in tabs in one click. The foundation v2.9's Launchpad will build on.
+
+**Hooks manager** makes `.git/hooks` visible and controllable. The new Hooks tab in Settings lists every hook in the repo, lets you toggle it on/off with a switch (using the `.disabled` suffix convention understood by tools like Husky), create new hooks from a dropdown of all 18 standard Git hook names, and delete them with confirmation. The same 3-layer pattern (Rust command → dev-server endpoint → typed TS wrapper) used for all GitWand backend features.
+
+**Worktree first-class** finishes what v1.6 started. Hit ⌘⇧N from anywhere, type a task name, and GitWand creates the worktree (path auto-derived as a sibling of the main worktree), creates the branch (`task/<name>` by default), and opens the worktree in a new tab — one gesture, no terminal. Each worktree row in the manager now shows live status pills (↑ ahead, ↓ behind, ~ modified, ✓ clean). And a new Cleanup panel surfaces non-main worktrees with nothing left to push, so you can select and delete merged branches in bulk.
+
+---
+
 ## v2.6.0 — May 2026
 
 ### Refactoring-aware merge

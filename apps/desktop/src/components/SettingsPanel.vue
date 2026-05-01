@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useTheme } from "../composables/useTheme";
 import BaseModal from "./BaseModal.vue";
+import HooksPanel from "./HooksPanel.vue";
+import AutomationsPanel from "./AutomationsPanel.vue";
 import {
   localeLabels,
   supportedLocales,
@@ -30,7 +32,9 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: ErrorLogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "git" | "editor" | "ai" | "logs";
+  initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
+  /** Current repo path (for Hooks tab) */
+  cwd?: string;
 }>();
 
 const emit = defineEmits<{
@@ -72,6 +76,13 @@ interface Settings {
   aiModel: string;
   aiOllamaUrl: string;
   aiOllamaModel: string;
+  // Automation settings (v2.8)
+  automations: {
+    autoResolve: { enabled: boolean };
+    nightlyPull: { enabled: boolean; hour: number; minute: number };
+    releaseNotes: { enabled: boolean };
+    aiCommitBatch: { enabled: boolean };
+  };
 }
 
 const defaultSettings: Settings = {
@@ -96,6 +107,12 @@ const defaultSettings: Settings = {
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
   blameAlgorithm: "histogram",
+  automations: {
+    autoResolve:   { enabled: false },
+    nightlyPull:   { enabled: false, hour: 8, minute: 0 },
+    releaseNotes:  { enabled: false },
+    aiCommitBatch: { enabled: false },
+  },
 };
 
 function loadSettings(): Settings {
@@ -120,7 +137,7 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "git" | "editor" | "ai" | "logs";
+type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 const settingsTabs: { id: SettingsTab; icon: string }[] = [
@@ -128,6 +145,8 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
   { id: "ai", icon: "ai" },
+  { id: "automations", icon: "automations" },
+  { id: "hooks", icon: "hooks" },
   { id: "logs", icon: "logs" },
 ];
 
@@ -447,11 +466,22 @@ onMounted(() => {
           <svg v-else-if="tab.icon === 'ai'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
           </svg>
+          <!-- Hooks icon -->
+          <svg v-else-if="tab.icon === 'hooks'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+            <path d="M3 4l2 2-2 2M7 8h6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M3 12h10" stroke-linecap="round"/>
+          </svg>
+          <!-- Automations icon -->
+          <svg v-else-if="tab.icon === 'automations'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/>
+            <path d="M5.5 5.5L4 4M11.5 11.5L10 10M10.5 5.5L12 4M4.5 11.5L3 13"/>
+            <circle cx="8" cy="8" r="2.5"/>
+          </svg>
           <!-- Logs icon -->
           <svg v-else-if="tab.icon === 'logs'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
           </svg>
-          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : t('settings.tabLogs') }}</span>
+          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
           <!-- Error count badge on Logs tab -->
           <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-tab-badge">
             {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
@@ -1020,6 +1050,17 @@ onMounted(() => {
               <p>{{ t('settings.aiPrivacyNote') }}</p>
             </div>
           </template>
+        </template>
+
+        <!-- ═══ AUTOMATIONS ═══ -->
+        <template v-if="activeSettingsTab === 'automations'">
+          <AutomationsPanel />
+        </template>
+
+        <!-- ═══ HOOKS ═══ -->
+        <template v-if="activeSettingsTab === 'hooks'">
+          <HooksPanel v-if="props.cwd" :cwd="props.cwd" />
+          <div v-else class="sp-logs-empty">{{ t('hooks.empty') }}</div>
         </template>
 
         <!-- ═══ LOGS ═══ -->

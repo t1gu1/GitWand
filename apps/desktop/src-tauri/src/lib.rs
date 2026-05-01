@@ -4128,6 +4128,399 @@ fn resolve_claude_binary() -> Option<String> {
     None
 }
 
+// ─── Git Hooks ────────────────────────────────────────────────
+
+/// Standard Git hook names (in lifecycle order).
+const HOOK_NAMES: &[&str] = &[
+    "pre-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-push",
+    "pre-rebase",
+    "post-checkout",
+    "post-merge",
+    "pre-receive",
+    "update",
+    "post-receive",
+    "post-update",
+    "post-rewrite",
+    "applypatch-msg",
+    "pre-applypatch",
+    "post-applypatch",
+    "pre-auto-gc",
+    "sendemail-validate",
+];
+
+#[derive(serde::Serialize)]
+pub struct HookEntry {
+    pub name: String,
+    pub enabled: bool,
+    pub executable: bool,
+    /// First line of the hook script (shebang / command), or empty.
+    pub preview: String,
+}
+
+/// List all Git hooks for the repository at `cwd`.
+///
+/// Returns every hook that exists in `.git/hooks/` (skipping `.sample` files).
+/// Disabled hooks are stored as `<name>.disabled`.
+#[tauri::command]
+fn git_hook_list(cwd: String) -> Result<Vec<HookEntry>, String> {
+    let repo = safe_repo_path(&cwd)?;
+    let hooks_dir = repo.join(".git").join("hooks");
+
+    if !hooks_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut entries: Vec<HookEntry> = Vec::new();
+
+    let read_dir = std::fs::read_dir(&hooks_dir)
+        .map_err(|e| format!("Failed to read hooks directory: {}", e))?;
+
+    for entry in read_dir.flatten() {
+        let fname = entry.file_name().to_string_lossy().to_string();
+
+        // Skip .sample files
+        if fname.ends_with(".sample") {
+            continue;
+        }
+
+        // Determine canonical hook name and enabled state
+        let (name, enabled) = if fname.ends_with(".disabled") {
+            (fname[..fname.len() - ".disabled".len()].to_string(), false)
+        } else {
+            (fname.clone(), true)
+        };
+
+        // Deduplicate (prefer enabled over disabled if both exist somehow)
+        if seen.contains(&name) {
+            continue;
+        }
+        seen.insert(name.clone());
+
+        let path = hooks_dir.join(&fname);
+
+        // Check executable bit (Unix)
+        #[cfg(unix)]
+        let executable = {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::metadata(&path)
+                .map(|m| m.permissions().mode() & 0o111 != 0)
+                .unwrap_or(false)
+        };
+        #[cfg(not(unix))]
+        let executable = true;
+
+        // Read first non-empty line as preview
+        let preview = std::fs::read_to_string(&path)
+            .unwrap_or_default()
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("")
+            .chars()
+            .take(80)
+            .collect();
+
+        entries.push(HookEntry { name, enabled, executable, preview });
+    }
+
+    // Sort by lifecycle order (known hooks first, then alphabetical unknown ones)
+    entries.sort_by(|a, b| {
+        let ai = HOOK_NAMES.iter().position(|&n| n == a.name);
+        let bi = HOOK_NAMES.iter().position(|&n| n == b.name);
+        match (ai, bi) {
+            (Some(x), Some(y)) => x.cmp(&y),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.name.cmp(&b.name),
+        }
+    });
+
+    Ok(entries)
+}
+
+/// Enable or disable a Git hook by renaming it with/without `.disabled` suffix.
+#[tauri::command]
+fn git_hook_toggle(cwd: String, name: String, enabled: bool) -> Result<(), String> {
+    // Validate hook name — alphanumeric + hyphens only
+    if name.contains('/') || name.contains('\\') || name.contains('.') {
+        return Err(format!("Invalid hook name: {}", name));
+    }
+    let repo = safe_repo_path(&cwd)?;
+    let hooks_dir = repo.join(".git").join("hooks");
+
+    let enabled_path = hooks_dir.join(&name);
+    let disabled_path = hooks_dir.join(format!("{}.disabled", name));
+
+    if enabled {
+        // Enable: rename .disabled → name
+        if disabled_path.exists() {
+            std::fs::rename(&disabled_path, &enabled_path)
+                .map_err(|e| format!("Failed to enable hook: {}", e))?;
+        }
+    } else {
+        // Disable: rename name → name.disabled
+        if enabled_path.exists() {
+            std::fs::rename(&enabled_path, &disabled_path)
+                .map_err(|e| format!("Failed to disable hook: {}", e))?;
+        }
+    }
+    Ok(())
+}
+
+/// Create or overwrite a Git hook script.
+///
+/// The hook is written to `.git/hooks/<name>` and made executable.
+/// Pass `content` without a shebang — `#!/usr/bin/env bash` is prepended automatically
+/// if the content does not already start with `#!`.
+#[tauri::command]
+fn git_hook_create(cwd: String, name: String, content: String) -> Result<(), String> {
+    // Validate hook name
+    if name.contains('/') || name.contains('\\') || name.contains('.') {
+        return Err(format!("Invalid hook name: {}", name));
+    }
+    let repo = safe_repo_path(&cwd)?;
+    let hooks_dir = repo.join(".git").join("hooks");
+
+    std::fs::create_dir_all(&hooks_dir)
+        .map_err(|e| format!("Failed to create hooks directory: {}", e))?;
+
+    let hook_path = hooks_dir.join(&name);
+
+    let script = if content.starts_with("#!") {
+        content.clone()
+    } else {
+        format!("#!/usr/bin/env bash\n{}", content)
+    };
+
+    std::fs::write(&hook_path, script)
+        .map_err(|e| format!("Failed to write hook: {}", e))?;
+
+    // Make executable (Unix only)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&hook_path)
+            .map_err(|e| format!("Failed to read hook metadata: {}", e))?
+            .permissions();
+        perms.set_mode(perms.mode() | 0o755);
+        std::fs::set_permissions(&hook_path, perms)
+            .map_err(|e| format!("Failed to set hook permissions: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Delete a Git hook (both enabled and disabled variants).
+#[tauri::command]
+fn git_hook_delete(cwd: String, name: String) -> Result<(), String> {
+    if name.contains('/') || name.contains('\\') || name.contains('.') {
+        return Err(format!("Invalid hook name: {}", name));
+    }
+    let repo = safe_repo_path(&cwd)?;
+    let hooks_dir = repo.join(".git").join("hooks");
+
+    let enabled_path = hooks_dir.join(&name);
+    let disabled_path = hooks_dir.join(format!("{}.disabled", name));
+
+    if enabled_path.exists() {
+        std::fs::remove_file(&enabled_path)
+            .map_err(|e| format!("Failed to delete hook: {}", e))?;
+    }
+    if disabled_path.exists() {
+        let _ = std::fs::remove_file(&disabled_path);
+    }
+
+    Ok(())
+}
+
+// ─── Workspaces ───────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct WorkspaceRepo {
+    pub path: String,
+    pub name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct WorkspaceConfig {
+    pub name: String,
+    pub repos: Vec<WorkspaceRepo>,
+}
+
+#[derive(serde::Serialize)]
+pub struct WorkspaceRepoStatus {
+    pub path: String,
+    pub name: String,
+    /// Current branch name (empty if not on a branch).
+    pub branch: String,
+    /// Commits ahead of upstream.
+    pub ahead: u32,
+    /// Commits behind upstream.
+    pub behind: u32,
+    /// Number of modified (tracked) files.
+    pub modified: u32,
+    /// Error fetching status (null = OK).
+    pub error: Option<String>,
+}
+
+/// Read a `.gitwand-workspace.json` from the given directory.
+#[tauri::command]
+fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
+    let dir = std::path::Path::new(&path);
+    let file = dir.join(".gitwand-workspace.json");
+    if !file.exists() {
+        return Err(format!("No workspace file found at {}", file.display()));
+    }
+    let content = std::fs::read_to_string(&file)
+        .map_err(|e| format!("Failed to read workspace: {}", e))?;
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse workspace: {}", e))
+}
+
+/// Write a `.gitwand-workspace.json` to the given directory.
+#[tauri::command]
+fn workspace_write(path: String, workspace: WorkspaceConfig) -> Result<(), String> {
+    let dir = std::path::Path::new(&path);
+    let file = dir.join(".gitwand-workspace.json");
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("Failed to create directory: {}", e))?;
+    let content = serde_json::to_string_pretty(&workspace)
+        .map_err(|e| format!("Failed to serialize workspace: {}", e))?;
+    std::fs::write(&file, content)
+        .map_err(|e| format!("Failed to write workspace: {}", e))
+}
+
+/// Get the status of all repos in a workspace (branch, ahead/behind, modified count).
+#[tauri::command]
+fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+    repos.into_iter().map(|repo| {
+        let path = repo.path.clone();
+        let name = repo.name.clone();
+
+        // Get current branch
+        let branch = Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        // Get ahead/behind vs upstream
+        let (ahead, behind) = Command::new("git")
+            .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let parts: Vec<&str> = s.trim().split_whitespace().collect();
+                if parts.len() == 2 {
+                    let a = parts[0].parse::<u32>().ok()?;
+                    let b = parts[1].parse::<u32>().ok()?;
+                    Some((a, b))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or((0, 0));
+
+        // Count modified tracked files
+        let modified = Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.lines().filter(|l| !l.is_empty()).count() as u32)
+            .unwrap_or(0);
+
+        WorkspaceRepoStatus { path, name, branch, ahead, behind, modified, error: None }
+    }).collect()
+}
+
+/// Run `git fetch` on all repos in a workspace (best-effort; errors captured per-repo).
+#[tauri::command]
+fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+    for repo in &repos {
+        let _ = Command::new("git")
+            .args(["fetch", "--all", "--prune"])
+            .current_dir(&repo.path)
+            .output();
+    }
+    workspace_status_all(repos)
+}
+
+/// Run `git pull --ff-only` on all repos (best-effort).
+#[tauri::command]
+fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+    for repo in &repos {
+        let _ = Command::new("git")
+            .args(["pull", "--ff-only"])
+            .current_dir(&repo.path)
+            .output();
+    }
+    workspace_status_all(repos)
+}
+
+/// Get the cross-worktree status for a repo — ahead/behind + modified count per worktree.
+#[tauri::command]
+fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, String> {
+    let worktrees = git_worktree_list(cwd)?;
+
+    let statuses = worktrees.into_iter().map(|wt| {
+        let path = wt.path.clone();
+        let name = wt.branch.trim_start_matches("refs/heads/").to_string();
+
+        let branch = Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        let (ahead, behind) = Command::new("git")
+            .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let parts: Vec<&str> = s.trim().split_whitespace().collect();
+                if parts.len() == 2 {
+                    Some((parts[0].parse::<u32>().unwrap_or(0), parts[1].parse::<u32>().unwrap_or(0)))
+                } else { None }
+            })
+            .unwrap_or((0, 0));
+
+        let modified = Command::new("git")
+            .args(["status", "--porcelain", "--untracked-files=no"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.lines().filter(|l| !l.is_empty()).count() as u32)
+            .unwrap_or(0);
+
+        WorkspaceRepoStatus { path, name, branch, ahead, behind, modified, error: None }
+    }).collect();
+
+    Ok(statuses)
+}
+
 // ─── Worktrees ────────────────────────────────────────────────
 
 #[derive(serde::Serialize, Clone)]
@@ -4281,6 +4674,193 @@ fn git_worktree_prune(cwd: String) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
+    Ok(())
+}
+
+// ─── Agent Sessions ───────────────────────────────────────────
+
+/// One agent "session" entry — one per worktree that has at least one agent tool configured.
+#[derive(serde::Serialize, Clone)]
+pub struct AgentSession {
+    /// Absolute path of the worktree.
+    pub path: String,
+    /// Current branch name (short).
+    pub branch: String,
+    /// Detected agent tool ("claude" | "cursor" | "windsurf" | "other").
+    pub tool: String,
+    /// Whether a process for this tool is currently running with this worktree as its cwd.
+    pub active: bool,
+    pub ahead: u32,
+    pub behind: u32,
+    pub modified: u32,
+}
+
+/// Collect the current-working-directories of all running processes whose command
+/// matches `tool_name` (case-insensitive prefix match on the executable basename).
+///
+/// Strategy (cross-platform):
+///   1. Try `lsof -a -d cwd -c <tool> -F n` — reliable on macOS, works on most Linux.
+///   2. On Linux, fall back to `/proc/<pid>/cwd` symlink scan.
+fn active_cwds_for_tool(tool_name: &str) -> std::collections::HashSet<String> {
+    let mut cwds = std::collections::HashSet::new();
+
+    // ── lsof approach ───────────────────────────────────────
+    let lsof = std::process::Command::new("lsof")
+        .args(["-a", "-d", "cwd", "-c", tool_name, "-F", "n"])
+        .output();
+    if let Ok(out) = lsof {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                if let Some(path) = line.strip_prefix('n') {
+                    cwds.insert(path.to_string());
+                }
+            }
+            return cwds; // lsof succeeded — done
+        }
+    }
+
+    // ── Linux /proc fallback ─────────────────────────────────
+    #[cfg(target_os = "linux")]
+    if let Ok(entries) = std::fs::read_dir("/proc") {
+        for entry in entries.flatten() {
+            let pid_path = entry.path();
+            // Only PID dirs (numeric names)
+            if !entry.file_name().to_string_lossy().chars().all(|c| c.is_ascii_digit()) {
+                continue;
+            }
+            // Check if exe basename matches the tool name
+            let exe_path = pid_path.join("exe");
+            if let Ok(exe) = std::fs::read_link(&exe_path) {
+                let basename = exe.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("");
+                if !basename.to_lowercase().starts_with(&tool_name.to_lowercase()) {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+            // Read cwd symlink
+            if let Ok(cwd) = std::fs::read_link(pid_path.join("cwd")) {
+                if let Some(s) = cwd.to_str() {
+                    cwds.insert(s.to_string());
+                }
+            }
+        }
+    }
+
+    cwds
+}
+
+/// Detect which agent tool (if any) is configured in a worktree directory.
+/// Returns a non-empty tool identifier or None.
+fn detect_agent_tool(worktree_path: &str) -> Option<String> {
+    let base = std::path::Path::new(worktree_path);
+    if base.join(".claude").is_dir() {
+        return Some("claude".to_string());
+    }
+    if base.join(".cursor").is_dir() {
+        return Some("cursor".to_string());
+    }
+    if base.join(".windsurf").is_dir() {
+        return Some("windsurf".to_string());
+    }
+    // Check for generic .mcp.json (any MCP-capable tool)
+    if base.join(".mcp.json").exists() {
+        return Some("other".to_string());
+    }
+    None
+}
+
+/// List agent sessions for all worktrees of the repo at `cwd`.
+/// A session exists when a worktree directory contains agent configuration.
+#[tauri::command]
+fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, String> {
+    let path = safe_repo_path(&cwd)?;
+    let worktrees = git_worktree_list(path.to_string_lossy().to_string())?;
+
+    // Collect active cwds per known tool (lazy — only for tools actually present)
+    let mut cwds_cache: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+
+    let sessions: Vec<AgentSession> = worktrees
+        .into_iter()
+        .filter_map(|wt| {
+            let tool = detect_agent_tool(&wt.path)?; // skip worktrees without agents
+
+            // Check if a process is actively running in this dir
+            let active_cwds = cwds_cache
+                .entry(tool.clone())
+                .or_insert_with(|| active_cwds_for_tool(&tool));
+            let active = active_cwds.contains(&wt.path);
+
+            // Resolve branch name
+            let branch = std::process::Command::new(git_binary())
+                .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                .current_dir(&wt.path)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_else(|| wt.branch.trim_start_matches("refs/heads/").to_string());
+
+            // Ahead / behind
+            let (ahead, behind) = std::process::Command::new(git_binary())
+                .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+                .current_dir(&wt.path)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .and_then(|s| {
+                    let v: Vec<&str> = s.trim().split_whitespace().collect();
+                    if v.len() == 2 {
+                        Some((v[0].parse::<u32>().unwrap_or(0), v[1].parse::<u32>().unwrap_or(0)))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or((0, 0));
+
+            // Modified files
+            let modified = std::process::Command::new(git_binary())
+                .args(["status", "--porcelain", "--untracked-files=no"])
+                .current_dir(&wt.path)
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.lines().filter(|l| !l.is_empty()).count() as u32)
+                .unwrap_or(0);
+
+            Some(AgentSession { path: wt.path, branch, tool, active, ahead, behind, modified })
+        })
+        .collect();
+
+    Ok(sessions)
+}
+
+/// Launch `claude` (or another agent CLI) in the given worktree directory as a
+/// detached child process. Returns immediately — the process runs independently.
+#[tauri::command]
+fn agent_session_launch(cwd: String, tool: String) -> Result<(), String> {
+    let path = safe_repo_path(&cwd)?;
+    let binary = match tool.as_str() {
+        "cursor"   => "cursor",
+        "windsurf" => "windsurf",
+        _          => "claude",
+    };
+
+    std::process::Command::new(binary)
+        .current_dir(&path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| format!("Failed to launch {}: {}", binary, e))?;
+
     Ok(())
 }
 
@@ -5147,10 +5727,22 @@ pub fn run() {
             detect_claude_cli,
             claude_cli_prompt,
             claude_cli_login,
+            git_hook_list,
+            git_hook_toggle,
+            git_hook_create,
+            git_hook_delete,
+            workspace_read,
+            workspace_write,
+            workspace_status_all,
+            workspace_fetch_all,
+            workspace_pull_all,
+            git_worktree_status_all,
             git_worktree_list,
             git_worktree_add,
             git_worktree_remove,
             git_worktree_prune,
+            agent_session_list,
+            agent_session_launch,
             git_submodule_list,
             git_submodule_init,
             git_submodule_update,

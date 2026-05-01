@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-05-01
+
+Desktop product track v2.8: Agent Sessions View and Scheduled AI tasks — GitWand now sees the AI agents working on your repos, and can run lightweight automation tasks on your behalf without any external daemon.
+
+### Added
+
+- **Agent Sessions View** (`AgentSessionsPanel.vue` + 3-layer backend)
+  - New **Agents** button in the repo sidebar (robot icon) — opens a modal listing all agent sessions detected across the current repo's worktrees.
+  - Each card shows: tool badge (Claude Code / Cursor / Windsurf / other), active/configured status, branch, ↑ ahead / ↓ behind / ~ modified pills, and shortened path.
+  - **Active detection** cross-platform: `lsof -a -d cwd -c <tool>` on macOS/Linux + `/proc/<pid>/cwd` Linux fallback; graceful no-op when unavailable.
+  - **Launch session**: one-click to start Claude Code (`claude .`) on any worktree, or open a worktree in a GitWand tab.
+  - Active sessions sort first; animated green pulse badge on active cards.
+  - Rust commands (`agent_session_list`, `agent_session_launch`) + dev-server endpoints + typed `backend.ts` wrappers (`AgentSession`, `agentSessionList`, `agentSessionLaunch`).
+
+- **Scheduled AI tasks** (`useScheduler.ts` composable)
+  - New `useScheduler()` composable — pure TypeScript, no external daemon; uses `setInterval` + `visibilitychange` + `beforeunload` events. Completely silent when all tasks are disabled.
+  - Four opt-in predefined tasks:
+    - **Auto-resolve on conflict** — polls every 5 s for a rising-edge MERGE_HEAD; triggers `resolveConflicts()` automatically and logs the result.
+    - **Nightly pull + rebase** — checks the schedule every 60 s; runs `pullAndRebase()` at the configured hour:minute, once per day (guarded by `localStorage` last-run timestamp).
+    - **Release notes on tag** — called by `App.vue` after a push that includes `v*` tags; generates CHANGELOG entry via `useReleaseNotes`. Requires AI enabled.
+    - **AI commit batch** — on `visibilitychange` (app blur) or `beforeunload`, if staged files are present, focuses the commit panel to suggest an AI message. Requires AI enabled.
+  - All tasks respect offline mode — silently skip when `isOffline = true`.
+  - Log entries flow to the existing **Logs** tab in Settings via the `onLog` callback.
+  - `triggerReleaseNotesIfEnabled()` returned for external callers (used by `App.vue` post-push).
+
+- **Automations Settings tab** (`AutomationsPanel.vue`)
+  - New **Automations** tab in Settings (between AI and Hooks) with a card per task: title, description, trigger badge (event or `HH:MM`), last-run timestamp from `localStorage`, and a toggle switch.
+  - Nightly pull card expands hour/minute number inputs when enabled.
+  - AI-dependent tasks (Release notes, AI commit batch) show a warning label and disabled toggle when AI is off in Settings.
+  - `useSettings()` composable now exposes `saveSettings()` so any component can persist settings without duplicating the write logic.
+
+### Fixed
+
+- `useSettings` composable was missing `saveSettings` export — `AutomationsPanel` and any future component can now call `saveSettings(settings.value)` directly without duplicating localStorage write logic.
+- `SettingsPanel.vue` local `Settings` interface now mirrors `AppSettings` in `useSettings.ts` for the new `automations` field (per duplicate-interface rule).
+
+## [2.7.0] - 2026-05-01
+
+Desktop product track v2.7: Workspaces multi-repo, Hooks manager, and Worktree first-class — three independent pillars that together make GitWand the command center for multi-repo engineering workflows.
+
+### Added
+
+- **Hooks manager** (`HooksPanel.vue` + 3-layer backend)
+  - New **Hooks** tab in Settings (accessible from any open repo).
+  - Lists all hooks found in `.git/hooks/`, showing enable/disable toggle, script preview, and executable warning.
+  - Toggle: renames `pre-commit` ↔ `pre-commit.disabled` — no hook runner change, fully compatible with standard Git tooling.
+  - Create a new hook via dropdown (18 standard hook names) + textarea editor.
+  - Delete with confirmation modal.
+  - Rust command (`git_hook_list/toggle/create/delete`) + dev-server endpoints + typed `backend.ts` wrappers.
+
+- **Workspaces multi-repo** (`WorkspacePanel.vue` + 3-layer backend)
+  - New **Workspace** button in the repo sidebar (briefcase icon).
+  - Create / open a `.gitwand-workspace.json` grouping multiple repos; workspace directory persisted across sessions.
+  - Per-repo status badges: branch (monospace), ↑ ahead (purple), ↓ behind (amber), modified (pink), Clean (green), ⚠ error.
+  - **Fetch all** / **Pull all** / **Refresh** / **Open all in tabs** bulk operations.
+  - Rust commands (`workspace_read/write/status_all/fetch_all/pull_all`) + dev-server + typed wrappers.
+
+- **Worktree first-class** (`WorktreeManager.vue` upgrades)
+  - **Quick-create ⌘⇧N** — keyboard shortcut opens the Worktree manager with the quick-create form pre-focused. Type a task name (e.g. `fix/login-bug`), GitWand auto-derives the worktree path (sibling of main worktree) and branch name (`task/<name>`), creates both in one action, and opens the worktree in a new tab.
+  - **Cross-worktree status** — each worktree row now shows live status pills: ↑ ahead, ↓ behind, ~ modified, ✓ clean (fetched via `git_worktree_status_all` on load).
+  - **Cleanup assisté** — new "Clean up" panel lists non-main, non-locked worktrees with `ahead = 0` (nothing to push). Select one or many, confirm, done.
+
+### Fixed
+
+- Stray closing brace in `en.ts` locale (duplicated `workspace` section close) causing `vue-tsc` parse failure.
+- `SettingsPanel` received `currentRepo?.path` (non-existent ref) — corrected to `repoFolderPath ?? undefined`.
+- `HooksPanel` dynamic locale key `hooks.${key}` typed as `LocaleKey` cast to pass strict `t()` signature.
+
 ## [2.6.0] - 2026-05-01
 
 `@gitwand/core@2.6.0` closes the v2.6 entry of the [CORE-V2-ROADMAP](./CORE-V2-ROADMAP.md): a refactoring-aware merge pipeline that detects concurrent rename / move-method refactorings and resolves the resulting conflicts via an invert → merge → replay strategy (inspired by Ellis et al. TSE 2023). Opt-in via `refactoringAware.enabled: true`. Otherwise fully backward-compatible — the new code path is completely silent by default.

@@ -2541,6 +2541,162 @@ export async function previewMerge(
   return [];
 }
 
+// ─── Git Hooks ──────────────────────────────────────────
+
+export interface HookEntry {
+  name: string;
+  enabled: boolean;
+  executable: boolean;
+  /** First line of the hook script (shebang / short preview). */
+  preview: string;
+}
+
+/** List all Git hooks for the repository. */
+export async function gitHookList(cwd: string): Promise<HookEntry[]> {
+  if (isTauri()) {
+    return tauriInvoke<HookEntry[]>("git_hook_list", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-hook-list?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to list hooks: ${res.status}`);
+  return res.json();
+}
+
+/** Enable or disable a hook. */
+export async function gitHookToggle(cwd: string, name: string, enabled: boolean): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke("git_hook_toggle", { cwd, name, enabled });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-hook-toggle`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, name, enabled }),
+  });
+  if (!res.ok) throw new Error(`Failed to toggle hook: ${res.status}`);
+}
+
+/** Create or overwrite a hook script. */
+export async function gitHookCreate(cwd: string, name: string, content: string): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke("git_hook_create", { cwd, name, content });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-hook-create`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, name, content }),
+  });
+  if (!res.ok) throw new Error(`Failed to create hook: ${res.status}`);
+}
+
+/** Delete a hook (both enabled and disabled variants). */
+export async function gitHookDelete(cwd: string, name: string): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke("git_hook_delete", { cwd, name });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-hook-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, name }),
+  });
+  if (!res.ok) throw new Error(`Failed to delete hook: ${res.status}`);
+}
+
+// ─── Workspaces ─────────────────────────────────────────
+
+export interface WorkspaceRepo {
+  path: string;
+  name: string;
+}
+
+export interface WorkspaceConfig {
+  name: string;
+  repos: WorkspaceRepo[];
+}
+
+export interface WorkspaceRepoStatus {
+  path: string;
+  name: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  modified: number;
+  error: string | null;
+}
+
+/** Read a .gitwand-workspace.json from the given directory. */
+export async function workspaceRead(path: string): Promise<WorkspaceConfig> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceConfig>("workspace_read", { path });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-read?path=${encodeURIComponent(path)}`);
+  if (!res.ok) throw new Error(`Failed to read workspace: ${res.status}`);
+  return res.json();
+}
+
+/** Write a .gitwand-workspace.json to the given directory. */
+export async function workspaceWrite(path: string, workspace: WorkspaceConfig): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke("workspace_write", { path, workspace });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-write`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, workspace }),
+  });
+  if (!res.ok) throw new Error(`Failed to write workspace: ${res.status}`);
+}
+
+/** Get the status of all repos in a workspace. */
+export async function workspaceStatusAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoStatus[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_status_all", { repos });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-status-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos }),
+  });
+  if (!res.ok) throw new Error(`Failed to get workspace status: ${res.status}`);
+  return res.json();
+}
+
+/** Fetch all repos in a workspace and return updated statuses. */
+export async function workspaceFetchAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoStatus[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_fetch_all", { repos });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-fetch-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos }),
+  });
+  if (!res.ok) throw new Error(`Failed to fetch workspace: ${res.status}`);
+  return res.json();
+}
+
+/** Pull all repos in a workspace and return updated statuses. */
+export async function workspacePullAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoStatus[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_pull_all", { repos });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-pull-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos }),
+  });
+  if (!res.ok) throw new Error(`Failed to pull workspace: ${res.status}`);
+  return res.json();
+}
+
+/** Get the cross-worktree status for a repository (ahead/behind + modified per worktree). */
+export async function gitWorktreeStatusAll(cwd: string): Promise<WorkspaceRepoStatus[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceRepoStatus[]>("git_worktree_status_all", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-worktree-status-all?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to get worktree status: ${res.status}`);
+  return res.json();
+}
+
 // ─── Worktrees ──────────────────────────────────────────
 
 export interface WorktreeEntry {
@@ -2612,6 +2768,46 @@ export async function gitWorktreePrune(cwd: string): Promise<void> {
     body: JSON.stringify({ cwd }),
   });
   if (!res.ok) throw new Error(`Failed to prune worktrees: ${res.status}`);
+}
+
+// ─── Agent Sessions ───────────────────────────────────────
+
+export interface AgentSession {
+  /** Absolute path of the worktree. */
+  path: string;
+  /** Short branch name. */
+  branch: string;
+  /** Detected tool: "claude" | "cursor" | "windsurf" | "other". */
+  tool: string;
+  /** Whether a process for this tool is currently running in this cwd. */
+  active: boolean;
+  ahead: number;
+  behind: number;
+  modified: number;
+}
+
+/** List agent sessions for all worktrees of the repo at `cwd`. */
+export async function agentSessionList(cwd: string): Promise<AgentSession[]> {
+  if (isTauri()) {
+    return tauriInvoke<AgentSession[]>("agent_session_list", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/agent-session-list?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to list agent sessions: ${res.status}`);
+  return res.json();
+}
+
+/** Launch the given agent CLI (defaults to `claude`) in the worktree at `cwd`. */
+export async function agentSessionLaunch(cwd: string, tool: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("agent_session_launch", { cwd, tool });
+    return;
+  }
+  const res = await fetch(`${DEV_SERVER}/api/agent-session-launch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, tool }),
+  });
+  if (!res.ok) throw new Error(`Failed to launch agent session: ${res.status}`);
 }
 
 // ─── Submodules ──────────────────────────────────────────
@@ -2794,10 +2990,14 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
 }
 
 /**
- * Download the pending update and restart the app.
+ * Download the pending update, install it, then relaunch the app.
  * Must only be called after `checkForUpdates()` returned a non-null value.
  *
  * Progress callback receives fraction 0–1 as bytes are downloaded.
+ *
+ * Note: `downloadAndInstall()` replaces the binary on disk but does NOT
+ * automatically relaunch — we call `relaunch()` from plugin-process ourselves
+ * so the user sees the new version without having to quit manually.
  */
 export async function installUpdate(
   onProgress?: (fraction: number) => void
@@ -2814,7 +3014,9 @@ export async function installUpdate(
         onProgress(downloaded / contentLength);
       }
     }
-    // "Finished" → the app restarts automatically
   });
+  // Binary is now replaced on disk — relaunch so the new version starts.
+  const { relaunch } = await import("@tauri-apps/plugin-process");
+  await relaunch();
 }
 

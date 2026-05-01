@@ -81,6 +81,8 @@ const emit = defineEmits<{
   /** Open the stash manager panel. */
   openStash: [];
   openTags: [];
+  openWorkspace: [];
+  openAgents: [];
 }>();
 
 const { t, locale } = useI18n();
@@ -607,6 +609,33 @@ function formatActivityDate(dateStr: string): string {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
+        </svg>
+      </button>
+      <!-- Workspaces -->
+      <button
+        class="view-tab-action"
+        @click="emit('openWorkspace')"
+        :title="t('workspace.title')"
+        :aria-label="t('workspace.title')"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <rect x="1" y="4" width="14" height="10" rx="2"/>
+          <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <!-- Agent Sessions -->
+      <button
+        class="view-tab-action"
+        @click="emit('openAgents')"
+        :title="t('agents.sidebarTooltip')"
+        :aria-label="t('agents.title')"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="11" width="18" height="11" rx="2"/>
+          <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
+          <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
+          <path d="M9 20h6"/>
         </svg>
       </button>
     </div>

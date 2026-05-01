@@ -24,6 +24,8 @@ import TagsPanel from "./components/TagsPanel.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
 import SubmodulePanel from "./components/SubmodulePanel.vue";
+import WorkspacePanel from "./components/WorkspacePanel.vue";
+import AgentSessionsPanel from "./components/AgentSessionsPanel.vue";
 import SearchPalette from "./components/header/SearchPalette.vue";
 import type { PaletteAction } from "./components/header/SearchPalette.vue";
 import BranchRenameModal from "./components/header/BranchRenameModal.vue";
@@ -46,6 +48,8 @@ import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
 import { useNetworkStatus } from "./composables/useNetworkStatus";
+import { useScheduler } from "./composables/useScheduler";
+import { useReleaseNotes } from "./composables/useReleaseNotes";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
 import {
@@ -895,10 +899,13 @@ const showRebase = ref(false);
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
 const showTags = ref(false);
+const showWorkspace = ref(false);
+const showAgents = ref(false);
 
 // ─── Worktree manager panel ──────────────────────────────
 const showWorktrees = ref(false);
 const pendingWorktreeBranch = ref<string | undefined>(undefined);
+const pendingQuickCreate = ref(false);
 
 // ─── Submodule panel ─────────────────────────────────────
 const showSubmodules = ref(false);
@@ -941,6 +948,8 @@ async function confirmPushWithTags() {
     });
   }
   pendingUnpushedTags.value = [];
+  // Trigger scheduled release notes if the user just pushed a version tag
+  triggerReleaseNotesIfEnabled();
 }
 
 async function confirmPushWithoutTags() {
@@ -1151,6 +1160,13 @@ function onKeyDown(e: KeyboardEvent) {
   } else if (mod && e.key === "s") {
     e.preventDefault();
     if (showingMergeEditor.value) saveAllFiles();
+  } else if (mod && e.shiftKey && e.key === "N") {
+    // Cmd/Ctrl+Shift+N — quick-create worktree
+    if (hasRepo.value) {
+      e.preventDefault();
+      pendingQuickCreate.value = true;
+      showWorktrees.value = true;
+    }
   } else if (mod && e.key >= "1" && e.key <= "9") {
     // Cmd+1..9 — switch to tab by position
     e.preventDefault();
@@ -1175,6 +1191,41 @@ function onSettingsClose() {
   refreshSettings();
   applyGitConfig();
 }
+
+
+// ─── Scheduler (v2.8) ────────────────────────────────────
+const { generate: generateReleaseNotesFn } = useReleaseNotes();
+
+const { triggerReleaseNotesIfEnabled } = useScheduler({
+  cwd: repoFolderPath as import("vue").Ref<string>,
+  settings,
+  isOffline,
+  onLog: (msg) => pushErrorLog(msg),
+  resolveConflicts: async () => {
+    if (!repoFolderPath.value) return;
+    await resolveAll();
+    await repoRefresh();
+  },
+  pullAndRebase: async () => {
+    await doPull(true);
+  },
+  generateReleaseNotes: async () => {
+    if (!repoFolderPath.value) return;
+    // Get last two tags and generate notes between them
+    const { gitListTags } = await import("./utils/backend");
+    const tags = await gitListTags(repoFolderPath.value);
+    if (tags.length < 2) return;
+    const sorted = [...tags].sort((a, b) => b.date.localeCompare(a.date));
+    await generateReleaseNotesFn(repoFolderPath.value, sorted[1].name, sorted[0].name);
+  },
+  triggerAiCommit: async () => {
+    // Surface the commit panel — the user will see staged files there
+    // and can use the AI commit button manually. A background generation
+    // would require a ref into the sidebar; this is the least-invasive UX.
+    showSettings.value = false;
+  },
+  hasStagedFiles: () => (repoStatus.value?.staged.length ?? 0) > 0,
+});
 
 // ─── Global shortcut listener (Cmd+Shift+G from anywhere) ─
 let unlistenGlobalShortcut: (() => void) | null = null;
@@ -1419,6 +1470,8 @@ onUnmounted(() => {
           @refresh="repoRefresh()"
           @open-stash="showStash = true"
           @open-tags="showTags = true"
+          @open-workspace="showWorkspace = true"
+      @open-agents="showAgents = true"
         />
       </aside>
 
@@ -1672,6 +1725,21 @@ onUnmounted(() => {
       @forked="onForked"
     />
 
+    <!-- Workspace panel -->
+    <WorkspacePanel
+      v-if="showWorkspace"
+      @close="showWorkspace = false"
+      @open-tab="(path) => { openTab(path); showWorkspace = false; }"
+    />
+
+    <!-- Agent Sessions panel -->
+    <AgentSessionsPanel
+      v-if="showAgents && repoFolderPath"
+      :cwd="repoFolderPath"
+      @close="showAgents = false"
+      @open-tab="(path) => { openTab(path); showAgents = false; }"
+    />
+
     <!-- Tags panel -->
     <TagsPanel
       v-if="showTags && repoFolderPath"
@@ -1686,8 +1754,9 @@ onUnmounted(() => {
       :cwd="repoFolderPath"
       :branches="branches"
       :suggested-branch="pendingWorktreeBranch"
-      @close="showWorktrees = false; pendingWorktreeBranch = undefined;"
-      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; }"
+      :open-quick-create="pendingQuickCreate"
+      @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
+      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }"
     />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
@@ -1790,6 +1859,7 @@ onUnmounted(() => {
       v-if="showSettings"
       :error-log="errorLog"
       :initial-tab="settingsInitialTab"
+      :cwd="repoFolderPath ?? undefined"
       @close="onSettingsClose"
       @update:commit-signature="onCommitSignatureChange"
       @update:diff-mode="onDiffModeChange"

@@ -50,6 +50,17 @@ export interface AppSettings {
   aiOllamaUrl: string;
   /** Ollama model name. */
   aiOllamaModel: string;
+  /** Automation settings (v2.8). */
+  automations: {
+    /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
+    autoResolve: { enabled: boolean };
+    /** Pull + rebase all repos in workspace at a fixed time each day. */
+    nightlyPull: { enabled: boolean; hour: number; minute: number };
+    /** Generate release notes when a v* tag is created. */
+    releaseNotes: { enabled: boolean };
+    /** Suggest an AI commit message when staged files are present at app close. */
+    aiCommitBatch: { enabled: boolean };
+  };
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -75,6 +86,12 @@ export const defaultAppSettings: AppSettings = {
   aiModel: "claude-sonnet-4-20250514",
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
+  automations: {
+    autoResolve:    { enabled: false },
+    nightlyPull:    { enabled: false, hour: 8, minute: 0 },
+    releaseNotes:   { enabled: false },
+    aiCommitBatch:  { enabled: false },
+  },
 };
 
 const SETTINGS_KEY = "gitwand-settings";
@@ -89,6 +106,14 @@ export function loadSettings(): AppSettings {
     // ignore
   }
   return { ...defaultAppSettings };
+}
+
+export function saveSettings(s: AppSettings): void {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    // ignore
+  }
 }
 
 // ─── Singleton reactive ref ───────────────────────────────
@@ -111,5 +136,7 @@ export function useSettings() {
     refreshSettings,
     /** One-shot read without reactivity. Useful in event handlers. */
     loadSettings,
+    /** Persist the current settings object to localStorage. */
+    saveSettings,
   };
 }
