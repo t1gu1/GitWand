@@ -84,10 +84,12 @@ bump README.md \
   "s/version-${OLD}-/version-${NEW}-/"
 
 # ── website/HomeLanding.vue (LATEST const + all locale badge strings) ────────
+# Use a generic semver pattern so the replacement works even when the file
+# wasn't updated in a previous bump (e.g. LATEST was pinned to an older value).
 bump website/.vitepress/theme/HomeLanding.vue \
-  "s/const LATEST = '${OLD}'/const LATEST = '${NEW}'/"
+  "s/const LATEST = '[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*'/const LATEST = '${NEW}'/"
 bump website/.vitepress/theme/HomeLanding.vue \
-  "s/v${OLD} · /v${NEW} · /g"
+  "s/v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]* · /v${NEW} · /g"
 
 # ── website/HomeLanding.vue: "What's new in vX.Y" CTA labels (5 locales) ────
 # These reference major.minor (e.g. "v2.0"), not the full semver, and the
