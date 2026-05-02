@@ -1094,6 +1094,14 @@ const en = {
     explain: "Explain",
     explainAnalyzing: "Analysing\u2026",
     analyzingConflict: "Analysing conflict\u2026",
+    // Custom automation
+    automationRun: "Run automation",
+    automationRunning: "Running\u2026",
+    // Resolution memory
+    memoryApply: "Memory",
+    memoryBannerHint: "Saved rule: {0}",
+    memorySaveOffer: "Remember this resolution for next time?",
+    memorySave: "Save",
   },
 
   // ─── PR inline diff — AI review ─────────────────────────
@@ -1206,6 +1214,21 @@ const en = {
     taskAiCommitBatch: "AI commit message on app close",
     taskAiCommitBatchDesc: "When you close GitWand with staged files, suggest an AI-generated commit message on next open.",
     taskAiCommitBatchTrigger: "Triggered by: app close with staged files",
+    // Custom rules
+    customRulesTitle: "Custom Rules",
+    customRulesDesc: "Trigger a shell command when a specific file has a conflict, then auto-commit the result.",
+    customRulesAdd: "Add rule",
+    customRulesEmpty: "No custom rules yet.",
+    customRulesEdit: "Edit rule",
+    customRulesDelete: "Delete rule",
+    customRulesFieldName: "Name",
+    customRulesFieldNamePlaceholder: "e.g. Rebuild manifest",
+    customRulesFieldTrigger: "Trigger (file pattern)",
+    customRulesFieldTriggerPlaceholder: "e.g. public/build/manifest.json",
+    customRulesFieldCommand: "Command",
+    customRulesFieldCommandPlaceholder: "e.g. npm run build",
+    customRulesFieldCommit: "Commit message",
+    customRulesFieldCommitPlaceholder: "e.g. build: regenerate {trigger}",
   },
 
   // ─── Agent Sessions (v2.8) ───────────────────────────────

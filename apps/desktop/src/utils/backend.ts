@@ -1179,6 +1179,19 @@ export async function setGitConfig(gitPath: string): Promise<void> {
 }
 
 /**
+ * Run a user-authored shell command in `cwd` (custom automation rules).
+ * Returns combined stdout+stderr. Throws on non-zero exit.
+ */
+export async function shellExec(cwd: string, command: string): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("shell_exec", { cwd, command });
+  }
+  // Dev-server stub: echo command back so the UI can be tested without Tauri
+  console.info(`[dev] shellExec in ${cwd}: ${command}`);
+  return `[dev mode] ${command}`;
+}
+
+/**
  * Read the .gitwandrc configuration from a repository root (Phase 7.4).
  * Returns the raw JSON string, or "" if not found.
  * Searches: .gitwandrc → .gitwandrc.json → package.json#gitwand

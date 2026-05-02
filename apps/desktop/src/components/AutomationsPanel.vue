@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, reactive } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useSettings } from "../composables/useSettings";
+import { useCustomAutomations, type CustomAutomationRule } from "../composables/useCustomAutomations";
 
 const { t } = useI18n();
 const { settings, saveSettings } = useSettings();
@@ -71,6 +72,55 @@ function toggleAiCommitBatch(e: Event) {
 
 // ─── Manual run tracking ──────────────────────────────────
 const runningTask = ref<string | null>(null);
+
+// ─── Custom automation rules ──────────────────────────────
+const { rules, addRule, updateRule, deleteRule, toggleRule } = useCustomAutomations();
+
+const showAddForm = ref(false);
+const editingId = ref<string | null>(null);
+
+const blankForm = (): Omit<CustomAutomationRule, "id"> => ({
+  name: "",
+  trigger: "",
+  command: "",
+  commitMessage: "",
+  enabled: true,
+});
+
+const form = reactive<Omit<CustomAutomationRule, "id">>(blankForm());
+
+function openAddForm() {
+  Object.assign(form, blankForm());
+  editingId.value = null;
+  showAddForm.value = true;
+}
+
+function openEditForm(rule: CustomAutomationRule) {
+  Object.assign(form, {
+    name: rule.name,
+    trigger: rule.trigger,
+    command: rule.command,
+    commitMessage: rule.commitMessage,
+    enabled: rule.enabled,
+  });
+  editingId.value = rule.id;
+  showAddForm.value = true;
+}
+
+function cancelForm() {
+  showAddForm.value = false;
+  editingId.value = null;
+}
+
+function submitForm() {
+  if (!form.name.trim() || !form.trigger.trim() || !form.command.trim()) return;
+  if (editingId.value) {
+    updateRule(editingId.value, { ...form });
+  } else {
+    addRule({ ...form });
+  }
+  cancelForm();
+}
 </script>
 
 <template>
@@ -219,12 +269,94 @@ const runningTask = ref<string | null>(null);
         <span class="aup-last-run">{{ lastRunLabel("aiCommitBatch") }}</span>
       </div>
     </div>
+
+    <!-- ── Custom Rules ─────────────────────────────────── -->
+    <div class="aup-section-head">
+      <span class="aup-section-title">{{ t("automations.customRulesTitle") }}</span>
+      <button class="aup-add-btn" @click="openAddForm">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        {{ t("automations.customRulesAdd") }}
+      </button>
+    </div>
+    <p class="aup-section-desc">{{ t("automations.customRulesDesc") }}</p>
+
+    <!-- Existing rules list -->
+    <div v-for="rule in rules" :key="rule.id" class="aup-card aup-rule-card">
+      <div class="aup-card-head">
+        <div class="aup-card-info">
+          <div class="aup-card-title">
+            <!-- terminal icon -->
+            <svg class="aup-task-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+            </svg>
+            {{ rule.name || rule.trigger }}
+          </div>
+          <span class="aup-trigger">{{ rule.trigger }}</span>
+          <code class="aup-rule-cmd">$ {{ rule.command }}</code>
+        </div>
+        <div class="aup-rule-actions">
+          <label class="aup-toggle">
+            <input
+              type="checkbox"
+              :checked="rule.enabled"
+              @change="toggleRule(rule.id, ($event.target as HTMLInputElement).checked)"
+            />
+            <span class="aup-toggle-track"><span class="aup-toggle-thumb" /></span>
+          </label>
+          <button class="aup-icon-btn" :title="t('automations.customRulesEdit')" @click="openEditForm(rule)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z"/>
+            </svg>
+          </button>
+          <button class="aup-icon-btn aup-icon-btn--danger" :title="t('automations.customRulesDelete')" @click="deleteRule(rule.id)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5l.5-9"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <p v-if="rules.length === 0 && !showAddForm" class="aup-empty">
+      {{ t("automations.customRulesEmpty") }}
+    </p>
+
+    <!-- Add / Edit form -->
+    <div v-if="showAddForm" class="aup-form-card">
+      <div class="aup-form-row">
+        <label class="aup-form-label">{{ t("automations.customRulesFieldName") }}</label>
+        <input v-model="form.name" class="aup-form-input" :placeholder="t('automations.customRulesFieldNamePlaceholder')" />
+      </div>
+      <div class="aup-form-row">
+        <label class="aup-form-label">{{ t("automations.customRulesFieldTrigger") }}</label>
+        <input v-model="form.trigger" class="aup-form-input" :placeholder="t('automations.customRulesFieldTriggerPlaceholder')" />
+      </div>
+      <div class="aup-form-row">
+        <label class="aup-form-label">{{ t("automations.customRulesFieldCommand") }}</label>
+        <input v-model="form.command" class="aup-form-input" :placeholder="t('automations.customRulesFieldCommandPlaceholder')" />
+      </div>
+      <div class="aup-form-row">
+        <label class="aup-form-label">{{ t("automations.customRulesFieldCommit") }}</label>
+        <input v-model="form.commitMessage" class="aup-form-input" :placeholder="t('automations.customRulesFieldCommitPlaceholder')" />
+      </div>
+      <div class="aup-form-footer">
+        <button class="bm-btn bm-btn--ghost" @click="cancelForm">{{ t("common.cancel") }}</button>
+        <button
+          class="bm-btn bm-btn--primary"
+          :disabled="!form.name.trim() || !form.trigger.trim() || !form.command.trim()"
+          @click="submitForm"
+        >{{ t("common.save") }}</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .aup-panel {
-  padding: 16px 20px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -404,5 +536,157 @@ const runningTask = ref<string | null>(null);
 
 .aup-toggle input:checked ~ .aup-toggle-track .aup-toggle-thumb {
   transform: translateX(14px);
+}
+
+/* ── Custom rules section ───────────────────────────────── */
+.aup-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.aup-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.aup-section-desc {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 0 0 4px;
+  line-height: 1.5;
+}
+
+.aup-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-accent);
+  background: none;
+  border: 1px solid var(--color-accent);
+  border-radius: 5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.aup-add-btn:hover {
+  background: var(--color-accent-soft);
+}
+
+.aup-rule-card .aup-card-head {
+  align-items: center;
+}
+
+.aup-rule-cmd {
+  font-size: 10px;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-tertiary, rgba(0,0,0,0.06));
+  border-radius: 3px;
+  padding: 1px 5px;
+  display: inline-block;
+  width: fit-content;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aup-rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.aup-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.aup-icon-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.aup-icon-btn--danger:hover {
+  background: var(--color-danger-soft, rgba(239,68,68,.12));
+  color: var(--color-danger, #ef4444);
+  border-color: var(--color-danger, #ef4444);
+}
+
+.aup-empty {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 10px 0;
+  margin: 0;
+}
+
+/* ── Inline add/edit form ───────────────────────────────── */
+.aup-form-card {
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--color-accent-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.aup-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.aup-form-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.aup-form-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.aup-form-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
+}
+
+.aup-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 </style>

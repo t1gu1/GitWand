@@ -8,13 +8,24 @@ import { safeHtml } from "../composables/useSafeHtml";
 import { useAIProvider, type ConflictContext } from "../composables/useAIProvider";
 
 import { useHunkExplanation } from "../composables/useHunkExplanation";
+import { useCustomAutomations } from "../composables/useCustomAutomations";
+import {
+  useResolutionMemory,
+  detectPattern,
+  applyMemory,
+  type ResolutionStrategy,
+} from "../composables/useResolutionMemory";
 
 const { t, locale } = useI18n();
 const { isAvailable: aiAvailable, isLoading: aiLoading, lastError: aiError, suggest: aiSuggest } = useAIProvider();
 const { isGenerating: aiExplainLoading, explain: aiExplain } = useHunkExplanation();
+const { findMatchingRule, executeRule } = useCustomAutomations();
+const { findMemory, saveMemory, markUsed, detectPattern: _dp, applyMemory: _am } = useResolutionMemory();
 
 const props = defineProps<{
   file: ConflictFile;
+  /** Repo root, needed by custom automations and memory apply */
+  cwd?: string;
 }>();
 
 type ManualChoice = "ours" | "theirs" | "both" | "both-theirs-first";
@@ -23,6 +34,8 @@ const emit = defineEmits<{
   resolve: [path: string];
   resolveHunk: [path: string, hunkIndex: number, choice: ManualChoice];
   resolveHunkCustom: [path: string, hunkIndex: number, content: string];
+  /** Custom automation ran and committed; parent should refresh status */
+  automationDone: [commitHash: string];
 }>();
 
 // ─── Inline Edit State ──────────────────────────────────
@@ -48,7 +61,7 @@ function cancelEditing() {
 }
 
 function validateEditing(hunkIndex: number) {
-  emit("resolveHunkCustom", props.file.path, hunkIndex, editContent.value);
+  resolveHunkCustomWithMemory(props.file.path, hunkIndex, editContent.value);
   editingHunkIndex.value = null;
   editContent.value = "";
 }
@@ -116,6 +129,100 @@ async function requestHunkExplanation(hunkIndex: number, hunk: ConflictHunk) {
 function dismissExplanation() {
   explanationHunkIndex.value = null;
   explanationError.value = null;
+}
+
+// ─── Custom Automation banner ───────────────────────────
+const matchingRule = computed(() => findMatchingRule(props.file.path));
+const automationRunning = ref(false);
+const automationOutput = ref<string | null>(null);
+const automationError = ref<string | null>(null);
+
+async function runAutomation() {
+  if (!matchingRule.value || !props.cwd) return;
+  automationRunning.value = true;
+  automationOutput.value = null;
+  automationError.value = null;
+  try {
+    const result = await executeRule(props.cwd, matchingRule.value, props.file.path);
+    automationOutput.value = result.output;
+    if (result.commitHash) {
+      emit("automationDone", result.commitHash);
+    }
+  } catch (err: any) {
+    automationError.value = err?.message ?? String(err);
+  } finally {
+    automationRunning.value = false;
+  }
+}
+
+function dismissAutomation() {
+  automationOutput.value = null;
+  automationError.value = null;
+}
+
+// ─── Resolution Memory ──────────────────────────────────
+/** After a manual choice, offer to remember it for this file. */
+const memoryOfferHunkIndex = ref<number | null>(null);
+const memoryOfferStrategy = ref<ResolutionStrategy | null>(null);
+const memoryOfferContent = ref<string | null>(null);
+
+/** The stored memory for the current file, if any. */
+const fileMemory = computed(() => findMemory(props.file.path));
+
+function offerMemory(hunkIndex: number, strategy: ResolutionStrategy, resolvedContent: string | null = null) {
+  memoryOfferHunkIndex.value = hunkIndex;
+  memoryOfferStrategy.value = strategy;
+  memoryOfferContent.value = resolvedContent;
+}
+
+function acceptMemoryOffer() {
+  if (!memoryOfferStrategy.value) return;
+  const label = `${memoryOfferStrategy.value} — ${props.file.path.split("/").pop()}`;
+  saveMemory(props.file.path, memoryOfferStrategy.value, label, memoryOfferContent.value);
+  dismissMemoryOffer();
+}
+
+function dismissMemoryOffer() {
+  memoryOfferHunkIndex.value = null;
+  memoryOfferStrategy.value = null;
+  memoryOfferContent.value = null;
+}
+
+function applyFileMemory(hunkIndex: number, hunk: ConflictHunk) {
+  if (!fileMemory.value) return;
+  const resolved = applyMemory(fileMemory.value, hunk);
+  if (resolved !== null) {
+    markUsed(fileMemory.value.id);
+    emit("resolveHunkCustom", props.file.path, hunkIndex, resolved);
+  }
+}
+
+/** Auto-detect learnable pattern when both sides share the same shape. */
+function autoDetectPattern(hunk: ConflictHunk): ResolutionStrategy | null {
+  const o = hunk.oursLines.join("\n");
+  const th = hunk.theirsLines.join("\n");
+  return detectPattern(o, th);
+}
+
+// ─── Override resolveHunk to capture memory offer ───────
+function resolveHunkWithMemory(path: string, hunkIndex: number, choice: ManualChoice) {
+  emit("resolveHunk", path, hunkIndex, choice);
+  const strategy: ResolutionStrategy = choice === "ours" ? "ours"
+    : choice === "theirs" ? "theirs"
+    : "both";
+  // Surface a "remember this?" toast after a brief delay so it doesn't clash with animations
+  setTimeout(() => offerMemory(hunkIndex, strategy), 200);
+}
+
+function resolveHunkCustomWithMemory(path: string, hunkIndex: number, content: string) {
+  emit("resolveHunkCustom", path, hunkIndex, content);
+  // For custom edits, try to detect an auto-learnable pattern
+  const hunk = hunks.value[hunkIndex];
+  if (hunk) {
+    const autoStrategy = autoDetectPattern(hunk);
+    const strategy: ResolutionStrategy = autoStrategy ?? "custom";
+    setTimeout(() => offerMemory(hunkIndex, strategy, content), 200);
+  }
 }
 
 const canResolve = computed(() => props.file.result.stats.autoResolved > 0);
@@ -388,6 +495,49 @@ onMounted(() => {
       </button>
     </div>
 
+    <!-- Custom Automation banner -->
+    <div v-if="matchingRule" class="me-automation-banner">
+      <div class="me-automation-body">
+        <svg class="me-automation-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+        <span class="me-automation-text">
+          <strong>{{ matchingRule.name }}</strong> —
+          <code>{{ matchingRule.command }}</code>
+        </span>
+      </div>
+      <div class="me-automation-actions">
+        <span v-if="automationRunning" class="me-automation-running">{{ t("mergeEditor.automationRunning") }}</span>
+        <template v-else>
+          <button class="me-automation-btn me-automation-btn--run" :disabled="automationRunning" @click="runAutomation">
+            {{ t("mergeEditor.automationRun") }}
+          </button>
+          <button class="me-automation-btn me-automation-btn--dismiss" @click="dismissAutomation">×</button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Automation output / error -->
+    <div v-if="automationOutput !== null || automationError !== null" class="me-automation-result" :class="{ 'me-automation-result--error': !!automationError }">
+      <pre class="me-automation-output">{{ automationError ?? automationOutput }}</pre>
+      <button class="me-automation-btn me-automation-btn--dismiss" @click="dismissAutomation">{{ t("common.close") }}</button>
+    </div>
+
+    <!-- Resolution Memory suggestion banner -->
+    <div v-if="fileMemory && !matchingRule" class="me-memory-banner">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm.75 10.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5V4.5h1.5V8.5z"/>
+      </svg>
+      <span class="me-memory-text">{{ t("mergeEditor.memoryBannerHint", fileMemory.description) }}</span>
+    </div>
+
+    <!-- Memory offer toast (after a manual choice) -->
+    <div v-if="memoryOfferHunkIndex !== null" class="me-memory-offer">
+      <span>{{ t("mergeEditor.memorySaveOffer") }}</span>
+      <button class="me-memory-btn me-memory-btn--save" @click="acceptMemoryOffer">{{ t("mergeEditor.memorySave") }}</button>
+      <button class="me-memory-btn" @click="dismissMemoryOffer">{{ t("common.close") }}</button>
+    </div>
+
     <!-- Editor body: code + minimap -->
     <div class="merge-body">
     <div
@@ -428,21 +578,21 @@ onMounted(() => {
                 class="inline-action inline-action--current"
                 :class="{ 'inline-action--recommended': isRecommended(hunkForSegment(seg)!, 'ours') }"
                 href="#"
-                @click.prevent="emit('resolveHunk', file.path, seg.hunkIndex!, 'ours')"
+                @click.prevent="resolveHunkWithMemory(file.path, seg.hunkIndex!, 'ours')"
               >{{ t('merge.acceptCurrent') }}<svg v-if="isRecommended(hunkForSegment(seg)!, 'ours')" class="recommend-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1L9.5 5.5L14 7L9.5 8.5L8 13L6.5 8.5L2 7L6.5 5.5L8 1Z"/></svg></a>
               <span class="inline-sep">|</span>
               <a
                 class="inline-action inline-action--incoming"
                 :class="{ 'inline-action--recommended': isRecommended(hunkForSegment(seg)!, 'theirs') }"
                 href="#"
-                @click.prevent="emit('resolveHunk', file.path, seg.hunkIndex!, 'theirs')"
+                @click.prevent="resolveHunkWithMemory(file.path, seg.hunkIndex!, 'theirs')"
               >{{ t('merge.acceptIncoming') }}<svg v-if="isRecommended(hunkForSegment(seg)!, 'theirs')" class="recommend-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1L9.5 5.5L14 7L9.5 8.5L8 13L6.5 8.5L2 7L6.5 5.5L8 1Z"/></svg></a>
               <span class="inline-sep">|</span>
               <a
                 class="inline-action inline-action--both"
                 :class="{ 'inline-action--recommended': isRecommended(hunkForSegment(seg)!, 'both') }"
                 href="#"
-                @click.prevent="emit('resolveHunk', file.path, seg.hunkIndex!, 'both')"
+                @click.prevent="resolveHunkWithMemory(file.path, seg.hunkIndex!, 'both')"
               >{{ t('merge.acceptBoth') }}<svg v-if="isRecommended(hunkForSegment(seg)!, 'both')" class="recommend-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 1L9.5 5.5L14 7L9.5 8.5L8 13L6.5 8.5L2 7L6.5 5.5L8 1Z"/></svg></a>
               <span class="inline-sep">|</span>
               <a
@@ -477,6 +627,20 @@ onMounted(() => {
                     <path d="M8 1.5a4.5 4.5 0 0 0-3 7.85V11h6V9.35A4.5 4.5 0 0 0 8 1.5Z"/>
                   </svg>
                   {{ aiExplainLoading && explanationHunkIndex === seg.hunkIndex ? t('mergeEditor.explainAnalyzing') : t('mergeEditor.explain') }}
+                </a>
+              </template>
+              <template v-if="fileMemory">
+                <span class="inline-sep">|</span>
+                <a
+                  class="inline-action inline-action--memory"
+                  href="#"
+                  :title="fileMemory.description"
+                  @click.prevent="applyFileMemory(seg.hunkIndex!, hunkForSegment(seg)!)"
+                >
+                  <svg class="ai-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm1 10H7v-1.5h2V11zm0-3H7V5h2v3z"/>
+                  </svg>
+                  {{ t('mergeEditor.memoryApply') }}
                 </a>
               </template>
               <span
@@ -1117,5 +1281,174 @@ onMounted(() => {
 .inline-action--explain:hover {
   color: var(--color-ai-hover);
   opacity: 1;
+}
+
+/* Memory action (same tone as AI but green-ish accent) */
+.inline-action--memory {
+  color: var(--color-success, #22c55e);
+  opacity: 0.85;
+}
+.inline-action--memory:hover {
+  opacity: 1;
+}
+
+/* ─── Custom Automation banner ─────────────────────────── */
+.me-automation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--color-accent-soft);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 12px;
+}
+
+.me-automation-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.me-automation-icon {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
+
+.me-automation-text {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.me-automation-text code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  background: var(--color-surface);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.me-automation-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.me-automation-running {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.me-automation-btn {
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: background 0.12s;
+}
+
+.me-automation-btn--run {
+  color: white;
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.me-automation-btn--run:hover {
+  opacity: 0.88;
+}
+
+.me-automation-btn--dismiss {
+  color: var(--color-text-muted);
+}
+
+.me-automation-btn--dismiss:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.me-automation-result {
+  padding: 8px 12px;
+  background: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.me-automation-result--error {
+  background: var(--color-danger-soft, rgba(239,68,68,.08));
+  border-color: var(--color-danger, #ef4444);
+}
+
+.me-automation-output {
+  flex: 1;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--color-text-primary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* ─── Resolution Memory banner ─────────────────────────── */
+.me-memory-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--color-success-soft, rgba(34,197,94,.08));
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-success, #22c55e);
+}
+
+.me-memory-text {
+  flex: 1;
+}
+
+/* ─── Memory offer toast ────────────────────────────────── */
+.me-memory-offer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+
+.me-memory-btn {
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 2px 7px;
+  color: var(--color-text-muted);
+  transition: background 0.12s;
+}
+
+.me-memory-btn:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.me-memory-btn--save {
+  color: var(--color-success, #22c55e);
+  border-color: var(--color-success, #22c55e);
+}
+
+.me-memory-btn--save:hover {
+  background: var(--color-success-soft, rgba(34,197,94,.12));
 }
 </style>

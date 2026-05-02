@@ -1066,6 +1066,15 @@ const ptBR: Locale = {
     explain: "Explicar",
     explainAnalyzing: "Analisando…",
     analyzingConflict: "Analisando conflito…",
+    // Custom automation
+    automationRun: "Executar automação",
+    automationRunning: "Executando…",
+    // Resolution memory
+    memoryApply: "Memória",
+    memoryBannerHint: "Regra salva: {0}",
+    memorySaveOffer: "Lembrar desta resolução para a próxima vez?",
+    memorySave: "Salvar",
+
   },
 
   // ─── PR inline diff — AI review ─────────────────────────
@@ -1171,6 +1180,22 @@ const ptBR: Locale = {
     taskAiCommitBatch: "Mensagem de commit por IA ao fechar",
     taskAiCommitBatchDesc: "Ao fechar o GitWand com arquivos em staging, sugere uma mensagem de commit gerada por IA na pr\u00f3xima abertura.",
     taskAiCommitBatchTrigger: "Disparado por: fechamento do app com arquivos em staging",
+    // Custom rules
+    customRulesTitle: "Regras personalizadas",
+    customRulesDesc: "Executar um comando shell quando um arquivo tiver conflito e commitar o resultado.",
+    customRulesAdd: "Adicionar",
+    customRulesEmpty: "Nenhuma regra personalizada.",
+    customRulesEdit: "Editar",
+    customRulesDelete: "Excluir",
+    customRulesFieldName: "Nome",
+    customRulesFieldNamePlaceholder: "ex. Rebuild manifest",
+    customRulesFieldTrigger: "Gatilho (arquivo)",
+    customRulesFieldTriggerPlaceholder: "ex. public/build/manifest.json",
+    customRulesFieldCommand: "Comando",
+    customRulesFieldCommandPlaceholder: "ex. npm run build",
+    customRulesFieldCommit: "Mensagem de commit",
+    customRulesFieldCommitPlaceholder: "ex. build: regenerar {trigger}",
+
   },
 
   // ─── Agent Sessions (v2.8) ───────────────────────

@@ -1052,6 +1052,15 @@ const zhCN: Locale = {
     explain: "解释",
     explainAnalyzing: "分析中…",
     analyzingConflict: "分析冲突中…",
+    // Custom automation
+    automationRun: "运行自动化",
+    automationRunning: "运行中…",
+    // Resolution memory
+    memoryApply: "记忆",
+    memoryBannerHint: "已保存规则：{0}",
+    memorySaveOffer: "记住此次解决方案以供下次使用？",
+    memorySave: "保存",
+
   },
 
   // ─── PR inline diff — AI review ─────────────────────────
@@ -1157,6 +1166,22 @@ const zhCN: Locale = {
     taskAiCommitBatch: "\u5173\u95ed\u5e94\u7528\u65f6 AI \u63d0\u4ea4\u6d88\u606f",
     taskAiCommitBatchDesc: "\u5173\u95ed GitWand \u65f6\u82e5\u6709\u6682\u5f85\u63d0\u4ea4\u6587\u4ef6\uff0c\u5c06\u5728\u4e0b\u6b21\u6253\u5f00\u65f6\u63d0\u793a AI \u751f\u6210\u7684\u63d0\u4ea4\u6d88\u606f\u3002",
     taskAiCommitBatchTrigger: "\u89e6\u53d1\u6761\u4ef6\uff1a\u5e94\u7528\u5173\u95ed\u4e14\u6709 staged \u6587\u4ef6",
+    // Custom rules
+    customRulesTitle: "自定义规则",
+    customRulesDesc: "当特定文件发生冲突时触发 shell 命令，然后自动提交结果。",
+    customRulesAdd: "添加规则",
+    customRulesEmpty: "暂无自定义规则。",
+    customRulesEdit: "编辑",
+    customRulesDelete: "删除",
+    customRulesFieldName: "名称",
+    customRulesFieldNamePlaceholder: "例：Rebuild manifest",
+    customRulesFieldTrigger: "触发文件",
+    customRulesFieldTriggerPlaceholder: "例：public/build/manifest.json",
+    customRulesFieldCommand: "命令",
+    customRulesFieldCommandPlaceholder: "例：npm run build",
+    customRulesFieldCommit: "提交信息",
+    customRulesFieldCommitPlaceholder: "例：build: 重新生成 {trigger}",
+
   },
 
   // ─── Agent Sessions (v2.8) ───────────────────────

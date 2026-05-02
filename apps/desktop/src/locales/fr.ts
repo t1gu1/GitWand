@@ -1077,6 +1077,15 @@ const fr: Locale = {
     explain: "Expliquer",
     explainAnalyzing: "Analyse\u2026",
     analyzingConflict: "Analyse du conflit\u2026",
+    // Custom automation
+    automationRun: "Lancer l'automatisation",
+    automationRunning: "En cours…",
+    // Resolution memory
+    memoryApply: "Mémoire",
+    memoryBannerHint: "Règle mémorisée : {0}",
+    memorySaveOffer: "Retenir cette résolution pour la prochaine fois ?",
+    memorySave: "Retenir",
+
   },
 
   // ─── PR inline diff — AI review ─────────────────────────
@@ -1182,6 +1191,22 @@ const fr: Locale = {
     taskAiCommitBatch: "Message de commit IA \u00e0 la fermeture",
     taskAiCommitBatchDesc: "Lorsque vous fermez GitWand avec des fichiers en staging, propose un message de commit IA \u00e0 la prochaine ouverture.",
     taskAiCommitBatchTrigger: "D\u00e9clench\u00e9 par\u00a0: fermeture de l\u2019app avec des fichiers staged",
+    // Custom rules
+    customRulesTitle: "Règles personnalisées",
+    customRulesDesc: "Déclencher une commande shell sur un fichier conflictuel, puis commiter le résultat.",
+    customRulesAdd: "Ajouter",
+    customRulesEmpty: "Aucune règle personnalisée.",
+    customRulesEdit: "Modifier",
+    customRulesDelete: "Supprimer",
+    customRulesFieldName: "Nom",
+    customRulesFieldNamePlaceholder: "ex. Rebuild manifest",
+    customRulesFieldTrigger: "Déclencheur (fichier)",
+    customRulesFieldTriggerPlaceholder: "ex. public/build/manifest.json",
+    customRulesFieldCommand: "Commande",
+    customRulesFieldCommandPlaceholder: "ex. npm run build",
+    customRulesFieldCommit: "Message de commit",
+    customRulesFieldCommitPlaceholder: "ex. build: regénérer {trigger}",
+
   },
 
   // ─── Agent Sessions (v2.8) ───────────────────────

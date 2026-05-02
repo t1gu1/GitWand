@@ -4341,6 +4341,47 @@ fn git_hook_delete(cwd: String, name: String) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Custom Automation — shell_exec ──────────────────────────
+
+/// Run an arbitrary shell command in `cwd` and return combined stdout+stderr.
+///
+/// Security: the command string is NOT constructed from user-repo content —
+/// it is authored explicitly by the user in the Settings UI and stored in
+/// localStorage. It runs through `/bin/sh -c`, so the user has full shell
+/// access, which is intentional (same model as git hooks).
+#[tauri::command]
+fn shell_exec(cwd: String, command: String) -> Result<String, String> {
+    if cwd.trim().is_empty() {
+        return Err("cwd must not be empty".to_string());
+    }
+    if command.trim().is_empty() {
+        return Err("command must not be empty".to_string());
+    }
+    let output = std::process::Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&command)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let combined = if stderr.is_empty() {
+        stdout
+    } else if stdout.is_empty() {
+        stderr
+    } else {
+        format!("{}\n{}", stdout, stderr)
+    };
+
+    if output.status.success() {
+        Ok(combined)
+    } else {
+        let code = output.status.code().unwrap_or(-1);
+        Err(format!("Exit {}: {}", code, combined.trim()))
+    }
+}
+
 // ─── Workspaces ───────────────────────────────────────────────
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -5737,6 +5778,7 @@ pub fn run() {
             git_hook_toggle,
             git_hook_create,
             git_hook_delete,
+            shell_exec,
             workspace_read,
             workspace_write,
             workspace_status_all,
