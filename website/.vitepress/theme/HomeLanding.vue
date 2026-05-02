@@ -625,43 +625,43 @@ const COMPARE_ROWS: CompareRow[] = [
   { label: 'VS Code extension',        gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
 
   { category: true, label: 'Diff & Staging' },
-  { label: 'Syntax highlighting',      gw: true,      ghd: false,     gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Syntax highlighting',      gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
   { label: 'Hunk-level staging',       gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
   { label: 'Line-level staging',       gw: true,      ghd: false,     gk: 'partial', fork: 'partial', tower: true, sm: false },
-  { label: 'Side-by-side diff',        gw: true,      ghd: false,     gk: true,      fork: true,    tower: true,   sm: true  },
-  { label: 'Image diff (visual)',      gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
+  { label: 'Side-by-side diff',        gw: true,      ghd: true,      gk: true,      fork: true,    tower: true,   sm: true  },
+  { label: 'Image diff (visual)',      gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: true  },
   { label: 'Folder tree diff',         gw: true,      ghd: false,     gk: false,     fork: false,   tower: false,  sm: false },
 
   { category: true, label: 'Conflict Resolution' },
-  { label: 'Auto-resolve conflicts',        gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
-  { label: 'Confidence scoring per hunk',   gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
-  { label: '3-way merge editor',            gw: true, ghd: false, gk: true,  fork: true,  tower: true,  sm: true  },
-  { label: 'Zero-impact merge preview',     gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
+  { label: 'Auto-resolve conflicts',        gw: true, ghd: false, gk: 'partial', fork: false, tower: false, sm: false, highlight: true },
+  { label: 'Confidence scoring per hunk',   gw: true, ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
+  { label: '3-way merge editor',            gw: true, ghd: false, gk: true,      fork: true,  tower: true,  sm: true  },
+  { label: 'Zero-impact merge preview',     gw: true, ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
   { label: 'Proactive conflict prevention', gw: true, ghd: false, gk: 'partial', fork: false, tower: 'partial', sm: false },
 
   { category: true, label: 'Power Git' },
   { label: 'Interactive rebase',            gw: true, ghd: 'partial', gk: true, fork: true, tower: true, sm: true  },
-  { label: 'Worktrees',                     gw: true, ghd: false,     gk: 'partial', fork: false, tower: true, sm: false },
-  { label: 'Submodule management',          gw: true, ghd: false,     gk: true, fork: true, tower: true, sm: true  },
+  { label: 'Worktrees',                     gw: true, ghd: false,     gk: true,  fork: true,  tower: true, sm: false },
+  { label: 'Submodule management',          gw: true, ghd: false,     gk: true,  fork: true,  tower: true, sm: true  },
   { label: 'Split commit by hunks',         gw: true, ghd: false,     gk: false, fork: false, tower: false, sm: false },
-  { label: 'File blame + line-range',       gw: true, ghd: false,     gk: true, fork: true, tower: true, sm: true  },
-  { label: 'Conventional commits',          gw: true,   ghd: false,     gk: false,     fork: false, tower: false,     sm: false },
-  { label: 'Multi-repo workspaces',         gw: 'soon', ghd: false,     gk: true,      fork: false, tower: 'partial', sm: false },
-  { label: 'Cross-repo dashboard',          gw: 'soon', ghd: false,     gk: true,      fork: false, tower: false,     sm: false },
+  { label: 'File blame + line-range',       gw: true, ghd: false,     gk: true,  fork: true,  tower: true, sm: true  },
+  { label: 'Conventional commits',          gw: true, ghd: false,     gk: false, fork: false, tower: false, sm: false },
+  { label: 'Multi-repo workspaces',         gw: true, ghd: false,     gk: true,  fork: false, tower: 'partial', sm: false },
+  { label: 'Cross-repo dashboard',          gw: true, ghd: false,     gk: true,  fork: false, tower: false,     sm: false },
 
   { category: true, label: 'Forge integrations' },
-  { label: 'GitHub PRs',                    gw: true,   ghd: true,      gk: true,      fork: 'partial', tower: 'partial', sm: false },
-  { label: 'GitLab MRs',                    gw: 'soon', ghd: false,     gk: true,      fork: false,     tower: 'partial', sm: false },
-  { label: 'Bitbucket PRs',                 gw: 'soon', ghd: false,     gk: true,      fork: false,     tower: false,     sm: false },
-  { label: 'Git hooks manager',             gw: 'soon', ghd: false,     gk: false,     fork: false,     tower: false,     sm: false },
+  { label: 'GitHub PRs',                    gw: true,   ghd: true,  gk: true,  fork: 'partial', tower: 'partial', sm: false },
+  { label: 'GitLab MRs',                    gw: 'soon', ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
+  { label: 'Bitbucket PRs',                 gw: 'soon', ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
+  { label: 'Git hooks manager',             gw: true,   ghd: false, gk: false, fork: false,     tower: false,     sm: false },
 
   { category: true, label: 'AI & Agents', note: 'GitWand connects to your own LLM — Claude, OpenAI-compatible, or Ollama. No built-in model.' },
-  { label: 'AI commit messages',            gw: true,   ghd: true,  gk: true,      fork: false, tower: false, sm: false },
-  { label: 'AI conflict explanation',       gw: true,   ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
-  { label: 'AI PR description',             gw: true,   ghd: false, gk: true,      fork: false, tower: false, sm: false },
-  { label: 'MCP server for AI agents',      gw: true,   ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
-  { label: 'Agent Sessions panel',          gw: 'soon', ghd: false, gk: 'partial', fork: false, tower: false, sm: false },
-  { label: 'Voice input (offline Whisper)', gw: 'soon', ghd: false, gk: false,     fork: false, tower: false, sm: false },
+  { label: 'AI commit messages',            gw: true,   ghd: true,      gk: true,      fork: 'partial', tower: true,  sm: false },
+  { label: 'AI conflict explanation',       gw: true,   ghd: false,     gk: 'partial', fork: false,     tower: false, sm: false, highlight: true },
+  { label: 'AI PR description',             gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
+  { label: 'MCP server for AI agents',      gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
+  { label: 'Agent Sessions panel',          gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
+  { label: 'Voice input (offline Whisper)', gw: 'soon', ghd: false,     gk: false,     fork: false,     tower: false, sm: false },
 ]
 
 function cellIcon(v: CompareValue | undefined): string {
@@ -1202,7 +1202,7 @@ function cellClass(v: CompareValue | undefined): string {
                 </th>
                 <th class="compare-app-col">
                   <span class="compare-app-name">GitKraken</span>
-                  <span class="compare-app-meta">$5/mo · Electron</span>
+                  <span class="compare-app-meta">$8/mo · Electron</span>
                 </th>
                 <th class="compare-app-col">
                   <span class="compare-app-name">Fork</span>
