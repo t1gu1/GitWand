@@ -4013,7 +4013,7 @@ fn merge_file_preview(
     }
 
     // git merge-file -p <ours> <base> <theirs>  (note: ordre ours/base/theirs)
-    let merge_out = std::process::Command::new("git")
+    let merge_out = std::process::std::process::Command::new("git")
         .args([
             "merge-file",
             "-p",
@@ -4447,7 +4447,7 @@ fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
         let name = repo.name.clone();
 
         // Get current branch
-        let branch = Command::new("git")
+        let branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .current_dir(&path)
             .output()
@@ -4458,7 +4458,7 @@ fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
             .unwrap_or_default();
 
         // Get ahead/behind vs upstream
-        let (ahead, behind) = Command::new("git")
+        let (ahead, behind) = std::process::Command::new("git")
             .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
             .current_dir(&path)
             .output()
@@ -4478,7 +4478,7 @@ fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
             .unwrap_or((0, 0));
 
         // Count modified tracked files
-        let modified = Command::new("git")
+        let modified = std::process::Command::new("git")
             .args(["status", "--porcelain", "--untracked-files=no"])
             .current_dir(&path)
             .output()
@@ -4496,7 +4496,7 @@ fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
 #[tauri::command]
 fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
     for repo in &repos {
-        let _ = Command::new("git")
+        let _ = std::process::Command::new("git")
             .args(["fetch", "--all", "--prune"])
             .current_dir(&repo.path)
             .output();
@@ -4508,7 +4508,7 @@ fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
 #[tauri::command]
 fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
     for repo in &repos {
-        let _ = Command::new("git")
+        let _ = std::process::Command::new("git")
             .args(["pull", "--ff-only"])
             .current_dir(&repo.path)
             .output();
@@ -4525,7 +4525,7 @@ fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, Stri
         let path = wt.path.clone();
         let name = wt.branch.trim_start_matches("refs/heads/").to_string();
 
-        let branch = Command::new("git")
+        let branch = std::process::Command::new("git")
             .args(["rev-parse", "--abbrev-ref", "HEAD"])
             .current_dir(&path)
             .output()
@@ -4535,7 +4535,7 @@ fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, Stri
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
 
-        let (ahead, behind) = Command::new("git")
+        let (ahead, behind) = std::process::Command::new("git")
             .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
             .current_dir(&path)
             .output()
@@ -4550,7 +4550,7 @@ fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, Stri
             })
             .unwrap_or((0, 0));
 
-        let modified = Command::new("git")
+        let modified = std::process::Command::new("git")
             .args(["status", "--porcelain", "--untracked-files=no"])
             .current_dir(&path)
             .output()
