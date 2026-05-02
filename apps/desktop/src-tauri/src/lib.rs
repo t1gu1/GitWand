@@ -4013,7 +4013,7 @@ fn merge_file_preview(
     }
 
     // git merge-file -p <ours> <base> <theirs>  (note: ordre ours/base/theirs)
-    let merge_out = std::process::std::process::Command::new("git")
+    let merge_out = std::process::Command::new("git")
         .args([
             "merge-file",
             "-p",
