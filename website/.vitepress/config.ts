@@ -145,7 +145,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
-            { text: 'Agent Sessions & automations (v2.8.0)', link: '/blog/agent-sessions-automations-v2-8' },
+            { text: 'Hooks, workspaces & agent sessions (v2.7–v2.8)', link: '/blog/agent-sessions-automations-v2-8' },
             { text: 'The state of merge conflict resolution in 2026', link: '/blog/state-of-merge-conflict-resolution-2026' },
             { text: 'Claude Code + GitWand: AI agents & merges', link: '/blog/claude-code-gitwand-ai-agents' },
             { text: 'Auto-merge failure modes', link: '/blog/auto-merge-failure-modes' },

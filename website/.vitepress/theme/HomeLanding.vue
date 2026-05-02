@@ -1255,9 +1255,9 @@ function cellClass(v: CompareValue | undefined): string {
           <span class="blog-teaser-label">From the blog</span>
         </div>
         <a href="/blog/agent-sessions-automations-v2-8" class="blog-teaser-card">
-          <div class="blog-teaser-meta">May 2, 2026 · 11 min read</div>
-          <h3 class="blog-teaser-title">Agent Sessions and scheduled automations: what went into GitWand v2.8.0</h3>
-          <p class="blog-teaser-excerpt">Cross-platform AI agent detection with lsof and /proc/cwd, a daemonless automation scheduler in pure TypeScript, and conflict resolution memory — the technical story behind v2.8.</p>
+          <div class="blog-teaser-meta">May 2, 2026 · 18 min read</div>
+          <h3 class="blog-teaser-title">Hooks, workspaces, agent sessions, and automations: what went into GitWand v2.7 and v2.8</h3>
+          <p class="blog-teaser-excerpt">Git hooks manager, multi-repo workspaces, worktree quick-create, cross-platform AI agent detection with lsof and /proc/cwd, a daemonless scheduler, and conflict resolution memory.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>
