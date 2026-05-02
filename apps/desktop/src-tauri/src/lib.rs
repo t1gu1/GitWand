@@ -4167,7 +4167,8 @@ pub struct HookEntry {
 /// Disabled hooks are stored as `<name>.disabled`.
 #[tauri::command]
 fn git_hook_list(cwd: String) -> Result<Vec<HookEntry>, String> {
-    let repo = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let repo = PathBuf::from(&cwd);
     let hooks_dir = repo.join(".git").join("hooks");
 
     if !hooks_dir.exists() {
@@ -4249,7 +4250,8 @@ fn git_hook_toggle(cwd: String, name: String, enabled: bool) -> Result<(), Strin
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
-    let repo = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let repo = PathBuf::from(&cwd);
     let hooks_dir = repo.join(".git").join("hooks");
 
     let enabled_path = hooks_dir.join(&name);
@@ -4282,7 +4284,8 @@ fn git_hook_create(cwd: String, name: String, content: String) -> Result<(), Str
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
-    let repo = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let repo = PathBuf::from(&cwd);
     let hooks_dir = repo.join(".git").join("hooks");
 
     std::fs::create_dir_all(&hooks_dir)
@@ -4320,7 +4323,8 @@ fn git_hook_delete(cwd: String, name: String) -> Result<(), String> {
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
-    let repo = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let repo = PathBuf::from(&cwd);
     let hooks_dir = repo.join(".git").join("hooks");
 
     let enabled_path = hooks_dir.join(&name);
@@ -4777,7 +4781,8 @@ fn detect_agent_tool(worktree_path: &str) -> Option<String> {
 /// A session exists when a worktree directory contains agent configuration.
 #[tauri::command]
 fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, String> {
-    let path = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let path = PathBuf::from(&cwd);
     let worktrees = git_worktree_list(path.to_string_lossy().to_string())?;
 
     // Collect active cwds per known tool (lazy — only for tools actually present)
@@ -4846,7 +4851,8 @@ fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, String> {
 /// detached child process. Returns immediately — the process runs independently.
 #[tauri::command]
 fn agent_session_launch(cwd: String, tool: String) -> Result<(), String> {
-    let path = safe_repo_path(&cwd)?;
+    if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
+    let path = PathBuf::from(&cwd);
     let binary = match tool.as_str() {
         "cursor"   => "cursor",
         "windsurf" => "windsurf",

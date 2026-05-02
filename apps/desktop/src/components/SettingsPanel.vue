@@ -1106,14 +1106,18 @@ onMounted(() => {
   gap: 0;
   margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-7));
   padding: 0 var(--space-7);
+  /* Scrollable when tabs overflow (7+ tabs) */
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
 }
+.sp-tabs::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
 .sp-tab {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  font-size: var(--font-size-base);
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4);
+  font-size: 13px;
   font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
   background: none;
