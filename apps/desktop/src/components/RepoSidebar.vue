@@ -1028,12 +1028,13 @@ function formatActivityDate(dateStr: string): string {
         :title="t('sidebar.tabDashboard')"
         :aria-label="t('sidebar.tabDashboard')"
       >
-        <svg width="15" height="15" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
           <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
           <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
           <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
           <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
         </svg>
+        <span class="sf-btn__label">{{ t('sidebar.tabDashboard') }}</span>
       </button>
       <div class="sf-sep" aria-hidden="true"></div>
       <button
@@ -1042,12 +1043,12 @@ function formatActivityDate(dateStr: string): string {
         :title="t('sidebar.stashTitle')"
         :aria-label="t('sidebar.stashTitle')"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M21 8v13H3V8"/>
           <path d="M1 3h22v5H1z"/>
           <path d="M10 12h4"/>
         </svg>
-        <span v-if="stashCount > 0" class="sf-btn__badge">{{ stashCount }}</span>
+        <span class="sf-btn__label">{{ t('sidebar.stashTitle') }}<template v-if="stashCount > 0"> ({{ stashCount }})</template></span>
       </button>
       <button
         class="sf-btn"
@@ -1055,10 +1056,11 @@ function formatActivityDate(dateStr: string): string {
         :title="t('tags.title')"
         :aria-label="t('tags.title')"
       >
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
         </svg>
+        <span class="sf-btn__label">{{ t('tags.title') }}</span>
       </button>
       <button
         class="sf-btn"
@@ -1066,10 +1068,11 @@ function formatActivityDate(dateStr: string): string {
         :title="t('workspace.title')"
         :aria-label="t('workspace.title')"
       >
-        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
           <rect x="1" y="4" width="14" height="10" rx="2"/>
           <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
         </svg>
+        <span class="sf-btn__label">{{ t('workspace.title') }}</span>
       </button>
       <button
         class="sf-btn"
@@ -1077,13 +1080,14 @@ function formatActivityDate(dateStr: string): string {
         :title="t('agents.sidebarTooltip')"
         :aria-label="t('agents.title')"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="11" width="18" height="11" rx="2"/>
           <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
           <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
           <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
           <path d="M9 20h6"/>
         </svg>
+        <span class="sf-btn__label">{{ t('agents.title') }}</span>
       </button>
     </div>
   </nav>
@@ -1192,29 +1196,33 @@ function formatActivityDate(dateStr: string): string {
 /* ── Footer toolbar ────────────────────────────────────────── */
 .sidebar-footer {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px 8px;
+  align-items: stretch;
+  gap: 1px;
+  padding: 4px 6px;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+  /* Always pin to the bottom of the flex column, regardless of content height */
+  margin-top: auto;
   background: var(--color-bg-secondary, var(--color-surface-alt, rgba(0,0,0,0.03)));
 }
 
 .sf-sep {
   width: 1px;
-  height: 18px;
+  align-self: stretch;
   background: var(--color-border);
-  margin: 0 4px;
+  margin: 4px 4px;
   flex-shrink: 0;
 }
 
 .sf-btn {
   position: relative;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  gap: 2px;
+  padding: 4px 6px;
+  min-width: 38px;
   border-radius: var(--radius-sm, 5px);
   background: none;
   color: var(--color-text-muted);
@@ -1238,16 +1246,25 @@ function formatActivityDate(dateStr: string): string {
   background: var(--color-accent-soft, rgba(99,102,241,0.15));
 }
 
+.sf-btn__label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  color: inherit;
+}
+
 .sf-btn__badge {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  min-width: 14px;
-  height: 14px;
+  top: 2px;
+  right: 2px;
+  min-width: 13px;
+  height: 13px;
   padding: 0 3px;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: var(--font-weight-semibold);
-  line-height: 14px;
+  line-height: 13px;
   text-align: center;
   background: var(--color-accent);
   color: var(--color-accent-text);

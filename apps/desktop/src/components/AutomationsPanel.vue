@@ -670,7 +670,7 @@ function submitForm() {
   padding: 5px 8px;
   border: 1px solid var(--color-border);
   border-radius: 5px;
-  background: var(--color-surface);
+  background: #fff;
   color: var(--color-text-primary);
   font-size: 12px;
   font-family: inherit;
