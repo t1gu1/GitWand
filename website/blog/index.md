@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/agent-sessions-automations-v2-8" class="blog-card">
+    <div class="blog-meta">May 2, 2026 · 11 min read</div>
+    <h2 class="blog-title">Agent Sessions and scheduled automations: what went into GitWand v2.8.0</h2>
+    <p class="blog-excerpt">How I built cross-platform AI agent detection using lsof and /proc/cwd, a daemonless automation scheduler in pure TypeScript, and why conflict resolution memory changes the LLM fallback equation.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/state-of-merge-conflict-resolution-2026" class="blog-card">
     <div class="blog-meta">Apr 26, 2026 · 12 min read</div>
     <h2 class="blog-title">The state of automatic merge conflict resolution in 2026: a survey, and where GitWand is headed</h2>
