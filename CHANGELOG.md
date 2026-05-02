@@ -43,6 +43,16 @@ Desktop product track v2.8: Agent Sessions View and Scheduled AI tasks — GitWa
 - `useSettings` composable was missing `saveSettings` export — `AutomationsPanel` and any future component can now call `saveSettings(settings.value)` directly without duplicating localStorage write logic.
 - `SettingsPanel.vue` local `Settings` interface now mirrors `AppSettings` in `useSettings.ts` for the new `automations` field (per duplicate-interface rule).
 
+### Website
+
+- **Homepage redesign** (`website/.vitepress/theme/HomeLanding.vue`) — complete structural overhaul replacing the flat 20-card feature grid:
+  - **Hero terminal animation** — live `gitwand resolve` simulation (9-step, type-in sequence) replaces the static screenshot; ↻ Replay button for repeat demos.
+  - **Conflict demo elevated** — before/after block moved immediately after the stats bar so visitors see the payoff before any feature list.
+  - **10 Patterns grid** — dedicated section with one card per resolution pattern; each card shows the pattern name, confidence tier (colour-coded: certain / high / medium / low), a one-line description, and auto-resolve status (⚡ or ○).
+  - **Tabbed features** — 20 cards reorganised into four navigable tabs: Core Git · AI · Integrations · New in v2.8; active tab underlined in purple.
+  - **Benchmarks section** — six metric cards with number-first typography: throughput at 1 / 5 / 50 conflicts, binary size (~8 MB vs ~150 MB Electron), test count (322), and hallucination count (0 — fully deterministic).
+  - All sections fully responsive; `vitepress build` clean (4.5 s).
+
 ## [2.7.0] - 2026-05-01
 
 Desktop product track v2.7: Workspaces multi-repo, Hooks manager, and Worktree first-class — three independent pillars that together make GitWand the command center for multi-repo engineering workflows.

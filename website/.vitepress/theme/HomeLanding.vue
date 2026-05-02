@@ -11,6 +11,51 @@ function toggleFaq(i: number) {
   faqOpen.value = faqOpen.value === i ? null : i
 }
 
+// ── Terminal demo (hero animation) ────────────────────────────────────────────
+interface TermLine { text: string; type: 'cmd' | 'info' | 'ok' | 'warn' }
+const termLines = ref<TermLine[]>([])
+const termRunning = ref(false)
+
+function runTerminalDemo() {
+  if (termRunning.value) return
+  termRunning.value = true
+  termLines.value = []
+  const steps: Array<{ delay: number } & TermLine> = [
+    { delay: 0,    text: '$ gitwand resolve',                                                    type: 'cmd'  },
+    { delay: 600,  text: 'Scanning 12 conflicted files…',                                        type: 'info' },
+    { delay: 1100, text: '✓ package-lock.json    47/47  [same_change · certain]',                type: 'ok'   },
+    { delay: 1500, text: '✓ src/config.ts         3/3   [one_side_change · certain]',            type: 'ok'   },
+    { delay: 1900, text: '✓ tailwind.config.js    2/2   [non_overlapping · high]',               type: 'ok'   },
+    { delay: 2300, text: '✓ README.md             5/5   [whitespace_only · high]',               type: 'ok'   },
+    { delay: 2700, text: '○ src/auth.ts           1 hunk pending  [complex · review needed]',    type: 'warn' },
+    { delay: 3100, text: '─────────────────────────────────────────────',                        type: 'info' },
+    { delay: 3400, text: '57 hunks resolved · 1 left for you · 0 errors',                        type: 'cmd'  },
+  ]
+  steps.forEach(({ delay, text, type }) => {
+    setTimeout(() => {
+      termLines.value.push({ text, type })
+      if (type === 'cmd' && termLines.value.length > 1) termRunning.value = false
+    }, delay)
+  })
+}
+
+// ── Feature tabs ──────────────────────────────────────────────────────────────
+const activeTab = ref<'core' | 'ai' | 'tools' | 'new'>('core')
+
+// ── 10 resolution patterns (technical — not localised) ────────────────────────
+const PATTERNS = [
+  { name: 'same_change',           conf: 'certain', auto: true,  desc: 'Both branches made the exact same edit.' },
+  { name: 'one_side_change',       conf: 'certain', auto: true,  desc: 'Only one branch touched this block.' },
+  { name: 'non_overlapping',       conf: 'high',    auto: true,  desc: 'Additions at different positions in the block.' },
+  { name: 'whitespace_only',       conf: 'high',    auto: true,  desc: 'Same logic, different indentation or spacing.' },
+  { name: 'reorder_only',          conf: 'high',    auto: true,  desc: 'Same lines, different order.' },
+  { name: 'insertion_at_boundary', conf: 'high',    auto: true,  desc: 'New lines added at the edge of a hunk.' },
+  { name: 'value_only_change',     conf: 'high',    auto: true,  desc: 'A scalar value (JSON, config) updated on one side.' },
+  { name: 'section_only_change',   conf: 'high',    auto: true,  desc: 'A document section edited on one side only.' },
+  { name: 'llm_proposed',          conf: 'medium',  auto: true,  desc: 'LLM-proposed resolution above the confidence threshold.' },
+  { name: 'complex',               conf: 'low',     auto: false, desc: 'Overlapping edits — surfaced with full classification trace.' },
+] as const
+
 // Short labels keep the picker compact; `title` surfaces the full native name on hover.
 const LOCALES: { code: Locale; label: string; title: string }[] = [
   { code: 'en',    label: 'EN', title: 'English' },
@@ -41,14 +86,15 @@ onMounted(() => {
     downloadUrl.value = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
   else if (/Linux/.test(ua))
     downloadUrl.value = `${RELEASES}/download/v${LATEST}/git-wand_${LATEST}_amd64.AppImage`
+  setTimeout(runTerminalDemo, 900)
 })
 
 const i18n: Record<Locale, any> = {
   fr: {
     badge: 'v2.8.0 · Open Source · MIT',
-    heroH1a: 'Git, sans',
-    heroH1b: 'maux de tête.',
-    heroSub: 'GitWand est un client Git natif avec résolution intelligente des conflits de fusion. Desktop, CLI, et extension VS Code — un seul outil, partout.',
+    heroH1a: 'Le client Git qui',
+    heroH1b: 'résout les conflits pour vous.',
+    heroSub: 'GitWand classifie chaque conflit de merge avec 10 patterns déterministes et un score de confiance par hunk. Les 95 % triviaux — résolus automatiquement. Les cas complexes — pour vous, avec traces complètes. Natif, gratuit, open source.',
     download: 'Télécharger',
     github: 'GitHub',
     whatsNew: 'Nouveautés v2.8',
@@ -128,6 +174,11 @@ const i18n: Record<Locale, any> = {
     llmStep3Desc: 'Pour chaque conflit complexe, l\'agent dispose du contexte complet : contenu ours/theirs/base, trace de classification et scores de confiance.',
     llmCompat: 'Compatible avec',
     llmDocs: 'Voir la documentation MCP →',
+    patternsTitle: '10 patterns. Déterministes. Auditables.',
+    patternsSub: 'Chaque hunk passe par le classifieur. Chaque pattern a son profil de confiance et son résolveur automatique.',
+    benchTitle: 'Des chiffres, pas des adjectifs.',
+    benchSub: 'Performances mesurées sur puce M, dépôts types.',
+    tabCore: 'Git de base', tabAI: 'IA', tabTools: 'Intégrations', tabNew: 'Nouveautés v2.8',
     faqTitle: 'Questions fréquentes',
     faqItems: [
       { q: 'GitWand est-il vraiment gratuit ?', a: 'Oui, GitWand est entièrement open source sous licence MIT. Vous pouvez l\'utiliser, le modifier et le redistribuer librement.' },
@@ -142,9 +193,9 @@ const i18n: Record<Locale, any> = {
   },
   en: {
     badge: 'v2.8.0 · Open Source · MIT',
-    heroH1a: 'Git, without',
-    heroH1b: 'the headaches.',
-    heroSub: 'GitWand is a native Git client with smart merge conflict resolution. Desktop, CLI, and VS Code extension — one tool, everywhere.',
+    heroH1a: 'The Git client that',
+    heroH1b: 'resolves conflicts for you.',
+    heroSub: 'GitWand classifies every merge conflict using 10 deterministic patterns and per-hunk confidence scoring. The trivial 95% — auto-resolved. The complex — left for you with full traces. Native, free, open-source.',
     download: 'Download',
     github: 'GitHub',
     whatsNew: "What's new in v2.8",
@@ -224,6 +275,11 @@ const i18n: Record<Locale, any> = {
     llmStep3Desc: 'For each complex conflict, the agent has full context: ours/theirs/base content, classification trace, and confidence scores.',
     llmCompat: 'Compatible with',
     llmDocs: 'View MCP documentation →',
+    patternsTitle: '10 patterns. Deterministic. Auditable.',
+    patternsSub: 'Every hunk runs through the classifier. Each pattern has its own confidence profile and automatic resolver.',
+    benchTitle: 'Numbers, not adjectives.',
+    benchSub: 'Performance measured on an M-series chip with typical repositories.',
+    tabCore: 'Core Git', tabAI: 'AI', tabTools: 'Integrations', tabNew: 'New in v2.8',
     faqTitle: 'Frequently asked questions',
     faqItems: [
       { q: 'Is GitWand really free?', a: 'Yes, GitWand is fully open source under the MIT license. You can use, modify, and redistribute it freely.' },
@@ -238,9 +294,9 @@ const i18n: Record<Locale, any> = {
   },
   es: {
     badge: 'v2.8.0 · Open Source · MIT',
-    heroH1a: 'Git, sin',
-    heroH1b: 'dolores de cabeza.',
-    heroSub: 'GitWand es un cliente Git nativo con resolución inteligente de conflictos de fusión. Escritorio, CLI y extensión de VS Code — una sola herramienta, en todas partes.',
+    heroH1a: 'El cliente Git que',
+    heroH1b: 'resuelve conflictos por ti.',
+    heroSub: 'GitWand clasifica cada conflicto de merge con 10 patrones deterministas y puntuación de confianza por hunk. El 95 % trivial — resuelto automáticamente. Lo complejo — para ti, con trazas completas. Nativo, gratuito, open source.',
     download: 'Descargar',
     github: 'GitHub',
     whatsNew: 'Novedades v2.8',
@@ -320,6 +376,11 @@ const i18n: Record<Locale, any> = {
     llmStep3Desc: 'Para cada conflicto complejo, el agente dispone del contexto completo: contenido ours/theirs/base, traza de clasificación y puntuaciones de confianza.',
     llmCompat: 'Compatible con',
     llmDocs: 'Ver la documentación de MCP →',
+    patternsTitle: '10 patrones. Deterministas. Auditables.',
+    patternsSub: 'Cada hunk pasa por el clasificador. Cada patrón tiene su perfil de confianza y resolución automática.',
+    benchTitle: 'Números, no adjetivos.',
+    benchSub: 'Rendimiento medido en chip M con repositorios típicos.',
+    tabCore: 'Git básico', tabAI: 'IA', tabTools: 'Integraciones', tabNew: 'Novedades v2.8',
     faqTitle: 'Preguntas frecuentes',
     faqItems: [
       { q: '¿GitWand es realmente gratis?', a: 'Sí, GitWand es totalmente open source bajo licencia MIT. Puedes usarlo, modificarlo y redistribuirlo libremente.' },
@@ -334,9 +395,9 @@ const i18n: Record<Locale, any> = {
   },
   'pt-BR': {
     badge: 'v2.8.0 · Open Source · MIT',
-    heroH1a: 'Git, sem',
-    heroH1b: 'dor de cabeça.',
-    heroSub: 'GitWand é um cliente Git nativo com resolução inteligente de conflitos de merge. Desktop, CLI e extensão VS Code — uma ferramenta, em todo lugar.',
+    heroH1a: 'O cliente Git que',
+    heroH1b: 'resolve conflitos por você.',
+    heroSub: 'GitWand classifica cada conflito de merge com 10 padrões deterministas e pontuação de confiança por hunk. Os 95 % triviais — resolvidos automaticamente. Os complexos — para você, com traces completos. Nativo, gratuito, open source.',
     download: 'Baixar',
     github: 'GitHub',
     whatsNew: 'Novidades v2.8',
@@ -416,6 +477,11 @@ const i18n: Record<Locale, any> = {
     llmStep3Desc: 'Para cada conflito complexo, o agente tem o contexto completo: conteúdo ours/theirs/base, trace de classificação e scores de confiança.',
     llmCompat: 'Compatível com',
     llmDocs: 'Ver a documentação do MCP →',
+    patternsTitle: '10 padrões. Deterministas. Auditáveis.',
+    patternsSub: 'Cada hunk passa pelo classificador. Cada padrão tem seu perfil de confiança e resolução automática.',
+    benchTitle: 'Números, não adjetivos.',
+    benchSub: 'Performance medida em chip M com repositórios típicos.',
+    tabCore: 'Git básico', tabAI: 'IA', tabTools: 'Integrações', tabNew: 'Novidades v2.8',
     faqTitle: 'Perguntas frequentes',
     faqItems: [
       { q: 'O GitWand é realmente gratuito?', a: 'Sim, o GitWand é totalmente open source sob licença MIT. Você pode usar, modificar e redistribuir livremente.' },
@@ -430,9 +496,9 @@ const i18n: Record<Locale, any> = {
   },
   'zh-CN': {
     badge: 'v2.8.0 · 开源 · MIT',
-    heroH1a: 'Git,告别',
-    heroH1b: '烦恼。',
-    heroSub: 'GitWand 是一款原生 Git 客户端,具备智能合并冲突解决能力。桌面端、CLI 和 VS Code 扩展 — 一款工具,处处可用。',
+    heroH1a: '自动解决冲突的',
+    heroH1b: 'Git 客户端',
+    heroSub: 'GitWand 通过 10 种确定性模式与逐 hunk 置信度评分，对每个合并冲突进行分类。95% 的简单冲突自动解决。复杂的留给你，附带完整追踪。原生、免费、开源。',
     download: '下载',
     github: 'GitHub',
     whatsNew: 'v2.8 新特性',
@@ -512,6 +578,11 @@ const i18n: Record<Locale, any> = {
     llmStep3Desc: '对于每个复杂冲突,代理都能获得完整上下文:ours/theirs/base 内容、分类追踪以及置信度评分。',
     llmCompat: '兼容',
     llmDocs: '查看 MCP 文档 →',
+    patternsTitle: '10 种模式。确定性的。可审计的。',
+    patternsSub: '每个 hunk 都经过分类器处理。每种模式都有自己的置信度配置和自动解析器。',
+    benchTitle: '数字，而非形容词。',
+    benchSub: '在 M 系列芯片上使用典型仓库测量的性能。',
+    tabCore: 'Git 核心', tabAI: 'AI', tabTools: '集成', tabNew: 'v2.8 新特性',
     faqTitle: '常见问题',
     faqItems: [
       { q: 'GitWand 真的免费吗?', a: '是的,GitWand 在 MIT 许可下完全开源。你可以自由使用、修改和分发。' },
@@ -658,9 +729,23 @@ function cellClass(v: CompareValue | undefined): string {
           <p class="hero-platforms">{{ t.platforms }}</p>
         </div>
 
-        <!-- Right: app screenshot -->
+        <!-- Right: terminal animation -->
         <div class="hero-visual">
-          <img src="/screenshots/app-log-diff.png" alt="GitWand — diff viewer with syntax highlighting" class="app-window app-screenshot" />
+          <div class="hero-term">
+            <div class="hero-term__bar">
+              <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
+              <span class="hero-term__title">~/projects/myapp — gitwand</span>
+              <button class="hero-term__replay" :disabled="termRunning" @click="runTerminalDemo" :title="'↻ Replay'">↻</button>
+            </div>
+            <div class="hero-term__body">
+              <div
+                v-for="(line, i) in termLines" :key="i"
+                class="hero-term__line"
+                :class="`hero-term__line--${line.type}`"
+              >{{ line.text }}</div>
+              <span v-if="termRunning" class="hero-term__cursor">▋</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -686,186 +771,7 @@ function cellClass(v: CompareValue | undefined): string {
     </section>
 
     <!-- ══════════════════════════════════════
-         FEATURES
-    ══════════════════════════════════════ -->
-    <section class="features">
-      <div class="section-inner">
-        <h2 class="section-title">{{ t.featTitle }}</h2>
-        <p class="section-sub">{{ t.featSub }}</p>
-        <div class="features-grid">
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featPerf }}</h3>
-            <p>{{ t.featPerfDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#7C3AED" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featResolve }}</h3>
-            <p>{{ t.featResolveDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featDiff }}</h3>
-            <p>{{ t.featDiffDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 6h8M7 8l-2 8M17 8l2 8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featHistory }}</h3>
-            <p>{{ t.featHistoryDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featPR }}</h3>
-            <p>{{ t.featPRDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="#7C3AED" stroke-width="1.8"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featUI }}</h3>
-            <p>{{ t.featUIDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#10B981" stroke-width="1.8"/></svg>
-            </div>
-            <h3>{{ t.featAIPR }}</h3>
-            <p>{{ t.featAIPRDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 3v12M6 21a3 3 0 100-6 3 3 0 000 6zM18 9a3 3 0 100-6 3 3 0 000 6zM18 9v4a2 2 0 01-2 2H8" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featAIMerge }}</h3>
-            <p>{{ t.featAIMergeDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#10B981" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featAIFlow }}</h3>
-            <p>{{ t.featAIFlowDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg>
-            </div>
-            <h3>{{ t.featImgDiff }}</h3>
-            <p>{{ t.featImgDiffDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5a1 1 0 011-1h4l2 2h10a1 1 0 011 1v2H3V5z" stroke="#7C3AED" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 9h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z" stroke="#7C3AED" stroke-width="1.8"/><path d="M7 13h4M7 17h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featFolderTree }}</h3>
-            <p>{{ t.featFolderTreeDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8h2M6 12h2M6 16h2M17 8h1M17 12h1M17 16h1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featWorktrees }}</h3>
-            <p>{{ t.featWorktreesDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6.5 9v3.5a1 1 0 001 1h9a1 1 0 001-1V9" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><rect x="8" y="14" width="8" height="8" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/></svg>
-            </div>
-            <h3>{{ t.featSubmodules }}</h3>
-            <p>{{ t.featSubmodulesDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5V16" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featSplitCommit }}</h3>
-            <p>{{ t.featSplitCommitDesc }}</p>
-          </div>
-
-          <div class="feat-card">
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22v-5M9 7V3M15 7V3M5 11V9a2 2 0 012-2h10a2 2 0 012 2v2a5 5 0 01-5 5h-4a5 5 0 01-5-5z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>{{ t.featMcp }}</h3>
-            <p>{{ t.featMcpDesc }}</p>
-          </div>
-
-          <!-- ── v1.9 features ── -->
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v1.9</div>
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featCommitCtx }}</h3>
-            <p>{{ t.featCommitCtxDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v1.9</div>
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 7h10M7 12h6" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="17" r="4" stroke="#7C3AED" stroke-width="1.8"/><path d="M17 15v2l1 1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featTags }}</h3>
-            <p>{{ t.featTagsDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v1.9</div>
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M3 9h18M8 13h3M8 16h5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featTrailers }}</h3>
-            <p>{{ t.featTrailersDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v1.9</div>
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="3" stroke="#7C3AED" stroke-width="1.6"/><path d="M21.5 19.5l1.5 1.5" stroke="#7C3AED" stroke-width="1.6" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featFileHistory }}</h3>
-            <p>{{ t.featFileHistoryDesc }}</p>
-          </div>
-
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v1.9</div>
-            <div class="feat-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><path d="M7.5 12h9M16.5 6l-4 4.5M16.5 18l-4-4.5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>{{ t.featForkWorkflow }}</h3>
-            <p>{{ t.featForkWorkflowDesc }}</p>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- ══════════════════════════════════════
-         CONFLICT RESOLUTION DEMO
+         CONFLICT RESOLUTION DEMO (moved before features)
     ══════════════════════════════════════ -->
     <section class="conflict-section">
       <div class="section-inner">
@@ -907,6 +813,219 @@ function cellClass(v: CompareValue | undefined): string {
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M13.5 3.5l-7 7L3 7" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               {{ t.conflictBadge }}
             </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         10 PATTERNS GRID
+    ══════════════════════════════════════ -->
+    <section class="patterns-section">
+      <div class="section-inner">
+        <h2 class="section-title">{{ t.patternsTitle }}</h2>
+        <p class="section-sub">{{ t.patternsSub }}</p>
+        <div class="patterns-grid">
+          <div
+            v-for="p in PATTERNS" :key="p.name"
+            class="pat-card"
+            :class="{ 'pat-card--dim': !p.auto }"
+          >
+            <div class="pat-head">
+              <code class="pat-name">{{ p.name }}</code>
+              <span class="pat-conf" :class="`pat-conf--${p.conf}`">{{ p.conf }}</span>
+            </div>
+            <p class="pat-desc">{{ p.desc }}</p>
+            <div class="pat-auto" :class="p.auto ? 'pat-auto--yes' : 'pat-auto--no'">
+              {{ p.auto ? '⚡ Auto-resolved' : '○ Review needed' }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         FEATURES (tabbed — replaces flat grid)
+    ══════════════════════════════════════ -->
+    <section class="features">
+      <div class="section-inner">
+        <h2 class="section-title">{{ t.featTitle }}</h2>
+        <p class="section-sub">{{ t.featSub }}</p>
+
+        <!-- Tab navigation -->
+        <div class="feat-tabs">
+          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'core' }" @click="activeTab = 'core'">{{ t.tabCore }}</button>
+          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'ai' }" @click="activeTab = 'ai'">{{ t.tabAI }}</button>
+          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'tools' }" @click="activeTab = 'tools'">{{ t.tabTools }}</button>
+          <button class="feat-tab feat-tab--highlight" :class="{ 'feat-tab--active': activeTab === 'new' }" @click="activeTab = 'new'">{{ t.tabNew }}</button>
+        </div>
+
+        <!-- Core Git tab -->
+        <div v-if="activeTab === 'core'" class="features-grid">
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featDiff }}</h3><p>{{ t.featDiffDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 6h8M7 8l-2 8M17 8l2 8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featHistory }}</h3><p>{{ t.featHistoryDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featPR }}</h3><p>{{ t.featPRDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8h2M6 12h2M6 16h2M17 8h1M17 12h1M17 16h1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featWorktrees }}</h3><p>{{ t.featWorktreesDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5V16" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featSplitCommit }}</h3><p>{{ t.featSplitCommitDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg></div>
+            <h3>{{ t.featImgDiff }}</h3><p>{{ t.featImgDiffDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5a1 1 0 011-1h4l2 2h10a1 1 0 011 1v2H3V5z" stroke="#7C3AED" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 9h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z" stroke="#7C3AED" stroke-width="1.8"/><path d="M7 13h4M7 17h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featFolderTree }}</h3><p>{{ t.featFolderTreeDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6.5 9v3.5a1 1 0 001 1h9a1 1 0 001-1V9" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><rect x="8" y="14" width="8" height="8" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/></svg></div>
+            <h3>{{ t.featSubmodules }}</h3><p>{{ t.featSubmodulesDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featCommitCtx }}</h3><p>{{ t.featCommitCtxDesc }}</p>
+          </div>
+        </div>
+
+        <!-- AI tab -->
+        <div v-if="activeTab === 'ai'" class="features-grid">
+          <div class="feat-card feat-card--ai">
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#10B981" stroke-width="1.8"/></svg></div>
+            <h3>{{ t.featAIPR }}</h3><p>{{ t.featAIPRDesc }}</p>
+          </div>
+          <div class="feat-card feat-card--ai">
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 3v12M6 21a3 3 0 100-6 3 3 0 000 6zM18 9a3 3 0 100-6 3 3 0 000 6zM18 9v4a2 2 0 01-2 2H8" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featAIMerge }}</h3><p>{{ t.featAIMergeDesc }}</p>
+          </div>
+          <div class="feat-card feat-card--ai">
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#10B981" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featAIFlow }}</h3><p>{{ t.featAIFlowDesc }}</p>
+          </div>
+          <div class="feat-card feat-card--ai">
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#10B981" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featResolve }}</h3><p>{{ t.featResolveDesc }}</p>
+          </div>
+          <div class="feat-card feat-card--ai">
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 7h10M7 12h6" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="17" r="4" stroke="#10B981" stroke-width="1.8"/><path d="M17 15v2l1 1" stroke="#10B981" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featTags }}</h3><p>{{ t.featTagsDesc }}</p>
+          </div>
+        </div>
+
+        <!-- Integrations tab -->
+        <div v-if="activeTab === 'tools'" class="features-grid">
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22v-5M9 7V3M15 7V3M5 11V9a2 2 0 012-2h10a2 2 0 012 2v2a5 5 0 01-5 5h-4a5 5 0 01-5-5z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featMcp }}</h3><p>{{ t.featMcpDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featUI }}</h3><p>{{ t.featUIDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M3 9h18M8 13h3M8 16h5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featTrailers }}</h3><p>{{ t.featTrailersDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="3" stroke="#7C3AED" stroke-width="1.6"/><path d="M21.5 19.5l1.5 1.5" stroke="#7C3AED" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featFileHistory }}</h3><p>{{ t.featFileHistoryDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><path d="M7.5 12h9M16.5 6l-4 4.5M16.5 18l-4-4.5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+            <h3>{{ t.featForkWorkflow }}</h3><p>{{ t.featForkWorkflowDesc }}</p>
+          </div>
+          <div class="feat-card">
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>{{ t.featPerf }}</h3><p>{{ t.featPerfDesc }}</p>
+          </div>
+        </div>
+
+        <!-- New in v2.8 tab -->
+        <div v-if="activeTab === 'new'" class="features-grid">
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.8</div>
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Custom automations</h3>
+            <p>Glob-trigger rules that run a shell command when a conflicted file matches a pattern. Auto-commit the result.</p>
+          </div>
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.8</div>
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#10B981" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Resolution memory</h3>
+            <p>Learns your resolution choices per file. Detects date/number patterns and re-applies them automatically.</p>
+          </div>
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.8</div>
+            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="#10B981" stroke-width="1.8"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            <h3>Agent Sessions</h3>
+            <p>Launch and track AI agent sessions per worktree. Live status badges, one-click open in Claude Code.</p>
+          </div>
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.7</div>
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/></svg></div>
+            <h3>Multi-repo workspaces</h3>
+            <p>Group repositories into workspaces and switch context in one click from a unified dashboard.</p>
+          </div>
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.7</div>
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Git Hooks manager</h3>
+            <p>List, toggle, and create pre-commit and pre-push hooks from the Settings panel. No shell scripting.</p>
+          </div>
+          <div class="feat-card feat-card--new">
+            <div class="feat-badge">v2.7</div>
+            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#7C3AED" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <h3>Scheduled automations</h3>
+            <p>Daily fetch, nightly GC, leak detection — configurable tasks that run automatically on a timer.</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
+         BENCHMARKS
+    ══════════════════════════════════════ -->
+    <section class="bench-section">
+      <div class="section-inner">
+        <h2 class="section-title">{{ t.benchTitle }}</h2>
+        <p class="section-sub">{{ t.benchSub }}</p>
+        <div class="bench-grid">
+          <div class="bench-card">
+            <div class="bench-val">249k<span class="bench-unit">ops/sec</span></div>
+            <div class="bench-label">1 conflict · ~30 lines · M-series</div>
+          </div>
+          <div class="bench-card">
+            <div class="bench-val">40k<span class="bench-unit">ops/sec</span></div>
+            <div class="bench-label">5 conflicts · ~140 lines</div>
+          </div>
+          <div class="bench-card">
+            <div class="bench-val">4.5k<span class="bench-unit">ops/sec</span></div>
+            <div class="bench-label">50 conflicts · ~1350 lines</div>
+          </div>
+          <div class="bench-card bench-card--purple">
+            <div class="bench-val">~8<span class="bench-unit">MB</span></div>
+            <div class="bench-label">Binary size — vs ~150MB Electron</div>
+          </div>
+          <div class="bench-card bench-card--purple">
+            <div class="bench-val">322<span class="bench-unit">tests</span></div>
+            <div class="bench-label">Engine · CLI · App · all passing</div>
+          </div>
+          <div class="bench-card bench-card--green">
+            <div class="bench-val">0</div>
+            <div class="bench-label">Hallucinations — fully deterministic</div>
           </div>
         </div>
       </div>
@@ -2331,6 +2450,273 @@ function cellClass(v: CompareValue | undefined): string {
 }
 
 /* ───────────────────────────────────────────
+   HERO TERMINAL ANIMATION
+─────────────────────────────────────────── */
+.hero-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-term {
+  width: 100%;
+  max-width: 520px;
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(124,58,237,0.12);
+  font-family: var(--vp-font-family-mono, 'ui-monospace', monospace);
+}
+.hero-term__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: #161b22;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.hero-term__title {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  pointer-events: none;
+  letter-spacing: 0.01em;
+}
+.hero-term__replay {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(255,255,255,0.25);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+.hero-term__replay:hover:not(:disabled) {
+  color: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.06);
+}
+.hero-term__replay:disabled { opacity: 0.3; cursor: default; }
+.hero-term__body {
+  padding: 16px 18px 20px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.hero-term__line {
+  font-size: 12.5px;
+  line-height: 1.65;
+  white-space: pre;
+  animation: termFadeIn 0.18s ease both;
+}
+@keyframes termFadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-term__line--cmd  { color: rgba(255,255,255,0.92); font-weight: 600; }
+.hero-term__line--info { color: rgba(255,255,255,0.38); }
+.hero-term__line--ok   { color: #3fb950; }
+.hero-term__line--warn { color: #d29922; }
+.hero-term__cursor {
+  display: inline-block;
+  color: var(--gw-purple-light);
+  animation: termBlink 1s step-end infinite;
+  font-size: 14px;
+  line-height: 1;
+  margin-top: 4px;
+}
+@keyframes termBlink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+/* ───────────────────────────────────────────
+   10 PATTERNS GRID
+─────────────────────────────────────────── */
+.patterns-section {
+  padding: 96px 0;
+  background: var(--gw-bg-2);
+  border-top: 1px solid var(--gw-border-soft);
+}
+.patterns-section .section-title { margin-bottom: 12px; }
+.patterns-section .section-sub   { margin-bottom: 48px; }
+
+.patterns-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.pat-card {
+  background: var(--gw-surface);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s, transform 0.15s;
+}
+.pat-card:hover {
+  border-color: var(--gw-purple);
+  transform: translateY(-2px);
+}
+.pat-card--dim {
+  opacity: 0.7;
+  background: var(--gw-bg);
+}
+.pat-card--dim:hover { opacity: 1; }
+
+.pat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pat-name {
+  font-family: var(--vp-font-family-mono, monospace);
+  font-size: 11.5px;
+  color: var(--gw-purple-light);
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.pat-conf {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-family: var(--vp-font-family-mono, monospace);
+  flex-shrink: 0;
+}
+.pat-conf--certain { background: rgba(16,185,129,0.15); color: #10b981; }
+.pat-conf--high    { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.pat-conf--medium  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.pat-conf--low     { background: rgba(239,68,68,0.12);  color: #f87171; }
+
+.pat-desc {
+  font-size: 12.5px;
+  color: var(--gw-text-muted);
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+}
+.pat-auto {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--vp-font-family-mono, monospace);
+}
+.pat-auto--yes { color: #3fb950; }
+.pat-auto--no  { color: rgba(255,255,255,0.3); }
+
+/* ───────────────────────────────────────────
+   TABBED FEATURES
+─────────────────────────────────────────── */
+.feat-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--gw-border-soft);
+  padding-bottom: 0;
+  flex-wrap: wrap;
+}
+.feat-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gw-text-muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+  border-radius: 6px 6px 0 0;
+}
+.feat-tab:hover { color: var(--gw-text); }
+.feat-tab--active {
+  color: var(--gw-text);
+  border-bottom-color: var(--gw-purple);
+  background: rgba(139, 92, 246, 0.05);
+}
+.feat-tab--highlight {
+  color: var(--gw-purple-light);
+}
+.feat-tab--highlight.feat-tab--active {
+  border-bottom-color: var(--gw-purple-light);
+}
+
+/* ───────────────────────────────────────────
+   BENCHMARKS
+─────────────────────────────────────────── */
+.bench-section {
+  padding: 96px 0;
+  background: var(--gw-bg);
+  border-top: 1px solid var(--gw-border-soft);
+}
+.bench-section .section-title { margin-bottom: 12px; }
+.bench-section .section-sub   { margin-bottom: 48px; }
+
+.bench-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.bench-card {
+  background: var(--gw-surface);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+  padding: 28px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s;
+}
+.bench-card:hover { border-color: var(--gw-purple); }
+
+.bench-card--purple {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.04);
+}
+.bench-card--green {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.bench-val {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--gw-text);
+  line-height: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.bench-card--purple .bench-val { color: var(--gw-purple-light); }
+.bench-card--green  .bench-val { color: #10b981; }
+
+.bench-unit {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--gw-text-muted);
+  letter-spacing: 0;
+}
+.bench-label {
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  line-height: 1.5;
+}
+
+/* ───────────────────────────────────────────
    RESPONSIVE
 ─────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -2345,10 +2731,18 @@ function cellClass(v: CompareValue | undefined): string {
   .conflict-demo { flex-direction: column; }
   .conflict-arrow { flex-direction: row; }
   .llm-layout { grid-template-columns: 1fr; gap: 40px; }
+  .bench-grid { grid-template-columns: repeat(2, 1fr); }
+  .patterns-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 600px) {
   .features-grid { grid-template-columns: 1fr; }
   .hero { padding: 60px 0 40px; }
   .platforms-grid { flex-direction: column; align-items: center; }
+  .bench-grid { grid-template-columns: 1fr; }
+  .patterns-grid { grid-template-columns: 1fr; }
+  .feat-tabs { gap: 2px; }
+  .feat-tab { padding: 8px 12px; font-size: 12px; }
+  .hero-term { max-width: 100%; }
+  .hero-term__line { white-space: pre-wrap; word-break: break-all; }
 }
 </style>
