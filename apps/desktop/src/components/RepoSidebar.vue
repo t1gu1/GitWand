@@ -1197,8 +1197,9 @@ function formatActivityDate(dateStr: string): string {
 .sidebar-footer {
   display: flex;
   align-items: stretch;
-  gap: 1px;
-  padding: 4px 6px;
+  justify-content: space-around;
+  gap: 0;
+  padding: 4px 2px;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
   /* Always pin to the bottom of the flex column, regardless of content height */
