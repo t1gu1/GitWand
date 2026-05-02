@@ -213,6 +213,11 @@ const es: Locale = {
     ctxDeleteFile: "Eliminar archivo",
     ctxDiscardChanges: "Descartar cambios",
     ctxAddToGitignore: "Añadir a .gitignore",
+    footerDashboard: "Dashboard",
+    footerStash: "Stash",
+    footerTags: "Tags",
+    footerWorkspaces: "Workspaces",
+    footerAgents: "Agents",
   },
 
   // ─── Dashboard ──────────────────────────────────────────

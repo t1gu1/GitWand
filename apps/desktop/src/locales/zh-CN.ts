@@ -217,6 +217,11 @@ const zhCN: Locale = {
     ctxDeleteFile: "删除文件",
     ctxDiscardChanges: "放弃更改",
     ctxAddToGitignore: "添加到 .gitignore",
+    footerDashboard: "Dashboard",
+    footerStash: "Stash",
+    footerTags: "Tags",
+    footerWorkspaces: "Workspaces",
+    footerAgents: "Agents",
   },
 
   dashboard: {

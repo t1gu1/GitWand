@@ -219,6 +219,11 @@ const en = {
     ctxDeleteFile: "Delete file",
     ctxDiscardChanges: "Discard changes",
     ctxAddToGitignore: "Add to .gitignore",
+    footerDashboard: "Dashboard",
+    footerStash: "Stash",
+    footerTags: "Tags",
+    footerWorkspaces: "Workspaces",
+    footerAgents: "Agents",
   },
 
   // ─── Dashboard ──────────────────────────────────────────

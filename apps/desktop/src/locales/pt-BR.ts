@@ -214,6 +214,11 @@ const ptBR: Locale = {
     ctxDeleteFile: "Excluir arquivo",
     ctxDiscardChanges: "Descartar alterações",
     ctxAddToGitignore: "Adicionar ao .gitignore",
+    footerDashboard: "Dashboard",
+    footerStash: "Stash",
+    footerTags: "Tags",
+    footerWorkspaces: "Workspaces",
+    footerAgents: "Agents",
   },
 
   // ─── Dashboard ──────────────────────────────────────────

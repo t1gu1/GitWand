@@ -1034,7 +1034,7 @@ function formatActivityDate(dateStr: string): string {
           <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
           <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3"/>
         </svg>
-        <span class="sf-btn__label">{{ t('sidebar.tabDashboard') }}</span>
+        <span class="sf-btn__label">{{ t('sidebar.footerDashboard') }}</span>
       </button>
       <div class="sf-sep" aria-hidden="true"></div>
       <button
@@ -1048,7 +1048,7 @@ function formatActivityDate(dateStr: string): string {
           <path d="M1 3h22v5H1z"/>
           <path d="M10 12h4"/>
         </svg>
-        <span class="sf-btn__label">{{ t('sidebar.stashTitle') }}<template v-if="stashCount > 0"> ({{ stashCount }})</template></span>
+        <span class="sf-btn__label">{{ t('sidebar.footerStash') }}<template v-if="stashCount > 0"> ({{ stashCount }})</template></span>
       </button>
       <button
         class="sf-btn"
@@ -1060,7 +1060,7 @@ function formatActivityDate(dateStr: string): string {
           <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
           <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
         </svg>
-        <span class="sf-btn__label">{{ t('tags.title') }}</span>
+        <span class="sf-btn__label">{{ t('sidebar.footerTags') }}</span>
       </button>
       <button
         class="sf-btn"
@@ -1072,7 +1072,7 @@ function formatActivityDate(dateStr: string): string {
           <rect x="1" y="4" width="14" height="10" rx="2"/>
           <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
         </svg>
-        <span class="sf-btn__label">{{ t('workspace.title') }}</span>
+        <span class="sf-btn__label">{{ t('sidebar.footerWorkspaces') }}</span>
       </button>
       <button
         class="sf-btn"
@@ -1087,7 +1087,7 @@ function formatActivityDate(dateStr: string): string {
           <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
           <path d="M9 20h6"/>
         </svg>
-        <span class="sf-btn__label">{{ t('agents.title') }}</span>
+        <span class="sf-btn__label">{{ t('sidebar.footerAgents') }}</span>
       </button>
     </div>
   </nav>
