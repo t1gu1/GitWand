@@ -22,6 +22,16 @@ GitWand now sees the AI agents working on your repos — and can act on your beh
 
 All tasks have a toggle, show their last-run timestamp, and log every action to the Logs tab. AI-dependent tasks disable themselves gracefully when AI is turned off.
 
+### Website refresh
+
+The homepage has been redesigned from the ground up. The flat 20-card feature wall is gone; in its place:
+
+A **live terminal demo** in the hero replaces the static screenshot — watch `gitwand resolve` classify and auto-resolve 12 conflicted files in real time, with a ↻ Replay button to run it again. Right after the hero, a **conflict before/after block** shows the exact transformation — one side tries `'dark'`, the other reads from localStorage, GitWand picks the right answer in a single line.
+
+A **10-pattern grid** dedicates a card to each resolution pattern, with its name in monospace, a colour-coded confidence badge (certain / high / medium / low), a plain-English description, and an ⚡ Auto-resolved or ○ Review needed indicator. Below that, **tabbed features** organise 20 cards into four navigable tabs: Core Git, AI, Integrations, and New in v2.8 — so you can find what matters without scrolling past a wall of equal-weight items.
+
+The page closes with a **benchmarks section** that leads with numbers, not adjectives: 249k ops/sec on a single conflict, 40k on five, 4.5k on fifty, ~8 MB binary (vs ~150 MB Electron), 322 tests all passing, and 0 hallucinations — fully deterministic resolution.
+
 ## v2.7.0 — May 2026
 
 ### Workspaces, Hooks manager, and Worktree first-class
