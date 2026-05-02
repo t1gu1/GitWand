@@ -1330,6 +1330,7 @@ const zhCN: Locale = {
     // 营销弹窗 (v2.0.1)
     tagline: "了解此版本的新功能、改进与修复。",
     viewChangelog: "查看完整更新日志",
+    relaunchErrorHint: "更新已安装——自动重启失败。请退出并重新打开 GitWand 以应用新版本。",
   },
 
   // ─── 原生 macOS 菜单栏 (v2.0)

@@ -1369,6 +1369,7 @@ const en = {
     // Marketing modal copy (v2.0.1)
     tagline: "Discover the new features, refinements, and fixes in this release.",
     viewChangelog: "Read the full changelog",
+    relaunchErrorHint: "Update installed — automatic restart failed. Please quit and reopen GitWand to apply the new version.",
   },
 
   // ─── Native macOS menu bar (v2.0) ───────────────────────

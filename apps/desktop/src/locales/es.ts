@@ -1343,6 +1343,7 @@ const es: Locale = {
     // Modal marketing (v2.0.1)
     tagline: "Descubre las novedades, mejoras y correcciones de esta versión.",
     viewChangelog: "Ver el changelog completo",
+    relaunchErrorHint: "Actualización instalada — el reinicio automático falló. Cierra y vuelve a abrir GitWand para aplicar la nueva versión.",
   },
 
   // ─── Barra de menú nativa de macOS (v2.0)

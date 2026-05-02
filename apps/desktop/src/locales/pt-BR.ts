@@ -1344,6 +1344,7 @@ const ptBR: Locale = {
     // Modal marketing (v2.0.1)
     tagline: "Descubra as novidades, melhorias e correções desta versão.",
     viewChangelog: "Ver o changelog completo",
+    relaunchErrorHint: "Atualização instalada — reinício automático falhou. Feche e reabra o GitWand para aplicar a nova versão.",
   },
 
   // ─── Barra de menu nativa do macOS (v2.0)

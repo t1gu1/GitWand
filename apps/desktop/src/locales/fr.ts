@@ -1355,6 +1355,7 @@ const fr: Locale = {
     // Modale marketing (v2.0.1)
     tagline: "Découvrez les nouveautés, améliorations et correctifs de cette version.",
     viewChangelog: "Voir le changelog complet",
+    relaunchErrorHint: "Mise à jour installée — le redémarrage automatique a échoué. Quittez et rouvrez GitWand pour appliquer la nouvelle version.",
   },
 
   // ─── Barre de menu native macOS (v2.0)

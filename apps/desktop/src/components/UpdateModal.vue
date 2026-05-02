@@ -36,12 +36,22 @@ const emit = defineEmits<{
 
 const installing = ref(false);
 const progress = ref(0); // 0–1
+const relaunchError = ref<string | null>(null);
 
 /** Expose progress setter so App.vue can relay onProgress callbacks */
 function setProgress(fraction: number) {
   progress.value = fraction;
 }
-defineExpose({ setProgress });
+
+/** Called by App.vue when relaunch() throws after a successful download.
+ *  Resets the spinner and shows a manual-reopen notice instead of
+ *  leaving the modal stuck on an infinite "Installation…" spinner. */
+function setRelaunchError(msg: string) {
+  installing.value = false;
+  relaunchError.value = msg;
+}
+
+defineExpose({ setProgress, setRelaunchError });
 
 const progressPct = computed(() => Math.round(progress.value * 100));
 
@@ -109,6 +119,12 @@ function onInstall() {
     <!-- Marketing tagline — generic, works for any release without depending
          on the manifest body being well-written. -->
     <p class="um-tagline">{{ t('update.tagline') }}</p>
+
+    <!-- Relaunch error — shown when download succeeded but restart failed -->
+    <div v-if="relaunchError" class="um-relaunch-error">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M8 5v3.5M8 11h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+      {{ t('update.relaunchErrorHint') }}
+    </div>
 
     <!-- Beta channel hint — explains why the button opens a browser -->
     <p v-if="isManual" class="um-manual-hint">
@@ -254,6 +270,27 @@ function onInstall() {
 
 .um-changelog-link svg {
   flex-shrink: 0;
+}
+
+/* Relaunch error — update downloaded but restart failed */
+.um-relaunch-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-left: 3px solid #ef4444;
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+.um-relaunch-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #ef4444;
 }
 
 /* Beta-channel hint kept from previous design */

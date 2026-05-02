@@ -1271,10 +1271,18 @@ async function onInstallUpdate() {
     return;
   }
   // Auto-install path (stable channel): Tauri downloads + replaces in place.
-  await installUpdate((fraction) => {
-    updateModalRef.value?.setProgress(fraction);
-  });
-  // installUpdate triggers a Tauri restart — if we reach here something went wrong.
+  try {
+    await installUpdate((fraction) => {
+      updateModalRef.value?.setProgress(fraction);
+    });
+  } catch (err) {
+    // relaunch() failed after a successful download (e.g. macOS Gatekeeper delay).
+    // Reset the modal so the user isn't stuck on an infinite spinner, and surface
+    // a dismissible message explaining they need to reopen manually.
+    updateModalRef.value?.setRelaunchError(String(err));
+  }
+  // installUpdate either relaunches (normal) or throws (caught above).
+  // Either way, clear the pending update so the modal can be closed.
   pendingUpdate.value = null;
 }
 

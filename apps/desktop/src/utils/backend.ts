@@ -3026,10 +3026,28 @@ export async function installUpdate(
       if (contentLength > 0 && onProgress) {
         onProgress(downloaded / contentLength);
       }
+    } else if (event.event === "Finished") {
+      // Ensure bar reaches 100% even when server omits Content-Length.
+      onProgress?.(1);
     }
   });
-  // Binary is now replaced on disk — relaunch so the new version starts.
-  const { relaunch } = await import("@tauri-apps/plugin-process");
-  await relaunch();
+
+  // Binary is now replaced on disk. Give macOS up to 3 s to finish its
+  // signature/quarantine check before we attempt to relaunch. Without this
+  // delay, relaunch() on macOS can throw "operation not permitted" because
+  // the newly-written bundle hasn't cleared Gatekeeper yet.
+  await new Promise<void>(resolve => setTimeout(resolve, 3000));
+
+  try {
+    const { relaunch } = await import("@tauri-apps/plugin-process");
+    await relaunch();
+  } catch (err) {
+    // relaunch() failed — surface the error so the caller can show it
+    // rather than leaving the modal stuck on a spinner forever.
+    throw new Error(
+      `Update downloaded successfully but automatic relaunch failed: ${err}.\n` +
+      `Please quit and reopen GitWand to apply the update.`
+    );
+  }
 }
 
