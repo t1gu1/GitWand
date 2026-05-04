@@ -217,12 +217,19 @@ export function usePrPanel(cwd: Ref<string>) {
       prs.value = await ghListPrs(cwd.value, filterState.value);
     } catch (err: any) {
       const msg: string = err.message ?? "";
-      if (msg.includes("gh auth") || msg.includes("authentication") || msg.includes("token") || msg.includes("401")) {
-        error.value = t("pr.error.noToken");
-      } else if (msg.includes("not found") || msg.includes("404") || msg.includes("remote")) {
-        error.value = t("pr.error.noRemote");
-      } else if (msg.includes("gh") && (msg.includes("installed") || msg.includes("not found") || msg.includes("ENOENT"))) {
+      const isGhMissing =
+        // Rust os error when binary not found in PATH
+        msg.includes("No such file or directory") ||
+        msg.includes("program not found") ||
+        msg.includes("ENOENT") ||
+        // Our own error prefix
+        (msg.includes("gh") && msg.includes("installed"));
+      if (isGhMissing) {
         error.value = t("pr.error.ghNotInstalled");
+      } else if (msg.includes("gh auth") || msg.includes("authentication") || msg.includes("token") || msg.includes("401")) {
+        error.value = t("pr.error.noToken");
+      } else if (msg.includes("404") || msg.includes("Could not resolve to a Repository")) {
+        error.value = t("pr.error.noRemote");
       } else {
         error.value = msg || t("pr.error.unknown");
       }

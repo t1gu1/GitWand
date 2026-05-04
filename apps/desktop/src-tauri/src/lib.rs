@@ -113,10 +113,33 @@ pub fn git_binary() -> String {
 
 /// Builds a `Command` for any binary with CREATE_NO_WINDOW on Windows.
 /// Prevents black CMD console windows from flashing when spawning child processes.
+///
+/// On macOS the app launched from Finder/Dock inherits a minimal PATH
+/// (/usr/bin:/bin:/usr/sbin:/sbin) that does not include Homebrew.
+/// We extend PATH with the common Homebrew prefixes so that tools like
+/// `gh`, `git` (custom path), `claude`, `codex`, etc. are resolvable.
 fn hidden_cmd(bin: &str) -> std::process::Command {
     let mut cmd = std::process::Command::new(bin);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
+    #[cfg(target_os = "macos")]
+    {
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        // Homebrew on Apple Silicon → /opt/homebrew/bin
+        // Homebrew on Intel Mac   → /usr/local/bin
+        // MacPorts                → /opt/local/bin
+        let extras = ["/opt/homebrew/bin", "/opt/homebrew/sbin",
+                      "/usr/local/bin", "/usr/local/sbin",
+                      "/opt/local/bin"];
+        let mut enriched = current_path.clone();
+        for extra in extras {
+            if !current_path.split(':').any(|p| p == extra) {
+                enriched.push(':');
+                enriched.push_str(extra);
+            }
+        }
+        cmd.env("PATH", enriched);
+    }
     cmd
 }
 
