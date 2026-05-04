@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.8.1 — May 2026
+
+Patch release addressing regressions reported after v2.8.0.
+
+**Windows — CMD console flash.** Every Git command, `gh` CLI call, and external tool spawn was opening a visible black CMD window on Windows. All child processes now carry the `CREATE_NO_WINDOW` flag so they run fully silent. The only intentional exception is the `claude login` interactive flow, which needs a visible terminal to complete OAuth.
+
+**Auto-updater stuck on "Installation…".** On macOS, Gatekeeper holds the newly-written binary for signature verification before allowing execution. If `relaunch()` was called too soon it threw "operation not permitted", leaving the update modal frozen on the spinner forever. A 3-second post-download delay is now applied on macOS only — on Windows the NSIS installer handles process restart itself, so no delay is needed. Any remaining `relaunch()` failure is caught and surfaced as a readable error with a manual-reopen instruction instead of silently hanging.
+
+**Pull requests not loading when GitWand is opened from the Dock or Finder (macOS).** Apps launched outside a terminal inherit a minimal `PATH` that does not include Homebrew (`/opt/homebrew/bin`, `/usr/local/bin`). The `gh` CLI — required for the PR panel — lives there and was therefore invisible to GitWand. All child-process spawns now extend `PATH` with the four common Homebrew and MacPorts prefixes on macOS automatically.
+
+**CI release — intermittent asset upload failure.** GitHub's Releases API occasionally returns a 500 error when several platform builds upload assets in parallel. A verification step now runs after each build, detects any missing asset, and re-uploads it with up to three retries.
+
 ## v2.8.0 — May 2026
 
 ### Agent Sessions View + Scheduled AI tasks
