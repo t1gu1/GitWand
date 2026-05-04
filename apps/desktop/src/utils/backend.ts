@@ -3032,11 +3032,18 @@ export async function installUpdate(
     }
   });
 
-  // Binary is now replaced on disk. Give macOS up to 3 s to finish its
-  // signature/quarantine check before we attempt to relaunch. Without this
-  // delay, relaunch() on macOS can throw "operation not permitted" because
-  // the newly-written bundle hasn't cleared Gatekeeper yet.
-  await new Promise<void>(resolve => setTimeout(resolve, 3000));
+  // On macOS, give Gatekeeper up to 3 s to finish its signature/quarantine
+  // check on the newly-written binary before we relaunch. Without this delay,
+  // relaunch() can throw "operation not permitted".
+  //
+  // On Windows the updater uses the NSIS installer which kills and restarts
+  // the process itself — our relaunch() below is a no-op safety net only.
+  // On Linux the binary is replaced in-place like macOS but without Gatekeeper.
+  const isMac = navigator.userAgent.toLowerCase().includes("macos") ||
+                (navigator as any).userAgentData?.platform?.toLowerCase() === "macos";
+  if (isMac) {
+    await new Promise<void>(resolve => setTimeout(resolve, 3000));
+  }
 
   try {
     const { relaunch } = await import("@tauri-apps/plugin-process");
