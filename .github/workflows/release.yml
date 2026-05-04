@@ -75,7 +75,7 @@ jobs:
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           rm /tmp/certificate.p12
 
-      - name: Build & publish release
+      - name: Build release artifacts
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -107,6 +107,47 @@ jobs:
           args: ${{ matrix.args }}
           updaterJsonPreferNsis: true
           updaterJsonKeepUniversal: true
+
+      # GitHub Releases API occasionally returns 500 on asset uploads,
+      # especially when the matrix jobs upload in parallel. Re-upload any
+      # asset that is missing from the release (idempotent, safe to retry).
+      - name: Verify & re-upload missing assets
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+
+          # Collect assets already on the release
+          uploaded=$(gh release view "$TAG" --repo "$REPO" --json assets \
+            --jq '[.assets[].name]' 2>/dev/null || echo '[]')
+
+          # Find all built artifacts for this platform
+          artifact_dir="apps/desktop/target/release/bundle"
+          [ -d "$artifact_dir" ] || exit 0
+
+          # Walk every signable artifact (installers + .sig files)
+          find "$artifact_dir" \
+            \( -name "*.deb" -o -name "*.AppImage" \
+            -o -name "*.rpm" \
+            -o -name "*.msi" -o -name "*.exe" -o -name "*.nsis" \
+            -o -name "*.dmg" \
+            -o -name "*.sig" \) \
+            -type f | while read -r file; do
+              name="$(basename "$file")"
+              if echo "$uploaded" | grep -qF "\"$name\""; then
+                echo "✓ already uploaded: $name"
+              else
+                echo "⚠ missing from release, uploading: $name"
+                for attempt in 1 2 3; do
+                  gh release upload "$TAG" "$file" --repo "$REPO" --clobber && break
+                  echo "  attempt $attempt failed, retrying in 10s…"
+                  sleep 10
+                done
+              fi
+          done
 
   # After all platform builds succeed, generate update.json and publish to GitHub Pages
   publish-update-manifest:
