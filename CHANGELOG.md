@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.1] - 2026-05-04
+
+Patch release addressing regressions reported after v2.8.0.
+
+### Fixed
+
+- **Windows — CMD console flash** — Every Git/gh/claude/codex child process was spawning a visible black CMD window on Windows. Added `CREATE_NO_WINDOW` flag (`0x08000000`) to all child processes via a new `hidden_cmd()` helper. The only intentional exception is the `claude login` interactive flow which requires a visible terminal.
+- **Auto-updater infinite spinner** — On macOS, `relaunch()` could throw while Gatekeeper verifies the new binary signature, leaving the update modal stuck on "Installation…" forever. A 3-second post-download delay is now applied before relaunch, and any remaining failure is caught and surfaced as a readable error with a manual-reopen instruction instead of hanging indefinitely.
+- **PRs not loading when app opened from Finder/Dock (macOS)** — The Tauri process inherits a minimal `PATH` when not launched from a terminal, so Homebrew-installed `gh` (`/opt/homebrew/bin/gh`, `/usr/local/bin/gh`) was not discoverable. `hidden_cmd()` now enriches `PATH` with the four common Homebrew/MacPorts prefixes on macOS before every spawn.
+- **CI release — intermittent asset upload 500 error** — GitHub Releases API occasionally returns a 500 on one of the last assets when parallel matrix jobs upload simultaneously. A post-build verification step now detects and re-uploads any missing asset with up to 3 retries.
+
 ## [2.8.0] - 2026-05-01
 
 Desktop product track v2.8: Agent Sessions View and Scheduled AI tasks — GitWand now sees the AI agents working on your repos, and can run lightweight automation tasks on your behalf without any external daemon.
