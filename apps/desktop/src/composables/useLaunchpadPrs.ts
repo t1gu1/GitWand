@@ -1,6 +1,7 @@
 import { ref, computed } from "vue";
 import { workspacePrsAll } from "../utils/backend";
 import type { WorkspaceRepoPrs, WorkspaceRepo, PullRequest } from "../utils/backend";
+import { useLaunchpadPins } from "./useLaunchpadPins";
 
 export type { WorkspaceRepoPrs };
 
@@ -20,13 +21,26 @@ export function useLaunchpadPrs() {
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  /** Flat list of all PRs with repo context, sorted newest first. */
+  const { isPinned, isSnoozed } = useLaunchpadPins();
+
+  /** Flat list of all non-snoozed PRs: pinned items first, then by createdAt descending. */
   const allPrs = computed<PrWithRepo[]>(() =>
     repos.value
-      .flatMap((r) =>
-        r.prs.map((pr) => ({ ...pr, repoName: r.repoName, repoPath: r.repoPath }))
-      )
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .flatMap((r) => r.prs.map((pr) => ({ ...pr, repoName: r.repoName, repoPath: r.repoPath })))
+      .filter((pr) => !isSnoozed(pr.url))
+      .sort((a, b) => {
+        const aPinned = isPinned(a.url) ? 0 : 1;
+        const bPinned = isPinned(b.url) ? 0 : 1;
+        if (aPinned !== bPinned) return aPinned - bPinned;
+        return b.createdAt.localeCompare(a.createdAt);
+      })
+  );
+
+  /** Flat list of currently-snoozed PRs (hidden from allPrs). */
+  const snoozedPrs = computed<PrWithRepo[]>(() =>
+    repos.value
+      .flatMap((r) => r.prs.map((pr) => ({ ...pr, repoName: r.repoName, repoPath: r.repoPath })))
+      .filter((pr) => isSnoozed(pr.url))
   );
 
   async function refresh(workspaceRepos: WorkspaceRepo[]): Promise<void> {
@@ -41,5 +55,5 @@ export function useLaunchpadPrs() {
     }
   }
 
-  return { repos, allPrs, loading, error, refresh };
+  return { repos, allPrs, snoozedPrs, loading, error, refresh };
 }
