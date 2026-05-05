@@ -567,32 +567,6 @@ watch(hasRepo, (has) => {
   }
 });
 
-// ─── Rebase-state polling ────────────────────────────────────────────────────
-// We need a dedicated interval because pollStatus() skips loadStatus() when the
-// git-status snapshot hasn't changed.  During a rebase-with-conflicts the status
-// output is perfectly stable, so repoStatus never gets a new value, so a plain
-// watch(repoStatus, …) would never fire.  A 3-second interval is lightweight
-// (one fetch / Tauri invoke) and guarantees the banner appears within 3 s of the
-// rebase pausing, and disappears within 3 s of --continue / --abort.
-let _rebaseStateInterval: ReturnType<typeof setInterval> | null = null;
-
-watch(
-  () => repoFolderPath.value,
-  (path) => {
-    if (_rebaseStateInterval) { clearInterval(_rebaseStateInterval); _rebaseStateInterval = null; }
-    if (path) {
-      refreshRepoState();                                     // immediate check on repo open
-      _rebaseStateInterval = setInterval(refreshRepoState, 3_000);
-    } else {
-      repoOperationState.value = null;
-    }
-  },
-  { immediate: true },
-);
-// Also re-check whenever status changes (e.g. user stages a resolved file) so
-// the Continue button enables without waiting for the next 3-second tick.
-watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
-
 // ─── Repo sidebar events ────────────────────────────────
 function onRepoFileSelect(path: string, staged: boolean) {
   repoSelectFile(path, staged);
@@ -954,6 +928,34 @@ async function onRebaseBannerActionDone() {
   await refreshRepoState();
   await repoRefresh();
 }
+
+// ─── Rebase-state polling ────────────────────────────────────────────────────
+// Declared here (after repoOperationState + refreshRepoState) so the
+// { immediate: true } watch can safely reference both without TDZ errors.
+// We need a dedicated interval because pollStatus() skips loadStatus() when the
+// git-status snapshot hasn't changed.  During a rebase-with-conflicts the status
+// output is perfectly stable, so repoStatus never gets a new value, so a plain
+// watch(repoStatus, …) would never fire.  A 3-second interval is lightweight
+// (one fetch / Tauri invoke) and guarantees the banner appears/disappears within
+// 3 s of the rebase pausing or --continue / --abort completing.
+let _rebaseStateInterval: ReturnType<typeof setInterval> | null = null;
+
+watch(
+  () => repoFolderPath.value,
+  (path) => {
+    if (_rebaseStateInterval) { clearInterval(_rebaseStateInterval); _rebaseStateInterval = null; }
+    if (path) {
+      refreshRepoState();                                     // immediate check on repo open
+      _rebaseStateInterval = setInterval(refreshRepoState, 3_000);
+    } else {
+      repoOperationState.value = null;
+    }
+  },
+  { immediate: true },
+);
+// Also re-check whenever status changes (e.g. user stages a resolved file) so
+// the Continue button enables without waiting for the next 3-second tick.
+watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
 
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
