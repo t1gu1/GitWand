@@ -4699,7 +4699,6 @@ struct GhIssueRaw {
     created_at: String,
     #[serde(rename = "updatedAt")]
     updated_at: String,
-    #[serde(default)]
     milestone: Option<GhIssueMilestone>,
 }
 
@@ -4725,6 +4724,7 @@ fn parse_gh_issue_json(json: &str) -> Result<Vec<Issue>, String> {
 }
 
 /// Per-repo aggregator for the Launchpad Issues panel.
+/// Used by `workspace_issues_all` (added in the next commit).
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceRepoIssues {
