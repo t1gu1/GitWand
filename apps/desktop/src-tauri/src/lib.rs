@@ -4649,6 +4649,57 @@ fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
     .collect()
 }
 
+/// Aggregate open PRs from all repos in a workspace (via `gh pr list`).
+/// Best-effort: gh failures per repo are captured in the `error` field.
+#[tauri::command]
+fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
+    repos.into_iter().map(|repo| {
+        let repo_path = repo.path.clone();
+        let repo_name = repo.name.clone();
+
+        let output = hidden_cmd("gh")
+            .args([
+                "pr", "list",
+                "--state", "open",
+                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
+                "--limit", "100",
+            ])
+            .current_dir(&repo_path)
+            .output();
+
+        match output {
+            Err(e) => WorkspaceRepoPrs {
+                repo_path,
+                repo_name,
+                prs: vec![],
+                error: Some(format!("gh not available: {}", e)),
+            },
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                WorkspaceRepoPrs {
+                    repo_path,
+                    repo_name,
+                    prs: vec![],
+                    error: Some(format!("gh pr list failed: {}", stderr.trim())),
+                }
+            }
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                match parse_gh_pr_json(&stdout) {
+                    Ok(prs) => WorkspaceRepoPrs { repo_path, repo_name, prs, error: None },
+                    Err(e) => WorkspaceRepoPrs {
+                        repo_path,
+                        repo_name,
+                        prs: vec![],
+                        error: Some(e),
+                    },
+                }
+            }
+        }
+    })
+    .collect()
+}
+
 /// Get the cross-worktree status for a repo — ahead/behind + modified count per worktree.
 #[tauri::command]
 fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, String> {
@@ -5918,6 +5969,7 @@ pub fn run() {
             workspace_fetch_all,
             workspace_pull_all,
             workspace_wip_all,
+            workspace_prs_all,
             git_worktree_status_all,
             git_worktree_list,
             git_worktree_add,
