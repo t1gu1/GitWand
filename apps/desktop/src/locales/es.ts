@@ -1021,6 +1021,21 @@ const es: Locale = {
     errorStatus: "No se pudo obtener el estado: {0}",
   },
 
+  launchpad: {
+    title: "Launchpad",
+    wipTab: "En progreso",
+    noRepos: "No hay repositorios en este espacio de trabajo.",
+    refresh: "Actualizar",
+    loading: "Cargando…",
+    errorFetch: "Error al cargar datos WIP: {0}",
+    staged: "{0} preparado",
+    unstaged: "{0} modificado",
+    untracked: "{0} sin seguimiento",
+    noUpstream: "sin upstream",
+    clean: "Limpio",
+    lastCommit: "Último commit {0}",
+  },
+
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Historial de operaciones",
