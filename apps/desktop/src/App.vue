@@ -567,13 +567,31 @@ watch(hasRepo, (has) => {
   }
 });
 
-// Poll rebase state whenever status refreshes (covers pull --rebase conflicts,
-// staged-file changes after conflict resolution, and repo switches).
+// ─── Rebase-state polling ────────────────────────────────────────────────────
+// We need a dedicated interval because pollStatus() skips loadStatus() when the
+// git-status snapshot hasn't changed.  During a rebase-with-conflicts the status
+// output is perfectly stable, so repoStatus never gets a new value, so a plain
+// watch(repoStatus, …) would never fire.  A 3-second interval is lightweight
+// (one fetch / Tauri invoke) and guarantees the banner appears within 3 s of the
+// rebase pausing, and disappears within 3 s of --continue / --abort.
+let _rebaseStateInterval: ReturnType<typeof setInterval> | null = null;
+
+watch(
+  () => repoFolderPath.value,
+  (path) => {
+    if (_rebaseStateInterval) { clearInterval(_rebaseStateInterval); _rebaseStateInterval = null; }
+    if (path) {
+      refreshRepoState();                                     // immediate check on repo open
+      _rebaseStateInterval = setInterval(refreshRepoState, 3_000);
+    } else {
+      repoOperationState.value = null;
+    }
+  },
+  { immediate: true },
+);
+// Also re-check whenever status changes (e.g. user stages a resolved file) so
+// the Continue button enables without waiting for the next 3-second tick.
 watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
-// Also refresh on repo switch — immediate:true covers the case where a repo is
-// already selected on mount (restored from localStorage) and a rebase is already
-// in progress: without immediate the watch only fires on the *next* path change.
-watch(() => repoFolderPath.value, () => { refreshRepoState(); }, { immediate: true });
 
 // ─── Repo sidebar events ────────────────────────────────
 function onRepoFileSelect(path: string, staged: boolean) {
@@ -1400,6 +1418,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown);
   unlistenGlobalShortcut?.();
+  if (_rebaseStateInterval) { clearInterval(_rebaseStateInterval); _rebaseStateInterval = null; }
 });
 </script>
 
