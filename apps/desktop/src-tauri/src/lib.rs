@@ -3031,7 +3031,7 @@ fn parse_remote_owner_repo(url: &str) -> (String, String) {
     (String::new(), String::new())
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct PullRequest {
     number: i64,
     title: String,
@@ -3048,6 +3048,80 @@ struct PullRequest {
     labels: Vec<String>,
     assignees: Vec<String>,
     review_requested: Vec<String>,
+    /// "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | ""
+    review_decision: String,
+    /// "CLEAN" | "BLOCKED" | "DIRTY" | "HAS_HOOKS" | "UNKNOWN" | ""
+    merge_state_status: String,
+    /// Overall CI rollup conclusion: "SUCCESS" | "FAILURE" | "PENDING" | ""
+    checks_rollup: String,
+}
+
+// Intermediate structs for serde_json deserialization of `gh pr list --json` output.
+
+#[derive(serde::Deserialize)]
+struct GhPrAuthor {
+    login: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrLabel {
+    name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrAssignee {
+    login: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrReviewee {
+    login: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrReviewRequest {
+    #[serde(rename = "requestedReviewer")]
+    requested_reviewer: Option<GhPrReviewee>,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrStatusCheck {
+    conclusion: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct GhPrRaw {
+    number: i64,
+    title: String,
+    state: String,
+    author: GhPrAuthor,
+    #[serde(rename = "headRefName")]
+    head_ref_name: String,
+    #[serde(rename = "baseRefName")]
+    base_ref_name: String,
+    #[serde(rename = "isDraft")]
+    is_draft: bool,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+    url: String,
+    #[serde(default)]
+    additions: i64,
+    #[serde(default)]
+    deletions: i64,
+    #[serde(default)]
+    labels: Vec<GhPrLabel>,
+    #[serde(default)]
+    assignees: Vec<GhPrAssignee>,
+    #[serde(rename = "reviewRequests", default)]
+    review_requests: Vec<GhPrReviewRequest>,
+    #[serde(rename = "reviewDecision")]
+    review_decision: Option<String>,
+    #[serde(rename = "mergeStateStatus")]
+    merge_state_status: Option<String>,
+    #[serde(rename = "statusCheckRollup", default)]
+    status_check_rollup: Vec<GhPrStatusCheck>,
 }
 
 /// List open pull requests using `gh` CLI.
@@ -3058,7 +3132,7 @@ fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
         .args([
             "pr", "list",
             "--state", st,
-            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests",
+            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
             "--limit", "300",
         ])
         .current_dir(&cwd)
@@ -3076,164 +3150,45 @@ fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
 }
 
 fn parse_gh_pr_json(json: &str) -> Result<Vec<PullRequest>, String> {
-    // Minimal JSON array parser for gh pr list output
-    // Each element has: number, title, state, author{login}, headRefName, baseRefName, isDraft,
-    // createdAt, updatedAt, url, additions, deletions, labels[{name}]
     let trimmed = json.trim();
-    if trimmed == "[]" || trimmed.is_empty() {
+    if trimmed.is_empty() || trimmed == "[]" {
         return Ok(Vec::new());
     }
-
-    let mut prs = Vec::new();
-
-    // Split by objects — find each {...} block
-    let mut depth = 0;
-    let mut obj_start = None;
-    for (i, ch) in trimmed.char_indices() {
-        match ch {
-            '{' => {
-                if depth == 1 {
-                    obj_start = Some(i);
-                }
-                depth += 1;
-            }
-            '}' => {
-                depth -= 1;
-                if depth == 1 {
-                    if let Some(start) = obj_start {
-                        let obj = &trimmed[start..=i];
-                        if let Ok(pr) = parse_single_pr(obj) {
-                            prs.push(pr);
-                        }
-                    }
-                    obj_start = None;
-                }
-            }
-            '[' if depth == 0 => { depth = 1; }
-            ']' if depth == 1 => { depth = 0; }
-            _ => {}
-        }
-    }
-
-    Ok(prs)
+    let raws: Vec<GhPrRaw> = serde_json::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse gh pr list output: {}", e))?;
+    Ok(raws.into_iter().map(gh_pr_raw_to_pr).collect())
 }
 
-fn parse_single_pr(json: &str) -> Result<PullRequest, String> {
-    let get_str = |key: &str| -> String {
-        extract_json_string(json, key).unwrap_or_default()
-    };
-    let get_num = |key: &str| -> i64 {
-        let needle = format!("\"{}\"", key);
-        if let Some(pos) = json.find(&needle) {
-            let rest = &json[pos + needle.len()..];
-            if let Some(colon) = rest.find(':') {
-                let after = rest[colon + 1..].trim_start();
-                let end = after.find(|c: char| !c.is_ascii_digit() && c != '-').unwrap_or(after.len());
-                return after[..end].parse().unwrap_or(0);
-            }
-        }
-        0
-    };
-    let get_bool = |key: &str| -> bool {
-        let needle = format!("\"{}\"", key);
-        if let Some(pos) = json.find(&needle) {
-            let rest = &json[pos + needle.len()..];
-            if let Some(colon) = rest.find(':') {
-                let after = rest[colon + 1..].trim_start();
-                return after.starts_with("true");
-            }
-        }
-        false
-    };
-
-    // Parse author.login
-    let author = if let Some(pos) = json.find("\"author\"") {
-        let rest = &json[pos..];
-        if let Some(login_pos) = rest.find("\"login\"") {
-            let login_rest = &rest[login_pos..];
-            extract_json_string(login_rest, "login").unwrap_or_default()
-        } else {
-            String::new()
-        }
-    } else {
-        String::new()
-    };
-
-    // Parse labels array
-    let mut labels = Vec::new();
-    if let Some(pos) = json.find("\"labels\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                // Find all "name" values inside
-                let mut search_start = 0;
-                while let Some(name_pos) = arr[search_start..].find("\"name\"") {
-                    let abs_pos = search_start + name_pos;
-                    if let Some(val) = extract_json_string(&arr[abs_pos..], "name") {
-                        labels.push(val);
-                    }
-                    search_start = abs_pos + 6;
-                }
-            }
-        }
-    }
-
-    // Parse assignees array [{login:"..."}]
-    let mut assignees = Vec::new();
-    if let Some(pos) = json.find("\"assignees\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                let mut search = 0;
-                while let Some(lpos) = arr[search..].find("\"login\"") {
-                    let abs = search + lpos;
-                    if let Some(v) = extract_json_string(&arr[abs..], "login") {
-                        if !v.is_empty() { assignees.push(v); }
-                    }
-                    search = abs + 7;
-                }
-            }
-        }
-    }
-
-    // Parse reviewRequests array [{requestedReviewer:{login:"..."}}]
-    let mut review_requested = Vec::new();
-    if let Some(pos) = json.find("\"reviewRequests\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                let mut search = 0;
-                while let Some(lpos) = arr[search..].find("\"login\"") {
-                    let abs = search + lpos;
-                    if let Some(v) = extract_json_string(&arr[abs..], "login") {
-                        if !v.is_empty() { review_requested.push(v); }
-                    }
-                    search = abs + 7;
-                }
-            }
-        }
-    }
-
-    Ok(PullRequest {
-        number: get_num("number"),
-        title: get_str("title"),
-        state: get_str("state"),
-        author,
-        branch: get_str("headRefName"),
-        base: get_str("baseRefName"),
-        draft: get_bool("isDraft"),
-        created_at: get_str("createdAt"),
-        updated_at: get_str("updatedAt"),
-        url: get_str("url"),
-        additions: get_num("additions"),
-        deletions: get_num("deletions"),
-        labels,
-        assignees,
+fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
+    let review_requested = r.review_requests
+        .into_iter()
+        .filter_map(|rr| rr.requested_reviewer?.login)
+        .collect();
+    let checks_rollup = r.status_check_rollup
+        .into_iter()
+        .filter_map(|c| c.conclusion)
+        .next()
+        .unwrap_or_default();
+    PullRequest {
+        number: r.number,
+        title: r.title,
+        state: r.state,
+        author: r.author.login,
+        branch: r.head_ref_name,
+        base: r.base_ref_name,
+        draft: r.is_draft,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        url: r.url,
+        additions: r.additions,
+        deletions: r.deletions,
+        labels: r.labels.into_iter().map(|l| l.name).collect(),
+        assignees: r.assignees.into_iter().map(|a| a.login).collect(),
         review_requested,
-    })
+        review_decision: r.review_decision.unwrap_or_default(),
+        merge_state_status: r.merge_state_status.unwrap_or_default(),
+        checks_rollup,
+    }
 }
 
 /// Create a pull request using `gh` CLI.
@@ -3298,7 +3253,7 @@ fn gh_create_pr(
         .args([
             "pr", "view",
             &url,
-            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels",
+            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
         ])
         .current_dir(&cwd)
         .output();
@@ -3306,8 +3261,16 @@ fn gh_create_pr(
     if let Ok(view) = view_output {
         if view.status.success() {
             let json = String::from_utf8_lossy(&view.stdout);
-            if let Ok(pr) = parse_single_pr(&json) {
-                return Ok(pr);
+            // gh pr view returns a single object (not array)
+            if let Ok(raw) = serde_json::from_str::<GhPrRaw>(json.trim()) {
+                return Ok(gh_pr_raw_to_pr(raw));
+            }
+            // Also try array format
+            let raws: Result<Vec<GhPrRaw>, _> = serde_json::from_str(json.trim());
+            if let Ok(mut raws) = raws {
+                if let Some(raw) = raws.pop() {
+                    return Ok(gh_pr_raw_to_pr(raw));
+                }
             }
         }
     }
@@ -3329,6 +3292,9 @@ fn gh_create_pr(
         labels: Vec::new(),
         assignees: Vec::new(),
         review_requested: Vec::new(),
+        review_decision: String::new(),
+        merge_state_status: String::new(),
+        checks_rollup: String::new(),
     })
 }
 
@@ -5861,4 +5827,115 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_empty_pr_list() {
+        let result = parse_gh_pr_json("[]").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_string() {
+        let result = parse_gh_pr_json("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_single_basic_pr() {
+        let json = r#"[{
+          "number": 42,
+          "title": "Add feature",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "headRefName": "feature/foo",
+          "baseRefName": "main",
+          "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-02T00:00:00Z",
+          "url": "https://github.com/org/repo/pull/42",
+          "additions": 10,
+          "deletions": 3,
+          "labels": [{"name": "bug"}],
+          "assignees": [{"login": "bob"}],
+          "reviewRequests": [{"requestedReviewer": {"login": "carol"}}],
+          "reviewDecision": "REVIEW_REQUIRED",
+          "mergeStateStatus": "BLOCKED",
+          "statusCheckRollup": [{"conclusion": "SUCCESS"}]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1);
+        let pr = &prs[0];
+        assert_eq!(pr.number, 42);
+        assert_eq!(pr.title, "Add feature");
+        assert_eq!(pr.author, "alice");
+        assert_eq!(pr.branch, "feature/foo");
+        assert_eq!(pr.base, "main");
+        assert!(!pr.draft);
+        assert_eq!(pr.labels, vec!["bug"]);
+        assert_eq!(pr.assignees, vec!["bob"]);
+        assert_eq!(pr.review_requested, vec!["carol"]);
+        assert_eq!(pr.review_decision, "REVIEW_REQUIRED");
+        assert_eq!(pr.merge_state_status, "BLOCKED");
+        assert_eq!(pr.checks_rollup, "SUCCESS");
+    }
+
+    #[test]
+    fn parse_pr_with_braces_in_title_does_not_silently_drop() {
+        // Regression test: the old char-scanning parser broke when PR titles
+        // or branch names contained '{' or '}', silently producing 0 results.
+        let json = r#"[{
+          "number": 1,
+          "title": "Fix {broken} thing",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "headRefName": "fix/{broken}",
+          "baseRefName": "main",
+          "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "https://github.com/org/repo/pull/1",
+          "additions": 1,
+          "deletions": 1,
+          "labels": [],
+          "assignees": [],
+          "reviewRequests": [],
+          "reviewDecision": null,
+          "mergeStateStatus": null,
+          "statusCheckRollup": []
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1, "PR with braces in title must not be dropped");
+        assert_eq!(prs[0].title, "Fix {broken} thing");
+        assert_eq!(prs[0].branch, "fix/{broken}");
+        assert_eq!(prs[0].review_decision, "");
+        assert_eq!(prs[0].merge_state_status, "");
+        assert_eq!(prs[0].checks_rollup, "");
+    }
+
+    #[test]
+    fn parse_multiple_prs_all_parsed() {
+        let json = r#"[
+          {"number":1,"title":"A","state":"OPEN","author":{"login":"x"},
+           "headRefName":"a","baseRefName":"main","isDraft":false,
+           "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+           "labels":[],"assignees":[],"reviewRequests":[],
+           "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]},
+          {"number":2,"title":"B","state":"OPEN","author":{"login":"y"},
+           "headRefName":"b","baseRefName":"main","isDraft":true,
+           "createdAt":"","updatedAt":"","url":"","additions":5,"deletions":2,
+           "labels":[{"name":"wip"}],"assignees":[],"reviewRequests":[],
+           "reviewDecision":"APPROVED","mergeStateStatus":"CLEAN","statusCheckRollup":[]}
+        ]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 2);
+        assert_eq!(prs[0].number, 1);
+        assert_eq!(prs[1].number, 2);
+        assert!(prs[1].draft);
+        assert_eq!(prs[1].review_decision, "APPROVED");
+    }
 }
