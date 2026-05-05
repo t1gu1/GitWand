@@ -1047,6 +1047,12 @@ const ptBR: Locale = {
     prCiSuccess: "CI passou",
     prCiFailure: "CI falhou",
     prCiPending: "CI pendente",
+    issuesTab: "Issues",
+    noIssues: "Nenhuma issue encontrada com este filtro.",
+    issueFilterAssigned: "Atribuídas a mim",
+    issueFilterMentioned: "Mencionam-me",
+    issueFilterCreated: "Criadas por mim",
+    issueMilestone: "Marco: {0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

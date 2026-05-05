@@ -3322,6 +3322,44 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/workspace-issues-all  { repos: [{ path, name }], filter: "" | "assigned" | "mentioned" | "created" }
+    if (url.pathname === "/api/workspace-issues-all" && req.method === "POST") {
+      try {
+        const { repos, filter = "" } = await readBody(req);
+        const results = repos.map(repo => {
+          try {
+            // Build gh args dynamically based on filter (mirrors Rust workspace_issues_all)
+            let cmd = "gh issue list --state open --json number,title,state,author,assignees,labels,url,createdAt,updatedAt,milestone --limit 100";
+            if (filter === "assigned") cmd += " --assignee @me";
+            else if (filter === "created") cmd += " --author @me";
+            else if (filter === "mentioned") cmd += " --search mentions:@me";
+
+            const raw = execSync(cmd, { cwd: repo.path, encoding: "utf-8" });
+            const ghIssues = JSON.parse(raw || "[]");
+            // Emit camelCase directly to match Tauri's Issue#[serde(rename_all = "camelCase")] output
+            const issues = ghIssues.map(issue => ({
+              number: issue.number,
+              title: issue.title ?? "",
+              state: issue.state ?? "",
+              author: issue.author?.login ?? "",
+              assignees: (issue.assignees ?? []).map(a => a.login).filter(Boolean),
+              labels: (issue.labels ?? []).map(l => l.name),
+              url: issue.url ?? "",
+              createdAt: issue.createdAt ?? "",
+              updatedAt: issue.updatedAt ?? "",
+              milestone: issue.milestone?.title ?? "",
+            }));
+            return { repo_path: repo.path, repo_name: repo.name, issues, filter, error: null };
+          } catch (e) {
+            return { repo_path: repo.path, repo_name: repo.name, issues: [], filter, error: e.message };
+          }
+        });
+        return jsonResponse(req, res, results);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // GET /api/git-worktree-status-all?cwd=<path>
     if (url.pathname === "/api/git-worktree-status-all" && req.method === "GET") {
       try {

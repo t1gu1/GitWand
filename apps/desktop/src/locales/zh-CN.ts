@@ -1035,6 +1035,12 @@ const zhCN: Locale = {
     prCiSuccess: "CI 通过",
     prCiFailure: "CI 失败",
     prCiPending: "CI 进行中",
+    issuesTab: "Issues",
+    noIssues: "没有符合此筛选条件的 issue。",
+    issueFilterAssigned: "分配给我",
+    issueFilterMentioned: "提及我",
+    issueFilterCreated: "我创建的",
+    issueMilestone: "里程碑：{0}",
   },
 
   undoStack: {

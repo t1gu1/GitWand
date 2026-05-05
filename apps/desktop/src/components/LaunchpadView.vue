@@ -2,8 +2,10 @@
 import { ref, onMounted } from "vue";
 import { useLaunchpadWip } from "../composables/useLaunchpadWip";
 import { useLaunchpadPrs } from "../composables/useLaunchpadPrs";
+import { useLaunchpadIssues } from "../composables/useLaunchpadIssues";
 import { useI18n } from "../composables/useI18n";
 import type { WorkspaceRepo } from "../utils/backend";
+import type { IssueFilter } from "../composables/useLaunchpadIssues";
 
 const props = defineProps<{
   repos: WorkspaceRepo[];
@@ -13,8 +15,9 @@ const { t } = useI18n();
 
 const { wip, loading: wipLoading, error: wipError, refresh: refreshWip } = useLaunchpadWip();
 const { allPrs, repos: prRepos, loading: prsLoading, error: prsError, refresh: refreshPrs } = useLaunchpadPrs();
+const { allIssues, repos: issueRepos, loading: issuesLoading, error: issuesError, activeFilter: issueFilter, refresh: refreshIssues } = useLaunchpadIssues();
 
-type Tab = "wip" | "prs";
+type Tab = "wip" | "prs" | "issues";
 const activeTab = ref<Tab>("wip");
 
 function setTab(tab: Tab) {
@@ -22,16 +25,22 @@ function setTab(tab: Tab) {
 }
 
 function handleRefresh() {
-  if (activeTab.value === "wip") {
-    refreshWip(props.repos);
-  } else {
-    refreshPrs(props.repos);
-  }
+  if (activeTab.value === "wip") refreshWip(props.repos);
+  else if (activeTab.value === "prs") refreshPrs(props.repos);
+  else refreshIssues(props.repos);
 }
+
+function setIssueFilter(filter: IssueFilter) {
+  issueFilter.value = filter;
+  refreshIssues(props.repos);
+}
+
+const isLoading = () => wipLoading.value || prsLoading.value || issuesLoading.value;
 
 onMounted(() => {
   refreshWip(props.repos);
   refreshPrs(props.repos);
+  refreshIssues(props.repos);
 });
 </script>
 
@@ -41,10 +50,10 @@ onMounted(() => {
       <h2 class="launchpad-view__title">{{ t("launchpad.title") }}</h2>
       <button
         class="launchpad-view__refresh"
-        :disabled="wipLoading || prsLoading"
+        :disabled="isLoading()"
         @click="handleRefresh"
       >
-        {{ (wipLoading || prsLoading) ? t("launchpad.loading") : t("launchpad.refresh") }}
+        {{ isLoading() ? t("launchpad.loading") : t("launchpad.refresh") }}
       </button>
     </div>
 
@@ -65,6 +74,16 @@ onMounted(() => {
         {{ t("launchpad.prsTab") }}
         <span v-if="allPrs.length > 0" class="launchpad-view__tab-badge">
           {{ allPrs.length }}
+        </span>
+      </button>
+      <button
+        class="launchpad-view__tab"
+        :class="{ 'launchpad-view__tab--active': activeTab === 'issues' }"
+        @click="setTab('issues')"
+      >
+        {{ t("launchpad.issuesTab") }}
+        <span v-if="allIssues.length > 0" class="launchpad-view__tab-badge">
+          {{ allIssues.length }}
         </span>
       </button>
     </div>
@@ -184,6 +203,71 @@ onMounted(() => {
       </ul>
       <!-- Per-repo errors -->
       <template v-for="repo in prRepos" :key="repo.repoPath">
+        <p v-if="repo.error" class="launchpad-view__repo-error">
+          {{ repo.repoName }}: {{ repo.error }}
+        </p>
+      </template>
+    </div>
+
+    <!-- Issues tab -->
+    <div v-if="activeTab === 'issues'" class="launchpad-view__panel">
+      <!-- Filter buttons -->
+      <div class="launchpad-view__issue-filters">
+        <button
+          class="launchpad-view__filter-btn"
+          :class="{ 'launchpad-view__filter-btn--active': issueFilter === 'assigned' }"
+          @click="setIssueFilter('assigned')"
+        >
+          {{ t("launchpad.issueFilterAssigned") }}
+        </button>
+        <button
+          class="launchpad-view__filter-btn"
+          :class="{ 'launchpad-view__filter-btn--active': issueFilter === 'mentioned' }"
+          @click="setIssueFilter('mentioned')"
+        >
+          {{ t("launchpad.issueFilterMentioned") }}
+        </button>
+        <button
+          class="launchpad-view__filter-btn"
+          :class="{ 'launchpad-view__filter-btn--active': issueFilter === 'created' }"
+          @click="setIssueFilter('created')"
+        >
+          {{ t("launchpad.issueFilterCreated") }}
+        </button>
+      </div>
+
+      <div v-if="issuesError" class="launchpad-view__error">
+        {{ t("launchpad.errorFetch", issuesError) }}
+      </div>
+      <p v-else-if="!issuesLoading && allIssues.length === 0" class="launchpad-view__empty">
+        {{ t("launchpad.noIssues") }}
+      </p>
+      <ul v-else class="launchpad-view__issue-list">
+        <li
+          v-for="issue in allIssues"
+          :key="`${issue.repoPath}/${issue.number}`"
+          class="launchpad-view__issue-item"
+        >
+          <span class="launchpad-view__pr-repo">{{ issue.repoName }}</span>
+          <span class="launchpad-view__issue-title">
+            <a :href="issue.url" target="_blank" rel="noopener noreferrer">
+              #{{ issue.number }} {{ issue.title }}
+            </a>
+          </span>
+          <span v-if="issue.milestone" class="launchpad-view__issue-milestone">
+            {{ t("launchpad.issueMilestone", issue.milestone) }}
+          </span>
+          <span class="launchpad-view__pr-labels">
+            <span
+              v-for="label in issue.labels"
+              :key="label"
+              class="launchpad-view__pr-label"
+            >{{ label }}</span>
+          </span>
+        </li>
+      </ul>
+      <!-- Per-repo errors -->
+      <template v-for="repo in issueRepos" :key="repo.repoPath">
         <p v-if="repo.error" class="launchpad-view__repo-error">
           {{ repo.repoName }}: {{ repo.error }}
         </p>
@@ -383,5 +467,72 @@ onMounted(() => {
   font-size: 0.7rem;
   background: var(--color-surface, #edf2f7);
   color: var(--color-text-muted, #718096);
+}
+
+/* Issues list */
+.launchpad-view__issue-filters {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.launchpad-view__filter-btn {
+  padding: 3px 10px;
+  font-size: 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background: none;
+  cursor: pointer;
+  color: var(--color-text, inherit);
+}
+
+.launchpad-view__filter-btn--active {
+  background: var(--color-accent, #3182ce);
+  color: #fff;
+  border-color: var(--color-accent, #3182ce);
+}
+
+.launchpad-view__issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.launchpad-view__issue-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--color-surface-raised, #f7fafc);
+  font-size: 0.875rem;
+}
+
+.launchpad-view__issue-title {
+  flex: 1;
+  min-width: 200px;
+  font-weight: 500;
+}
+
+.launchpad-view__issue-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.launchpad-view__issue-title a:hover {
+  text-decoration: underline;
+}
+
+.launchpad-view__issue-milestone {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #718096);
+  background: var(--color-surface, #edf2f7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 </style>
