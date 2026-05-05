@@ -1822,19 +1822,39 @@ export async function gitRemoteInfo(cwd: string): Promise<RemoteInfo> {
   }
 }
 
+// Module-level identity cache — one `gh api user` call per app session.
+// Store the Promise so concurrent callers reuse the same in-flight request.
+let _currentUserPromise: Promise<string> | null = null;
+
 /**
  * Returns the GitHub login of the currently authenticated user (via `gh` CLI or token).
+ * Result is cached for the lifetime of the app session.
  */
-export async function ghCurrentUser(): Promise<string> {
+export function ghCurrentUser(): Promise<string> {
+  if (_currentUserPromise) return _currentUserPromise;
   if (isTauri()) {
-    return tauriInvoke<string>("gh_current_user");
+    _currentUserPromise = tauriInvoke<string>("gh_current_user");
+  } else {
+    _currentUserPromise = devFetch(`${DEV_SERVER}/api/gh-current-user`).then(
+      async (res) => {
+        if (!res.ok) throw new Error(`Failed to get current user: ${res.status}`);
+        return res.json() as Promise<string>;
+      }
+    );
   }
-  const resp = await devFetch(`${DEV_SERVER}/api/gh-current-user`);
-  if (!resp.ok) {
-    const body = await resp.json().catch(() => ({ error: resp.statusText }));
-    throw new Error(body.error ?? `HTTP ${resp.status}`);
+  return _currentUserPromise;
+}
+
+/** Returns the list of file paths changed by a PR (lazy — call only when needed). */
+export async function ghPrFiles(repoPath: string, prNumber: number): Promise<string[]> {
+  if (isTauri()) {
+    return tauriInvoke<string[]>("pr_files", { cwd: repoPath, number: prNumber });
   }
-  return resp.json();
+  const res = await devFetch(
+    `${DEV_SERVER}/api/pr-files?repo=${encodeURIComponent(repoPath)}&pr=${prNumber}`
+  );
+  if (!res.ok) throw new Error(`Failed to get PR files: ${res.status}`);
+  return res.json() as Promise<string[]>;
 }
 
 export interface PullRequest {

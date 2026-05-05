@@ -3951,6 +3951,26 @@ async function handleRequest(req, res) {
       return jsonResponse(req, res, { dest: finalPath });
     }
 
+    // GET /api/pr-files?repo=<path>&pr=<number>
+    if (url.pathname === "/api/pr-files" && req.method === "GET") {
+      const repoPath = url.searchParams.get("repo");
+      const prNumber = url.searchParams.get("pr");
+      if (!repoPath || !prNumber) {
+        return jsonResponse(req, res, { error: "Missing repo or pr parameter" }, 400);
+      }
+      try {
+        const raw = execFileSync(
+          GH,
+          ["pr", "view", prNumber, "--json", "files", "--jq", "[.files[].path]"],
+          { cwd: repoPath, encoding: "utf-8" }
+        );
+        return jsonResponse(req, res, JSON.parse(raw.trim() || "[]"));
+      } catch (err) {
+        console.error("[pr-files]", err.message);
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);
@@ -3981,5 +4001,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/gh-pr-detail?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-diff?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>`);
+  console.log(`    GET  /api/pr-files?repo=<path>&pr=<n>`);
   console.log(`    GET  /api/git-remote-info?cwd=<path>\n`);
 });

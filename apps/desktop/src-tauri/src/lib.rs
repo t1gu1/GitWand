@@ -6020,6 +6020,27 @@ fn gh_current_user() -> Result<String, String> {
     Ok(login)
 }
 
+/// Returns the list of file paths changed by a given PR number.
+/// Calls `gh pr view <number> --json files --jq '[.files[].path]'`.
+#[tauri::command]
+fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
+    let output = hidden_cmd("gh")
+        .args([
+            "pr", "view", &number.to_string(),
+            "--json", "files",
+            "--jq", "[.files[].path]",
+        ])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run gh pr view: {}", e))?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
+    }
+    let json = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str::<Vec<String>>(json.trim())
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
     let output = git_cmd()
@@ -6388,6 +6409,7 @@ pub fn run() {
             gh_fork,
             git_shortlog,
             gh_current_user,
+            pr_files,
             detect_codex_cli,
             codex_cli_prompt,
         ])
