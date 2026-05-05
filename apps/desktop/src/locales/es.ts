@@ -1034,6 +1034,15 @@ const es: Locale = {
     noUpstream: "sin upstream",
     clean: "Limpio",
     lastCommit: "Último commit {0}",
+    prsTab: "PRs",
+    noPrs: "No hay pull requests abiertas en este espacio de trabajo.",
+    prDraft: "Borrador",
+    prApproved: "Aprobada",
+    prChangesRequested: "Cambios solicitados",
+    prReviewRequired: "Revisión requerida",
+    prCiSuccess: "CI superada",
+    prCiFailure: "CI fallida",
+    prCiPending: "CI pendiente",
   },
 
   // ─── Undo ───────────────────────────────────────────────

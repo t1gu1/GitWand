@@ -1023,6 +1023,15 @@ const zhCN: Locale = {
     noUpstream: "无上游",
     clean: "干净",
     lastCommit: "最后提交 {0}",
+    prsTab: "PRs",
+    noPrs: "此工作区中没有未关闭的拉取请求。",
+    prDraft: "草稿",
+    prApproved: "已批准",
+    prChangesRequested: "需要修改",
+    prReviewRequired: "需要审查",
+    prCiSuccess: "CI 通过",
+    prCiFailure: "CI 失败",
+    prCiPending: "CI 进行中",
   },
 
   undoStack: {

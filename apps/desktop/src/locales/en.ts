@@ -1062,6 +1062,15 @@ const en = {
     noUpstream: "no upstream",
     clean: "Clean",
     lastCommit: "Last commit {0}",
+    prsTab: "PRs",
+    noPrs: "No open pull requests in this workspace.",
+    prDraft: "Draft",
+    prApproved: "Approved",
+    prChangesRequested: "Changes requested",
+    prReviewRequired: "Review required",
+    prCiSuccess: "CI passed",
+    prCiFailure: "CI failed",
+    prCiPending: "CI pending",
   },
 
   // ─── Undo ───────────────────────────────────────────────
