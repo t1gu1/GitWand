@@ -4978,6 +4978,89 @@ fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
     .collect()
 }
 
+/// Aggregate open GitHub Issues from all repos in a workspace (via `gh issue list`).
+/// `filter` controls which issues are fetched:
+///   ""          — all open issues (no additional flag)
+///   "assigned"  — issues assigned to the authenticated user (--assignee @me)
+///   "mentioned" — issues mentioning the user (--search mentions:@me)
+///   "created"   — issues created by the user (--author @me)
+/// Best-effort: gh failures per repo are captured in the `error` field.
+#[tauri::command]
+fn workspace_issues_all(repos: Vec<WorkspaceRepo>, filter: String) -> Vec<WorkspaceRepoIssues> {
+    repos.into_iter().map(|repo| {
+        let repo_path = repo.path.clone();
+        let repo_name = repo.name.clone();
+
+        let mut args: Vec<String> = vec![
+            "issue".to_string(), "list".to_string(),
+            "--state".to_string(), "open".to_string(),
+            "--json".to_string(),
+            "number,title,state,author,assignees,labels,url,createdAt,updatedAt,milestone".to_string(),
+            "--limit".to_string(), "100".to_string(),
+        ];
+        match filter.as_str() {
+            "assigned" => {
+                args.push("--assignee".to_string());
+                args.push("@me".to_string());
+            }
+            "created" => {
+                args.push("--author".to_string());
+                args.push("@me".to_string());
+            }
+            "mentioned" => {
+                args.push("--search".to_string());
+                args.push("mentions:@me".to_string());
+            }
+            _ => {} // "" or unknown = no extra filter
+        }
+
+        let output = hidden_cmd("gh")
+            .args(&args)
+            .current_dir(&repo_path)
+            .output();
+
+        match output {
+            Err(e) => WorkspaceRepoIssues {
+                repo_path,
+                repo_name,
+                issues: vec![],
+                filter: filter.clone(),
+                error: Some(format!("gh not available: {}", e)),
+            },
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                WorkspaceRepoIssues {
+                    repo_path,
+                    repo_name,
+                    issues: vec![],
+                    filter: filter.clone(),
+                    error: Some(format!("gh issue list failed: {}", stderr.trim())),
+                }
+            }
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                match parse_gh_issue_json(&stdout) {
+                    Ok(issues) => WorkspaceRepoIssues {
+                        repo_path,
+                        repo_name,
+                        issues,
+                        filter: filter.clone(),
+                        error: None,
+                    },
+                    Err(e) => WorkspaceRepoIssues {
+                        repo_path,
+                        repo_name,
+                        issues: vec![],
+                        filter: filter.clone(),
+                        error: Some(e),
+                    },
+                }
+            }
+        }
+    })
+    .collect()
+}
+
 /// Get the cross-worktree status for a repo — ahead/behind + modified count per worktree.
 #[tauri::command]
 fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, String> {
@@ -6250,6 +6333,7 @@ pub fn run() {
             workspace_pull_all,
             workspace_wip_all,
             workspace_prs_all,
+            workspace_issues_all,
             git_worktree_status_all,
             git_worktree_list,
             git_worktree_add,
