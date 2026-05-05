@@ -1074,6 +1074,12 @@ const en = {
     prCiSuccess: "CI passed",
     prCiFailure: "CI failed",
     prCiPending: "CI pending",
+      issuesTab: "Issues",
+      noIssues: "No issues found with this filter.",
+      issueFilterAssigned: "Assigned to me",
+      issueFilterMentioned: "Mentions me",
+      issueFilterCreated: "Created by me",
+      issueMilestone: "Milestone: {0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

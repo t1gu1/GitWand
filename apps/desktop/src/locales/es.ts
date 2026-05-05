@@ -1046,6 +1046,12 @@ const es: Locale = {
     prCiSuccess: "CI superada",
     prCiFailure: "CI fallida",
     prCiPending: "CI pendiente",
+      issuesTab: "Issues",
+      noIssues: "No se encontraron issues con este filtro.",
+      issueFilterAssigned: "Asignadas a mí",
+      issueFilterMentioned: "Me mencionan",
+      issueFilterCreated: "Creadas por mí",
+      issueMilestone: "Hito: {0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────
