@@ -4626,6 +4626,8 @@ pub struct WorkspaceWipItem {
     pub has_no_upstream: bool,
     /// Error fetching data (None = OK).
     pub error: Option<String>,
+    /// Relative paths of staged and unstaged changed files (excludes untracked).
+    pub changed_files: Vec<String>,
 }
 
 /// Per-repo aggregator for the Launchpad PRs panel.
@@ -4898,6 +4900,28 @@ fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .unwrap_or_default();
         let (staged_count, unstaged_count, untracked_count) = parse_wip_status(&status_out);
+        let changed_files: Vec<String> = {
+            let mut seen = std::collections::HashSet::new();
+            for line in status_out.lines() {
+                if line.len() < 4 { continue; }
+                if &line[0..2] == "??" { continue; } // skip untracked
+                let path_part = &line[3..];
+                // Handle renames ("old -> new") — take the new path
+                let path = if path_part.contains(" -> ") {
+                    path_part.split(" -> ").last().unwrap_or(path_part).trim()
+                } else {
+                    path_part.trim()
+                };
+                // Strip surrounding double-quotes git adds for filenames with spaces
+                let path = path.trim_matches('"');
+                if !path.is_empty() {
+                    seen.insert(path.to_string());
+                }
+            }
+            let mut v: Vec<String> = seen.into_iter().collect();
+            v.sort();
+            v
+        };
 
         // Last commit timestamp (ISO 8601 committer date)
         let last_commit_at = git_cmd()
@@ -4922,6 +4946,7 @@ fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
             last_commit_at,
             has_no_upstream,
             error: None,
+            changed_files,
         }
     })
     .collect()
@@ -6670,5 +6695,57 @@ mod tests {
         assert_eq!(issues[0].milestone, "", "milestone should be empty string when absent");
         assert!(issues[0].assignees.is_empty());
         assert!(issues[0].labels.is_empty());
+    }
+
+    #[test]
+    fn test_changed_files_extraction() {
+        // Helper that mirrors the changed_files extraction logic in get_workspace_wip
+        fn extract(status_out: &str) -> Vec<String> {
+            let mut seen = std::collections::HashSet::new();
+            for line in status_out.lines() {
+                if line.len() < 4 { continue; }
+                if &line[0..2] == "??" { continue; }
+                let path_part = &line[3..];
+                let path = if path_part.contains(" -> ") {
+                    path_part.split(" -> ").last().unwrap_or(path_part).trim()
+                } else {
+                    path_part.trim()
+                };
+                let path = path.trim_matches('"');
+                if !path.is_empty() {
+                    seen.insert(path.to_string());
+                }
+            }
+            let mut v: Vec<String> = seen.into_iter().collect();
+            v.sort();
+            v
+        }
+
+        // Normal modified file
+        assert_eq!(extract(" M src/main.rs\n"), vec!["src/main.rs"]);
+
+        // Untracked file is skipped
+        assert_eq!(extract("?? untracked.rs\n"), Vec::<String>::new());
+
+        // Rename: take the new path
+        assert_eq!(extract("R  old.rs -> new.rs\n"), vec!["new.rs"]);
+
+        // File with spaces: quotes stripped
+        assert_eq!(extract(" M \"new file.ts\"\n"), vec!["new file.ts"]);
+
+        // Rename with spaces: new path, quotes stripped
+        assert_eq!(extract("R  \"old file.ts\" -> \"new file.ts\"\n"), vec!["new file.ts"]);
+
+        // Deduplication
+        assert_eq!(
+            extract(" M src/auth.ts\nM  src/auth.ts\n"),
+            vec!["src/auth.ts"]
+        );
+
+        // Mixed: modified + untracked
+        assert_eq!(
+            extract(" M src/auth.ts\n?? ignored.ts\n"),
+            vec!["src/auth.ts"]
+        );
     }
 }

@@ -22,14 +22,14 @@ const MOCK_ITEMS: WorkspaceWipItem[] = [
     ahead: 2, behind: 0,
     stagedCount: 1, unstagedCount: 3, untrackedCount: 0,
     lastCommitAt: "2026-05-01T10:00:00+02:00",
-    hasNoUpstream: false, error: null,
+    hasNoUpstream: false, error: null, changedFiles: [],
   },
   {
     path: "/repo/b", name: "beta", branch: "feat/x",
     ahead: 0, behind: 0,
     stagedCount: 0, unstagedCount: 0, untrackedCount: 2,
     lastCommitAt: "2026-04-30T08:00:00+02:00",
-    hasNoUpstream: true, error: null,
+    hasNoUpstream: true, error: null, changedFiles: [],
   },
 ];
 

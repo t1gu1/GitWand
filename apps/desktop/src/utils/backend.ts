@@ -2780,6 +2780,8 @@ export interface WorkspaceWipItem {
   /** True when no upstream is configured for the current branch. */
   hasNoUpstream: boolean;
   error: string | null;
+  /** Relative paths of staged and unstaged changed files (excludes untracked). */
+  changedFiles: string[];
 }
 
 /** Per-repo container for the Launchpad PRs panel. */
@@ -2914,6 +2916,7 @@ export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<Workspace
     lastCommitAt: (item.last_commit_at as string) ?? "",
     hasNoUpstream: (item.has_no_upstream as boolean) ?? false,
     error: (item.error as string | null) ?? null,
+    changedFiles: (item.changed_files as string[]) ?? [],
   }));
 }
 

@@ -3271,11 +3271,30 @@ async function handleRequest(req, res) {
               last_commit_at = execSync("git log -1 --format=%cI", { cwd: repo.path, encoding: "utf-8" }).trim();
             } catch {}
 
+            const changed_files = [];
+            const seenFiles = new Set();
+            for (const line of statusOut.split("\n")) {
+              if (line.length < 4) continue;
+              if (line[0] === "?" && line[1] === "?") continue; // skip untracked
+              const pathPart = line.slice(3).trim();
+              const rawPath = pathPart.includes(" -> ")
+                ? pathPart.split(" -> ").pop()
+                : pathPart;
+              // Strip surrounding double-quotes git adds for filenames with spaces
+              const filePath = rawPath ? rawPath.replace(/^"|"$/g, "") : null;
+              if (filePath && !seenFiles.has(filePath)) {
+                seenFiles.add(filePath);
+                changed_files.push(filePath);
+              }
+            }
+            changed_files.sort();
+
             return {
               path: repo.path, name: repo.name, branch,
               ahead, behind,
               staged_count, unstaged_count, untracked_count,
               last_commit_at, has_no_upstream,
+              changed_files,
               error: null,
             };
           } catch (e) {
@@ -3284,6 +3303,7 @@ async function handleRequest(req, res) {
               ahead: 0, behind: 0,
               staged_count: 0, unstaged_count: 0, untracked_count: 0,
               last_commit_at: "", has_no_upstream: false,
+              changed_files: [],
               error: e.message,
             };
           }
