@@ -302,6 +302,8 @@ onMounted(() => {
         @keydown.enter="showSnoozedPrs = !showSnoozedPrs"
       >
         💤 {{ t("launchpad.snoozedCount", snoozedPrs.length) }}
+        <span v-if="!showSnoozedPrs" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>
+        <span v-else class="launchpad-view__snoozed-show-label">▲</span>
       </div>
       <ul v-if="showSnoozedPrs && snoozedPrs.length > 0" class="launchpad-view__snoozed-list">
         <li v-for="pr in snoozedPrs" :key="pr.url" class="launchpad-view__snoozed-item">
@@ -421,6 +423,8 @@ onMounted(() => {
         @keydown.enter="showSnoozedIssues = !showSnoozedIssues"
       >
         💤 {{ t("launchpad.snoozedCount", snoozedIssues.length) }}
+        <span v-if="!showSnoozedIssues" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>
+        <span v-else class="launchpad-view__snoozed-show-label">▲</span>
       </div>
       <ul v-if="showSnoozedIssues && snoozedIssues.length > 0" class="launchpad-view__snoozed-list">
         <li v-for="issue in snoozedIssues" :key="issue.url" class="launchpad-view__snoozed-item">
@@ -723,6 +727,12 @@ onMounted(() => {
 
 .launchpad-view__snoozed-bandeau:hover {
   background: var(--color-border, #e2e8f0);
+}
+
+.launchpad-view__snoozed-show-label {
+  margin-left: 8px;
+  opacity: 0.75;
+  font-size: 0.75rem;
 }
 
 .launchpad-view__snoozed-list {
