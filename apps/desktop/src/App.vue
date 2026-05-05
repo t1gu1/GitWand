@@ -928,7 +928,8 @@ const showRebase = ref(false);
 const repoOperationState = ref<RepoOperationState | null>(null);
 const showRebaseBanner = computed(() =>
   repoOperationState.value !== null &&
-  (repoOperationState.value.state === "rebase") &&
+  (repoOperationState.value.state === "rebase" || repoOperationState.value.state === "rebase_interactive") &&
+  !showRebase.value &&   // don't overlap with the RebaseEditor (user-initiated interactive rebase)
   repoFolderPath.value !== ""
 );
 
@@ -936,9 +937,15 @@ async function refreshRepoState() {
   if (!repoFolderPath.value) { repoOperationState.value = null; return; }
   try {
     const state = await gitRepoState(repoFolderPath.value);
-    // Only surface plain rebase — interactive rebase is handled by RebaseEditor
-    repoOperationState.value = state.state === "rebase" ? state : null;
-  } catch {
+    console.log("[rebase] gitRepoState →", JSON.stringify(state), "| cwd:", repoFolderPath.value);
+    // Surface both plain and interactive rebase states — git ≥2.26 uses the
+    // sequencer backend (creates rebase-merge/interactive) even for plain
+    // pull --rebase.  We distinguish from a user-initiated RebaseEditor session
+    // via the showRebase flag (see showRebaseBanner computed above).
+    repoOperationState.value =
+      (state.state === "rebase" || state.state === "rebase_interactive") ? state : null;
+  } catch (err) {
+    console.warn("[rebase] gitRepoState error:", err);
     repoOperationState.value = null;
   }
 }
