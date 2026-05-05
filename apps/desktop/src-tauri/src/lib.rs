@@ -4643,6 +4643,103 @@ struct WorkspaceRepoPrs {
     error: Option<String>,
 }
 
+/// A GitHub issue as returned by `gh issue list`.
+/// `rename_all = "camelCase"` means Tauri IPC serializes fields directly to
+/// camelCase TypeScript — no mapping layer needed (unlike `PullRequest`).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Issue {
+    number: i64,
+    title: String,
+    state: String,
+    author: String,
+    assignees: Vec<String>,
+    labels: Vec<String>,
+    url: String,
+    created_at: String,
+    updated_at: String,
+    /// Milestone title, empty string if none.
+    milestone: String,
+}
+
+// Intermediate structs for serde_json deserialization of `gh issue list --json` output.
+
+#[derive(serde::Deserialize)]
+struct GhIssueAuthor {
+    login: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhIssueAssignee {
+    login: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhIssueLabel {
+    name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhIssueMilestone {
+    title: String,
+}
+
+#[derive(serde::Deserialize)]
+struct GhIssueRaw {
+    number: i64,
+    title: String,
+    state: String,
+    author: GhIssueAuthor,
+    #[serde(default)]
+    assignees: Vec<GhIssueAssignee>,
+    #[serde(default)]
+    labels: Vec<GhIssueLabel>,
+    url: String,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+    #[serde(default)]
+    milestone: Option<GhIssueMilestone>,
+}
+
+fn parse_gh_issue_json(json: &str) -> Result<Vec<Issue>, String> {
+    let trimmed = json.trim();
+    if trimmed.is_empty() || trimmed == "[]" {
+        return Ok(Vec::new());
+    }
+    let raws: Vec<GhIssueRaw> = serde_json::from_str(trimmed)
+        .map_err(|e| format!("Failed to parse gh issue list output: {}", e))?;
+    Ok(raws.into_iter().map(|r| Issue {
+        number: r.number,
+        title: r.title,
+        state: r.state,
+        author: r.author.login,
+        assignees: r.assignees.into_iter().map(|a| a.login).collect(),
+        labels: r.labels.into_iter().map(|l| l.name).collect(),
+        url: r.url,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        milestone: r.milestone.map(|m| m.title).unwrap_or_default(),
+    }).collect())
+}
+
+/// Per-repo aggregator for the Launchpad Issues panel.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceRepoIssues {
+    /// Filesystem path to the repository root.
+    repo_path: String,
+    /// Display name for the repository.
+    repo_name: String,
+    /// Open issues filtered by the `filter` parameter.
+    issues: Vec<Issue>,
+    /// Filter applied: "" = all, "assigned", "mentioned", "created".
+    filter: String,
+    /// Error message if `gh issue list` failed for this repo (None = OK).
+    error: Option<String>,
+}
+
 /// Read a `.gitwand-workspace.json` from the given directory.
 #[tauri::command]
 fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
@@ -6429,5 +6526,64 @@ mod tests {
         assert!(json.contains("\"gh: command not found\""), "error message must appear in JSON");
         // error field itself should be camelCase (it's a single word, stays "error")
         assert!(json.contains("\"error\":\"gh: command not found\""), "error key+value must appear together: {}", json);
+    }
+
+    #[test]
+    fn parse_empty_issue_list() {
+        let result = parse_gh_issue_json("[]").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_issue_string() {
+        let result = parse_gh_issue_json("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_single_issue_all_fields() {
+        let json = r#"[{
+          "number": 7,
+          "title": "Fix crash on startup",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "assignees": [{"login": "bob"}],
+          "labels": [{"name": "bug"}, {"name": "urgent"}],
+          "url": "https://github.com/org/repo/issues/7",
+          "createdAt": "2026-03-01T10:00:00Z",
+          "updatedAt": "2026-03-02T12:00:00Z",
+          "milestone": {"title": "v2.9.0"}
+        }]"#;
+        let issues = parse_gh_issue_json(json).unwrap();
+        assert_eq!(issues.len(), 1);
+        let issue = &issues[0];
+        assert_eq!(issue.number, 7);
+        assert_eq!(issue.title, "Fix crash on startup");
+        assert_eq!(issue.state, "OPEN");
+        assert_eq!(issue.author, "alice");
+        assert_eq!(issue.assignees, vec!["bob"]);
+        assert_eq!(issue.labels, vec!["bug", "urgent"]);
+        assert_eq!(issue.url, "https://github.com/org/repo/issues/7");
+        assert_eq!(issue.created_at, "2026-03-01T10:00:00Z");
+        assert_eq!(issue.updated_at, "2026-03-02T12:00:00Z");
+        assert_eq!(issue.milestone, "v2.9.0");
+    }
+
+    #[test]
+    fn parse_issue_without_milestone() {
+        let json = r#"[{
+          "number": 1,
+          "title": "Simple issue",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "url": "https://github.com/org/repo/issues/1",
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z"
+        }]"#;
+        let issues = parse_gh_issue_json(json).unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].milestone, "", "milestone should be empty string when absent");
+        assert!(issues[0].assignees.is_empty());
+        assert!(issues[0].labels.is_empty());
     }
 }
