@@ -9,6 +9,16 @@
  */
 
 import { createServer } from "node:http";
+
+// ── Crash guards ────────────────────────────────────────────────────────────
+// Without these, any unhandled exception or rejected promise kills the process
+// silently, causing "Failed to fetch" storms in the browser dev tools.
+process.on("uncaughtException", (err) => {
+  console.error("[dev-server] uncaughtException — server kept alive:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[dev-server] unhandledRejection — server kept alive:", reason);
+});
 import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
 import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
@@ -263,7 +273,19 @@ function readBody(req) {
   });
 }
 
-const server = createServer(async (req, res) => {
+const server = createServer((req, res) => {
+  // Wrap the entire async handler so any unhandled rejection sends a 500
+  // instead of crashing the server process.
+  handleRequest(req, res).catch((err) => {
+    console.error("[dev-server] unhandled error in request handler:", err);
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Internal server error" }));
+    }
+  });
+});
+
+async function handleRequest(req, res) {
   // CORS preflight
   if (req.method === "OPTIONS") {
     res.writeHead(204, corsHeaders(req));

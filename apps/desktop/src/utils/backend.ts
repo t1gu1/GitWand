@@ -10,6 +10,56 @@
 
 const DEV_SERVER = "http://localhost:3001";
 
+/**
+ * Lightweight circuit-breaker for dev-server fetches.
+ *
+ * After THRESHOLD consecutive "Failed to fetch" (connection refused / server
+ * down), all outgoing fetches are blocked for BACKOFF_MS milliseconds so the
+ * browser doesn't spray thousands of failed requests into the Network tab.
+ *
+ * The breaker resets automatically after the backoff period, trying one probe
+ * request.  If that succeeds, normal operation resumes; if it fails the cycle
+ * repeats with the same backoff.
+ *
+ * Only active in browser/dev mode — Tauri uses invoke() and is unaffected.
+ */
+const _cb = {
+  failures:   0,
+  openUntil:  0,           // epoch ms — while Date.now() < openUntil, block all fetches
+  THRESHOLD:  3,           // consecutive failures before opening the breaker
+  BACKOFF_MS: 15_000,      // how long to stay open before probing again
+};
+
+/**
+ * Thin wrapper around `fetch` that honours the circuit breaker.
+ * All dev-server fetches should call this instead of `fetch()` directly.
+ */
+async function devFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  if (Date.now() < _cb.openUntil) {
+    throw new Error("dev-server unreachable (circuit breaker open)");
+  }
+  try {
+    const res = await fetch(input, init);
+    _cb.failures = 0;           // any successful TCP connection resets the counter
+    return res;
+  } catch (err: any) {
+    // Only count network-level errors (connection refused / server down).
+    // HTTP 4xx/5xx responses are fine — they don't mean the server is down.
+    if (err?.name === "TypeError" && err?.message?.includes("fetch")) {
+      _cb.failures += 1;
+      if (_cb.failures >= _cb.THRESHOLD) {
+        _cb.openUntil = Date.now() + _cb.BACKOFF_MS;
+        console.warn(
+          `[backend] dev-server unreachable after ${_cb.failures} attempts — ` +
+          `polling paused for ${_cb.BACKOFF_MS / 1000}s`,
+        );
+        _cb.failures = 0;       // reset so the next probe starts fresh
+      }
+    }
+    throw err;
+  }
+}
+
 /** Check if we're inside a Tauri webview. */
 export function isTauri(): boolean {
   return !!(window as any).__TAURI_INTERNALS__;
@@ -97,7 +147,7 @@ export async function readFile(cwd: string, path: string): Promise<string> {
     // Rust backend validates that `path`, resolved under `cwd`, stays inside cwd.
     return tauriInvoke<string>("read_file", { cwd, path });
   }
-  const res = await fetch(`${DEV_SERVER}/api/read-file`, {
+  const res = await devFetch(`${DEV_SERVER}/api/read-file`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path }),
@@ -120,7 +170,7 @@ export async function writeFile(
     await tauriInvoke("write_file", { cwd, path, content });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/write-file`, {
+  const res = await devFetch(`${DEV_SERVER}/api/write-file`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path, content }),
@@ -175,7 +225,7 @@ export async function readFileAtRevision(
       absent: raw.absent,
     };
   }
-  const res = await fetch(`${DEV_SERVER}/api/read-file-at-revision`, {
+  const res = await devFetch(`${DEV_SERVER}/api/read-file-at-revision`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, rev, path }),
@@ -236,7 +286,7 @@ export async function folderDiff(
     // field translation is needed here — the shape matches FolderDiffNode.
     return await tauriInvoke<FolderDiffNode>("folder_diff", { cwd, refA, refB });
   }
-  const res = await fetch(`${DEV_SERVER}/api/folder-diff`, {
+  const res = await devFetch(`${DEV_SERVER}/api/folder-diff`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, refA, refB }),
@@ -287,7 +337,7 @@ export async function listDir(dirPath?: string): Promise<ListDirResult> {
     };
   }
   const qs = dirPath ? `?path=${encodeURIComponent(dirPath)}` : "";
-  const res = await fetch(`${DEV_SERVER}/api/list-dir${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/list-dir${qs}`);
   if (!res.ok) throw new Error(`Failed to list directory: ${res.status}`);
   return res.json();
 }
@@ -355,7 +405,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
     };
   }
 
-  const res = await fetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
   const data = await res.json();
   // dev-server doesn't compute push remote — fill defaults
@@ -445,7 +495,7 @@ export async function getGitDiff(
   }
 
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&staged=${staged}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-diff${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-diff${qs}`);
   if (!res.ok) throw new Error(`Failed to get git diff: ${res.status}`);
   return res.json();
 }
@@ -466,7 +516,7 @@ export async function getGitUser(cwd: string): Promise<GitUser> {
     return { name: raw.name, email: raw.email };
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-get-user${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-get-user${qs}`);
   if (!res.ok) return { name: "", email: "" };
   return res.json();
 }
@@ -531,7 +581,7 @@ export async function getGitLog(
   }
 
   const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 50}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-log${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();
 }
@@ -546,7 +596,7 @@ export async function gitStage(cwd: string, paths: string[]): Promise<void> {
     await tauriInvoke("git_stage", { cwd, paths });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stage`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, paths }),
@@ -562,7 +612,7 @@ export async function gitUnstage(cwd: string, paths: string[]): Promise<void> {
     await tauriInvoke("git_unstage", { cwd, paths });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-unstage`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-unstage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, paths }),
@@ -579,7 +629,7 @@ export async function gitStagePatch(cwd: string, patch: string): Promise<void> {
     await tauriInvoke("git_stage_patch", { cwd, patch });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stage-patch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stage-patch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, patch }),
@@ -596,7 +646,7 @@ export async function gitUnstagePatch(cwd: string, patch: string): Promise<void>
     await tauriInvoke("git_unstage_patch", { cwd, patch });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-unstage-patch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-unstage-patch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, patch }),
@@ -613,7 +663,7 @@ export async function gitCommit(cwd: string, message: string): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("git_commit", { cwd, message });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, message }),
@@ -630,7 +680,7 @@ export async function gitAmendCommit(cwd: string, message: string): Promise<stri
   if (isTauri()) {
     return tauriInvoke<string>("git_amend_commit", { cwd, message });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-amend-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-amend-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, message }),
@@ -679,7 +729,7 @@ export async function gitSplitCommit(
     );
     return { firstHash: raw.first_hash, secondHash: raw.second_hash };
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-split-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-split-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, firstPatch, firstMessage, secondMessage }),
@@ -715,7 +765,7 @@ export async function gitPush(
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-push`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-push`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, setUpstream }),
@@ -730,7 +780,7 @@ export async function gitPull(cwd: string, rebase: boolean = false): Promise<Git
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_pull", { cwd, rebase });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-pull`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-pull`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, rebase }),
@@ -745,7 +795,7 @@ export async function gitFetch(cwd: string): Promise<GitPushPullResult> {
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_fetch", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-fetch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-fetch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -760,7 +810,7 @@ export async function gitMerge(cwd: string, branch: string): Promise<GitPushPull
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_merge", { cwd, branch });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-merge`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-merge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, branch }),
@@ -775,7 +825,7 @@ export async function gitMergeAbort(cwd: string): Promise<GitPushPullResult> {
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_merge_abort", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-merge-abort`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-merge-abort`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -790,7 +840,7 @@ export async function gitMergeContinue(cwd: string): Promise<GitPushPullResult> 
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_merge_continue", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-merge-continue`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-merge-continue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -823,7 +873,7 @@ export async function gitRepoState(cwd: string): Promise<RepoOperationState> {
   if (isTauri()) {
     return tauriInvoke<RepoOperationState>("git_repo_state", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-repo-state`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-repo-state`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -841,7 +891,7 @@ export async function gitRebaseAction(
   if (isTauri()) {
     return tauriInvoke<void>("git_rebase_action", { cwd, action });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-rebase-action`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-rebase-action`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, action }),
@@ -901,7 +951,7 @@ export async function getGitShow(cwd: string, hash: string): Promise<GitDiff[]> 
   }
 
   const qs = `?cwd=${encodeURIComponent(cwd)}&hash=${encodeURIComponent(hash)}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-show${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-show${qs}`);
   if (!res.ok) throw new Error(`Failed to get commit diff: ${res.status}`);
   return res.json();
 }
@@ -938,7 +988,7 @@ export async function getGitBlame(cwd: string, path: string, algorithm: BlameAlg
     }));
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&algorithm=${algorithm}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-blame${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-blame${qs}`);
   if (!res.ok) throw new Error(`Failed to get blame: ${res.status}`);
   return res.json();
 }
@@ -963,7 +1013,7 @@ export async function getGitFileLog(cwd: string, path: string, count = 50): Prom
     return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&count=${count}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-file-log${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-file-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get file log: ${res.status}`);
   return res.json();
 }
@@ -980,7 +1030,7 @@ export async function getGitFileLogPickaxe(cwd: string, path: string, search: st
     return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&search=${encodeURIComponent(search)}&mode=${mode}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-file-log-pickaxe${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-file-log-pickaxe${qs}`);
   if (!res.ok) throw new Error(`Failed to get pickaxe log: ${res.status}`);
   return res.json();
 }
@@ -995,7 +1045,7 @@ export async function getGitFileLogRange(cwd: string, path: string, startLine: n
     return raw.map(r => ({ hashFull: r.hash_full, hash: r.hash, author: r.author, date: r.date, message: r.message, body: r.body }));
   }
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&startLine=${startLine}&endLine=${endLine}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-file-log-range${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-file-log-range${qs}`);
   if (!res.ok) throw new Error(`Failed to get range log: ${res.status}`);
   return res.json();
 }
@@ -1048,7 +1098,7 @@ export async function getGitFileDiff(
   }
 
   const qs = `?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}&from=${encodeURIComponent(fromHash)}&to=${encodeURIComponent(toHash)}`;
-  const res = await fetch(`${DEV_SERVER}/api/git-file-diff${qs}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-file-diff${qs}`);
   if (!res.ok) throw new Error(`Failed to get file diff: ${res.status}`);
   return res.json();
 }
@@ -1063,7 +1113,7 @@ export async function gitDiscard(cwd: string, paths: string[], untracked = false
     await tauriInvoke("git_discard", { cwd, paths, untracked });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-discard`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-discard`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, paths, untracked }),
@@ -1079,7 +1129,7 @@ export async function gitAddToGitignore(cwd: string, path: string): Promise<void
     await tauriInvoke("git_add_to_gitignore", { cwd, path });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-gitignore`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-gitignore`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path }),
@@ -1130,7 +1180,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
     }));
   }
 
-  const res = await fetch(`${DEV_SERVER}/api/git-branches?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-branches?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to get branches: ${res.status}`);
   return res.json();
 }
@@ -1148,7 +1198,7 @@ export async function gitCreateBranch(
     await tauriInvoke("git_create_branch", { cwd, name, checkout, startPoint: startPoint ?? null });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-create-branch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-create-branch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, checkout, startPoint }),
@@ -1164,7 +1214,7 @@ export async function gitSwitchBranch(cwd: string, name: string): Promise<void> 
     await tauriInvoke("git_switch_branch", { cwd, name });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-switch-branch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-switch-branch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name }),
@@ -1182,7 +1232,7 @@ export async function gitStash(cwd: string, message?: string): Promise<void> {
     await tauriInvoke("git_stash", { cwd, message: trimmed });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, message: trimmed }),
@@ -1198,7 +1248,7 @@ export async function gitStashPop(cwd: string): Promise<void> {
     await tauriInvoke("git_stash_pop", { cwd });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash-pop`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-pop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -1256,7 +1306,7 @@ export async function readGitwandrc(cwd: string): Promise<string> {
   }
   // In browser dev mode, try to fetch from a potential dev endpoint
   try {
-    const res = await fetch(`${DEV_SERVER}/api/read-gitwandrc`, {
+    const res = await devFetch(`${DEV_SERVER}/api/read-gitwandrc`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cwd }),
@@ -1276,7 +1326,7 @@ export async function gitDeleteBranch(cwd: string, name: string, force: boolean 
     await tauriInvoke("git_delete_branch", { cwd, name, force });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-delete-branch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-delete-branch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, force }),
@@ -1293,7 +1343,7 @@ export async function gitRenameBranch(cwd: string, oldName: string, newName: str
     await tauriInvoke("git_rename_branch", { cwd, oldName, newName });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-rename-branch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-rename-branch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, oldName, newName }),
@@ -1342,7 +1392,7 @@ export async function gitCherryPick(cwd: string, hashes: string[]): Promise<GitP
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_cherry_pick", { cwd, hashes });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-cherry-pick`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-cherry-pick`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, hashes }),
@@ -1358,7 +1408,7 @@ export async function gitCherryPickAbort(cwd: string): Promise<void> {
     await tauriInvoke("git_cherry_pick_abort", { cwd });
     return;
   }
-  await fetch(`${DEV_SERVER}/api/git-cherry-pick-abort`, {
+  await devFetch(`${DEV_SERVER}/api/git-cherry-pick-abort`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -1372,7 +1422,7 @@ export async function gitCherryPickContinue(cwd: string): Promise<GitPushPullRes
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_cherry_pick_continue", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-cherry-pick-continue`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-cherry-pick-continue`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -1390,7 +1440,7 @@ export async function gitCheckoutCommit(cwd: string, sha: string): Promise<void>
     await tauriInvoke("git_checkout_commit", { cwd, sha });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-checkout-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-checkout-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, sha }),
@@ -1407,7 +1457,7 @@ export async function gitResetToCommit(cwd: string, sha: string, mode: "soft" | 
     await tauriInvoke("git_reset_to_commit", { cwd, sha, mode });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-reset-to-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-reset-to-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, sha, mode }),
@@ -1423,7 +1473,7 @@ export async function gitRevertCommit(cwd: string, sha: string, mainline?: numbe
   if (isTauri()) {
     return tauriInvoke<GitPushPullResult>("git_revert_commit", { cwd, sha, mainline: mainline ?? null });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-revert-commit`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-revert-commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, sha, mainline }),
@@ -1440,7 +1490,7 @@ export async function gitCreateTag(cwd: string, name: string, sha: string, messa
     await tauriInvoke("git_create_tag", { cwd, name, sha, message: message ?? null });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-create-tag`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-create-tag`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, sha, message }),
@@ -1466,7 +1516,7 @@ export async function gitListTags(cwd: string): Promise<GitTag[]> {
     const raw = await tauriInvoke<Array<{ name: string; hash: string; is_annotated: boolean; date: string; message: string }>>("git_list_tags", { cwd });
     return raw.map(t => ({ name: t.name, hash: t.hash, isAnnotated: t.is_annotated, date: t.date, message: t.message }));
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-list-tags?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-list-tags?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`git list-tags failed: ${res.status}`);
   const raw = await res.json() as Array<{ name: string; hash: string; is_annotated: boolean; date: string; message: string }>;
   return raw.map(t => ({ name: t.name, hash: t.hash, isAnnotated: t.is_annotated, date: t.date, message: t.message }));
@@ -1477,7 +1527,7 @@ export async function gitUnpushedTags(cwd: string, remote = "origin"): Promise<s
   if (isTauri()) {
     return tauriInvoke<string[]>("git_unpushed_tags", { cwd, remote });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-unpushed-tags?cwd=${encodeURIComponent(cwd)}&remote=${encodeURIComponent(remote)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-unpushed-tags?cwd=${encodeURIComponent(cwd)}&remote=${encodeURIComponent(remote)}`);
   if (!res.ok) throw new Error(`git unpushed-tags failed: ${res.status}`);
   return res.json();
 }
@@ -1487,7 +1537,7 @@ export async function gitDeleteTag(cwd: string, name: string): Promise<void> {
     await tauriInvoke("git_delete_tag", { cwd, name });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-delete-tag`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-delete-tag`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name }),
@@ -1507,7 +1557,7 @@ export async function gitPushTags(
     await tauriInvoke("git_push_tags", { cwd, remote, mode, tagName: tagName ?? null });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-push-tags`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-push-tags`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, remote, mode, tagName }),
@@ -1520,7 +1570,7 @@ export async function gitDeleteRemoteTag(cwd: string, remote: string, name: stri
     await tauriInvoke("git_delete_remote_tag", { cwd, remote, name });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-delete-remote-tag`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-delete-remote-tag`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, remote, name }),
@@ -1566,7 +1616,7 @@ export async function gitClone(url: string, dest: string): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("git_clone", { url, dest });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-clone`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-clone`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, dest }),
@@ -1585,7 +1635,7 @@ export async function ghFork(url: string, parentDir: string): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("gh_fork", { url, parentDir });
   }
-  const res = await fetch(`${DEV_SERVER}/api/gh-fork`, {
+  const res = await devFetch(`${DEV_SERVER}/api/gh-fork`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, parentDir }),
@@ -1613,7 +1663,7 @@ export async function gitStashList(cwd: string): Promise<StashEntry[]> {
   if (isTauri()) {
     return tauriInvoke<StashEntry[]>("git_stash_list", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash-list?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-list?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to list stashes: ${res.status}`);
   return res.json();
 }
@@ -1626,7 +1676,7 @@ export async function gitStashApply(cwd: string, index: number): Promise<void> {
     await tauriInvoke("git_stash_apply", { cwd, index });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash-apply`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-apply`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, index }),
@@ -1642,7 +1692,7 @@ export async function gitStashDrop(cwd: string, index: number): Promise<void> {
     await tauriInvoke("git_stash_drop", { cwd, index });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash-drop`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-drop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, index }),
@@ -1657,7 +1707,7 @@ export async function gitStashShow(cwd: string, index: number): Promise<string> 
   if (isTauri()) {
     return tauriInvoke<string>("git_stash_show", { cwd, index });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-stash-show?cwd=${encodeURIComponent(cwd)}&index=${index}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-show?cwd=${encodeURIComponent(cwd)}&index=${index}`);
   if (!res.ok) throw new Error(`Failed to show stash: ${res.status}`);
   const data = await res.json();
   return data.diff;
@@ -1719,7 +1769,7 @@ export async function gitExec(cwd: string, args: string[]): Promise<TerminalResu
       exitCode: (raw.exitCode ?? raw.exit_code ?? -1) as number,
     };
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-exec`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-exec`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, args }),
@@ -1779,7 +1829,7 @@ export async function ghCurrentUser(): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("gh_current_user");
   }
-  const resp = await fetch(`${DEV_SERVER}/api/gh-current-user`);
+  const resp = await devFetch(`${DEV_SERVER}/api/gh-current-user`);
   if (!resp.ok) {
     const body = await resp.json().catch(() => ({ error: resp.statusText }));
     throw new Error(body.error ?? `HTTP ${resp.status}`);
@@ -1862,7 +1912,7 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
     }));
   }
   // Browser dev mode — call dev server
-  const res = await fetch(`${DEV_SERVER}/api/gh-list-prs?cwd=${encodeURIComponent(cwd)}&state=${state}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-list-prs?cwd=${encodeURIComponent(cwd)}&state=${state}`);
   if (!res.ok) throw new Error(`gh pr list failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
@@ -1940,7 +1990,7 @@ export async function ghCreatePr(
     };
   }
   // Browser dev mode — call dev server (uses GitHub REST API directly)
-  const res = await fetch(`${DEV_SERVER}/api/gh-create-pr`, {
+  const res = await devFetch(`${DEV_SERVER}/api/gh-create-pr`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, title, body, base, draft, reviewers }),
@@ -1996,7 +2046,7 @@ export async function ghListReviewerCandidates(cwd: string): Promise<ReviewerCan
     }));
   }
   // Browser dev mode — call dev server (uses GitHub REST API directly)
-  const res = await fetch(`${DEV_SERVER}/api/gh-reviewer-candidates?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-reviewer-candidates?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) return [];
   const raw = await res.json();
   if (!Array.isArray(raw)) return [];
@@ -2027,7 +2077,7 @@ export async function ghMergePr(cwd: string, number: number, method: string = "m
     await tauriInvoke("gh_merge_pr", { cwd, number, method });
     return;
   }
-  const resp = await fetch(`${DEV_SERVER}/api/gh-merge-pr`, {
+  const resp = await devFetch(`${DEV_SERVER}/api/gh-merge-pr`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, number, method }),
@@ -2122,7 +2172,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
     };
   }
   // Browser dev mode
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-detail?cwd=${encodeURIComponent(cwd)}&number=${number}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-detail?cwd=${encodeURIComponent(cwd)}&number=${number}`);
   if (!res.ok) throw new Error(`gh pr detail failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
@@ -2143,7 +2193,7 @@ export async function ghPrDiff(cwd: string, number: number): Promise<string> {
   if (isTauri()) {
     return await tauriInvoke<string>("gh_pr_diff", { cwd, number });
   }
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-diff?cwd=${encodeURIComponent(cwd)}&number=${number}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-diff?cwd=${encodeURIComponent(cwd)}&number=${number}`);
   if (!res.ok) throw new Error(`gh pr diff failed: ${res.status}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
@@ -2168,7 +2218,7 @@ export async function ghPrChecks(cwd: string, number: number): Promise<CICheck[]
       detailsUrl: c.details_url,
     }));
   }
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-checks?cwd=${encodeURIComponent(cwd)}&number=${number}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-checks?cwd=${encodeURIComponent(cwd)}&number=${number}`);
   if (!res.ok) throw new Error(`gh pr checks failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
@@ -2223,7 +2273,7 @@ export interface CreatePrCommentParams {
 /** Fetch all review comments for a PR. */
 export async function ghPrComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
   // No Tauri implementation — browser only for now
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
   if (!res.ok) throw new Error(`gh pr comments failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
@@ -2236,7 +2286,7 @@ export async function ghPrCreateComment(
   prNumber: number,
   params: CreatePrCommentParams,
 ): Promise<PrReviewComment> {
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-comment`, {
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-comment`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, number: prNumber, ...params }),
@@ -2253,7 +2303,7 @@ export async function ghPrUpdateComment(
   commentId: number,
   body: string,
 ): Promise<void> {
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-comment?id=${commentId}`, {
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-comment?id=${commentId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, body }),
@@ -2314,7 +2364,7 @@ export async function ghPrSubmitReview(
     comments?: PendingReviewComment[];
   },
 ): Promise<PrReview> {
-  const res = await fetch(`${DEV_SERVER}/api/gh-pr-submit-review`, {
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-submit-review`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, number: prNumber, ...opts }),
@@ -2388,7 +2438,7 @@ export async function ghPrHotspots(cwd: string, paths: string[]): Promise<PrHots
 
 /** Total number of tracked files in the repo (for scope %). */
 export async function gitFileCount(cwd: string): Promise<number> {
-  const res = await fetch(`${DEV_SERVER}/api/git-file-count?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-file-count?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`file count failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
@@ -2441,7 +2491,7 @@ export async function detectClaudeCli(): Promise<ClaudeCliInfo> {
     return tauriInvoke<ClaudeCliInfo>("detect_claude_cli");
   }
   try {
-    const res = await fetch(`${DEV_SERVER}/api/claude-cli-detect`);
+    const res = await devFetch(`${DEV_SERVER}/api/claude-cli-detect`);
     if (res.ok) return (await res.json()) as ClaudeCliInfo;
   } catch {
     // Dev server unavailable
@@ -2481,7 +2531,7 @@ export async function claudeCliPrompt(
       outputFormat,
     });
   }
-  const res = await fetch(`${DEV_SERVER}/api/claude-cli-prompt`, {
+  const res = await devFetch(`${DEV_SERVER}/api/claude-cli-prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, systemPrompt, cwd, outputFormat }),
@@ -2520,7 +2570,7 @@ export async function detectCodexCli(): Promise<CodexCliInfo> {
     return tauriInvoke<CodexCliInfo>("detect_codex_cli");
   }
   try {
-    const res = await fetch(`${DEV_SERVER}/api/codex-cli-detect`);
+    const res = await devFetch(`${DEV_SERVER}/api/codex-cli-detect`);
     if (res.ok) return (await res.json()) as CodexCliInfo;
   } catch {
     // Dev server unavailable
@@ -2550,7 +2600,7 @@ export async function codexCliPrompt(
       cwd,
     });
   }
-  const res = await fetch(`${DEV_SERVER}/api/codex-cli-prompt`, {
+  const res = await devFetch(`${DEV_SERVER}/api/codex-cli-prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, systemPrompt, cwd }),
@@ -2575,7 +2625,7 @@ export async function claudeCliLogin(): Promise<void> {
     await tauriInvoke("claude_cli_login");
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/claude-cli-login`, {
+  const res = await devFetch(`${DEV_SERVER}/api/claude-cli-login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
@@ -2620,7 +2670,7 @@ export async function previewMerge(
   }
   // Dev mode: endpoint optionnel (pas critique pour le dev)
   try {
-    const res = await fetch(`${DEV_SERVER}/api/preview-merge`, {
+    const res = await devFetch(`${DEV_SERVER}/api/preview-merge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cwd, sourceBranch }),
@@ -2647,7 +2697,7 @@ export async function gitHookList(cwd: string): Promise<HookEntry[]> {
   if (isTauri()) {
     return tauriInvoke<HookEntry[]>("git_hook_list", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-hook-list?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-hook-list?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to list hooks: ${res.status}`);
   return res.json();
 }
@@ -2657,7 +2707,7 @@ export async function gitHookToggle(cwd: string, name: string, enabled: boolean)
   if (isTauri()) {
     return tauriInvoke("git_hook_toggle", { cwd, name, enabled });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-hook-toggle`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-hook-toggle`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, enabled }),
@@ -2670,7 +2720,7 @@ export async function gitHookCreate(cwd: string, name: string, content: string):
   if (isTauri()) {
     return tauriInvoke("git_hook_create", { cwd, name, content });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-hook-create`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-hook-create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, content }),
@@ -2683,7 +2733,7 @@ export async function gitHookDelete(cwd: string, name: string): Promise<void> {
   if (isTauri()) {
     return tauriInvoke("git_hook_delete", { cwd, name });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-hook-delete`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-hook-delete`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name }),
@@ -2780,7 +2830,7 @@ export async function workspaceRead(path: string): Promise<WorkspaceConfig> {
   if (isTauri()) {
     return tauriInvoke<WorkspaceConfig>("workspace_read", { path });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-read?path=${encodeURIComponent(path)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-read?path=${encodeURIComponent(path)}`);
   if (!res.ok) throw new Error(`Failed to read workspace: ${res.status}`);
   return res.json();
 }
@@ -2790,7 +2840,7 @@ export async function workspaceWrite(path: string, workspace: WorkspaceConfig): 
   if (isTauri()) {
     return tauriInvoke("workspace_write", { path, workspace });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-write`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-write`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ path, workspace }),
@@ -2803,7 +2853,7 @@ export async function workspaceStatusAll(repos: WorkspaceRepo[]): Promise<Worksp
   if (isTauri()) {
     return tauriInvoke<WorkspaceRepoStatus[]>("workspace_status_all", { repos });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-status-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-status-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos }),
@@ -2817,7 +2867,7 @@ export async function workspaceFetchAll(repos: WorkspaceRepo[]): Promise<Workspa
   if (isTauri()) {
     return tauriInvoke<WorkspaceRepoStatus[]>("workspace_fetch_all", { repos });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-fetch-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-fetch-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos }),
@@ -2831,7 +2881,7 @@ export async function workspacePullAll(repos: WorkspaceRepo[]): Promise<Workspac
   if (isTauri()) {
     return tauriInvoke<WorkspaceRepoStatus[]>("workspace_pull_all", { repos });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-pull-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-pull-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos }),
@@ -2845,7 +2895,7 @@ export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<Workspace
   if (isTauri()) {
     return tauriInvoke<WorkspaceWipItem[]>("workspace_wip_all", { repos });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-wip-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-wip-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos }),
@@ -2911,7 +2961,7 @@ export async function workspacePrsAll(repos: WorkspaceRepo[]): Promise<Workspace
       error: item.error,
     }));
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-prs-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-prs-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos }),
@@ -2939,7 +2989,7 @@ export async function workspaceIssuesAll(
     // Issue struct has rename_all = "camelCase". Direct cast, no mapping needed.
     return tauriInvoke<WorkspaceRepoIssues[]>("workspace_issues_all", { repos, filter });
   }
-  const res = await fetch(`${DEV_SERVER}/api/workspace-issues-all`, {
+  const res = await devFetch(`${DEV_SERVER}/api/workspace-issues-all`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ repos, filter }),
@@ -2961,7 +3011,7 @@ export async function gitWorktreeStatusAll(cwd: string): Promise<WorkspaceRepoSt
   if (isTauri()) {
     return tauriInvoke<WorkspaceRepoStatus[]>("git_worktree_status_all", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-worktree-status-all?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-status-all?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to get worktree status: ${res.status}`);
   return res.json();
 }
@@ -2982,7 +3032,7 @@ export async function gitWorktreeList(cwd: string): Promise<WorktreeEntry[]> {
   if (isTauri()) {
     return tauriInvoke<WorktreeEntry[]>("git_worktree_list", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-worktree-list?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-list?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to list worktrees: ${res.status}`);
   return res.json();
 }
@@ -3002,7 +3052,7 @@ export async function gitWorktreeAdd(
       new_branch: newBranch ?? null,
     });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-worktree-add`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path, branch, new_branch: newBranch ?? null }),
@@ -3017,7 +3067,7 @@ export async function gitWorktreeRemove(cwd: string, path: string, force?: boole
     await tauriInvoke("git_worktree_remove", { cwd, path, force: force ?? false });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-worktree-remove`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-remove`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path, force: force ?? false }),
@@ -3031,7 +3081,7 @@ export async function gitWorktreePrune(cwd: string): Promise<void> {
     await tauriInvoke("git_worktree_prune", { cwd });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-worktree-prune`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-prune`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -3060,7 +3110,7 @@ export async function agentSessionList(cwd: string): Promise<AgentSession[]> {
   if (isTauri()) {
     return tauriInvoke<AgentSession[]>("agent_session_list", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/agent-session-list?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/agent-session-list?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to list agent sessions: ${res.status}`);
   return res.json();
 }
@@ -3071,7 +3121,7 @@ export async function agentSessionLaunch(cwd: string, tool: string): Promise<voi
     await tauriInvoke("agent_session_launch", { cwd, tool });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/agent-session-launch`, {
+  const res = await devFetch(`${DEV_SERVER}/api/agent-session-launch`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, tool }),
@@ -3095,7 +3145,7 @@ export async function gitSubmoduleList(cwd: string): Promise<SubmoduleEntry[]> {
   if (isTauri()) {
     return tauriInvoke<SubmoduleEntry[]>("git_submodule_list", { cwd });
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-submodule-list?cwd=${encodeURIComponent(cwd)}`);
+  const res = await devFetch(`${DEV_SERVER}/api/git-submodule-list?cwd=${encodeURIComponent(cwd)}`);
   if (!res.ok) throw new Error(`Failed to list submodules: ${res.status}`);
   return res.json();
 }
@@ -3106,7 +3156,7 @@ export async function gitSubmoduleInit(cwd: string): Promise<void> {
     await tauriInvoke("git_submodule_init", { cwd });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-submodule-init`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-submodule-init`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd }),
@@ -3124,7 +3174,7 @@ export async function gitSubmoduleUpdate(
     await tauriInvoke("git_submodule_update", { cwd, init, recursive });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-submodule-update`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-submodule-update`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, init, recursive }),
@@ -3138,7 +3188,7 @@ export async function gitSubmoduleAdd(cwd: string, url: string, path: string): P
     await tauriInvoke("git_submodule_add", { cwd, url, path });
     return;
   }
-  const res = await fetch(`${DEV_SERVER}/api/git-submodule-add`, {
+  const res = await devFetch(`${DEV_SERVER}/api/git-submodule-add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, url, path }),
