@@ -61,5 +61,9 @@ export default defineConfig({
     setupFiles: ["src/test-setup.ts"],
     include: ["src/**/*.test.ts"],
     globals: false,
+    // Reset mock call counts/instances between each test so that
+    // toHaveBeenCalledTimes() assertions are scoped to a single test.
+    // Does NOT clear return values — each test's beforeEach sets those explicitly.
+    clearMocks: true,
   },
 });
