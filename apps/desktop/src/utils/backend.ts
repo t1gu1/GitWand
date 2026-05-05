@@ -1828,9 +1828,9 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
     labels: pr.labels,
     assignees: pr.assignees ?? [],
     reviewRequested: pr.review_requested ?? [],
-    reviewDecision: (pr as any).review_decision ?? "",
-    mergeStateStatus: (pr as any).merge_state_status ?? "",
-    checksRollup: (pr as any).checks_rollup ?? "",
+    reviewDecision: pr.review_decision ?? "",
+    mergeStateStatus: pr.merge_state_status ?? "",
+    checksRollup: pr.checks_rollup ?? "",
   }));
 }
 
@@ -1860,6 +1860,9 @@ export async function ghCreatePr(
       additions: number;
       deletions: number;
       labels: string[];
+      review_decision: string;
+      merge_state_status: string;
+      checks_rollup: string;
     }>("gh_create_pr", { cwd, title, body, base, draft, reviewers });
     return {
       number: raw.number,
@@ -1877,9 +1880,9 @@ export async function ghCreatePr(
       labels: raw.labels,
       assignees: [],
       reviewRequested: [],
-      reviewDecision: (raw as any).review_decision ?? "",
-      mergeStateStatus: (raw as any).merge_state_status ?? "",
-      checksRollup: (raw as any).checks_rollup ?? "",
+      reviewDecision: raw.review_decision ?? "",
+      mergeStateStatus: raw.merge_state_status ?? "",
+      checksRollup: raw.checks_rollup ?? "",
     };
   }
   // Browser dev mode — call dev server (uses GitHub REST API directly)
@@ -1908,9 +1911,9 @@ export async function ghCreatePr(
     labels: raw.labels,
     assignees: [],
     reviewRequested: [],
-    reviewDecision: (raw as any).review_decision ?? "",
-    mergeStateStatus: (raw as any).merge_state_status ?? "",
-    checksRollup: (raw as any).checks_rollup ?? "",
+    reviewDecision: raw.review_decision ?? "",
+    mergeStateStatus: raw.merge_state_status ?? "",
+    checksRollup: raw.checks_rollup ?? "",
   };
 }
 
