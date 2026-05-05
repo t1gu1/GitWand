@@ -311,7 +311,7 @@ async function onMergeSuccessDeleteBranch(branch: string, alsoRemote: boolean) {
       // git push <remote> --delete <branch> — same command as for tags
       const remoteInfo = await gitRemoteInfo(cwd);
       if (remoteInfo?.name) {
-        await gitDeleteRemoteTag(cwd, remoteInfo.name, branch).catch(() => {/* best-effort */});
+        await gitDeleteRemoteTag(cwd, remoteInfo.name, branch).catch(() => {/* best-effort */ });
       }
     }
     showMergeSuccess.value = false;
@@ -937,7 +937,6 @@ async function refreshRepoState() {
   if (!repoFolderPath.value) { repoOperationState.value = null; return; }
   try {
     const state = await gitRepoState(repoFolderPath.value);
-    console.log("[rebase] gitRepoState →", JSON.stringify(state), "| cwd:", repoFolderPath.value);
     // Surface both plain and interactive rebase states — git ≥2.26 uses the
     // sequencer backend (creates rebase-merge/interactive) even for plain
     // pull --rebase.  We distinguish from a user-initiated RebaseEditor session
@@ -1431,128 +1430,52 @@ onUnmounted(() => {
 
 <template>
   <div class="app">
-    <AppHeader
-      :has-files="hasFiles"
-      :theme="theme"
-      :branch-display="branchDisplay"
-      :repo-stats="repoStats"
-      :has-repo="hasRepo"
-      :folder-name="folderName"
-      :can-push="canPush"
-      :can-pull="canPull"
-      :needs-publish="needsPublish"
-      :ahead-count="aheadCount"
-      :behind-count="behindCount"
-      :push-remote="pushRemote"
-      :ahead-push-count="aheadPushCount"
-      :is-pushing="isPushing"
-      :is-pulling="isPulling"
-      :is-fetching="isFetching"
-      :cwd="repoFolderPath ?? ''"
-      :branches="branches"
-      :branches-loading="branchesLoading"
-      :is-switching-branch="isSwitchingBranch"
-      :is-merging="isMerging"
-      :tabs="repoTabs"
-      :active-tab-id="activeTabId"
-      @open-folder="handleOpenFolder"
-      @open-repo="handleOpenPath"
-      @switch-tab="switchTab"
-      @close-tab="closeTab"
-      @new-tab="handleOpenFolder"
-      @open-clone="showCloneModal = true"
-      @open-fork="showForkModal = true"
-      @toggle-theme="toggleTheme"
-      @push="handlePush"
-      @pull="() => doPull(pullMode === 'rebase')"
-      @fetch="doFetch"
-      @sync="doSync"
-      @publish="doPublish"
-      @rebase-onto-remote="doRebaseOntoRemote"
-      @merge-remote="doMergeRemote"
-      @merge-branch="doMerge"
-      @open-settings="settingsInitialTab = undefined; showSettings = true"
-      :error-count="errorLog.length"
-      :is-offline="isOffline"
-      @switch-branch="handleSwitchBranch"
-      @create-branch="createBranch"
-      @delete-branch="deleteBranch"
-      @open-rename-modal="showBranchRenameModal = true"
-      @open-delete-modal="showBranchDeleteModal = true"
-      @load-branches="loadBranches"
-      @undo-performed="repoRefresh()"
+    <AppHeader :has-files="hasFiles" :theme="theme" :branch-display="branchDisplay" :repo-stats="repoStats"
+      :has-repo="hasRepo" :folder-name="folderName" :can-push="canPush" :can-pull="canPull"
+      :needs-publish="needsPublish" :ahead-count="aheadCount" :behind-count="behindCount" :push-remote="pushRemote"
+      :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling" :is-fetching="isFetching"
+      :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
+      :is-switching-branch="isSwitchingBranch" :is-merging="isMerging" :tabs="repoTabs" :active-tab-id="activeTabId"
+      @open-folder="handleOpenFolder" @open-repo="handleOpenPath" @switch-tab="switchTab" @close-tab="closeTab"
+      @new-tab="handleOpenFolder" @open-clone="showCloneModal = true" @open-fork="showForkModal = true"
+      @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
+      @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
+      @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
+      :error-count="errorLog.length" :is-offline="isOffline" @switch-branch="handleSwitchBranch"
+      @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
+      @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
-      @open-submodules="showSubmodules = true"
-      @open-search="handleOpenSearch"
-      @open-help="showHelp = true"
-    />
+      @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true" />
 
     <div class="app-body">
       <aside class="sidebar" v-if="hasRepo && showSidebar">
-        <RepoSidebar
-          :cwd="repoFolderPath ?? ''"
-          :files="repoFiles"
-          :selected-file="repoSelectedFile"
-          :view-mode="viewMode"
-          :repo-stats="repoStats"
-          :commit-summary="commitSummary"
-          :commit-description="commitDescription"
-          :can-commit="canCommit"
-          :is-committing="isCommitting"
-          :log-entries="repoLog"
-          :log-loading="repoLoading"
-          :log-scope="logScope"
-          :log-author-filter="logAuthorFilter"
-          :current-branch="repoStatus?.branch ?? ''"
-          :selected-commit-hash="selectedCommitHash"
-          :ahead-count="aheadCount"
-          :needs-publish="needsPublish"
-          :dir-files="expandedDirFiles"
-          :branches="branches"
-          @select="onRepoFileSelect"
-          @change-view="onViewModeChange"
-          @select-dir-file="(path) => repoSelectFile(path, false)"
-          @stage-file="(path) => stageFiles([path])"
-          @unstage-file="(path) => unstageFiles([path])"
-          @stage-all="stageAll"
-          @stage-paths="(paths) => stageFiles(paths)"
-          @unstage-all="unstageAll"
-          :git-user="currentGitUser"
-          @commit="(trailers) => doCommit(trailers)"
-          @update:commit-summary="(val) => commitSummary = val"
-          @update:commit-description="(val) => commitDescription = val"
-          @select-commit="selectCommit"
-          @edit-commit="handleEditCommit"
-          @split-commit="handleSplitCommitRequest"
-          @checkout-commit="handleCheckoutCommit"
-          @reset-to-commit="handleResetToCommit"
-          @revert-commit="handleRevertCommit"
-          @create-branch-from-commit="handleCreateBranchFromCommit"
-          @tag-commit="handleTagCommit"
-          @cherry-pick-commit="handleCherryPickCommit"
-          @view-on-forge="handleViewOnForge"
-          @update:log-scope="setLogScope"
-          @update:log-author-filter="setLogAuthorFilter"
+        <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
+          :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
+          :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
+          :log-entries="repoLog" :log-loading="repoLoading" :log-scope="logScope" :log-author-filter="logAuthorFilter"
+          :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
+          :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
+          @select="onRepoFileSelect" @change-view="onViewModeChange"
+          @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
+          @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
+          @stage-paths="(paths) => stageFiles(paths)" @unstage-all="unstageAll" :git-user="currentGitUser"
+          @commit="(trailers) => doCommit(trailers)" @update:commit-summary="(val) => commitSummary = val"
+          @update:commit-description="(val) => commitDescription = val" @select-commit="selectCommit"
+          @edit-commit="handleEditCommit" @split-commit="handleSplitCommitRequest"
+          @checkout-commit="handleCheckoutCommit" @reset-to-commit="handleResetToCommit"
+          @revert-commit="handleRevertCommit" @create-branch-from-commit="handleCreateBranchFromCommit"
+          @tag-commit="handleTagCommit" @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge"
+          @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
-          @add-to-gitignore="(path) => addToGitignore(path)"
-          @refresh="repoRefresh()"
-          @open-stash="showStash = true"
-          @open-tags="showTags = true"
-          @open-workspace="showWorkspace = true"
-      @open-agents="showAgents = true"
-        />
+          @add-to-gitignore="(path) => addToGitignore(path)" @refresh="repoRefresh()" @open-stash="showStash = true"
+          @open-tags="showTags = true" @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
       </aside>
 
       <main class="main">
         <!-- No repo loaded → EmptyState full screen -->
-        <EmptyState
-          v-if="!hasRepo && !repoLoading"
-          @open-folder="handleOpenFolder"
-          @open-path="handleOpenPath"
-          @open-clone="showCloneModal = true"
-          @open-fork="showForkModal = true"
-        />
+        <EmptyState v-if="!hasRepo && !repoLoading" @open-folder="handleOpenFolder" @open-path="handleOpenPath"
+          @open-clone="showCloneModal = true" @open-fork="showForkModal = true" />
 
         <template v-else>
           <div v-if="repoLoading" class="loading-overlay">
@@ -1561,75 +1484,60 @@ onUnmounted(() => {
           </div>
 
           <template v-else>
-          <Transition name="error-toast">
-            <div v-if="repoError" class="error-toast" role="alert">
-              <svg class="error-toast-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
-                <path d="M7 4v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                <circle cx="7" cy="9.5" r="0.75" fill="currentColor"/>
-              </svg>
-              <span class="error-toast-text">{{ repoError }}</span>
-              <button class="error-toast-logs" @click="settingsInitialTab = 'logs'; showSettings = true" :title="t('error.viewLogs')">
-                {{ t('error.viewLogs') }}
-              </button>
-              <button class="error-toast-close" @click="repoError = null" :aria-label="t('common.close')">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
-                  <path d="M2.646 2.646a.5.5 0 01.708 0L6 5.293l2.646-2.647a.5.5 0 01.708.708L6.707 6l2.647 2.646a.5.5 0 01-.708.708L6 6.707 3.354 9.354a.5.5 0 01-.708-.708L5.293 6 2.646 3.354a.5.5 0 010-.708z"/>
+            <Transition name="error-toast">
+              <div v-if="repoError" class="error-toast" role="alert">
+                <svg class="error-toast-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4" />
+                  <path d="M7 4v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+                  <circle cx="7" cy="9.5" r="0.75" fill="currentColor" />
                 </svg>
+                <span class="error-toast-text">{{ repoError }}</span>
+                <button class="error-toast-logs" @click="settingsInitialTab = 'logs'; showSettings = true"
+                  :title="t('error.viewLogs')">
+                  {{ t('error.viewLogs') }}
+                </button>
+                <button class="error-toast-close" @click="repoError = null" :aria-label="t('common.close')">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+                    <path
+                      d="M2.646 2.646a.5.5 0 01.708 0L6 5.293l2.646-2.647a.5.5 0 01.708.708L6.707 6l2.647 2.646a.5.5 0 01-.708.708L6 6.707 3.354 9.354a.5.5 0 01-.708-.708L5.293 6 2.646 3.354a.5.5 0 010-.708z" />
+                  </svg>
+                </button>
+              </div>
+            </Transition>
+
+            <!-- Conflict banner (merge or cherry-pick) -->
+            <div v-if="hasConflicts" class="conflict-banner" role="alert">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                <path d="M9 1.5L16.5 15H1.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+                <path d="M9 7v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                <circle cx="9" cy="12.5" r="0.75" fill="currentColor" />
+              </svg>
+              <span class="conflict-text">
+                {{ repoStats.conflicted }} {{ repoStats.conflicted > 1 ? t('header.conflicts') : t('header.conflict') }}
+                — {{ t('header.resolveConflicts') }}
+              </span>
+              <button v-if="isCherryPicking" class="conflict-abort-btn" @click="doCherryPickAbort">
+                {{ t('header.abortCherryPick') }}
+              </button>
+              <button v-else class="conflict-abort-btn" @click="doAbortMerge">
+                {{ t('header.abortMerge') }}
               </button>
             </div>
-          </Transition>
 
-          <!-- Conflict banner (merge or cherry-pick) -->
-          <div v-if="hasConflicts" class="conflict-banner" role="alert">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path d="M9 1.5L16.5 15H1.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-              <path d="M9 7v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <circle cx="9" cy="12.5" r="0.75" fill="currentColor"/>
-            </svg>
-            <span class="conflict-text">
-              {{ repoStats.conflicted }} {{ repoStats.conflicted > 1 ? t('header.conflicts') : t('header.conflict') }}
-              — {{ t('header.resolveConflicts') }}
-            </span>
-            <button v-if="isCherryPicking" class="conflict-abort-btn" @click="doCherryPickAbort">
-              {{ t('header.abortCherryPick') }}
-            </button>
-            <button v-else class="conflict-abort-btn" @click="doAbortMerge">
-              {{ t('header.abortMerge') }}
-            </button>
-          </div>
+            <!-- Dashboard view (default when opening a repo) -->
+            <DashboardView v-if="viewMode === 'dashboard'" :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
+              :status="repoStats" :ahead="aheadCount" :behind="behindCount" :needs-publish="needsPublish"
+              @change-view="onViewModeChange" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
 
-          <!-- Dashboard view (default when opening a repo) -->
-          <DashboardView
-            v-if="viewMode === 'dashboard'"
-            :cwd="repoFolderPath ?? ''"
-            :branch="branchDisplay"
-            :status="repoStats"
-            :ahead="aheadCount"
-            :behind="behindCount"
-            :needs-publish="needsPublish"
-            @change-view="onViewModeChange"
-            @push="handlePush"
-            @sync="() => doPull(pullMode === 'rebase')"
-          />
-
-          <!-- Changes view: conflict editor, file history, or diff viewer -->
-          <template v-else-if="viewMode === 'changes'">
-            <MergeEditor
-              v-if="showingMergeEditor && mergeSelectedFile"
-              :file="mergeSelectedFile"
-              @resolve="handleResolveFile"
-              @resolve-hunk="(path, idx, choice) => handleResolveHunk(path, idx, choice)"
-              @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)"
-            />
-            <FileHistoryViewer
-              v-else-if="fileHistoryPath && repoFolderPath"
-              :file-path="fileHistoryPath"
-              :cwd="repoFolderPath"
-              @close="closeFileHistory"
-              @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }"
-            />
-            <!--
+            <!-- Changes view: conflict editor, file history, or diff viewer -->
+            <template v-else-if="viewMode === 'changes'">
+              <MergeEditor v-if="showingMergeEditor && mergeSelectedFile" :file="mergeSelectedFile"
+                @resolve="handleResolveFile" @resolve-hunk="(path, idx, choice) => handleResolveHunk(path, idx, choice)"
+                @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)" />
+              <FileHistoryViewer v-else-if="fileHistoryPath && repoFolderPath" :file-path="fileHistoryPath"
+                :cwd="repoFolderPath" @close="closeFileHistory"
+                @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }" />
+              <!--
               Image files (PNG, JPEG, WebP, GIF, SVG) get the ImageDiffViewer
               branch; the line-based DiffViewer would hit its "binary file"
               dead-end and show nothing useful.
@@ -1637,121 +1545,61 @@ onUnmounted(() => {
               - newRev is ":0" (the staged index version) when viewing staged
                 changes, otherwise "" (the working tree on disk).
             -->
-            <ImageDiffViewer
-              v-else-if="isImagePath(repoSelectedFile) && repoFolderPath && repoSelectedFile"
-              :cwd="repoFolderPath"
-              :file-path="repoSelectedFile"
-              old-rev="HEAD"
-              :new-rev="repoSelectedFileStaged ? ':0' : ''"
-              status="modified"
-            />
-            <DiffViewer
-              v-else
-              :diff="repoDiff"
-              :file-path="repoSelectedFile"
-              :diff-mode="diffMode"
-              :selectable="true"
-              @update:diff-mode="onDiffModeChange"
-              @open-file-history="openFileHistory"
-              @open-in-editor="handleOpenInEditor"
-              @stage-patch="stagePatch"
-              @select-dir-file="(path) => repoSelectFile(path, false)"
-            />
-          </template>
+              <ImageDiffViewer v-else-if="isImagePath(repoSelectedFile) && repoFolderPath && repoSelectedFile"
+                :cwd="repoFolderPath" :file-path="repoSelectedFile" old-rev="HEAD"
+                :new-rev="repoSelectedFileStaged ? ':0' : ''" status="modified" />
+              <DiffViewer v-else :diff="repoDiff" :file-path="repoSelectedFile" :diff-mode="diffMode" :selectable="true"
+                @update:diff-mode="onDiffModeChange" @open-file-history="openFileHistory"
+                @open-in-editor="handleOpenInEditor" @stage-patch="stagePatch"
+                @select-dir-file="(path) => repoSelectFile(path, false)" />
+            </template>
 
-          <!-- History view: commit diff (log is in sidebar) -->
-          <CommitDiffViewer
-            v-else-if="viewMode === 'history'"
-            :diffs="commitDiffs"
-            :commit-hash="selectedCommitHash"
-            :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null"
-            :diff-mode="diffMode"
-            @update:diff-mode="onDiffModeChange"
-          />
+            <!-- History view: commit diff (log is in sidebar) -->
+            <CommitDiffViewer v-else-if="viewMode === 'history'" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
+              :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
+              @update:diff-mode="onDiffModeChange" />
 
-          <!-- Graph view: DAG visualization -->
-          <CommitGraph
-            v-else-if="viewMode === 'graph'"
-            :commits="repoLog"
-            :selected-hash="selectedCommitHash"
-            :current-branch="branchDisplay"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-          />
+            <!-- Graph view: DAG visualization -->
+            <CommitGraph v-else-if="viewMode === 'graph'" :commits="repoLog" :selected-hash="selectedCommitHash"
+              :current-branch="branchDisplay"
+              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
 
-          <!-- PRs view: creation form takes over when showCreateForm is true -->
-          <PrCreateView
-            v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
-            :current-branch="repoStatus?.branch ?? ''"
-            :branches="branches"
-            :cwd="repoFolderPath ?? ''"
-          />
+            <!-- PRs view: creation form takes over when showCreateForm is true -->
+            <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
+              :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
 
-          <!-- PRs view: detail panel fills the main area -->
-          <PrDetailView
-            v-else-if="viewMode === 'prs'"
-            @refresh="repoRefresh"
-            @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-          />
+            <!-- PRs view: detail panel fills the main area -->
+            <PrDetailView v-else-if="viewMode === 'prs'" @refresh="repoRefresh"
+              @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
           </template>
         </template>
       </main>
     </div>
 
     <!-- In-app update modal -->
-    <UpdateModal
-      v-if="pendingUpdate"
-      ref="updateModalRef"
-      :update="pendingUpdate"
-      @close="pendingUpdate = null"
-      @install="onInstallUpdate"
-    />
+    <UpdateModal v-if="pendingUpdate" ref="updateModalRef" :update="pendingUpdate" @close="pendingUpdate = null"
+      @install="onInstallUpdate" />
 
     <!-- Folder picker modal (browser mode) -->
-    <FolderPicker
-      v-if="showFolderPicker"
-      @select="onFolderSelected"
-      @cancel="onFolderPickerCancel"
-    />
+    <FolderPicker v-if="showFolderPicker" @select="onFolderSelected" @cancel="onFolderPickerCancel" />
 
     <!-- Edit commit overlay -->
-    <EditCommitOverlay
-      :entry="editingCommit"
-      @confirm="handleAmendConfirm"
-      @cancel="editingCommit = null"
-    />
+    <EditCommitOverlay :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
 
     <!-- Plain rebase-in-progress modal (pull --rebase paused on conflicts) -->
-    <RebaseProgressModal
-      v-if="showRebaseBanner && repoOperationState"
-      :repo-state="repoOperationState"
-      :cwd="repoFolderPath ?? ''"
-      @action-done="onRebaseBannerActionDone"
-      @error="(msg) => { repoError = msg; }"
-    />
+    <RebaseProgressModal v-if="showRebaseBanner && repoOperationState" :repo-state="repoOperationState"
+      :cwd="repoFolderPath ?? ''" @action-done="onRebaseBannerActionDone" @error="(msg) => { repoError = msg; }" />
 
     <!-- Merge success modal -->
-    <MergeSuccessModal
-      v-if="showMergeSuccess"
-      :merged-branch="lastMergedBranch ?? undefined"
-      @close="onMergeSuccessClose"
-      @push="onMergeSuccessPush"
-      @delete-branch="onMergeSuccessDeleteBranch"
-    />
+    <MergeSuccessModal v-if="showMergeSuccess" :merged-branch="lastMergedBranch ?? undefined"
+      @close="onMergeSuccessClose" @push="onMergeSuccessPush" @delete-branch="onMergeSuccessDeleteBranch" />
 
     <!-- Split commit modal (driven by the useSplitCommit composable's
          module-level state — mounting once here is sufficient) -->
-    <SplitCommitModal
-      @split-completed="handleSplitCompleted"
-      @close="handleSplitClose"
-    />
+    <SplitCommitModal @split-completed="handleSplitCompleted" @close="handleSplitClose" />
 
     <!-- Success toast -->
-    <div
-      v-if="successToast"
-      class="toast"
-      :class="{ 'toast--leaving': successToastLeaving }"
-      role="status"
-    >
+    <div v-if="successToast" class="toast" :class="{ 'toast--leaving': successToastLeaving }" role="status">
       <div class="toast-body">
         <div class="toast-title">{{ successToast }}</div>
         <div class="toast-detail" v-if="successToastDetail">{{ successToastDetail }}</div>
@@ -1760,103 +1608,59 @@ onUnmounted(() => {
     </div>
 
     <!-- Interactive rebase panel -->
-    <RebaseEditor
-      v-if="showRebase && repoFolderPath"
-      :cwd="repoFolderPath"
-      :current-branch="branchDisplay"
-      :branches="branches"
-      @close="showRebase = false"
-      @done="handleRebaseDone"
-    />
+    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="branchDisplay"
+      :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
-    <StashManager
-      v-if="showStash && repoFolderPath"
-      :cwd="repoFolderPath"
-      @close="showStash = false"
-      @refresh="repoRefresh()"
-    />
+    <StashManager v-if="showStash && repoFolderPath" :cwd="repoFolderPath" @close="showStash = false"
+      @refresh="repoRefresh()" />
 
     <!-- Integrated git terminal (v2.0) — reuses the stash-overlay shell
          so it lives in the same overlay layer as worktrees / submodules. -->
-    <div v-if="showTerminal && repoFolderPath" class="stash-overlay overlay-backdrop" @click.self="showTerminal = false">
+    <div v-if="showTerminal && repoFolderPath" class="stash-overlay overlay-backdrop"
+      @click.self="showTerminal = false">
       <div class="stash-overlay-body">
-        <GitTerminal
-          :cwd="repoFolderPath"
-          @close="showTerminal = false"
-          @refresh="repoRefresh()"
-        />
+        <GitTerminal :cwd="repoFolderPath" @close="showTerminal = false" @refresh="repoRefresh()" />
       </div>
     </div>
 
     <!-- Clone modal (v2.0) -->
-    <CloneModal
-      v-if="showCloneModal"
-      @close="showCloneModal = false"
-      @cloned="onCloned"
-    />
+    <CloneModal v-if="showCloneModal" @close="showCloneModal = false" @cloned="onCloned" />
 
     <!-- Fork modal (v2.0) -->
-    <ForkModal
-      v-if="showForkModal"
-      @close="showForkModal = false"
-      @forked="onForked"
-    />
+    <ForkModal v-if="showForkModal" @close="showForkModal = false" @forked="onForked" />
 
     <!-- Workspace panel -->
-    <WorkspacePanel
-      v-if="showWorkspace"
-      @close="showWorkspace = false"
-      @open-tab="(path) => { openTab(path); showWorkspace = false; }"
-    />
+    <WorkspacePanel v-if="showWorkspace" @close="showWorkspace = false"
+      @open-tab="(path) => { openTab(path); showWorkspace = false; }" />
 
     <!-- Agent Sessions panel -->
-    <AgentSessionsPanel
-      v-if="showAgents && repoFolderPath"
-      :cwd="repoFolderPath"
-      @close="showAgents = false"
-      @open-tab="(path) => { openTab(path); showAgents = false; }"
-    />
+    <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"
+      @open-tab="(path) => { openTab(path); showAgents = false; }" />
 
     <!-- Tags panel -->
-    <TagsPanel
-      v-if="showTags && repoFolderPath"
-      :cwd="repoFolderPath"
-      @close="showTags = false"
-      @create-tag="showTags = false; commitActionModal.type = 'tag'; commitActionModal.entry = repoLog[0] ?? null;"
-    />
+    <TagsPanel v-if="showTags && repoFolderPath" :cwd="repoFolderPath" @close="showTags = false"
+      @create-tag="showTags = false; commitActionModal.type = 'tag'; commitActionModal.entry = repoLog[0] ?? null;" />
 
     <!-- Worktree manager (uses BaseModal internally → own Teleport + backdrop) -->
-    <WorktreeManager
-      v-if="showWorktrees && repoFolderPath"
-      :cwd="repoFolderPath"
-      :branches="branches"
-      :suggested-branch="pendingWorktreeBranch"
-      :open-quick-create="pendingQuickCreate"
+    <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
+      :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
       @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
-      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }"
-    />
+      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
-    <SubmodulePanel
-      v-if="showSubmodules && repoFolderPath"
-      :cwd="repoFolderPath"
-      @close="showSubmodules = false"
-      @open-tab="(path) => { openTab(path); showSubmodules = false; }"
-    />
+    <SubmodulePanel v-if="showSubmodules && repoFolderPath" :cwd="repoFolderPath" @close="showSubmodules = false"
+      @open-tab="(path) => { openTab(path); showSubmodules = false; }" />
 
     <!-- Push + unpushed tags confirmation modal -->
-    <BaseModal
-      v-if="pushTagsConfirm"
-      :title="t('push.tagsConfirm.title')"
-      size="sm"
-      role="alertdialog"
-      @close="pushTagsConfirm = false"
-    >
+    <BaseModal v-if="pushTagsConfirm" :title="t('push.tagsConfirm.title')" size="sm" role="alertdialog"
+      @close="pushTagsConfirm = false">
       <template #title-icon>
         <div class="ptc-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path
+              d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
           </svg>
         </div>
       </template>
@@ -1864,8 +1668,10 @@ onUnmounted(() => {
       <p class="ptc-desc">{{ t('push.tagsConfirm.desc', pendingUnpushedTags.length) }}</p>
       <ul class="ptc-tag-list">
         <li v-for="tag in pendingUnpushedTags.slice(0, 8)" :key="tag" class="ptc-tag">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 2h6l6 6-6 6-6-6V2z"/><circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none"/>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M2 2h6l6 6-6 6-6-6V2z" />
+            <circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none" />
           </svg>
           {{ tag }}
         </li>
@@ -1876,8 +1682,10 @@ onUnmounted(() => {
 
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="pushTagsConfirm = false">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--ghost" @click="confirmPushWithoutTags">{{ t('push.tagsConfirm.withoutTags') }}</button>
-        <button class="bm-btn bm-btn--primary" @click="confirmPushWithTags">{{ t('push.tagsConfirm.withTags') }}</button>
+        <button class="bm-btn bm-btn--ghost" @click="confirmPushWithoutTags">{{ t('push.tagsConfirm.withoutTags')
+          }}</button>
+        <button class="bm-btn bm-btn--primary" @click="confirmPushWithTags">{{ t('push.tagsConfirm.withTags')
+          }}</button>
       </template>
     </BaseModal>
 
@@ -1891,22 +1699,11 @@ onUnmounted(() => {
           {{ t('branches.switchStashHint', pendingSwitchBranch) }}
         </p>
         <div class="switch-stash-row">
-          <input
-            v-model="switchStashMessage"
-            type="text"
-            class="switch-stash-input"
-            :placeholder="t('branches.switchStashPlaceholder')"
-            maxlength="120"
-            @keydown.enter.prevent="confirmSwitchStash"
-            @keydown.esc.prevent="cancelSwitchStash"
-          />
-          <button
-            v-if="aiProvider.isAvailable.value"
-            type="button"
-            class="switch-stash-ai-btn"
-            :disabled="isGeneratingSwitchStashMessage"
-            @click="suggestSwitchStashMessage"
-          >
+          <input v-model="switchStashMessage" type="text" class="switch-stash-input"
+            :placeholder="t('branches.switchStashPlaceholder')" maxlength="120"
+            @keydown.enter.prevent="confirmSwitchStash" @keydown.esc.prevent="cancelSwitchStash" />
+          <button v-if="aiProvider.isAvailable.value" type="button" class="switch-stash-ai-btn"
+            :disabled="isGeneratingSwitchStashMessage" @click="suggestSwitchStashMessage">
             <span v-if="isGeneratingSwitchStashMessage">…</span>
             <span v-else class="switch-stash-ai-label">
               <AiSparkle :size="13" />
@@ -1927,68 +1724,36 @@ onUnmounted(() => {
     </div>
 
     <!-- Help panel -->
-    <HelpView
-      v-if="showHelp"
-      @close="showHelp = false"
-    />
+    <HelpView v-if="showHelp" @close="showHelp = false" />
 
     <!-- Settings panel -->
-    <SettingsPanel
-      v-if="showSettings"
-      :error-log="errorLog"
-      :initial-tab="settingsInitialTab"
-      :cwd="repoFolderPath ?? undefined"
-      @close="onSettingsClose"
-      @update:commit-signature="onCommitSignatureChange"
-      @update:diff-mode="onDiffModeChange"
-      @update:pull-mode="onPullModeChange"
-      @update:font-size="onFontSizeChange"
-      @update:tab-size="onTabSizeChange"
-      @clear-logs="clearErrorLog"
-    />
+    <SettingsPanel v-if="showSettings" :error-log="errorLog" :initial-tab="settingsInitialTab"
+      :cwd="repoFolderPath ?? undefined" @close="onSettingsClose" @update:commit-signature="onCommitSignatureChange"
+      @update:diff-mode="onDiffModeChange" @update:pull-mode="onPullModeChange" @update:font-size="onFontSizeChange"
+      @update:tab-size="onTabSizeChange" @clear-logs="clearErrorLog" />
 
     <!-- Command palette (Cmd/Ctrl+K) — teleports to body, so position
          in the template tree is cosmetic. Mounted conditionally so the
          input gets fresh autofocus each time it opens. -->
-    <SearchPalette
-      v-if="showSearchPalette"
-      :branches="branches"
-      :commits="repoLog"
-      :actions="paletteActions"
-      @close="showSearchPalette = false"
-      @switch-branch="onPaletteSwitchBranch"
-      @select-commit="onPaletteSelectCommit"
-      @run-action="onPaletteAction"
-    />
+    <SearchPalette v-if="showSearchPalette" :branches="branches" :commits="repoLog" :actions="paletteActions"
+      @close="showSearchPalette = false" @switch-branch="onPaletteSwitchBranch" @select-commit="onPaletteSelectCommit"
+      @run-action="onPaletteAction" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
          Both teleport to body and guard against `branchDisplay` going
          null between open + confirm (the :current-branch / :branch-name
          binding is non-null because we only mount when showing). -->
-    <BranchRenameModal
-      v-if="showBranchRenameModal && branchDisplay"
-      :current-branch="branchDisplay"
-      @close="showBranchRenameModal = false"
-      @confirm="onBranchRenameConfirm"
-    />
-    <BranchDeleteModal
-      v-if="showBranchDeleteModal && branchDisplay"
-      :branch-name="branchDisplay"
-      @close="showBranchDeleteModal = false"
-      @confirm="onBranchDeleteConfirm"
-    />
+    <BranchRenameModal v-if="showBranchRenameModal && branchDisplay" :current-branch="branchDisplay"
+      @close="showBranchRenameModal = false" @confirm="onBranchRenameConfirm" />
+    <BranchDeleteModal v-if="showBranchDeleteModal && branchDisplay" :branch-name="branchDisplay"
+      @close="showBranchDeleteModal = false" @confirm="onBranchDeleteConfirm" />
 
     <!-- ── Commit context-menu modals (v1.9) — using BaseModal for design consistency ── -->
 
     <!-- Checkout commit -->
-    <BaseModal
-      v-if="commitActionModal.type === 'checkout'"
-      :title="t('commitCtx.checkout')"
-      :subtitle="t('commitCtx.checkoutDesc', commitActionModal.entry?.hash ?? '')"
-      size="sm"
-      role="alertdialog"
-      @close="closeCommitActionModal"
-    >
+    <BaseModal v-if="commitActionModal.type === 'checkout'" :title="t('commitCtx.checkout')"
+      :subtitle="t('commitCtx.checkoutDesc', commitActionModal.entry?.hash ?? '')" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
       <p class="cam-warn">{{ t('commitCtx.checkoutWarn') }}</p>
       <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
       <template #footer>
@@ -2000,107 +1765,75 @@ onUnmounted(() => {
     </BaseModal>
 
     <!-- Reset to commit -->
-    <BaseModal
-      v-if="commitActionModal.type === 'reset'"
-      :title="t('commitCtx.reset')"
-      :subtitle="t('commitCtx.resetDesc', commitActionModal.entry?.hash ?? '')"
-      size="sm"
-      role="alertdialog"
-      @close="closeCommitActionModal"
-    >
+    <BaseModal v-if="commitActionModal.type === 'reset'" :title="t('commitCtx.reset')"
+      :subtitle="t('commitCtx.resetDesc', commitActionModal.entry?.hash ?? '')" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
       <div class="cam-radio-group">
-        <label v-for="mode in (['soft','mixed','hard'] as const)" :key="mode" class="cam-radio">
+        <label v-for="mode in (['soft', 'mixed', 'hard'] as const)" :key="mode" class="cam-radio">
           <input type="radio" name="resetMode" :value="mode" v-model="commitActionModal.resetMode" />
           <span class="cam-radio-label">
             <strong>--{{ mode }}</strong>
-            <span class="cam-radio-hint">{{ t((`commitCtx.reset${mode.charAt(0).toUpperCase() + mode.slice(1)}Hint`) as any) }}</span>
+            <span class="cam-radio-hint">{{ t((`commitCtx.reset${mode.charAt(0).toUpperCase() + mode.slice(1)}Hint`) as
+              any)
+              }}</span>
           </span>
         </label>
       </div>
-      <p v-if="commitActionModal.resetMode === 'hard'" class="cam-warn" style="margin-top: var(--space-3)">{{ t('commitCtx.resetHardWarn') }}</p>
+      <p v-if="commitActionModal.resetMode === 'hard'" class="cam-warn" style="margin-top: var(--space-3)">{{
+        t('commitCtx.resetHardWarn') }}</p>
       <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
-        <button
-          class="bm-btn"
-          :class="commitActionModal.resetMode === 'hard' ? 'bm-btn--danger' : 'bm-btn--primary'"
-          :disabled="commitActionModal.busy"
-          @click="confirmResetToCommit"
-        >
+        <button class="bm-btn" :class="commitActionModal.resetMode === 'hard' ? 'bm-btn--danger' : 'bm-btn--primary'"
+          :disabled="commitActionModal.busy" @click="confirmResetToCommit">
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.resetConfirm') }}
         </button>
       </template>
     </BaseModal>
 
     <!-- Create branch from commit -->
-    <BaseModal
-      v-if="commitActionModal.type === 'createBranch'"
-      :title="t('commitCtx.createBranch')"
-      :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')"
-      size="sm"
-      @close="closeCommitActionModal"
-    >
-      <input
-        v-model="commitActionModal.branchName"
-        type="text"
-        class="cam-input"
-        :placeholder="t('commitCtx.branchNamePlaceholder')"
-        maxlength="100"
-        autofocus
-        @keydown.enter.prevent="confirmCreateBranchFromCommit"
-      />
+    <BaseModal v-if="commitActionModal.type === 'createBranch'" :title="t('commitCtx.createBranch')"
+      :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')" size="sm"
+      @close="closeCommitActionModal">
+      <input v-model="commitActionModal.branchName" type="text" class="cam-input"
+        :placeholder="t('commitCtx.branchNamePlaceholder')" maxlength="100" autofocus
+        @keydown.enter.prevent="confirmCreateBranchFromCommit" />
       <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy || !commitActionModal.branchName.trim()" @click="confirmCreateBranchFromCommit">
+        <button class="bm-btn bm-btn--primary"
+          :disabled="commitActionModal.busy || !commitActionModal.branchName.trim()"
+          @click="confirmCreateBranchFromCommit">
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.createBranchConfirm') }}
         </button>
       </template>
     </BaseModal>
 
     <!-- Tag this commit -->
-    <BaseModal
-      v-if="commitActionModal.type === 'tag'"
-      :title="t('commitCtx.tag')"
-      :subtitle="t('commitCtx.tagDesc', commitActionModal.entry?.hash ?? '')"
-      size="sm"
-      @close="closeCommitActionModal"
-    >
+    <BaseModal v-if="commitActionModal.type === 'tag'" :title="t('commitCtx.tag')"
+      :subtitle="t('commitCtx.tagDesc', commitActionModal.entry?.hash ?? '')" size="sm" @close="closeCommitActionModal">
       <div style="display: flex; flex-direction: column; gap: var(--space-3);">
         <!-- AI suggestion strip -->
         <div v-if="isAIAvailable" class="tag-ai-row">
           <span class="tag-ai-hint">{{ t('commitCtx.tagAiHint') }}</span>
-          <button
-            class="bm-btn btn--ai tag-ai-btn"
-            :disabled="commitActionModal.busy || isTagAISuggesting"
-            @click="suggestTagWithAI"
-          >
+          <button class="bm-btn btn--ai tag-ai-btn" :disabled="commitActionModal.busy || isTagAISuggesting"
+            @click="suggestTagWithAI">
             <AiSparkle :size="13" :animated="isTagAISuggesting" />
             {{ isTagAISuggesting ? t('common.loading') : t('commitCtx.tagAiSuggest') }}
           </button>
         </div>
-        <input
-          v-model="commitActionModal.tagName"
-          type="text"
-          class="cam-input"
-          :placeholder="t('commitCtx.tagNamePlaceholder')"
-          maxlength="100"
-          autofocus
-        />
-        <input
-          v-model="commitActionModal.tagMessage"
-          type="text"
-          class="cam-input"
-          :placeholder="t('commitCtx.tagMessagePlaceholder')"
-          maxlength="200"
-          @keydown.enter.prevent="confirmTagCommit"
-        />
+        <input v-model="commitActionModal.tagName" type="text" class="cam-input"
+          :placeholder="t('commitCtx.tagNamePlaceholder')" maxlength="100" autofocus />
+        <input v-model="commitActionModal.tagMessage" type="text" class="cam-input"
+          :placeholder="t('commitCtx.tagMessagePlaceholder')" maxlength="200"
+          @keydown.enter.prevent="confirmTagCommit" />
         <p class="cam-hint">{{ t('commitCtx.tagAnnotatedHint') }}</p>
         <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
       </div>
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy || !commitActionModal.tagName.trim()" @click="confirmTagCommit">
+        <button class="bm-btn bm-btn--primary" :disabled="commitActionModal.busy || !commitActionModal.tagName.trim()"
+          @click="confirmTagCommit">
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.tagConfirm') }}
         </button>
       </template>
@@ -2159,7 +1892,9 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .loading-text {
@@ -2172,7 +1907,7 @@ onUnmounted(() => {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-5);
-  background: var(--color-danger-bg, rgba(243,139,168,.12));
+  background: var(--color-danger-bg, rgba(243, 139, 168, .12));
   border-bottom: 1px solid var(--color-danger, #f38ba8);
   color: var(--color-danger, #f38ba8);
   font-size: var(--font-size-sm);
@@ -2201,7 +1936,10 @@ onUnmounted(() => {
   padding: 0;
   opacity: 0.8;
 }
-.error-toast-logs:hover { opacity: 1; }
+
+.error-toast-logs:hover {
+  opacity: 1;
+}
 
 .error-toast-close {
   flex-shrink: 0;
@@ -2218,7 +1956,10 @@ onUnmounted(() => {
   cursor: pointer;
   transition: opacity var(--transition-fast);
 }
-.error-toast-close:hover { opacity: 1; }
+
+.error-toast-close:hover {
+  opacity: 1;
+}
 
 /* slide-down enter/leave for Transition */
 .error-toast-enter-active,
@@ -2227,6 +1968,7 @@ onUnmounted(() => {
   max-height: 60px;
   overflow: hidden;
 }
+
 .error-toast-enter-from,
 .error-toast-leave-to {
   max-height: 0;
@@ -2325,13 +2067,27 @@ onUnmounted(() => {
 }
 
 @keyframes toastSlideIn {
-  from { opacity: 0; transform: translateY(12px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes toastSlideOut {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to   { opacity: 0; transform: translateY(8px) scale(0.96); }
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
 }
 
 /* ─── Stash overlay (Phase 1.3.3) ────────────────────────── */
@@ -2418,7 +2174,7 @@ onUnmounted(() => {
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0,0,0,0.35));
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.35));
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
@@ -2481,6 +2237,7 @@ onUnmounted(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .switch-stash-ai-label {
   display: inline-flex;
   align-items: center;
@@ -2615,5 +2372,4 @@ onUnmounted(() => {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
-
 </style>

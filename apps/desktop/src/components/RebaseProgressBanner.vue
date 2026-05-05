@@ -53,22 +53,17 @@ async function runAction(action: "continue" | "abort" | "skip") {
 </script>
 
 <template>
-  <BaseModal
-    size="sm"
-    hide-header
-    :aria-label="t('rebase.bannerTitle')"
-    @close="runAction('abort')"
-  >
+  <BaseModal size="sm" hide-header :aria-label="t('rebase.bannerTitle')" @close="runAction('abort')">
     <div class="rpm-body">
       <!-- Icon -->
       <div class="rpm-icon" :class="{ 'rpm-icon--conflict': repoState.hasConflict }">
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
           <circle cx="24" cy="24" r="24" />
           <!-- rebase arrows -->
-          <path d="M17 12v6a4 4 0 0 0 4 4h6m0 0-3-3m3 3-3 3" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M31 36v-6a4 4 0 0 0-4-4h-6m0 0 3 3m-3-3 3-3" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M17 12v6a4 4 0 0 0 4 4h6m0 0-3-3m3 3-3 3" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round" />
+          <path d="M31 36v-6a4 4 0 0 0-4-4h-6m0 0 3 3m-3-3 3-3" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round" />
         </svg>
       </div>
 
@@ -92,30 +87,19 @@ async function runAction(action: "continue" | "abort" | "skip") {
 
     <template #footer>
       <!-- Abort (left-aligned ghost-danger) -->
-      <button
-        class="bm-btn bm-btn--ghost bm-btn--danger rpm-btn-abort"
-        :disabled="busy"
-        @click="runAction('abort')"
-      >
+      <button class="bm-btn bm-btn--ghost bm-btn--danger rpm-btn-abort" :disabled="busy" @click="runAction('abort')">
         {{ t('rebase.abort') }}
       </button>
 
       <!-- Skip -->
-      <button
-        class="bm-btn bm-btn--ghost"
-        :disabled="busy"
-        @click="runAction('skip')"
-      >
+      <button class="bm-btn bm-btn--ghost" :disabled="busy" @click="runAction('skip')">
         {{ t('rebase.skip') }}
       </button>
 
       <!-- Continue (primary, disabled while conflicts remain) -->
-      <button
-        class="bm-btn bm-btn--primary"
-        :disabled="busy || repoState.hasConflict"
+      <button class="bm-btn bm-btn--primary" :disabled="busy || repoState.hasConflict"
         :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
-        @click="runAction('continue')"
-      >
+        @click="runAction('continue')">
         <span v-if="busy" class="rpm-spinner" aria-hidden="true" />
         {{ t('rebase.continue') }}
       </button>
@@ -136,15 +120,17 @@ async function runAction(action: "continue" | "abort" | "skip") {
 
 /* ── Icon ────────────────────────────────────────────────────────────── */
 .rpm-icon svg circle {
-  fill: var(--color-warning-soft, rgba(249, 226, 175, 0.15));
+  fill: var(--color-success-soft);
 }
+
 .rpm-icon svg path {
-  stroke: var(--gw-yellow, #f9e2af);
+  stroke: var(--color-success);
 }
 
 .rpm-icon--conflict svg circle {
   fill: rgba(243, 139, 168, 0.12);
 }
+
 .rpm-icon--conflict svg path {
   stroke: var(--gw-red, #f38ba8);
 }
@@ -200,7 +186,8 @@ async function runAction(action: "continue" | "abort" | "skip") {
 
 /* ── Footer overrides ────────────────────────────────────────────────── */
 .rpm-btn-abort {
-  margin-right: auto;   /* push skip + continue to the right */
+  margin-right: auto;
+  /* push skip + continue to the right */
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────── */
@@ -215,6 +202,8 @@ async function runAction(action: "continue" | "abort" | "skip") {
 }
 
 @keyframes rpm-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
