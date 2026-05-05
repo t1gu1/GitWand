@@ -5862,3 +5862,113 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running GitWand");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_empty_pr_list() {
+        let result = parse_gh_pr_json("[]").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_empty_string() {
+        let result = parse_gh_pr_json("").unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_single_basic_pr() {
+        let json = r#"[{
+          "number": 42,
+          "title": "Add feature",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "headRefName": "feature/foo",
+          "baseRefName": "main",
+          "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-02T00:00:00Z",
+          "url": "https://github.com/org/repo/pull/42",
+          "additions": 10,
+          "deletions": 3,
+          "labels": [{"name": "bug"}],
+          "assignees": [{"login": "bob"}],
+          "reviewRequests": [{"requestedReviewer": {"login": "carol"}}],
+          "reviewDecision": "REVIEW_REQUIRED",
+          "mergeStateStatus": "BLOCKED",
+          "statusCheckRollup": [{"conclusion": "SUCCESS"}]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1);
+        let pr = &prs[0];
+        assert_eq!(pr.number, 42);
+        assert_eq!(pr.title, "Add feature");
+        assert_eq!(pr.author, "alice");
+        assert_eq!(pr.branch, "feature/foo");
+        assert_eq!(pr.base, "main");
+        assert!(!pr.draft);
+        assert_eq!(pr.labels, vec!["bug"]);
+        assert_eq!(pr.assignees, vec!["bob"]);
+        assert_eq!(pr.review_requested, vec!["carol"]);
+        assert_eq!(pr.review_decision, "REVIEW_REQUIRED");
+        assert_eq!(pr.merge_state_status, "BLOCKED");
+        assert_eq!(pr.checks_rollup, "SUCCESS");
+    }
+
+    #[test]
+    fn parse_pr_with_braces_in_title_does_not_silently_drop() {
+        // Regression test: the old char-scanning parser broke when PR titles
+        // or branch names contained '{' or '}', silently producing 0 results.
+        let json = r#"[{
+          "number": 1,
+          "title": "Fix {broken} thing",
+          "state": "OPEN",
+          "author": {"login": "alice"},
+          "headRefName": "fix/{broken}",
+          "baseRefName": "main",
+          "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z",
+          "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "https://github.com/org/repo/pull/1",
+          "additions": 1,
+          "deletions": 1,
+          "labels": [],
+          "assignees": [],
+          "reviewRequests": [],
+          "reviewDecision": null,
+          "mergeStateStatus": null,
+          "statusCheckRollup": []
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1, "PR with braces in title must not be dropped");
+        assert_eq!(prs[0].title, "Fix {broken} thing");
+        assert_eq!(prs[0].review_decision, "");
+        assert_eq!(prs[0].merge_state_status, "");
+        assert_eq!(prs[0].checks_rollup, "");
+    }
+
+    #[test]
+    fn parse_multiple_prs_all_parsed() {
+        let json = r#"[
+          {"number":1,"title":"A","state":"OPEN","author":{"login":"x"},
+           "headRefName":"a","baseRefName":"main","isDraft":false,
+           "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+           "labels":[],"assignees":[],"reviewRequests":[],
+           "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]},
+          {"number":2,"title":"B","state":"OPEN","author":{"login":"y"},
+           "headRefName":"b","baseRefName":"main","isDraft":true,
+           "createdAt":"","updatedAt":"","url":"","additions":5,"deletions":2,
+           "labels":[{"name":"wip"}],"assignees":[],"reviewRequests":[],
+           "reviewDecision":"APPROVED","mergeStateStatus":"CLEAN","statusCheckRollup":[]}
+        ]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 2);
+        assert_eq!(prs[0].number, 1);
+        assert_eq!(prs[1].number, 2);
+        assert!(prs[1].draft);
+        assert_eq!(prs[1].review_decision, "APPROVED");
+    }
+}
