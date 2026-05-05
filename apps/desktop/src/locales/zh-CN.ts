@@ -1055,6 +1055,14 @@ const zhCN: Locale = {
     pinBadge: "已置顶",
     prMenuLabel: "PR #{0} 的操作",
     issueMenuLabel: "Issue #{0} 的操作",
+    teamTab: "团队",
+    noTeamActivity: "此工作区无团队活动。",
+    teamOverlaps: "文件冲突 ({0})",
+    teamMembers: "团队",
+    teamOverlapFiles: "{0} 个共同文件",
+    teamOverlapViaWip: "来自 WIP",
+    teamOverlapViaBranch: "来自分支",
+    teamPrCount: "{0} 个 PR",
   },
 
   undoStack: {

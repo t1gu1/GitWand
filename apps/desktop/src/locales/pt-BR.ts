@@ -1067,6 +1067,14 @@ const ptBR: Locale = {
     pinBadge: "Fixado",
     prMenuLabel: "Ações para PR #{0}",
     issueMenuLabel: "Ações para issue #{0}",
+    teamTab: "Equipe",
+    noTeamActivity: "Nenhuma atividade da equipe neste workspace.",
+    teamOverlaps: "Sobreposições ({0})",
+    teamMembers: "Equipe",
+    teamOverlapFiles: "{0} arquivo(s) em comum",
+    teamOverlapViaWip: "via WIP",
+    teamOverlapViaBranch: "via branch",
+    teamPrCount: "{0} PR(s)",
   },
 
   // ─── Undo ───────────────────────────────────────────────

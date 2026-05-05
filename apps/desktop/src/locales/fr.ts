@@ -1077,6 +1077,14 @@ const fr: Locale = {
     pinBadge: "Épinglé",
     prMenuLabel: "Actions pour la PR #{0}",
     issueMenuLabel: "Actions pour l'issue #{0}",
+    teamTab: "Équipe",
+    noTeamActivity: "Aucune activité d'équipe sur ce workspace.",
+    teamOverlaps: "Chevauchements ({0})",
+    teamMembers: "Équipe",
+    teamOverlapFiles: "{0} fichier(s) en commun",
+    teamOverlapViaWip: "via WIP",
+    teamOverlapViaBranch: "via branche",
+    teamPrCount: "{0} PR(s)",
   },
 
   // ─── Undo ───────────────────────────────────────────────

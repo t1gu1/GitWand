@@ -1094,6 +1094,14 @@ const en = {
     pinBadge: "Pinned",
     prMenuLabel: "Actions for PR #{0}",
     issueMenuLabel: "Actions for issue #{0}",
+    teamTab: "Team",
+    noTeamActivity: "No team activity on this workspace.",
+    teamOverlaps: "Overlaps ({0})",
+    teamMembers: "Team",
+    teamOverlapFiles: "{0} shared file(s)",
+    teamOverlapViaWip: "via WIP",
+    teamOverlapViaBranch: "via branch",
+    teamPrCount: "{0} PR(s)",
   },
 
   // ─── Undo ───────────────────────────────────────────────
