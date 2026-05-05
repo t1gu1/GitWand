@@ -54,6 +54,11 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Patch globalThis.localStorage to use the jsdom Storage implementation.
+    // Node.js v25 ships a built-in `localStorage` stub that has no methods
+    // (setItem/getItem/clear) unless --localstorage-file is supplied. Vitest's
+    // jsdom environment does not override it, so we do so here.
+    setupFiles: ["src/test-setup.ts"],
     include: ["src/**/*.test.ts"],
     globals: false,
   },
