@@ -1057,12 +1057,12 @@ const fr: Locale = {
     prCiSuccess: "CI réussie",
     prCiFailure: "CI échouée",
     prCiPending: "CI en cours",
-      issuesTab: "Issues",
-      noIssues: "Aucune issue trouvée avec ce filtre.",
-      issueFilterAssigned: "Assignées à moi",
-      issueFilterMentioned: "Me mentionnent",
-      issueFilterCreated: "Créées par moi",
-      issueMilestone: "Jalon : {0}",
+    issuesTab: "Issues",
+    noIssues: "Aucune issue trouvée avec ce filtre.",
+    issueFilterAssigned: "Assignées à moi",
+    issueFilterMentioned: "Me mentionnent",
+    issueFilterCreated: "Créées par moi",
+    issueMilestone: "Jalon : {0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

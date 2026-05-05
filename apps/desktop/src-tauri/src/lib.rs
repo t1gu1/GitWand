@@ -4979,7 +4979,7 @@ fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
 }
 
 /// Aggregate open GitHub Issues from all repos in a workspace (via `gh issue list`).
-/// TypeScript wrapper `workspaceIssuesAll` is added to `backend.ts` in the same PR (Task 4).
+/// TypeScript wrapper: `workspaceIssuesAll` in `backend.ts`.
 /// `filter` controls which issues are fetched:
 ///   ""          — all open issues (no additional flag)
 ///   "assigned"  — issues assigned to the authenticated user (--assignee @me)
