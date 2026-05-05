@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WorkspaceRepoIssues, WorkspaceRepo, Issue } from "../../utils/backend";
+import { useLaunchpadPins, _resetPinsForTesting } from "../useLaunchpadPins";
 
 vi.mock("../../utils/backend", () => ({
   workspaceIssuesAll: vi.fn(),
@@ -92,5 +93,72 @@ describe("useLaunchpadIssues", () => {
     resolve(MOCK_DATA);
     await p;
     expect(loading.value).toBe(false);
+  });
+});
+
+describe("useLaunchpadIssues — pin/snooze integration", () => {
+  const ISSUE1_URL = "https://github.com/org/alpha/issues/10";
+  const ISSUE2_URL = "https://github.com/org/alpha/issues/20";
+
+  const ISSUE1: Issue = {
+    ...MOCK_ISSUE,
+    number: 10,
+    url: ISSUE1_URL,
+    updatedAt: "2026-03-01T10:00:00Z", // older
+    createdAt: "2026-02-01T10:00:00Z",
+  };
+  const ISSUE2: Issue = {
+    ...MOCK_ISSUE,
+    number: 20,
+    url: ISSUE2_URL,
+    updatedAt: "2026-05-01T10:00:00Z", // newer
+    createdAt: "2026-04-01T10:00:00Z",
+  };
+  const DATA_TWO: WorkspaceRepoIssues[] = [
+    { repoPath: "/repo/a", repoName: "alpha", issues: [ISSUE1, ISSUE2], filter: "assigned", error: null },
+  ];
+
+  beforeEach(() => {
+    localStorage.clear();
+    _resetPinsForTesting();
+    mockFetch.mockReset();
+  });
+
+  it("pinned issue appears before non-pinned issue in allIssues", async () => {
+    mockFetch.mockResolvedValue(DATA_TWO);
+    const pins = useLaunchpadPins();
+    // Pin ISSUE1 (the older one) — it should jump to the front
+    pins.pin(ISSUE1_URL, "issue");
+
+    const { allIssues, refresh } = useLaunchpadIssues();
+    await refresh(REPOS);
+
+    expect(allIssues.value[0].url).toBe(ISSUE1_URL);
+    expect(allIssues.value[1].url).toBe(ISSUE2_URL);
+  });
+
+  it("snoozed issue is absent from allIssues and present in snoozedIssues", async () => {
+    mockFetch.mockResolvedValue(DATA_TWO);
+    const pins = useLaunchpadPins();
+    pins.snooze(ISSUE1_URL, "issue", 1);
+
+    const { allIssues, snoozedIssues, refresh } = useLaunchpadIssues();
+    await refresh(REPOS);
+
+    expect(allIssues.value.find((i) => i.url === ISSUE1_URL)).toBeUndefined();
+    expect(allIssues.value.find((i) => i.url === ISSUE2_URL)).toBeDefined();
+    expect(snoozedIssues.value.find((i) => i.url === ISSUE1_URL)).toBeDefined();
+  });
+
+  it("pinned+snoozed issue is absent from allIssues (snooze takes priority)", async () => {
+    mockFetch.mockResolvedValue(DATA_TWO);
+    const pins = useLaunchpadPins();
+    pins.pin(ISSUE1_URL, "issue");
+    pins.snooze(ISSUE1_URL, "issue", 1);
+
+    const { allIssues, refresh } = useLaunchpadIssues();
+    await refresh(REPOS);
+
+    expect(allIssues.value.find((i) => i.url === ISSUE1_URL)).toBeUndefined();
   });
 });

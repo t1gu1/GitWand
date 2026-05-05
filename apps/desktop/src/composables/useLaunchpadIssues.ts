@@ -1,6 +1,7 @@
 import { ref, computed } from "vue";
 import { workspaceIssuesAll } from "../utils/backend";
 import type { WorkspaceRepoIssues, WorkspaceRepo, Issue } from "../utils/backend";
+import { useLaunchpadPins } from "./useLaunchpadPins";
 
 export type { WorkspaceRepoIssues };
 
@@ -25,13 +26,30 @@ export function useLaunchpadIssues() {
   /** Currently active filter. Defaults to "assigned". Change before calling refresh(). */
   const activeFilter = ref<IssueFilter>("assigned");
 
-  /** Flat list of all issues with repo context, sorted newest-updated first. */
+  const { isPinned, isSnoozed } = useLaunchpadPins();
+
+  /** Flat list of all non-snoozed issues: pinned first, then by updatedAt descending. */
   const allIssues = computed<IssueWithRepo[]>(() =>
     repos.value
       .flatMap((r) =>
         r.issues.map((issue) => ({ ...issue, repoName: r.repoName, repoPath: r.repoPath }))
       )
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .filter((issue) => !isSnoozed(issue.url))
+      .sort((a, b) => {
+        const aPinned = isPinned(a.url) ? 0 : 1;
+        const bPinned = isPinned(b.url) ? 0 : 1;
+        if (aPinned !== bPinned) return aPinned - bPinned;
+        return b.updatedAt.localeCompare(a.updatedAt);
+      })
+  );
+
+  /** Flat list of currently-snoozed issues (hidden from allIssues). */
+  const snoozedIssues = computed<IssueWithRepo[]>(() =>
+    repos.value
+      .flatMap((r) =>
+        r.issues.map((issue) => ({ ...issue, repoName: r.repoName, repoPath: r.repoPath }))
+      )
+      .filter((issue) => isSnoozed(issue.url))
   );
 
   async function refresh(workspaceRepos: WorkspaceRepo[]): Promise<void> {
@@ -46,5 +64,5 @@ export function useLaunchpadIssues() {
     }
   }
 
-  return { repos, allIssues, loading, error, activeFilter, refresh };
+  return { repos, allIssues, snoozedIssues, loading, error, activeFilter, refresh };
 }
