@@ -61,3 +61,4 @@ research/
 /docs
 .release-notes-v1.5.0.md
 website/.vitepress/.temp
+.claude/worktrees/
