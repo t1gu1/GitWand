@@ -570,8 +570,10 @@ watch(hasRepo, (has) => {
 // Poll rebase state whenever status refreshes (covers pull --rebase conflicts,
 // staged-file changes after conflict resolution, and repo switches).
 watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
-// Also refresh on repo switch
-watch(() => repoFolderPath.value, () => { refreshRepoState(); });
+// Also refresh on repo switch — immediate:true covers the case where a repo is
+// already selected on mount (restored from localStorage) and a rebase is already
+// in progress: without immediate the watch only fires on the *next* path change.
+watch(() => repoFolderPath.value, () => { refreshRepoState(); }, { immediate: true });
 
 // ─── Repo sidebar events ────────────────────────────────
 function onRepoFileSelect(path: string, staged: boolean) {
