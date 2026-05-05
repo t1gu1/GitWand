@@ -4724,7 +4724,7 @@ fn parse_gh_issue_json(json: &str) -> Result<Vec<Issue>, String> {
 }
 
 /// Per-repo aggregator for the Launchpad Issues panel.
-/// Used by `workspace_issues_all` (added in the next commit).
+/// Used by `workspace_issues_all`.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct WorkspaceRepoIssues {
@@ -4979,6 +4979,7 @@ fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
 }
 
 /// Aggregate open GitHub Issues from all repos in a workspace (via `gh issue list`).
+/// TypeScript wrapper `workspaceIssuesAll` is added to `backend.ts` in the same PR (Task 4).
 /// `filter` controls which issues are fetched:
 ///   ""          — all open issues (no additional flag)
 ///   "assigned"  — issues assigned to the authenticated user (--assignee @me)
