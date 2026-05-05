@@ -1860,6 +1860,12 @@ const server = createServer(async (req, res) => {
           labels: (pr.labels ?? []).map((l) => l.name),
           assignees: (pr.assignees ?? []).map((a) => a.login).filter(Boolean),
           review_requested: (pr.requested_reviewers ?? []).map((r) => r.login).filter(Boolean),
+          // GitHub REST API /pulls does not expose reviewDecision (GraphQL-only via gh CLI).
+          review_decision: "",
+          // mergeable_state is the closest REST equivalent to mergeStateStatus.
+          merge_state_status: pr.mergeable_state ?? "",
+          // statusCheckRollup requires an extra API call per PR — not fetched here.
+          checks_rollup: "",
         }));
         return jsonResponse(req, res, prs);
       } catch (err) {
