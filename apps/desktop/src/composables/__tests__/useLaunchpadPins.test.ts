@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 // We also import _resetPinsForTesting to re-read localStorage into the refs
 let useLaunchpadPins: typeof import("../useLaunchpadPins").useLaunchpadPins;
 let _resetPinsForTesting: typeof import("../useLaunchpadPins")._resetPinsForTesting;
+let LAUNCHPAD_PINS_STORAGE_KEY: typeof import("../useLaunchpadPins").LAUNCHPAD_PINS_STORAGE_KEY;
 
 beforeEach(async () => {
   localStorage.clear();
@@ -11,6 +12,7 @@ beforeEach(async () => {
   const mod = await import("../useLaunchpadPins");
   useLaunchpadPins = mod.useLaunchpadPins;
   _resetPinsForTesting = mod._resetPinsForTesting;
+  LAUNCHPAD_PINS_STORAGE_KEY = mod.LAUNCHPAD_PINS_STORAGE_KEY;
   _resetPinsForTesting();
 });
 
@@ -53,10 +55,10 @@ describe("useLaunchpadPins", () => {
     // Manually insert an expired snooze via snooze() then patch localStorage
     p.snooze(PR_URL, "pr", 1);
     // Patch the stored data to put snoozedUntil in the past
-    const raw = localStorage.getItem("gitwand-launchpad-pins")!;
+    const raw = localStorage.getItem(LAUNCHPAD_PINS_STORAGE_KEY)!;
     const data = JSON.parse(raw);
     data.snoozes[0].snoozedUntil = new Date(Date.now() - 1000).toISOString();
-    localStorage.setItem("gitwand-launchpad-pins", JSON.stringify(data));
+    localStorage.setItem(LAUNCHPAD_PINS_STORAGE_KEY, JSON.stringify(data));
     _resetPinsForTesting(); // re-load from localStorage
 
     const p2 = useLaunchpadPins();
@@ -83,10 +85,10 @@ describe("useLaunchpadPins", () => {
     const p = useLaunchpadPins();
     p.snooze(PR_URL, "pr", 1);
     // Patch localStorage to put snoozedUntil in the past
-    const raw = localStorage.getItem("gitwand-launchpad-pins")!;
+    const raw = localStorage.getItem(LAUNCHPAD_PINS_STORAGE_KEY)!;
     const data = JSON.parse(raw);
     data.snoozes[0].snoozedUntil = new Date(Date.now() - 1000).toISOString();
-    localStorage.setItem("gitwand-launchpad-pins", JSON.stringify(data));
+    localStorage.setItem(LAUNCHPAD_PINS_STORAGE_KEY, JSON.stringify(data));
     _resetPinsForTesting();
 
     const p2 = useLaunchpadPins();

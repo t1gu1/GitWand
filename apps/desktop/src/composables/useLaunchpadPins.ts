@@ -12,7 +12,8 @@ export interface SnoozedItem {
   snoozedUntil: string; // ISO 8601 — item reappears after this date
 }
 
-const STORAGE_KEY = "gitwand-launchpad-pins";
+export const LAUNCHPAD_PINS_STORAGE_KEY = "gitwand-launchpad-pins";
+const STORAGE_KEY = LAUNCHPAD_PINS_STORAGE_KEY;
 
 interface StoredData {
   pins: PinnedItem[];
