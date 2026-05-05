@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useLaunchpadWip } from "../composables/useLaunchpadWip";
 import { useLaunchpadPrs } from "../composables/useLaunchpadPrs";
 import { useLaunchpadIssues } from "../composables/useLaunchpadIssues";
 import { useLaunchpadPins } from "../composables/useLaunchpadPins";
+import { useLaunchpadTeam } from "../composables/useLaunchpadTeam";
+import type { TeamMemberActivity, OverlappingPr } from "../composables/useLaunchpadTeam";
 import { useI18n } from "../composables/useI18n";
 import type { WorkspaceRepo } from "../utils/backend";
 import type { IssueFilter } from "../composables/useLaunchpadIssues";
@@ -18,8 +20,14 @@ const { wip, loading: wipLoading, error: wipError, refresh: refreshWip } = useLa
 const { allPrs, snoozedPrs, repos: prRepos, loading: prsLoading, error: prsError, refresh: refreshPrs } = useLaunchpadPrs();
 const { allIssues, snoozedIssues, repos: issueRepos, loading: issuesLoading, error: issuesError, activeFilter: issueFilter, refresh: refreshIssues } = useLaunchpadIssues();
 const { pin, unpin, snooze, unsnooze, isPinned, isSnoozed, snoozedUntil } = useLaunchpadPins();
+const {
+  teamActivity,
+  loading: teamLoading,
+  error: teamError,
+  refresh: refreshTeam,
+} = useLaunchpadTeam();
 
-type Tab = "wip" | "prs" | "issues";
+type Tab = "wip" | "prs" | "issues" | "team";
 const activeTab = ref<Tab>("wip");
 
 // ── ⋮ menu state ──────────────────────────────────────────────────────────────
@@ -30,6 +38,41 @@ const openSnoozeFor = ref<string | null>(null);
 const showSnoozedPrs = ref(false);
 const showSnoozedIssues = ref(false);
 
+// ── Team expanded state ────────────────────────────────────────────────────────
+const expandedTeamMembers = ref<Set<string>>(new Set());
+
+function initExpandedMembers(members: readonly TeamMemberActivity[]): void {
+  expandedTeamMembers.value = new Set(
+    members.filter((m) => m.overlappingPrs.length > 0).map((m) => m.login)
+  );
+}
+
+function toggleTeamMember(login: string): void {
+  const next = new Set(expandedTeamMembers.value);
+  if (next.has(login)) next.delete(login);
+  else next.add(login);
+  expandedTeamMembers.value = next;
+}
+
+const TEAM_AVATAR_COLORS = [
+  "#cba6f7", "#89b4fa", "#a6e3a1", "#fab387", "#f38ba8", "#94e2d5",
+] as const;
+
+function teamAvatarColor(login: string): string {
+  let hash = 0;
+  for (let i = 0; i < login.length; i++) {
+    hash = (hash * 31 + login.charCodeAt(i)) & 0xffff;
+  }
+  return TEAM_AVATAR_COLORS[hash % TEAM_AVATAR_COLORS.length];
+}
+
+const membersWithOverlap = computed(() =>
+  teamActivity.value.filter((m) => m.overlappingPrs.length > 0)
+);
+const membersWithoutOverlap = computed(() =>
+  teamActivity.value.filter((m) => m.overlappingPrs.length === 0)
+);
+
 function setTab(tab: Tab) {
   activeTab.value = tab;
 }
@@ -37,7 +80,12 @@ function setTab(tab: Tab) {
 function handleRefresh() {
   if (activeTab.value === "wip") refreshWip(props.repos);
   else if (activeTab.value === "prs") refreshPrs(props.repos);
-  else refreshIssues(props.repos);
+  else if (activeTab.value === "issues") refreshIssues(props.repos);
+  else if (activeTab.value === "team") {
+    refreshTeam(props.repos)
+      .then(() => initExpandedMembers(teamActivity.value))
+      .catch(() => { /* errors already captured in teamError reactive ref */ });
+  }
 }
 
 function setIssueFilter(filter: IssueFilter) {
@@ -45,7 +93,7 @@ function setIssueFilter(filter: IssueFilter) {
   refreshIssues(props.repos);
 }
 
-const isLoading = () => wipLoading.value || prsLoading.value || issuesLoading.value;
+const isLoading = () => wipLoading.value || prsLoading.value || issuesLoading.value || teamLoading.value;
 
 // ── Menu helpers ──────────────────────────────────────────────────────────────
 function toggleMenu(url: string): void {
@@ -93,6 +141,9 @@ onMounted(() => {
   refreshWip(props.repos);
   refreshPrs(props.repos);
   refreshIssues(props.repos);
+  refreshTeam(props.repos)
+    .then(() => initExpandedMembers(teamActivity.value))
+    .catch(() => { /* errors already captured in teamError reactive ref */ });
 });
 </script>
 
@@ -137,6 +188,13 @@ onMounted(() => {
         <span v-if="allIssues.length > 0" class="launchpad-view__tab-badge">
           {{ allIssues.length }}
         </span>
+      </button>
+      <button
+        class="launchpad-view__tab"
+        :class="{ 'launchpad-view__tab--active': activeTab === 'team' }"
+        @click="setTab('team')"
+      >
+        {{ t("launchpad.teamTab") }}
       </button>
     </div>
 
@@ -438,6 +496,153 @@ onMounted(() => {
           </button>
         </li>
       </ul>
+    </div>
+
+    <!-- ── Team panel ─────────────────────────────────────────── -->
+    <div v-if="activeTab === 'team'" class="launchpad-view__panel">
+      <!-- Loading -->
+      <div v-if="teamLoading" class="launchpad-view__empty">
+        {{ t("launchpad.loading") }}
+      </div>
+
+      <!-- Error -->
+      <div v-else-if="teamError" class="launchpad-view__error">
+        {{ t("launchpad.errorFetch", teamError) }}
+      </div>
+
+      <!-- Empty state -->
+      <div v-else-if="teamActivity.length === 0" class="launchpad-view__empty">
+        {{ t("launchpad.noTeamActivity") }}
+      </div>
+
+      <!-- Content -->
+      <template v-else>
+        <!-- Overlaps section -->
+        <div
+          v-if="membersWithOverlap.length > 0"
+          class="launchpad-view__team-section"
+        >
+          <div class="launchpad-view__team-section-header launchpad-view__team-section-header--overlap">
+            ⚠
+            {{
+              t(
+                "launchpad.teamOverlaps",
+                membersWithOverlap.length
+              )
+            }}
+          </div>
+          <div
+            v-for="member in membersWithOverlap"
+            :key="member.login"
+            class="launchpad-view__team-member launchpad-view__team-member--overlap"
+          >
+            <div
+              class="launchpad-view__team-member-header"
+              @click="toggleTeamMember(member.login)"
+              role="button"
+              tabindex="0"
+              :aria-expanded="expandedTeamMembers.has(member.login)"
+              @keydown.enter="toggleTeamMember(member.login)"
+              @keydown.space.prevent="toggleTeamMember(member.login)"
+            >
+              <span
+                class="launchpad-view__team-avatar"
+                :style="{ background: teamAvatarColor(member.login) }"
+                aria-hidden="true"
+              >{{ (member.login[0] ?? "?").toUpperCase() }}</span>
+              <span
+                class="launchpad-view__team-login"
+                :style="{ color: teamAvatarColor(member.login) }"
+              >{{ member.login }}</span>
+              <span class="launchpad-view__team-pr-count">
+                {{ t("launchpad.teamPrCount", member.prs.length) }}
+              </span>
+              <span class="launchpad-view__team-chevron">
+                {{ expandedTeamMembers.has(member.login) ? "▾" : "▸" }}
+              </span>
+            </div>
+            <div v-if="expandedTeamMembers.has(member.login)" class="launchpad-view__team-prs">
+              <div
+                v-for="pr in member.prs"
+                :key="pr.url"
+                class="launchpad-view__team-pr-row"
+              >
+                <span class="launchpad-view__repo-badge">{{ pr.repoName }}</span>
+                <a :href="pr.url" class="launchpad-view__team-pr-link" target="_blank" rel="noopener noreferrer">
+                  #{{ pr.number }} {{ pr.title }}
+                </a>
+                <template
+                  v-for="overlap in ([member.overlappingPrs.find((op) => op.url === pr.url)].filter(Boolean) as OverlappingPr[])"
+                  :key="overlap.url"
+                >
+                  <div class="launchpad-view__overlap-badge">
+                    <span>⚠</span>
+                    <span>{{ t("launchpad.teamOverlapFiles", overlap.overlappingFiles.length) }}</span>
+                    <span>{{
+                      overlap.myContext === "wip"
+                        ? t("launchpad.teamOverlapViaWip")
+                        : t("launchpad.teamOverlapViaBranch")
+                    }}</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Team section (no overlap) -->
+        <div
+          v-if="membersWithoutOverlap.length > 0"
+          class="launchpad-view__team-section"
+        >
+          <div class="launchpad-view__team-section-header">
+            {{ t("launchpad.teamMembers") }}
+          </div>
+          <div
+            v-for="member in membersWithoutOverlap"
+            :key="member.login"
+            class="launchpad-view__team-member"
+          >
+            <div
+              class="launchpad-view__team-member-header"
+              @click="toggleTeamMember(member.login)"
+              role="button"
+              tabindex="0"
+              :aria-expanded="expandedTeamMembers.has(member.login)"
+              @keydown.enter="toggleTeamMember(member.login)"
+              @keydown.space.prevent="toggleTeamMember(member.login)"
+            >
+              <span
+                class="launchpad-view__team-avatar"
+                :style="{ background: teamAvatarColor(member.login) }"
+                aria-hidden="true"
+              >{{ (member.login[0] ?? "?").toUpperCase() }}</span>
+              <span
+                class="launchpad-view__team-login"
+                :style="{ color: teamAvatarColor(member.login) }"
+              >{{ member.login }}</span>
+              <span class="launchpad-view__team-pr-count">
+                {{ t("launchpad.teamPrCount", member.prs.length) }}
+              </span>
+              <span class="launchpad-view__team-chevron">
+                {{ expandedTeamMembers.has(member.login) ? "▾" : "▸" }}
+              </span>
+            </div>
+            <div v-if="expandedTeamMembers.has(member.login)" class="launchpad-view__team-prs">
+              <div
+                v-for="pr in member.prs"
+                :key="pr.url"
+                class="launchpad-view__team-pr-row"
+              >
+                <span class="launchpad-view__repo-badge">{{ pr.repoName }}</span>
+                <a :href="pr.url" class="launchpad-view__team-pr-link" target="_blank" rel="noopener noreferrer">
+                  #{{ pr.number }} {{ pr.title }}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
@@ -853,5 +1058,131 @@ onMounted(() => {
   padding: 1px 6px;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+/* ── Team panel ──────────────────────────────────────────── */
+.launchpad-view__team-section {
+  margin-bottom: 16px;
+}
+
+.launchpad-view__team-section-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted, #718096);
+  margin-bottom: 8px;
+}
+
+.launchpad-view__team-section-header--overlap {
+  color: #f38ba8;
+}
+
+.launchpad-view__team-member {
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  background: var(--color-surface, #edf2f7);
+}
+
+.launchpad-view__team-member--overlap {
+  border-color: #f38ba8;
+  background: #2a1e2e;
+}
+
+.launchpad-view__team-member-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.launchpad-view__team-member-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.launchpad-view__team-member-header:focus-visible {
+  outline: 2px solid var(--color-accent, #3182ce);
+  outline-offset: -2px;
+}
+
+.launchpad-view__team-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #1e1e2e;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.launchpad-view__team-login {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.launchpad-view__team-pr-count {
+  color: var(--color-text-muted, #718096);
+  font-size: 11px;
+}
+
+.launchpad-view__team-chevron {
+  margin-left: auto;
+  color: var(--color-text-muted, #718096);
+  font-size: 11px;
+}
+
+.launchpad-view__team-prs {
+  padding: 0 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.launchpad-view__team-pr-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.launchpad-view__repo-badge {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #718096);
+  background: var(--color-surface, #edf2f7);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.launchpad-view__overlap-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #f38ba8;
+  margin-top: 2px;
+  flex-basis: 100%;
+}
+
+.launchpad-view__team-pr-link {
+  color: var(--color-text, inherit);
+  text-decoration: none;
+  flex: 1;
+  font-size: 12px;
+}
+
+.launchpad-view__team-pr-link:hover {
+  text-decoration: underline;
 }
 </style>
