@@ -2785,7 +2785,7 @@ export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<Workspace
 /** Map a raw snake_case PR object (from Tauri or dev-server) to the typed PullRequest interface. */
 function mapRawPr(pr: Record<string, unknown>): PullRequest {
   return {
-    number: pr.number as number,
+    number: (pr.number as number) ?? 0,
     title: (pr.title as string) ?? "",
     state: (pr.state as string) ?? "",
     author: (pr.author as string) ?? "",
