@@ -1010,6 +1010,21 @@ const zhCN: Locale = {
     errorStatus: "获取状态失败：{0}",
   },
 
+  launchpad: {
+    title: "启动台",
+    wipTab: "进行中",
+    noRepos: "此工作区中没有仓库。",
+    refresh: "刷新",
+    loading: "加载中…",
+    errorFetch: "加载 WIP 数据失败：{0}",
+    staged: "{0} 已暂存",
+    unstaged: "{0} 已修改",
+    untracked: "{0} 未跟踪",
+    noUpstream: "无上游",
+    clean: "干净",
+    lastCommit: "最后提交 {0}",
+  },
+
   undoStack: {
     title: "操作历史",
     undoButton: "回退",

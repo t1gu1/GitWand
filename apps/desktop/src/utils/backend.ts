@@ -2659,6 +2659,25 @@ export interface WorkspaceRepoStatus {
   error: string | null;
 }
 
+export interface WorkspaceWipItem {
+  path: string;
+  name: string;
+  branch: string;
+  ahead: number;
+  behind: number;
+  /** Files staged for commit (index modified). */
+  stagedCount: number;
+  /** Tracked files modified in working tree (not staged). */
+  unstagedCount: number;
+  /** Untracked files not ignored by .gitignore. */
+  untrackedCount: number;
+  /** ISO 8601 committer date of HEAD commit. Empty on brand-new repos. */
+  lastCommitAt: string;
+  /** True when no upstream is configured for the current branch. */
+  hasNoUpstream: boolean;
+  error: string | null;
+}
+
 /** Read a .gitwand-workspace.json from the given directory. */
 export async function workspaceRead(path: string): Promise<WorkspaceConfig> {
   if (isTauri()) {
@@ -2722,6 +2741,33 @@ export async function workspacePullAll(repos: WorkspaceRepo[]): Promise<Workspac
   });
   if (!res.ok) throw new Error(`Failed to pull workspace: ${res.status}`);
   return res.json();
+}
+
+/** Get detailed WIP status (staged/unstaged/untracked/last-commit/upstream) for all repos. */
+export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<WorkspaceWipItem[]> {
+  if (isTauri()) {
+    return tauriInvoke<WorkspaceWipItem[]>("workspace_wip_all", { repos });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-wip-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos }),
+  });
+  if (!res.ok) throw new Error(`Failed to get workspace WIP: ${res.status}`);
+  const raw = (await res.json()) as Array<Record<string, unknown>>;
+  return raw.map((item) => ({
+    path: (item.path as string) ?? "",
+    name: (item.name as string) ?? "",
+    branch: (item.branch as string) ?? "",
+    ahead: (item.ahead as number) ?? 0,
+    behind: (item.behind as number) ?? 0,
+    stagedCount: (item.staged_count as number) ?? 0,
+    unstagedCount: (item.unstaged_count as number) ?? 0,
+    untrackedCount: (item.untracked_count as number) ?? 0,
+    lastCommitAt: (item.last_commit_at as string) ?? "",
+    hasNoUpstream: (item.has_no_upstream as boolean) ?? false,
+    error: (item.error as string | null) ?? null,
+  }));
 }
 
 /** Get the cross-worktree status for a repository (ahead/behind + modified per worktree). */

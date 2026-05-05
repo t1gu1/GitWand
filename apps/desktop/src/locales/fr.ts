@@ -1032,6 +1032,21 @@ const fr: Locale = {
     errorStatus: "Impossible d\'obtenir le statut\u00a0: {0}",
   },
 
+  launchpad: {
+    title: "Launchpad",
+    wipTab: "En cours",
+    noRepos: "Aucun dépôt dans cet espace de travail.",
+    refresh: "Actualiser",
+    loading: "Chargement…",
+    errorFetch: "Impossible de charger les données WIP : {0}",
+    staged: "{0} indexé",
+    unstaged: "{0} modifié",
+    untracked: "{0} non suivi",
+    noUpstream: "pas d'amont",
+    clean: "Propre",
+    lastCommit: "Dernier commit {0}",
+  },
+
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Historique des opérations",

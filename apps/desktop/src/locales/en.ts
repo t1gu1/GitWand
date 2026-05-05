@@ -1049,6 +1049,21 @@ const en = {
     errorStatus: "Failed to get status: {0}",
   },
 
+  launchpad: {
+    title: "Launchpad",
+    wipTab: "WIP",
+    noRepos: "No repositories in this workspace.",
+    refresh: "Refresh",
+    loading: "Loading…",
+    errorFetch: "Failed to load WIP data: {0}",
+    staged: "{0} staged",
+    unstaged: "{0} unstaged",
+    untracked: "{0} untracked",
+    noUpstream: "no upstream",
+    clean: "Clean",
+    lastCommit: "Last commit {0}",
+  },
+
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Operation history",

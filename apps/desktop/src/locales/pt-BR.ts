@@ -1022,6 +1022,21 @@ const ptBR: Locale = {
     errorStatus: "Falha ao obter status: {0}",
   },
 
+  launchpad: {
+    title: "Launchpad",
+    wipTab: "Em andamento",
+    noRepos: "Nenhum repositório neste espaço de trabalho.",
+    refresh: "Atualizar",
+    loading: "Carregando…",
+    errorFetch: "Falha ao carregar dados WIP: {0}",
+    staged: "{0} preparado",
+    unstaged: "{0} modificado",
+    untracked: "{0} não rastreado",
+    noUpstream: "sem upstream",
+    clean: "Limpo",
+    lastCommit: "Último commit {0}",
+  },
+
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Histórico de operações",

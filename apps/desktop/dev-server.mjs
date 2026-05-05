@@ -3143,6 +3143,63 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/workspace-wip-all  { repos: [{ path, name }] }
+    if (url.pathname === "/api/workspace-wip-all" && req.method === "POST") {
+      try {
+        const { repos } = await readBody(req);
+        const items = repos.map(repo => {
+          try {
+            const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: repo.path, encoding: "utf-8" }).trim();
+
+            let ahead = 0, behind = 0, has_no_upstream = false;
+            try {
+              const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: repo.path, encoding: "utf-8" }).trim().split(/\s+/);
+              ahead = parseInt(ab[0]) || 0;
+              behind = parseInt(ab[1]) || 0;
+            } catch {
+              has_no_upstream = true;
+            }
+
+            const statusOut = execSync("git status --porcelain", { cwd: repo.path, encoding: "utf-8" });
+            let staged_count = 0, unstaged_count = 0, untracked_count = 0;
+            for (const line of statusOut.split("\n").filter(l => l.length >= 2)) {
+              const x = line[0], y = line[1];
+              if (x === "?" && y === "?") {
+                untracked_count++;
+              } else {
+                if (x !== " " && x !== "?" && x !== "!") staged_count++;
+                if (y !== " " && y !== "?" && y !== "!") unstaged_count++;
+              }
+            }
+
+            let last_commit_at = "";
+            try {
+              last_commit_at = execSync("git log -1 --format=%cI", { cwd: repo.path, encoding: "utf-8" }).trim();
+            } catch {}
+
+            return {
+              path: repo.path, name: repo.name, branch,
+              ahead, behind,
+              staged_count, unstaged_count, untracked_count,
+              last_commit_at, has_no_upstream,
+              error: null,
+            };
+          } catch (e) {
+            return {
+              path: repo.path, name: repo.name, branch: "",
+              ahead: 0, behind: 0,
+              staged_count: 0, unstaged_count: 0, untracked_count: 0,
+              last_commit_at: "", has_no_upstream: false,
+              error: e.message,
+            };
+          }
+        });
+        return jsonResponse(req, res, items);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // GET /api/git-worktree-status-all?cwd=<path>
     if (url.pathname === "/api/git-worktree-status-all" && req.method === "GET") {
       try {

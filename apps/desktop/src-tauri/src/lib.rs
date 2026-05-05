@@ -4422,6 +4422,31 @@ pub struct WorkspaceRepoStatus {
     pub error: Option<String>,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceWipItem {
+    pub path: String,
+    pub name: String,
+    /// Current branch name (empty if detached HEAD).
+    pub branch: String,
+    /// Commits ahead of upstream.
+    pub ahead: u32,
+    /// Commits behind upstream.
+    pub behind: u32,
+    /// Files with changes staged for commit (index modified).
+    pub staged_count: u32,
+    /// Tracked files modified in the working tree (not staged).
+    pub unstaged_count: u32,
+    /// Untracked files not ignored by .gitignore.
+    pub untracked_count: u32,
+    /// ISO 8601 committer date of HEAD commit (empty on brand-new repo).
+    pub last_commit_at: String,
+    /// True when no upstream branch is configured for the current branch.
+    pub has_no_upstream: bool,
+    /// Error fetching data (None = OK).
+    pub error: Option<String>,
+}
+
 /// Read a `.gitwand-workspace.json` from the given directory.
 #[tauri::command]
 fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
@@ -4524,6 +4549,89 @@ fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
             .output();
     }
     workspace_status_all(repos)
+}
+
+/// Get detailed WIP status for all repos in a workspace.
+/// Returns staged/unstaged/untracked counts, last commit timestamp, and upstream presence.
+#[tauri::command]
+fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
+    repos.into_iter().map(|repo| {
+        let path = repo.path.clone();
+        let name = repo.name.clone();
+
+        // Current branch
+        let branch = git_cmd()
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        // Ahead/behind — failure means no upstream configured
+        let ab_output = git_cmd()
+            .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
+            .current_dir(&path)
+            .output();
+        let has_no_upstream = ab_output
+            .as_ref()
+            .map(|o| !o.status.success())
+            .unwrap_or(true);
+        let (ahead, behind) = ab_output
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let parts: Vec<&str> = s.trim().split_whitespace().collect();
+                if parts.len() == 2 {
+                    let a = parts[0].parse::<u32>().ok()?;
+                    let b = parts[1].parse::<u32>().ok()?;
+                    Some((a, b))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or((0, 0));
+
+        // WIP counts — include untracked files (no --untracked-files=no)
+        let status_out = git_cmd()
+            .args(["status", "--porcelain"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .unwrap_or_default();
+        let (staged_count, unstaged_count, untracked_count) = parse_wip_status(&status_out);
+
+        // Last commit timestamp (ISO 8601 committer date)
+        let last_commit_at = git_cmd()
+            .args(["log", "-1", "--format=%cI"])
+            .current_dir(&path)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        WorkspaceWipItem {
+            path,
+            name,
+            branch,
+            ahead,
+            behind,
+            staged_count,
+            unstaged_count,
+            untracked_count,
+            last_commit_at,
+            has_no_upstream,
+            error: None,
+        }
+    })
+    .collect()
 }
 
 /// Get the cross-worktree status for a repo — ahead/behind + modified count per worktree.
@@ -5794,6 +5902,7 @@ pub fn run() {
             workspace_status_all,
             workspace_fetch_all,
             workspace_pull_all,
+            workspace_wip_all,
             git_worktree_status_all,
             git_worktree_list,
             git_worktree_add,
@@ -5827,6 +5936,36 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");
+}
+
+/// Parse `git status --porcelain` output.
+/// Returns (staged_count, unstaged_count, untracked_count).
+fn parse_wip_status(output: &str) -> (u32, u32, u32) {
+    let mut staged = 0u32;
+    let mut unstaged = 0u32;
+    let mut untracked = 0u32;
+    // Note: merge-conflict codes (UU, AA, AU, etc.) have U in X and/or Y positions.
+    // Under this classification, they increment both staged and unstaged counts,
+    // which is intentional for v1 — the WIP panel shows "activity", not a detailed conflict view.
+    // A future iteration may add a dedicated conflict_count field.
+    for line in output.lines() {
+        if line.len() < 2 {
+            continue;
+        }
+        let x = &line[0..1];
+        let y = &line[1..2];
+        if x == "?" && y == "?" {
+            untracked += 1;
+        } else {
+            if x != " " && x != "?" && x != "!" {
+                staged += 1;
+            }
+            if y != " " && y != "?" && y != "!" {
+                unstaged += 1;
+            }
+        }
+    }
+    (staged, unstaged, untracked)
 }
 
 #[cfg(test)]
@@ -5937,5 +6076,77 @@ mod tests {
         assert_eq!(prs[1].number, 2);
         assert!(prs[1].draft);
         assert_eq!(prs[1].review_decision, "APPROVED");
+    }
+
+    #[test]
+    fn wip_status_empty() {
+        let (s, u, t) = parse_wip_status("");
+        assert_eq!((s, u, t), (0, 0, 0));
+    }
+
+    #[test]
+    fn wip_status_untracked_only() {
+        let out = "?? new_file.rs\n?? another.txt\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 0, "no staged");
+        assert_eq!(u, 0, "no unstaged");
+        assert_eq!(t, 2, "two untracked");
+    }
+
+    #[test]
+    fn wip_status_staged_only() {
+        // Format: "XY filename" — X=index status, Y=worktree status, space before filename
+        // "A " = X=A (added to index), Y=' ' (clean worktree) → staged only
+        // "M " = X=M (modified in index), Y=' ' (clean worktree) → staged only
+        // The double space: XY + separator space = "A  filename"
+        let out = "A  staged_new.rs\nM  staged_mod.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 2, "two staged");
+        assert_eq!(u, 0, "no unstaged");
+        assert_eq!(t, 0, "no untracked");
+    }
+
+    #[test]
+    fn wip_status_unstaged_only() {
+        // " M" = clean index, modified worktree
+        let out = " M worktree_mod.rs\n D deleted_worktree.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 0, "no staged");
+        assert_eq!(u, 2, "two unstaged");
+        assert_eq!(t, 0, "no untracked");
+    }
+
+    #[test]
+    fn wip_status_mixed() {
+        // MM = both staged and unstaged modifications to same file
+        let out = "MM both.rs\nA  staged.rs\n?? untracked.rs\n M unstaged.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        // "MM": X=M (staged), Y=M (unstaged)
+        // "A ": X=A (staged), Y=' ' (not unstaged)
+        // "??": untracked
+        // " M": X=' ' (not staged), Y=M (unstaged)
+        assert_eq!(s, 2, "MM + A = 2 staged");
+        assert_eq!(u, 2, "MM + M = 2 unstaged");
+        assert_eq!(t, 1, "one untracked");
+    }
+
+    #[test]
+    fn wip_status_whitespace_only() {
+        // git status --porcelain may emit a trailing newline with no content lines
+        let out = "\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!((s, u, t), (0, 0, 0), "trailing newline only = empty");
+    }
+
+    #[test]
+    fn wip_status_conflicts() {
+        // Merge-conflict codes (UU, AA, etc.) count in both staged and unstaged
+        // because U != ' '/'?'/'!' for both X and Y.
+        // This is intentional: conflict files show up as "active" in both dimensions.
+        let out = "UU conflict.rs\nAA added_both.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 2, "UU and AA both staged (X = U or A)");
+        assert_eq!(u, 2, "UU and AA both unstaged (Y = U or A)");
+        assert_eq!(t, 0, "no untracked");
     }
 }
