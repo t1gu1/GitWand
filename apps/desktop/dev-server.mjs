@@ -9,6 +9,10 @@
  */
 
 import { createServer } from "node:http";
+import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
+import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
+import { homedir, tmpdir } from "node:os";
 
 // ── Crash guards ────────────────────────────────────────────────────────────
 // Without these, any unhandled exception or rejected promise kills the process
@@ -19,10 +23,6 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   console.error("[dev-server] unhandledRejection — server kept alive:", reason);
 });
-import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
-import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
-import { homedir, tmpdir } from "node:os";
 
 /**
  * Resolve `relPath` under `cwd`, ensuring the result stays inside the canonical
@@ -3935,7 +3935,7 @@ async function handleRequest(req, res) {
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);
   }
-});
+}
 
 // Bind on loopback only. The dev-server exposes filesystem + git commands,
 // so it must never be reachable from other hosts on the network.
