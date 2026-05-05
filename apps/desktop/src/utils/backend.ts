@@ -2756,9 +2756,9 @@ export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<Workspace
   if (!res.ok) throw new Error(`Failed to get workspace WIP: ${res.status}`);
   const raw = (await res.json()) as Array<Record<string, unknown>>;
   return raw.map((item) => ({
-    path: item.path as string,
-    name: item.name as string,
-    branch: item.branch as string,
+    path: (item.path as string) ?? "",
+    name: (item.name as string) ?? "",
+    branch: (item.branch as string) ?? "",
     ahead: (item.ahead as number) ?? 0,
     behind: (item.behind as number) ?? 0,
     stagedCount: (item.staged_count as number) ?? 0,
