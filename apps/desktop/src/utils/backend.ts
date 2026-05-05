@@ -2744,6 +2744,37 @@ export interface WorkspaceRepoPrs {
   error: string | null;
 }
 
+/**
+ * A GitHub issue as returned by `workspace_issues_all`.
+ * All fields are camelCase — the Rust `Issue` struct uses `rename_all = "camelCase"`.
+ */
+export interface Issue {
+  number: number;
+  title: string;
+  state: string;
+  author: string;
+  assignees: string[];
+  labels: string[];
+  url: string;
+  createdAt: string;
+  updatedAt: string;
+  milestone: string;
+}
+
+/** Per-repo container for the Launchpad Issues panel. */
+export interface WorkspaceRepoIssues {
+  /** Filesystem path to the repo. */
+  repoPath: string;
+  /** Display name for the repo. */
+  repoName: string;
+  /** Open issues filtered by `filter`. */
+  issues: Issue[];
+  /** The filter that was applied: "" | "assigned" | "mentioned" | "created". */
+  filter: string;
+  /** Error if gh issue list failed for this repo (null = OK). */
+  error: string | null;
+}
+
 /** Read a .gitwand-workspace.json from the given directory. */
 export async function workspaceRead(path: string): Promise<WorkspaceConfig> {
   if (isTauri()) {
@@ -2891,6 +2922,36 @@ export async function workspacePrsAll(repos: WorkspaceRepo[]): Promise<Workspace
     repoPath: (item.repo_path as string) ?? "",
     repoName: (item.repo_name as string) ?? "",
     prs: ((item.prs as Array<Record<string, unknown>>) ?? []).map(mapRawPr),
+    error: (item.error as string | null) ?? null,
+  }));
+}
+
+/**
+ * Aggregate open GitHub Issues from all repos in a workspace (requires `gh` CLI).
+ * @param filter — "" (all), "assigned", "mentioned", or "created"
+ */
+export async function workspaceIssuesAll(
+  repos: WorkspaceRepo[],
+  filter: string,
+): Promise<WorkspaceRepoIssues[]> {
+  if (isTauri()) {
+    // Both outer fields (repoPath, repoName) and inner Issue fields are camelCase —
+    // Issue struct has rename_all = "camelCase". Direct cast, no mapping needed.
+    return tauriInvoke<WorkspaceRepoIssues[]>("workspace_issues_all", { repos, filter });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-issues-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos, filter }),
+  });
+  if (!res.ok) throw new Error(`Failed to get workspace issues: ${res.status}`);
+  const raw = (await res.json()) as Array<Record<string, unknown>>;
+  // Dev-server uses snake_case for outer fields; issues array is already camelCase.
+  return raw.map((item) => ({
+    repoPath: (item.repo_path as string) ?? "",
+    repoName: (item.repo_name as string) ?? "",
+    issues: ((item.issues as Issue[]) ?? []),
+    filter: (item.filter as string) ?? "",
     error: (item.error as string | null) ?? null,
   }));
 }
