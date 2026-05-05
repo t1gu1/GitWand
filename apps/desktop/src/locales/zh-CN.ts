@@ -1041,6 +1041,17 @@ const zhCN: Locale = {
     issueFilterMentioned: "提及我",
     issueFilterCreated: "我创建的",
     issueMilestone: "里程碑：{0}",
+    pin: "置顶",
+    unpin: "取消置顶",
+    snooze: "稍后提醒",
+    unsnooze: "取消提醒",
+    snooze1d: "1 天",
+    snooze3d: "3 天",
+    snooze1w: "1 周",
+    snooze2w: "2 周",
+    snoozedCount: "{0} 个已推迟项目",
+    snoozedUntil: "推迟至 {0}",
+    showSnoozed: "显示已推迟",
   },
 
   undoStack: {

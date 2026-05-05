@@ -1063,6 +1063,17 @@ const fr: Locale = {
     issueFilterMentioned: "Me mentionnent",
     issueFilterCreated: "Créées par moi",
     issueMilestone: "Jalon : {0}",
+    pin: "Épingler",
+    unpin: "Désépingler",
+    snooze: "Snoozer",
+    unsnooze: "Annuler le snooze",
+    snooze1d: "1 jour",
+    snooze3d: "3 jours",
+    snooze1w: "1 semaine",
+    snooze2w: "2 semaines",
+    snoozedCount: "{0} élément(s) snooze",
+    snoozedUntil: "Snooze jusqu'au {0}",
+    showSnoozed: "Afficher les snoozés",
   },
 
   // ─── Undo ───────────────────────────────────────────────

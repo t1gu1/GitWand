@@ -1053,6 +1053,17 @@ const ptBR: Locale = {
     issueFilterMentioned: "Mencionam-me",
     issueFilterCreated: "Criadas por mim",
     issueMilestone: "Marco: {0}",
+    pin: "Fixar",
+    unpin: "Desafixar",
+    snooze: "Adiar",
+    unsnooze: "Cancelar adiamento",
+    snooze1d: "1 dia",
+    snooze3d: "3 dias",
+    snooze1w: "1 semana",
+    snooze2w: "2 semanas",
+    snoozedCount: "{0} item(ns) adiado(s)",
+    snoozedUntil: "Adiado até {0}",
+    showSnoozed: "Mostrar adiados",
   },
 
   // ─── Undo ───────────────────────────────────────────────

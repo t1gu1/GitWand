@@ -1052,6 +1052,17 @@ const es: Locale = {
     issueFilterMentioned: "Me mencionan",
     issueFilterCreated: "Creadas por mí",
     issueMilestone: "Hito: {0}",
+    pin: "Fijar",
+    unpin: "Desfijar",
+    snooze: "Posponer",
+    unsnooze: "Cancelar posposición",
+    snooze1d: "1 día",
+    snooze3d: "3 días",
+    snooze1w: "1 semana",
+    snooze2w: "2 semanas",
+    snoozedCount: "{0} elemento(s) pospuesto(s)",
+    snoozedUntil: "Pospuesto hasta {0}",
+    showSnoozed: "Mostrar pospuestos",
   },
 
   // ─── Undo ───────────────────────────────────────────────

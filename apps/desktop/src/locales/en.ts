@@ -1080,6 +1080,17 @@ const en = {
     issueFilterMentioned: "Mentions me",
     issueFilterCreated: "Created by me",
     issueMilestone: "Milestone: {0}",
+    pin: "Pin",
+    unpin: "Unpin",
+    snooze: "Snooze",
+    unsnooze: "Cancel snooze",
+    snooze1d: "1 day",
+    snooze3d: "3 days",
+    snooze1w: "1 week",
+    snooze2w: "2 weeks",
+    snoozedCount: "{0} snoozed item(s)",
+    snoozedUntil: "Snoozed until {0}",
+    showSnoozed: "Show snoozed",
   },
 
   // ─── Undo ───────────────────────────────────────────────
