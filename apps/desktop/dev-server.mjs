@@ -3272,6 +3272,56 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/workspace-prs-all  { repos: [{ path, name }] }
+    if (url.pathname === "/api/workspace-prs-all" && req.method === "POST") {
+      try {
+        const { repos } = await readBody(req);
+        const results = repos.map(repo => {
+          try {
+            const raw = execSync(
+              "gh pr list --state open --json number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup --limit 100",
+              { cwd: repo.path, encoding: "utf-8" }
+            );
+            const ghPrs = JSON.parse(raw || "[]");
+            const prs = ghPrs.map(pr => ({
+              number: pr.number,
+              title: pr.title ?? "",
+              state: pr.state ?? "",
+              author: pr.author?.login ?? "",
+              branch: pr.headRefName ?? "",
+              base: pr.baseRefName ?? "",
+              draft: pr.isDraft ?? false,
+              created_at: pr.createdAt ?? "",
+              updated_at: pr.updatedAt ?? "",
+              url: pr.url ?? "",
+              additions: pr.additions ?? 0,
+              deletions: pr.deletions ?? 0,
+              labels: (pr.labels ?? []).map(l => l.name),
+              assignees: (pr.assignees ?? []).map(a => a.login).filter(Boolean),
+              review_requested: (pr.reviewRequests ?? [])
+                .map(rr => rr.requestedReviewer?.login)
+                .filter(Boolean),
+              review_decision: pr.reviewDecision ?? "",
+              merge_state_status: pr.mergeStateStatus ?? "",
+              checks_rollup: (pr.statusCheckRollup ?? [])
+                .map(c => c.conclusion)
+                .find(c => !!c) ?? "",
+            }));
+            return { repo_path: repo.path, repo_name: repo.name, prs, error: null };
+          } catch (e) {
+            return {
+              repo_path: repo.path, repo_name: repo.name,
+              prs: [],
+              error: e.message,
+            };
+          }
+        });
+        return jsonResponse(req, res, results);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // GET /api/git-worktree-status-all?cwd=<path>
     if (url.pathname === "/api/git-worktree-status-all" && req.method === "GET") {
       try {

@@ -1048,6 +1048,15 @@ const fr: Locale = {
     noUpstream: "pas d'amont",
     clean: "Propre",
     lastCommit: "Dernier commit {0}",
+    prsTab: "PRs",
+    noPrs: "Aucune pull request ouverte dans cet espace de travail.",
+    prDraft: "Brouillon",
+    prApproved: "Approuvée",
+    prChangesRequested: "Modifications demandées",
+    prReviewRequired: "Revue requise",
+    prCiSuccess: "CI réussie",
+    prCiFailure: "CI échouée",
+    prCiPending: "CI en cours",
   },
 
   // ─── Undo ───────────────────────────────────────────────

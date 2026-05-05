@@ -1038,6 +1038,15 @@ const ptBR: Locale = {
     noUpstream: "sem upstream",
     clean: "Limpo",
     lastCommit: "Último commit {0}",
+    prsTab: "PRs",
+    noPrs: "Nenhuma pull request aberta neste espaço de trabalho.",
+    prDraft: "Rascunho",
+    prApproved: "Aprovada",
+    prChangesRequested: "Mudanças solicitadas",
+    prReviewRequired: "Revisão necessária",
+    prCiSuccess: "CI passou",
+    prCiFailure: "CI falhou",
+    prCiPending: "CI pendente",
   },
 
   // ─── Undo ───────────────────────────────────────────────

@@ -4628,6 +4628,21 @@ pub struct WorkspaceWipItem {
     pub error: Option<String>,
 }
 
+/// Per-repo aggregator for the Launchpad PRs panel.
+/// `prs` contains all open PRs fetched via `gh pr list` for this repo.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceRepoPrs {
+    /// Filesystem path to the repository root.
+    repo_path: String,
+    /// Display name for the repository.
+    repo_name: String,
+    /// Open pull requests (empty on error or when none exist).
+    prs: Vec<PullRequest>,
+    /// Error message if `gh pr list` failed for this repo (None = OK).
+    error: Option<String>,
+}
+
 /// Read a `.gitwand-workspace.json` from the given directory.
 #[tauri::command]
 fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
@@ -4810,6 +4825,57 @@ fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
             last_commit_at,
             has_no_upstream,
             error: None,
+        }
+    })
+    .collect()
+}
+
+/// Aggregate open PRs from all repos in a workspace (via `gh pr list`).
+/// Best-effort: gh failures per repo are captured in the `error` field.
+#[tauri::command]
+fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
+    repos.into_iter().map(|repo| {
+        let repo_path = repo.path.clone();
+        let repo_name = repo.name.clone();
+
+        let output = hidden_cmd("gh")
+            .args([
+                "pr", "list",
+                "--state", "open",
+                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
+                "--limit", "100",
+            ])
+            .current_dir(&repo_path)
+            .output();
+
+        match output {
+            Err(e) => WorkspaceRepoPrs {
+                repo_path,
+                repo_name,
+                prs: vec![],
+                error: Some(format!("gh not available: {}", e)),
+            },
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                WorkspaceRepoPrs {
+                    repo_path,
+                    repo_name,
+                    prs: vec![],
+                    error: Some(format!("gh pr list failed: {}", stderr.trim())),
+                }
+            }
+            Ok(out) => {
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                match parse_gh_pr_json(&stdout) {
+                    Ok(prs) => WorkspaceRepoPrs { repo_path, repo_name, prs, error: None },
+                    Err(e) => WorkspaceRepoPrs {
+                        repo_path,
+                        repo_name,
+                        prs: vec![],
+                        error: Some(e),
+                    },
+                }
+            }
         }
     })
     .collect()
@@ -6086,6 +6152,7 @@ pub fn run() {
             workspace_fetch_all,
             workspace_pull_all,
             workspace_wip_all,
+            workspace_prs_all,
             git_worktree_status_all,
             git_worktree_list,
             git_worktree_add,
@@ -6331,5 +6398,36 @@ mod tests {
         assert_eq!(s, 2, "UU and AA both staged (X = U or A)");
         assert_eq!(u, 2, "UU and AA both unstaged (Y = U or A)");
         assert_eq!(t, 0, "no untracked");
+    }
+
+    #[test]
+    fn workspace_repo_prs_serializes_camel_case_fields() {
+        let item = WorkspaceRepoPrs {
+            repo_path: "/path/to/repo".to_string(),
+            repo_name: "my-repo".to_string(),
+            prs: vec![],
+            error: None,
+        };
+        let json = serde_json::to_string(&item).unwrap();
+        // #[serde(rename_all = "camelCase")] must produce camelCase keys
+        assert!(json.contains("\"repoPath\""), "repo_path should serialize as repoPath, got: {}", json);
+        assert!(json.contains("\"repoName\""), "repo_name should serialize as repoName, got: {}", json);
+        assert!(!json.contains("\"repo_path\""), "snake_case must not appear: {}", json);
+        assert!(!json.contains("\"repo_name\""), "snake_case must not appear: {}", json);
+        assert!(json.contains("\"prs\""), "prs field must appear in JSON, got: {}", json);
+    }
+
+    #[test]
+    fn workspace_repo_prs_error_serializes() {
+        let item = WorkspaceRepoPrs {
+            repo_path: "/path".to_string(),
+            repo_name: "repo".to_string(),
+            prs: vec![],
+            error: Some("gh: command not found".to_string()),
+        };
+        let json = serde_json::to_string(&item).unwrap();
+        assert!(json.contains("\"gh: command not found\""), "error message must appear in JSON");
+        // error field itself should be camelCase (it's a single word, stays "error")
+        assert!(json.contains("\"error\":\"gh: command not found\""), "error key+value must appear together: {}", json);
     }
 }

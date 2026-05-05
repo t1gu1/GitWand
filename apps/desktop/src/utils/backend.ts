@@ -2732,6 +2732,18 @@ export interface WorkspaceWipItem {
   error: string | null;
 }
 
+/** Per-repo container for the Launchpad PRs panel. */
+export interface WorkspaceRepoPrs {
+  /** Filesystem path to the repo. */
+  repoPath: string;
+  /** Display name for the repo. */
+  repoName: string;
+  /** Open pull requests (empty on error or when none exist). */
+  prs: PullRequest[];
+  /** Error if gh pr list failed for this repo (null = OK). */
+  error: string | null;
+}
+
 /** Read a .gitwand-workspace.json from the given directory. */
 export async function workspaceRead(path: string): Promise<WorkspaceConfig> {
   if (isTauri()) {
@@ -2820,6 +2832,65 @@ export async function workspaceWipAll(repos: WorkspaceRepo[]): Promise<Workspace
     untrackedCount: (item.untracked_count as number) ?? 0,
     lastCommitAt: (item.last_commit_at as string) ?? "",
     hasNoUpstream: (item.has_no_upstream as boolean) ?? false,
+    error: (item.error as string | null) ?? null,
+  }));
+}
+
+/** Map a raw snake_case PR object (from Tauri or dev-server) to the typed PullRequest interface. */
+function mapRawPr(pr: Record<string, unknown>): PullRequest {
+  return {
+    number: (pr.number as number) ?? 0,
+    title: (pr.title as string) ?? "",
+    state: (pr.state as string) ?? "",
+    author: (pr.author as string) ?? "",
+    branch: (pr.branch as string) ?? "",
+    base: (pr.base as string) ?? "",
+    draft: (pr.draft as boolean) ?? false,
+    createdAt: (pr.created_at as string) ?? "",
+    updatedAt: (pr.updated_at as string) ?? "",
+    url: (pr.url as string) ?? "",
+    additions: (pr.additions as number) ?? 0,
+    deletions: (pr.deletions as number) ?? 0,
+    labels: (pr.labels as string[]) ?? [],
+    assignees: (pr.assignees as string[]) ?? [],
+    reviewRequested: (pr.review_requested as string[]) ?? [],
+    reviewDecision: (pr.review_decision as string) ?? "",
+    mergeStateStatus: (pr.merge_state_status as string) ?? "",
+    checksRollup: (pr.checks_rollup as string) ?? "",
+  };
+}
+
+/** Aggregate open PRs from all repos in a workspace (requires `gh` CLI). */
+export async function workspacePrsAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoPrs[]> {
+  if (isTauri()) {
+    // Tauri bridge: outer fields are camelCase (serde rename_all),
+    // but nested PullRequest fields are still snake_case.
+    const raw = await tauriInvoke<
+      Array<{
+        repoPath: string;
+        repoName: string;
+        prs: Array<Record<string, unknown>>;
+        error: string | null;
+      }>
+    >("workspace_prs_all", { repos });
+    return raw.map((item) => ({
+      repoPath: item.repoPath,
+      repoName: item.repoName,
+      prs: item.prs.map(mapRawPr),
+      error: item.error,
+    }));
+  }
+  const res = await fetch(`${DEV_SERVER}/api/workspace-prs-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ repos }),
+  });
+  if (!res.ok) throw new Error(`Failed to get workspace PRs: ${res.status}`);
+  const raw = (await res.json()) as Array<Record<string, unknown>>;
+  return raw.map((item) => ({
+    repoPath: (item.repo_path as string) ?? "",
+    repoName: (item.repo_name as string) ?? "",
+    prs: ((item.prs as Array<Record<string, unknown>>) ?? []).map(mapRawPr),
     error: (item.error as string | null) ?? null,
   }));
 }
