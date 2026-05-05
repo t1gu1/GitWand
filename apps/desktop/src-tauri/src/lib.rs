@@ -5943,6 +5943,10 @@ fn parse_wip_status(output: &str) -> (u32, u32, u32) {
     let mut staged = 0u32;
     let mut unstaged = 0u32;
     let mut untracked = 0u32;
+    // Note: merge-conflict codes (UU, AA, AU, etc.) have U in X and/or Y positions.
+    // Under this classification, they increment both staged and unstaged counts,
+    // which is intentional for v1 — the WIP panel shows "activity", not a detailed conflict view.
+    // A future iteration may add a dedicated conflict_count field.
     for line in output.lines() {
         if line.len() < 2 {
             continue;
@@ -6131,5 +6135,17 @@ mod tests {
         let out = "\n";
         let (s, u, t) = parse_wip_status(out);
         assert_eq!((s, u, t), (0, 0, 0), "trailing newline only = empty");
+    }
+
+    #[test]
+    fn wip_status_conflicts() {
+        // Merge-conflict codes (UU, AA, etc.) count in both staged and unstaged
+        // because U != ' '/'?'/'!' for both X and Y.
+        // This is intentional: conflict files show up as "active" in both dimensions.
+        let out = "UU conflict.rs\nAA added_both.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 2, "UU and AA both staged (X = U or A)");
+        assert_eq!(u, 2, "UU and AA both unstaged (Y = U or A)");
+        assert_eq!(t, 0, "no untracked");
     }
 }
