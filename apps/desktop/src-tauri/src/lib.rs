@@ -5829,6 +5829,12 @@ pub fn run() {
         .expect("error while running GitWand");
 }
 
+/// Parse `git status --porcelain` output.
+/// Returns (staged_count, unstaged_count, untracked_count).
+fn parse_wip_status(_output: &str) -> (u32, u32, u32) {
+    todo!()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5937,5 +5943,54 @@ mod tests {
         assert_eq!(prs[1].number, 2);
         assert!(prs[1].draft);
         assert_eq!(prs[1].review_decision, "APPROVED");
+    }
+
+    #[test]
+    fn wip_status_empty() {
+        let (s, u, t) = parse_wip_status("");
+        assert_eq!((s, u, t), (0, 0, 0));
+    }
+
+    #[test]
+    fn wip_status_untracked_only() {
+        let out = "?? new_file.rs\n?? another.txt\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 0, "no staged");
+        assert_eq!(u, 0, "no unstaged");
+        assert_eq!(t, 2, "two untracked");
+    }
+
+    #[test]
+    fn wip_status_staged_only() {
+        // "A " = new file added to index; "M " = modified in index, clean worktree
+        let out = "A  staged_new.rs\nM  staged_mod.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 2, "two staged");
+        assert_eq!(u, 0, "no unstaged");
+        assert_eq!(t, 0, "no untracked");
+    }
+
+    #[test]
+    fn wip_status_unstaged_only() {
+        // " M" = clean index, modified worktree
+        let out = " M worktree_mod.rs\n D deleted_worktree.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        assert_eq!(s, 0, "no staged");
+        assert_eq!(u, 2, "two unstaged");
+        assert_eq!(t, 0, "no untracked");
+    }
+
+    #[test]
+    fn wip_status_mixed() {
+        // MM = both staged and unstaged modifications to same file
+        let out = "MM both.rs\nA  staged.rs\n?? untracked.rs\n M unstaged.rs\n";
+        let (s, u, t) = parse_wip_status(out);
+        // "MM": X=M (staged), Y=M (unstaged)
+        // "A ": X=A (staged), Y=' ' (not unstaged)
+        // "??": untracked
+        // " M": X=' ' (not staged), Y=M (unstaged)
+        assert_eq!(s, 2, "MM + A = 2 staged");
+        assert_eq!(u, 2, "MM + M = 2 unstaged");
+        assert_eq!(t, 1, "one untracked");
     }
 }
