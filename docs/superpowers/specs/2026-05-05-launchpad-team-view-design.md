@@ -61,7 +61,6 @@ Rust side: `git status --porcelain` parsed to extract file paths (column 4+), de
 ```typescript
 interface TeamMemberActivity {
   login: string
-  avatarUrl: string            // from PullRequest.author
   prs: PrWithRepo[]            // all open PRs by this member (non-self)
   overlappingPrs: OverlappingPr[]  // subset with confirmed file overlap
 }
@@ -95,27 +94,14 @@ refresh(repos: WorkspaceRepo[]): Promise<void>
 ### `refresh()` implementation steps
 
 1. Resolve identity: `await ghCurrentUser()` (cached — no repeat call)
-2. Fetch PRs: `await workspacePrsAll(repos)` → flatten → filter `author.login !== currentUser`
+2. Fetch PRs: `await workspacePrsAll(repos)` → flatten → split into `myPrs` (`author.login === currentUser`) and `colleaguePrs` (`author.login !== currentUser`)
 3. Fetch WIP: `await workspaceWipAll(repos)` → extract `changedFiles` per repo
-4. My changed files = union of all `changedFiles` across repos (for overlap detection)
-5. If no WIP files → collect my branch files via `prFiles` for my own open branches (fallback — `myContext: "branch"`)
-6. For each colleague PR: lazy-load `await prFiles(repoPath, pr.number)`
-7. Compute `overlappingFiles = intersection(myFiles, colleaguePrFiles)`
-8. Build `TeamMemberActivity[]`, mark `OverlappingPr` entries
-9. Sort: overlap members first, then alphabetical
-
-### Identity cache
-
-```typescript
-// Module-level — survives across refresh() calls
-let _currentUser: string | null = null
-
-async function ghCurrentUser(): Promise<string> {
-  if (_currentUser) return _currentUser
-  _currentUser = await /* invoke gh_current_user */
-  return _currentUser
-}
-```
+4. My changed files (`myFiles`) = union of all `changedFiles` across repos
+5. If `myFiles` is empty (no WIP) → fetch files for `myPrs` in parallel (`Promise.all`) → `myFiles` = union of those file lists (`myContext: "branch"`)
+6. For each colleague PR: lazy-load `await prFiles(repoPath, pr.number)` in parallel (`Promise.all`)
+7. Compute `overlappingFiles = intersection(myFiles, colleaguePrFiles)` per PR
+8. Build `TeamMemberActivity[]` from `colleaguePrs`, mark `OverlappingPr` entries
+9. Sort: overlap members first, then alphabetical by `login`
 
 ---
 
@@ -161,8 +147,8 @@ export async function prFiles(
 ### `dev-server.mjs` mock endpoints
 
 ```
-GET /api/gh-current-user          → "mock-user"
-GET /api/pr-files/:number         → ["src/auth.ts", "src/utils/token.ts"]
+GET /api/gh-current-user              → "mock-user"
+GET /api/pr-files/:repo/:number       → ["src/auth.ts", "src/utils/token.ts"]
 ```
 
 `workspace_wip_all` mock extended: at least one repo returns `changedFiles: ["src/auth.ts"]`.
@@ -195,8 +181,8 @@ Extend `type Tab = "wip" | "prs" | "issues" | "team"`. Add fourth `<button>` wit
 
 ### MemberCard
 
-- Avatar: colored circle with first letter of `login` (no external image fetch — avoids rate limits)
-- Login in matching color
+- Avatar: colored circle with first letter of `login` — color deterministic from login hash, palette of 6 colors (no external image fetch — avoids rate limits)
+- Login label in matching color
 - PR count: `t("launchpad.teamPrCount", N)`
 - Collapsed by default for members without overlap; expanded for members with overlap
 
