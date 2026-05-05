@@ -19,7 +19,7 @@ import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
-import RebaseProgressBanner from "./components/RebaseProgressBanner.vue";
+import RebaseProgressModal from "./components/RebaseProgressBanner.vue";
 import StashManager from "./components/StashManager.vue";
 import TagsPanel from "./components/TagsPanel.vue";
 import AiSparkle from "./components/AiSparkle.vue";
@@ -1580,15 +1580,6 @@ onUnmounted(() => {
             </div>
           </Transition>
 
-          <!-- Plain rebase-in-progress banner (pull --rebase with conflicts) -->
-          <RebaseProgressBanner
-            v-if="showRebaseBanner && repoOperationState"
-            :repo-state="repoOperationState"
-            :cwd="repoFolderPath"
-            @action-done="onRebaseBannerActionDone"
-            @error="(msg) => { repoError = msg; }"
-          />
-
           <!-- Conflict banner (merge or cherry-pick) -->
           <div v-if="hasConflicts" class="conflict-banner" role="alert">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
@@ -1727,6 +1718,15 @@ onUnmounted(() => {
       :entry="editingCommit"
       @confirm="handleAmendConfirm"
       @cancel="editingCommit = null"
+    />
+
+    <!-- Plain rebase-in-progress modal (pull --rebase paused on conflicts) -->
+    <RebaseProgressModal
+      v-if="showRebaseBanner && repoOperationState"
+      :repo-state="repoOperationState"
+      :cwd="repoFolderPath ?? ''"
+      @action-done="onRebaseBannerActionDone"
+      @error="(msg) => { repoError = msg; }"
     />
 
     <!-- Merge success modal -->

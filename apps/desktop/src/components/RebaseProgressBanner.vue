@@ -1,14 +1,17 @@
 <script setup lang="ts">
 /**
- * RebaseProgressBanner — sticky banner shown when a plain rebase (e.g. from
- * `git pull --rebase`) is paused due to conflicts.
+ * RebaseProgressModal — shown as a centred modal when a plain rebase
+ * (e.g. from `git pull --rebase`) is paused due to conflicts.
  *
- * Distinct from the interactive RebaseEditor: this handles the simpler case
- * of a non-interactive rebase where the user just needs Continue / Skip / Abort.
+ * Distinct from the interactive RebaseEditor: this handles the simpler
+ * case where the user just needs Continue / Skip / Abort.
+ *
+ * Design mirrors MergeSuccessModal (BaseModal sm, hide-header, bm-btn).
  */
 import { ref, computed } from "vue";
 import type { RepoOperationState } from "../utils/backend";
 import { t } from "../composables/useI18n";
+import BaseModal from "./BaseModal.vue";
 
 const props = defineProps<{
   repoState: RepoOperationState;
@@ -30,11 +33,9 @@ const shortHead = computed(() =>
 
 const stepLabel = computed(() => {
   if (props.repoState.step && props.repoState.total)
-    return `(${props.repoState.step}/${props.repoState.total})`;
+    return `${props.repoState.step} / ${props.repoState.total}`;
   return "";
 });
-
-const canContinue = computed(() => !props.repoState.hasConflict);
 
 async function runAction(action: "continue" | "abort" | "skip") {
   if (busy.value) return;
@@ -52,175 +53,168 @@ async function runAction(action: "continue" | "abort" | "skip") {
 </script>
 
 <template>
-  <div class="rpb" role="status" aria-live="polite">
-    <!-- Icon -->
-    <svg class="rpb__icon" width="15" height="15" viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <polyline points="17 1 21 5 17 9"/>
-      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-      <polyline points="7 23 3 19 7 15"/>
-      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>
+  <BaseModal
+    size="sm"
+    hide-header
+    :aria-label="t('rebase.bannerTitle')"
+    @close="runAction('abort')"
+  >
+    <div class="rpm-body">
+      <!-- Icon -->
+      <div class="rpm-icon" :class="{ 'rpm-icon--conflict': repoState.hasConflict }">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx="24" cy="24" r="24" />
+          <!-- rebase arrows -->
+          <path d="M17 12v6a4 4 0 0 0 4 4h6m0 0-3-3m3 3-3 3" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M31 36v-6a4 4 0 0 0-4-4h-6m0 0 3 3m-3-3 3-3" stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </div>
 
-    <!-- Label -->
-    <div class="rpb__text">
-      <span class="rpb__title">{{ t('rebase.bannerTitle') }}</span>
-      <span v-if="shortHead || stepLabel" class="rpb__meta">
+      <h2 class="rpm-title">{{ t('rebase.bannerTitle') }}</h2>
+
+      <!-- Meta: commit + step -->
+      <p class="rpm-meta" v-if="shortHead || stepLabel">
         <code v-if="shortHead">{{ shortHead }}</code>
-        <span v-if="stepLabel">{{ stepLabel }}</span>
-        <span v-if="repoState.targetBranch">→ {{ repoState.targetBranch }}</span>
-      </span>
-      <span v-if="repoState.hasConflict" class="rpb__hint">
+        <span v-if="repoState.targetBranch">→ <strong>{{ repoState.targetBranch }}</strong></span>
+        <span v-if="stepLabel" class="rpm-step">{{ stepLabel }}</span>
+      </p>
+
+      <!-- Status hint -->
+      <p v-if="repoState.hasConflict" class="rpm-hint rpm-hint--conflict">
         {{ t('rebase.bannerConflictHint') }}
-      </span>
-      <span v-else class="rpb__hint rpb__hint--ready">
+      </p>
+      <p v-else class="rpm-hint rpm-hint--ready">
         {{ t('rebase.bannerReadyHint') }}
-      </span>
+      </p>
     </div>
 
-    <!-- Actions -->
-    <div class="rpb__actions">
+    <template #footer>
+      <!-- Abort (left-aligned ghost-danger) -->
       <button
-        class="rpb__btn rpb__btn--primary"
-        :disabled="busy || repoState.hasConflict"
-        :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
-        @click="runAction('continue')"
-      >
-        <span v-if="busy" class="rpb__spinner" aria-hidden="true"/>
-        {{ t('rebase.continue') }}
-      </button>
-      <button
-        class="rpb__btn"
+        class="bm-btn bm-btn--ghost bm-btn--danger rpm-btn-abort"
         :disabled="busy"
-        :title="t('rebase.skip')"
-        @click="runAction('skip')"
-      >
-        {{ t('rebase.skip') }}
-      </button>
-      <button
-        class="rpb__btn rpb__btn--danger"
-        :disabled="busy"
-        :title="t('rebase.abort')"
         @click="runAction('abort')"
       >
         {{ t('rebase.abort') }}
       </button>
-    </div>
-  </div>
+
+      <!-- Skip -->
+      <button
+        class="bm-btn bm-btn--ghost"
+        :disabled="busy"
+        @click="runAction('skip')"
+      >
+        {{ t('rebase.skip') }}
+      </button>
+
+      <!-- Continue (primary, disabled while conflicts remain) -->
+      <button
+        class="bm-btn bm-btn--primary"
+        :disabled="busy || repoState.hasConflict"
+        :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
+        @click="runAction('continue')"
+      >
+        <span v-if="busy" class="rpm-spinner" aria-hidden="true" />
+        {{ t('rebase.continue') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
 
 <style scoped>
-.rpb {
+/* ── Body ────────────────────────────────────────────────────────────── */
+.rpm-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-3) var(--space-2);
+}
+
+/* ── Icon ────────────────────────────────────────────────────────────── */
+.rpm-icon svg circle {
+  fill: var(--color-warning-soft, rgba(249, 226, 175, 0.15));
+}
+.rpm-icon svg path {
+  stroke: var(--gw-yellow, #f9e2af);
+}
+
+.rpm-icon--conflict svg circle {
+  fill: rgba(243, 139, 168, 0.12);
+}
+.rpm-icon--conflict svg path {
+  stroke: var(--gw-red, #f38ba8);
+}
+
+/* ── Text ────────────────────────────────────────────────────────────── */
+.rpm-title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.rpm-meta {
+  margin: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: var(--gw-bg-secondary, #1e1e2e);
-  border-bottom: 1px solid var(--gw-border, #333);
-  border-left: 3px solid var(--gw-yellow, #f9e2af);
-  font-size: 12px;
-  flex-shrink: 0;
-}
-
-.rpb__icon {
-  color: var(--gw-yellow, #f9e2af);
-  flex-shrink: 0;
-}
-
-.rpb__text {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
   gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
   flex-wrap: wrap;
-  min-width: 0;
+  justify-content: center;
 }
 
-.rpb__title {
-  font-weight: 600;
-  color: var(--gw-fg, #cdd6f4);
-  white-space: nowrap;
-}
-
-.rpb__meta {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  color: var(--gw-fg-muted, #7f849c);
-}
-
-.rpb__meta code {
+.rpm-meta code {
   font-family: var(--gw-font-mono, monospace);
-  background: var(--gw-bg-tertiary, #313244);
-  padding: 0 4px;
+  background: var(--color-bg-tertiary, #313244);
+  padding: 1px 5px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
-.rpb__hint {
-  color: var(--gw-fg-muted, #7f849c);
-  font-style: italic;
+.rpm-step {
+  background: var(--color-bg-tertiary, #313244);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: var(--font-size-xs);
 }
 
-.rpb__hint--ready {
-  color: var(--gw-green, #a6e3a1);
+.rpm-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: var(--line-height-normal);
 }
 
-.rpb__actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.rpb__btn {
-  padding: 3px 10px;
-  border-radius: 5px;
-  border: 1px solid var(--gw-border, #444);
-  background: var(--gw-bg-tertiary, #313244);
-  color: var(--gw-fg, #cdd6f4);
-  font-size: 11px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: background 0.15s, opacity 0.15s;
-}
-.rpb__btn:hover:not(:disabled) {
-  background: var(--gw-bg-hover, #45475a);
-}
-.rpb__btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.rpb__btn--primary {
-  background: var(--gw-purple, #7c3aed);
-  border-color: var(--gw-purple, #7c3aed);
-  color: #fff;
-  font-weight: 600;
-}
-.rpb__btn--primary:hover:not(:disabled) {
-  background: var(--gw-purple-hover, #6d28d9);
-}
-
-.rpb__btn--danger {
+.rpm-hint--conflict {
   color: var(--gw-red, #f38ba8);
 }
-.rpb__btn--danger:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--gw-red, #f38ba8) 12%, var(--gw-bg-tertiary, #313244));
+
+.rpm-hint--ready {
+  color: var(--color-success, #a6e3a1);
 }
 
-.rpb__spinner {
-  width: 10px;
-  height: 10px;
-  border: 2px solid rgba(255,255,255,0.3);
+/* ── Footer overrides ────────────────────────────────────────────────── */
+.rpm-btn-abort {
+  margin-right: auto;   /* push skip + continue to the right */
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────── */
+.rpm-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
   border-radius: 50%;
-  animation: rpb-spin 0.7s linear infinite;
+  animation: rpm-spin 0.6s linear infinite;
   flex-shrink: 0;
 }
 
-@keyframes rpb-spin {
+@keyframes rpm-spin {
   to { transform: rotate(360deg); }
 }
 </style>
