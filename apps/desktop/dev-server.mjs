@@ -1249,6 +1249,78 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // POST /api/git-repo-state  { cwd }
+    if (url.pathname === "/api/git-repo-state" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const { execSync: es } = await import("node:child_process");
+        const fs = await import("node:fs");
+        const path = await import("node:path");
+
+        // Resolve .git dir
+        const gitDirRaw = es("git rev-parse --git-dir", { cwd: resolvedCwd, encoding: "utf-8" }).trim();
+        const gitDir = path.isAbsolute(gitDirRaw) ? gitDirRaw : path.join(resolvedCwd, gitDirRaw);
+
+        const readTrimmed = (p) => { try { return fs.readFileSync(p, "utf-8").trim(); } catch { return null; } };
+        const readU32 = (p) => { const s = readTrimmed(p); return s ? (parseInt(s, 10) || 0) : 0; };
+        const hasConflict = () => {
+          try {
+            const out = es("git status --porcelain", { cwd: resolvedCwd, encoding: "utf-8" });
+            return out.split("\n").some(l => ["UU","AA","UD","DU","AU","UA"].includes(l.slice(0,2)));
+          } catch { return false; }
+        };
+
+        const rebaseMerge = path.join(gitDir, "rebase-merge");
+        if (fs.existsSync(rebaseMerge)) {
+          const isInteractive = fs.existsSync(path.join(rebaseMerge, "interactive"));
+          return jsonResponse(req, res, {
+            state: isInteractive ? "rebase_interactive" : "rebase",
+            hasConflict: hasConflict(),
+            operationHead: readTrimmed(path.join(gitDir, "REBASE_HEAD")),
+            targetBranch: (readTrimmed(path.join(rebaseMerge, "head-name")) || "").replace("refs/heads/", "") || null,
+            step: readU32(path.join(rebaseMerge, "msgnum")),
+            total: readU32(path.join(rebaseMerge, "end")),
+          });
+        }
+        const rebaseApply = path.join(gitDir, "rebase-apply");
+        if (fs.existsSync(rebaseApply)) {
+          return jsonResponse(req, res, {
+            state: "rebase",
+            hasConflict: hasConflict(),
+            operationHead: readTrimmed(path.join(gitDir, "REBASE_HEAD")),
+            targetBranch: (readTrimmed(path.join(rebaseApply, "head-name")) || "").replace("refs/heads/", "") || null,
+            step: readU32(path.join(rebaseApply, "next")),
+            total: readU32(path.join(rebaseApply, "last")),
+          });
+        }
+        for (const [head, state] of [["MERGE_HEAD","merge"],["CHERRY_PICK_HEAD","cherry_pick"],["REVERT_HEAD","revert"]]) {
+          const headFile = path.join(gitDir, head);
+          if (fs.existsSync(headFile)) {
+            return jsonResponse(req, res, { state, hasConflict: hasConflict(), operationHead: readTrimmed(headFile), targetBranch: null, step: 0, total: 0 });
+          }
+        }
+        return jsonResponse(req, res, { state: "clean", hasConflict: false, operationHead: null, targetBranch: null, step: 0, total: 0 });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-rebase-action  { cwd, action: "continue"|"abort"|"skip" }
+    if (url.pathname === "/api/git-rebase-action" && req.method === "POST") {
+      const { cwd, action } = await readBody(req);
+      if (!cwd || !["continue","abort","skip"].includes(action))
+        return jsonResponse(req, res, { error: "Missing cwd or invalid action" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execSync(`git rebase --${action}`, { cwd: resolvedCwd, encoding: "utf-8", shell: true, env: { ...process.env, GIT_EDITOR: "true", GIT_TERMINAL_PROMPT: "0" } });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr || err.message }, 500);
+      }
+    }
+
     // GET /api/git-file-diff?cwd=<path>&path=<file>&from=<hash>&to=<hash>
     if (url.pathname === "/api/git-file-diff" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");

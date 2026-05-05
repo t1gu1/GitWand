@@ -1826,6 +1826,187 @@ fn git_pull(cwd: String) -> Result<GitPushPullResult, String> {
     })
 }
 
+// ─── Git repo state (rebase / merge in progress) ─────────────
+
+/// Reads file as trimmed string, returns None on any error.
+fn read_git_file(path: &std::path::Path) -> Option<String> {
+    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+}
+
+/// Reads file as u32, returns 0 on any error.
+fn read_git_u32(path: &std::path::Path) -> u32 {
+    read_git_file(path).and_then(|s| s.parse().ok()).unwrap_or(0)
+}
+
+/// Checks if the working tree has unresolved conflict markers (UU, AA, UD, DU, AU, UA).
+fn has_unresolved_conflicts(cwd: &str) -> bool {
+    git_cmd()
+        .args(["status", "--porcelain"])
+        .current_dir(cwd)
+        .output()
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .any(|l| matches!(l.get(..2), Some("UU" | "AA" | "UD" | "DU" | "AU" | "UA")))
+        })
+        .unwrap_or(false)
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RepoOperationState {
+    /// "clean" | "rebase" | "rebase_interactive" | "merge" | "cherry_pick" | "revert"
+    pub state: String,
+    /// True when there are still unresolved conflict markers in the working tree.
+    pub has_conflict: bool,
+    /// SHA of the commit being applied (REBASE_HEAD / MERGE_HEAD / CHERRY_PICK_HEAD).
+    pub operation_head: Option<String>,
+    /// Branch or ref being rebased onto (from rebase-merge/head-name).
+    pub target_branch: Option<String>,
+    /// 1-based current step within the rebase sequence (0 when unknown).
+    pub step: u32,
+    /// Total steps in the rebase sequence (0 when unknown).
+    pub total: u32,
+}
+
+/// Returns the current operation state of the repository by inspecting the
+/// .git directory directly — more reliable than parsing locale-dependent
+/// `git status` messages.
+///
+/// Detects:
+/// - Plain rebase in progress (.git/rebase-merge without "interactive" file,
+///   or .git/rebase-apply) — triggered by `git pull --rebase` conflicts
+/// - Interactive rebase (.git/rebase-merge + "interactive" file)
+/// - Merge in progress (.git/MERGE_HEAD)
+/// - Cherry-pick in progress (.git/CHERRY_PICK_HEAD)
+/// - Revert in progress (.git/REVERT_HEAD)
+#[tauri::command]
+fn git_repo_state(cwd: String) -> Result<RepoOperationState, String> {
+    // Resolve .git directory (handles worktrees: .git may be a file pointing elsewhere)
+    let git_dir_out = git_cmd()
+        .args(["rev-parse", "--git-dir"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("rev-parse --git-dir failed: {}", e))?;
+    let git_dir_rel = String::from_utf8_lossy(&git_dir_out.stdout).trim().to_string();
+    let git_dir = if git_dir_rel.starts_with('/') || (git_dir_rel.len() > 2 && git_dir_rel.chars().nth(1) == Some(':')) {
+        std::path::PathBuf::from(&git_dir_rel)
+    } else {
+        std::path::Path::new(&cwd).join(&git_dir_rel)
+    };
+
+    // ── Plain or interactive rebase (git >= 2.26: rebase-merge dir) ───────
+    let rebase_merge = git_dir.join("rebase-merge");
+    if rebase_merge.exists() {
+        let is_interactive = rebase_merge.join("interactive").exists();
+        let step  = read_git_u32(&rebase_merge.join("msgnum"));
+        let total = read_git_u32(&rebase_merge.join("end"));
+        let head  = read_git_file(&git_dir.join("REBASE_HEAD"));
+        let branch = read_git_file(&rebase_merge.join("head-name"))
+            .map(|s| s.trim_start_matches("refs/heads/").to_string());
+        return Ok(RepoOperationState {
+            state: if is_interactive { "rebase_interactive".into() } else { "rebase".into() },
+            has_conflict: has_unresolved_conflicts(&cwd),
+            operation_head: head,
+            target_branch: branch,
+            step,
+            total,
+        });
+    }
+
+    // ── Old-style rebase-apply (git am / old --apply) ─────────────────────
+    let rebase_apply = git_dir.join("rebase-apply");
+    if rebase_apply.exists() {
+        let step  = read_git_u32(&rebase_apply.join("next"));
+        let total = read_git_u32(&rebase_apply.join("last"));
+        let head  = read_git_file(&git_dir.join("REBASE_HEAD"));
+        let branch = read_git_file(&rebase_apply.join("head-name"))
+            .map(|s| s.trim_start_matches("refs/heads/").to_string());
+        return Ok(RepoOperationState {
+            state: "rebase".into(),
+            has_conflict: has_unresolved_conflicts(&cwd),
+            operation_head: head,
+            target_branch: branch,
+            step,
+            total,
+        });
+    }
+
+    // ── Merge in progress ─────────────────────────────────────────────────
+    let merge_head = git_dir.join("MERGE_HEAD");
+    if merge_head.exists() {
+        return Ok(RepoOperationState {
+            state: "merge".into(),
+            has_conflict: has_unresolved_conflicts(&cwd),
+            operation_head: read_git_file(&merge_head),
+            target_branch: None,
+            step: 0,
+            total: 0,
+        });
+    }
+
+    // ── Cherry-pick in progress ───────────────────────────────────────────
+    let cherry_head = git_dir.join("CHERRY_PICK_HEAD");
+    if cherry_head.exists() {
+        return Ok(RepoOperationState {
+            state: "cherry_pick".into(),
+            has_conflict: has_unresolved_conflicts(&cwd),
+            operation_head: read_git_file(&cherry_head),
+            target_branch: None,
+            step: 0,
+            total: 0,
+        });
+    }
+
+    // ── Revert in progress ────────────────────────────────────────────────
+    let revert_head = git_dir.join("REVERT_HEAD");
+    if revert_head.exists() {
+        return Ok(RepoOperationState {
+            state: "revert".into(),
+            has_conflict: has_unresolved_conflicts(&cwd),
+            operation_head: read_git_file(&revert_head),
+            target_branch: None,
+            step: 0,
+            total: 0,
+        });
+    }
+
+    // ── Clean ─────────────────────────────────────────────────────────────
+    Ok(RepoOperationState {
+        state: "clean".into(),
+        has_conflict: false,
+        operation_head: None,
+        target_branch: None,
+        step: 0,
+        total: 0,
+    })
+}
+
+/// Run `git rebase --continue`, `--abort`, or `--skip`.
+/// GIT_EDITOR is set to `true` so no editor window ever opens (e.g. for
+/// commit-message editing during --continue).
+#[tauri::command]
+fn git_rebase_action(cwd: String, action: String) -> Result<(), String> {
+    let arg = match action.as_str() {
+        "continue" | "abort" | "skip" => action.as_str(),
+        _ => return Err(format!("Unknown rebase action '{}'", action)),
+    };
+    let output = git_cmd()
+        .args(["rebase", &format!("--{}", arg)])
+        .env("GIT_EDITOR", "true")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git rebase --{}: {}", arg, e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let msg = if stderr.is_empty() { stdout } else { stderr };
+        return Err(format!("git rebase --{} failed: {}", arg, msg));
+    }
+    Ok(())
+}
+
 // ─── Git discard changes ─────────────────────────────────────
 
 #[tauri::command]
@@ -5855,6 +6036,8 @@ pub fn run() {
             git_merge,
             git_merge_abort,
             git_merge_continue,
+            git_repo_state,
+            git_rebase_action,
             git_discard,
             git_show,
             git_branches,

@@ -1,0 +1,44 @@
+[package]
+name = "gitwand-desktop"
+version = "2.8.1"
+description = "GitWand Desktop — standalone merge conflict resolution"
+authors = ["Laurent Guitton <lb.guitton@gmail.com>"]
+license = "MIT"
+edition = "2021"
+
+[lib]
+name = "gitwand_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+# ─── Parity probe (P2.3) ─────────────────────────────────────
+#
+# Petit binaire de test qui expose les commandes Tauri critiques en CLI, pour
+# le harness de tests de parité Rust↔Node (`apps/desktop/tests/parity/`).
+#
+# Déclaré comme `[[example]]` plutôt que `[[bin]]` : tauri-bundler découvre
+# automatiquement toutes les entrées `[[bin]]` d'un package et tente de les
+# bundler comme binaires externes — ce qui cassait la release v1.5.1 car
+# `parity_probe` n'est pas compilé dans la configuration de release normale.
+# Les examples ne sont pas touchés par tauri-bundler et ne sont pas construits
+# par défaut, donc pas besoin d'un feature flag.
+#
+# Build : `cargo build --example parity-probe`
+# Sortie : `target/debug/examples/parity-probe`
+[[example]]
+name = "parity-probe"
+path = "examples/parity_probe.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+base64 = "0.22"

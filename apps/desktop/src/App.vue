@@ -19,6 +19,7 @@ import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
 import RebaseEditor from "./components/RebaseEditor.vue";
+import RebaseProgressBanner from "./components/RebaseProgressBanner.vue";
 import StashManager from "./components/StashManager.vue";
 import TagsPanel from "./components/TagsPanel.vue";
 import AiSparkle from "./components/AiSparkle.vue";
@@ -64,8 +65,8 @@ import { useCommitActions } from "./composables/useCommitActions";
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
 const { isOffline } = useNetworkStatus();
-import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate } from "./utils/backend";
-import type { UpdateInfo } from "./utils/backend";
+import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState } from "./utils/backend";
+import type { UpdateInfo, RepoOperationState } from "./utils/backend";
 import UpdateModal from "./components/UpdateModal.vue";
 
 const { theme, toggle: toggleTheme } = useTheme();
@@ -566,6 +567,12 @@ watch(hasRepo, (has) => {
   }
 });
 
+// Poll rebase state whenever status refreshes (covers pull --rebase conflicts,
+// staged-file changes after conflict resolution, and repo switches).
+watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
+// Also refresh on repo switch
+watch(() => repoFolderPath.value, () => { refreshRepoState(); });
+
 // ─── Repo sidebar events ────────────────────────────────
 function onRepoFileSelect(path: string, staged: boolean) {
   repoSelectFile(path, staged);
@@ -895,6 +902,32 @@ async function onForked(path: string) {
 
 // ─── Interactive rebase panel ────────────────────────────
 const showRebase = ref(false);
+
+// ─── Rebase-in-progress state (plain rebase from pull --rebase) ──────────
+// Polled after every repo refresh so the banner appears/disappears automatically.
+const repoOperationState = ref<RepoOperationState | null>(null);
+const showRebaseBanner = computed(() =>
+  repoOperationState.value !== null &&
+  (repoOperationState.value.state === "rebase") &&
+  repoFolderPath.value !== ""
+);
+
+async function refreshRepoState() {
+  if (!repoFolderPath.value) { repoOperationState.value = null; return; }
+  try {
+    const state = await gitRepoState(repoFolderPath.value);
+    // Only surface plain rebase — interactive rebase is handled by RebaseEditor
+    repoOperationState.value = state.state === "rebase" ? state : null;
+  } catch {
+    repoOperationState.value = null;
+  }
+}
+
+async function onRebaseBannerActionDone() {
+  // After continue/abort/skip: re-poll state, refresh repo
+  await refreshRepoState();
+  await repoRefresh();
+}
 
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
@@ -1518,6 +1551,15 @@ onUnmounted(() => {
               </button>
             </div>
           </Transition>
+
+          <!-- Plain rebase-in-progress banner (pull --rebase with conflicts) -->
+          <RebaseProgressBanner
+            v-if="showRebaseBanner && repoOperationState"
+            :repo-state="repoOperationState"
+            :cwd="repoFolderPath"
+            @action-done="onRebaseBannerActionDone"
+            @error="(msg) => { repoError = msg; }"
+          />
 
           <!-- Conflict banner (merge or cherry-pick) -->
           <div v-if="hasConflicts" class="conflict-banner" role="alert">

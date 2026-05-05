@@ -1,0 +1,48 @@
+{
+  "attribution": {
+    "commit": false,
+    "pr": false
+  },
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push -f)"
+    ],
+    "allow": [
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git checkout*)",
+      "Bash(git switch*)",
+      "Bash(git branch*)",
+      "Bash(git merge*)",
+      "Bash(git rebase*)",
+      "Bash(git stash*)",
+      "Bash(git tag*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git push*)",
+      "Bash(git worktree*)",
+      "Bash(git check-ignore*)",
+      "Bash(pnpm install*)",
+      "Bash(pnpm build*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm lint*)",
+      "Bash(pnpm bench*)",
+      "Bash(pnpm clean*)",
+      "Bash(pnpm -r run*)",
+      "Bash(pnpm -r build*)",
+      "Bash(pnpm -r test*)",
+      "Bash(./scripts/bump-version.sh*)",
+      "Bash(cargo check*)",
+      "Bash(cargo build*)",
+      "Bash(cargo test*)",
+      "Bash(cargo clippy*)",
+      "Bash(cargo fmt*)"
+    ]
+  }
+}

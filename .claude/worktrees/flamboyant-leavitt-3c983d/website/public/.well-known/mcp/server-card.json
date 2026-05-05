@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0",
+  "serverInfo": {
+    "name": "GitWand MCP Server",
+    "version": "2.8.1",
+    "description": "Smart Git conflict resolution for AI agents — auto-resolves trivial merge conflicts and guides AI through complex ones with a full DecisionTrace.",
+    "homepage": "https://gitwand.devlint.fr/guide/mcp",
+    "license": "MIT",
+    "publisher": {
+      "name": "Devlint",
+      "url": "https://github.com/devlint"
+    }
+  },
+  "install": {
+    "npm": "@gitwand/mcp",
+    "command": "npx @gitwand/mcp",
+    "mcpConfig": {
+      "command": "npx",
+      "args": ["@gitwand/mcp"]
+    }
+  },
+  "transport": {
+    "type": "stdio",
+    "description": "Runs as a local stdio process. Launch via npx or install globally."
+  },
+  "capabilities": {
+    "tools": [
+      {
+        "name": "gitwand_status",
+        "description": "List conflicted files in the current Git repo with conflict counts, types, and auto-resolvability scores."
+      },
+      {
+        "name": "gitwand_resolve_conflicts",
+        "description": "Auto-resolve trivial Git merge conflicts using GitWand's pattern-based engine. Returns DecisionTrace and pendingHunks for complex conflicts."
+      },
+      {
+        "name": "gitwand_preview_merge",
+        "description": "Dry-run conflict resolution — shows auto-resolvable vs. manual hunks without modifying files."
+      },
+      {
+        "name": "gitwand_explain_hunk",
+        "description": "Explain why a specific conflict hunk was classified as complex, with full DecisionTrace."
+      },
+      {
+        "name": "gitwand_apply_resolution",
+        "description": "Apply a custom resolution (from the LLM) to a specific conflict hunk."
+      },
+      {
+        "name": "gitwand_resolve_hunk_llm",
+        "description": "v2.5 — Validate and apply an LLM-proposed resolution for a complex hunk. Checks for residual markers, syntax errors, and a configurable score threshold before writing. Returns full audit trail."
+      }
+    ],
+    "resources": [
+      {
+        "uri": "gitwand://repo/conflicts",
+        "name": "Current Conflicts",
+        "description": "Live conflict state of the current repo — file list, counts, and auto-resolvability."
+      },
+      {
+        "uri": "gitwand://repo/policy",
+        "name": "Merge Policy",
+        "description": ".gitwandrc configuration — merge policies, confidence thresholds, per-path overrides."
+      },
+      {
+        "uri": "gitwand://hunk/{file}/{line}",
+        "name": "Hunk Detail",
+        "description": "Raw hunk content (ours/theirs/base) plus confidence and DecisionTrace for a specific conflict."
+      }
+    ],
+    "prompts": false
+  }
+}

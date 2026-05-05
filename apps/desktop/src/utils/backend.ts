@@ -798,6 +798,60 @@ export async function gitMergeContinue(cwd: string): Promise<GitPushPullResult> 
   return res.json();
 }
 
+// ─── Git repo operation state ─────────────────────────────────
+
+export interface RepoOperationState {
+  /** "clean" | "rebase" | "rebase_interactive" | "merge" | "cherry_pick" | "revert" */
+  state: 'clean' | 'rebase' | 'rebase_interactive' | 'merge' | 'cherry_pick' | 'revert';
+  /** True when there are still unresolved conflict markers in the working tree. */
+  hasConflict: boolean;
+  /** SHA of the commit being applied (REBASE_HEAD / MERGE_HEAD / …). */
+  operationHead: string | null;
+  /** Branch being rebased onto (from rebase-merge/head-name). */
+  targetBranch: string | null;
+  /** 1-based current step (0 when unknown). */
+  step: number;
+  /** Total steps (0 when unknown). */
+  total: number;
+}
+
+/**
+ * Reads the repository's current operation state directly from the .git
+ * directory — reliable across all git locales.
+ */
+export async function gitRepoState(cwd: string): Promise<RepoOperationState> {
+  if (isTauri()) {
+    return tauriInvoke<RepoOperationState>("git_repo_state", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-repo-state`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  return res.json();
+}
+
+/**
+ * Run `git rebase --continue`, `--abort`, or `--skip`.
+ */
+export async function gitRebaseAction(
+  cwd: string,
+  action: 'continue' | 'abort' | 'skip'
+): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke<void>("git_rebase_action", { cwd, action });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/git-rebase-action`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, action }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error ?? "git rebase action failed");
+  }
+}
+
 // ─── Git show (commit diff) ───────────────────────────────────
 
 /**

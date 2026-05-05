@@ -1,0 +1,929 @@
+<script setup lang="ts">
+import { computed, ref, watch, inject, nextTick, onMounted, onUnmounted, type Ref } from "vue";
+import type { GitLogEntry } from "../utils/backend";
+import { useI18n } from "../composables/useI18n";
+import { useAIProvider } from "../composables/useAIProvider";
+import { useCommitSearch, filterCommitsLocal, type CommitMatch } from "../composables/useCommitSearch";
+import { LOG_FOCUS_SEARCH_KEY } from "../composables/branchPickerBridge";
+import AiSparkle from "./AiSparkle.vue";
+const { t, locale } = useI18n();
+
+const props = defineProps<{
+  entries: GitLogEntry[];
+  loading: boolean;
+  selectedHash: string | null;
+  aheadCount?: number;
+  /**
+   * True when the current branch has no upstream configured yet.
+   * In that case every local commit is effectively "unpushed" because
+   * origin does not know about this branch at all.
+   */
+  needsPublish?: boolean;
+}>();
+
+/**
+ * Effective count of unpushed commits used for styling:
+ * - when the branch has no upstream, every local commit is unpushed
+ * - otherwise, use aheadCount reported by git status
+ */
+const effectiveAhead = computed(() =>
+  props.needsPublish ? props.entries.length : (props.aheadCount ?? 0),
+);
+
+const emit = defineEmits<{
+  selectCommit: [hash: string];
+  editCommit: [entry: GitLogEntry];
+  splitCommit: [entry: GitLogEntry];
+  // v1.9 — commit context menu
+  checkoutCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry];
+  revertCommit: [entry: GitLogEntry];
+  createBranchFromCommit: [entry: GitLogEntry];
+  tagCommit: [entry: GitLogEntry];
+  cherryPickCommit: [entry: GitLogEntry];
+  viewOnForge: [entry: GitLogEntry];
+}>();
+
+// ─── Context menu on commit items ─────────────────────────
+// Right-click on a commit opens a small menu with the "Split commit…" action.
+// The actual split workflow is owned by the host (App.vue); here we only
+// surface the user intent via the `splitCommit` emit.
+interface CommitCtxMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  entry: GitLogEntry | null;
+  /** Index in the displayed list — used to restrict some actions to HEAD. */
+  idx: number;
+}
+const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
+
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+  e.preventDefault();
+  e.stopPropagation();
+  // Select the commit first — the user expects the diff view to reflect what
+  // they right-clicked on.
+  emit("selectCommit", entry.hashFull);
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+}
+
+function closeCommitContextMenu() {
+  ctxMenu.value.visible = false;
+}
+
+function onCtxSplit() {
+  if (!ctxMenu.value.entry) return;
+  if (isCtxEntryMerge.value) return;
+  emit("splitCommit", ctxMenu.value.entry);
+  closeCommitContextMenu();
+}
+
+function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | "createBranchFromCommit" | "tagCommit" | "cherryPickCommit" | "viewOnForge") {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  if (event === "checkoutCommit")         emit("checkoutCommit", entry);
+  else if (event === "resetToCommit")     emit("resetToCommit", entry);
+  else if (event === "revertCommit")      emit("revertCommit", entry);
+  else if (event === "createBranchFromCommit") emit("createBranchFromCommit", entry);
+  else if (event === "tagCommit")         emit("tagCommit", entry);
+  else if (event === "cherryPickCommit")  emit("cherryPickCommit", entry);
+  else if (event === "viewOnForge")       emit("viewOnForge", entry);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySha(full: boolean) {
+  const sha = full ? ctxMenu.value.entry?.hashFull : ctxMenu.value.entry?.hash;
+  if (sha) await navigator.clipboard.writeText(sha);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyMessage() {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  const text = entry.body ? `${entry.message}\n\n${entry.body}` : entry.message;
+  await navigator.clipboard.writeText(text);
+  closeCommitContextMenu();
+}
+
+/** True when the commit under the context menu is a merge (>1 parent). */
+const isCtxEntryMerge = computed(
+  () => (ctxMenu.value.entry?.parents?.length ?? 0) > 1,
+);
+
+/**
+ * True when the commit under the context menu is the topmost displayed entry
+ * AND search is not active. In search mode idx=0 is not necessarily HEAD, so
+ * we conservatively disable actions that require HEAD (Amend, Split).
+ */
+const isCtxEntryHead = computed(() => !isSearchActive.value && ctxMenu.value.idx === 0);
+
+onMounted(() => {
+  window.addEventListener("click", closeCommitContextMenu);
+  window.addEventListener("contextmenu", closeCommitContextMenu, { capture: false });
+  window.addEventListener("keydown", onCtxKey);
+});
+onUnmounted(() => {
+  window.removeEventListener("click", closeCommitContextMenu);
+  window.removeEventListener("contextmenu", closeCommitContextMenu, { capture: false } as EventListenerOptions);
+  window.removeEventListener("keydown", onCtxKey);
+});
+
+function onCtxKey(e: KeyboardEvent) {
+  if (e.key === "Escape") closeCommitContextMenu();
+}
+
+// ─── Search (Phase 1.3.4) ─────────────────────────────────
+const ai = useAIProvider();
+const { isSearching: isAiSearching, searchAI, lastError: aiSearchError } = useCommitSearch();
+const searchQuery = ref("");
+const aiMatches = ref<CommitMatch[] | null>(null);
+const searchInputEl = ref<HTMLInputElement | null>(null);
+
+// External focus trigger (native Edit menu → Find in Log). Each bump of
+// the injected counter focuses + selects the search input. App.vue is
+// expected to switch viewMode to "history" before bumping so the input
+// is actually mounted.
+const focusRequest = inject<Ref<number> | null>(LOG_FOCUS_SEARCH_KEY, null);
+if (focusRequest) {
+  watch(focusRequest, () => {
+    nextTick(() => {
+      const el = searchInputEl.value;
+      if (!el) return;
+      el.focus();
+      el.select();
+    });
+  });
+}
+
+const displayedEntries = computed<GitLogEntry[]>(() => {
+  if (aiMatches.value !== null) return aiMatches.value.map((m) => m.entry);
+  return filterCommitsLocal(props.entries, searchQuery.value);
+});
+
+const isSearchActive = computed(
+  () => aiMatches.value !== null || searchQuery.value.trim().length > 0,
+);
+
+/** Hashes of the commits considered "unpushed" in the original list. */
+const unpushedHashes = computed<Set<string>>(() => {
+  const set = new Set<string>();
+  const ahead = props.needsPublish ? props.entries.length : (props.aheadCount ?? 0);
+  for (let i = 0; i < ahead; i++) {
+    const e = props.entries[i];
+    if (e) set.add(e.hashFull);
+  }
+  return set;
+});
+
+function isUnpushed(entry: GitLogEntry): boolean {
+  return unpushedHashes.value.has(entry.hashFull);
+}
+
+const reasonByHash = computed(() => {
+  const map = new Map<string, string>();
+  if (aiMatches.value) {
+    for (const m of aiMatches.value) {
+      if (m.reason) map.set(m.entry.hashFull, m.reason);
+    }
+  }
+  return map;
+});
+
+async function runAiSearch() {
+  if (!searchQuery.value.trim()) return;
+  try {
+    const matches = await searchAI(searchQuery.value, props.entries, {
+      locale: locale.value,
+    });
+    aiMatches.value = matches;
+  } catch {
+    // surfaced via aiSearchError
+  }
+}
+
+function clearSearch() {
+  searchQuery.value = "";
+  aiMatches.value = null;
+}
+
+// Clear AI match set when the query changes (typing invalidates the
+// prior AI result — the user is refining).
+watch(searchQuery, () => {
+  aiMatches.value = null;
+});
+
+interface RefBadge { type: "head" | "branch" | "remote" | "tag"; label: string; }
+
+function parseRefBadges(refs: string): RefBadge[] {
+  if (!refs) return [];
+  return refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
+    if (r.startsWith("HEAD -> ")) return { type: "head" as const, label: r.slice(8) };
+    if (r === "HEAD") return { type: "head" as const, label: "HEAD" };
+    if (r.startsWith("tag: ")) return { type: "tag" as const, label: r.slice(5) };
+    if (r.includes("/")) return { type: "remote" as const, label: r };
+    return { type: "branch" as const, label: r };
+  });
+}
+
+function relativeDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffMin < 1) return t('date.now');
+  if (diffMin < 60) return t('date.minutesAgo', diffMin);
+  if (diffHour < 24) return t('date.hoursAgo', diffHour);
+  if (diffDay < 7) return t('date.daysAgo', diffDay);
+  if (diffDay < 30) return t('date.weeksAgo', Math.floor(diffDay / 7));
+  return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function authorInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+function authorColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 55%, 55%)`;
+}
+</script>
+
+<template>
+  <div class="commit-log">
+    <!-- Search bar -->
+    <div v-if="entries.length > 0" class="log-search">
+      <svg class="log-search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <input
+        ref="searchInputEl"
+        v-model="searchQuery"
+        type="text"
+        class="log-search-input"
+        :placeholder="t('log.searchPlaceholder')"
+        @keydown.enter.prevent="runAiSearch"
+        @keydown.esc.prevent="clearSearch"
+      />
+      <button
+        v-if="ai.isAvailable.value && searchQuery.trim()"
+        type="button"
+        class="btn btn--ai btn--icon"
+        :disabled="isAiSearching"
+        :title="t('log.searchAiHint')"
+        :aria-label="t('log.searchAiHint')"
+        @click="runAiSearch"
+      >
+        <span v-if="isAiSearching">…</span>
+        <AiSparkle v-else :size="16" />
+      </button>
+      <button
+        v-if="searchQuery || aiMatches !== null"
+        type="button"
+        class="log-search-clear"
+        :title="t('common.close')"
+        @click="clearSearch"
+      >✕</button>
+    </div>
+    <p v-if="aiSearchError" class="log-search-error">{{ aiSearchError }}</p>
+    <p v-if="aiMatches !== null" class="log-search-status">
+      <AiSparkle :size="13" :animated="false" />
+      {{ t('log.aiSearchResults', displayedEntries.length) }}
+    </p>
+
+    <div class="log-loading" v-if="loading">
+      <div class="loading-spinner"></div>
+      <span class="muted">{{ t('common.loading') }}</span>
+    </div>
+
+    <ul class="log-list" v-else-if="displayedEntries.length > 0">
+      <template v-for="(entry, idx) in displayedEntries" :key="entry.hashFull">
+        <!-- Section label before first unpushed commit (or unpublished branch) -->
+        <li
+          v-if="!isSearchActive && effectiveAhead > 0 && idx === 0"
+          class="log-section-label"
+          :class="needsPublish ? 'log-section-label--unpublished' : 'log-section-label--unpushed'"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 13V3M5 6l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span v-if="needsPublish">{{ t('log.unpublishedBranch') }}</span>
+          <span v-else>{{ effectiveAhead }} {{ effectiveAhead === 1 ? t('log.unpushedOne') : t('log.unpushedMany') }}</span>
+        </li>
+        <!-- Section label before first pushed commit -->
+        <li v-if="!isSearchActive && !needsPublish && effectiveAhead > 0 && idx === effectiveAhead" class="log-section-label log-section-label--pushed">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M13.5 3.5l-7 7L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('log.pushed') }}</span>
+        </li>
+        <!-- Commit item -->
+        <li
+          class="commit-item"
+          :class="{
+            'commit-item--selected': selectedHash === entry.hashFull,
+            'commit-item--unpushed': isUnpushed(entry),
+          }"
+          @click="emit('selectCommit', entry.hashFull)"
+          @contextmenu="openCommitContextMenu($event, entry, idx)"
+          tabindex="0"
+          @keydown.enter="emit('selectCommit', entry.hashFull)"
+        >
+          <div class="commit-avatar" :style="{ background: authorColor(entry.author) }">
+            {{ authorInitials(entry.author) }}
+          </div>
+          <div class="commit-info">
+            <div class="commit-message">
+              {{ entry.message }}
+              <span v-if="isUnpushed(entry)" class="unpushed-badge">{{ needsPublish ? t('log.unpublishedBadge') : 'unpushed' }}</span>
+            </div>
+            <div v-if="reasonByHash.get(entry.hashFull)" class="commit-ai-reason">
+              <AiSparkle :size="12" :animated="false" />
+              <span>{{ reasonByHash.get(entry.hashFull) }}</span>
+            </div>
+            <div class="commit-meta">
+              <span class="commit-hash mono">{{ entry.hash }}</span>
+              <span class="commit-separator" aria-hidden="true">&middot;</span>
+              <span class="commit-author">{{ entry.author }}</span>
+              <span class="commit-separator" aria-hidden="true">&middot;</span>
+              <time class="commit-date" :datetime="entry.date">{{ relativeDate(entry.date) }}</time>
+            </div>
+            <!-- Ref badges (branch + tag) — hidden when search active to save space -->
+            <div v-if="!isSearchActive && entry.refs" class="commit-refs">
+              <span
+                v-for="badge in parseRefBadges(entry.refs)"
+                :key="badge.label"
+                class="commit-ref-badge"
+                :class="`commit-ref-badge--${badge.type}`"
+              >{{ badge.label }}</span>
+            </div>
+          </div>
+          <!-- Edit button — HEAD unpushed only (hidden in search mode) -->
+          <button
+            v-if="!isSearchActive && aheadCount != null && idx === 0"
+            class="commit-edit-btn"
+            @click.stop="emit('editCommit', entry)"
+            :title="t('log.editMessage')"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </li>
+      </template>
+    </ul>
+
+    <div class="log-empty" v-else>
+      <span class="muted">{{ t('log.noCommit') }}</span>
+    </div>
+
+    <!-- Context menu for commit items (right-click) -->
+    <Teleport to="body">
+      <ul
+        v-if="ctxMenu.visible"
+        class="commit-ctx-menu"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+        role="menu"
+        @click.stop
+        @contextmenu.prevent
+      >
+        <!-- Navigation -->
+        <li
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+          role="menuitem"
+          :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+          @click="!isCtxEntryHead && onCtxEmit('checkoutCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.checkout') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxEmit('resetToCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.reset') }}</span>
+        </li>
+
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+
+        <!-- Branching -->
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxEmit('createBranchFromCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 0v2a2 2 0 0 1-2 2H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.createBranch') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxEmit('tagCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <circle cx="5.5" cy="5.5" r="1" fill="currentColor"/>
+          </svg>
+          <span>{{ t('commitCtx.tag') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+          role="menuitem"
+          :title="isCtxEntryHead ? t('commitCtx.cherryPickHeadDisabled') : undefined"
+          @click="!isCtxEntryHead && onCtxEmit('cherryPickCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="5" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="11" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M5 11V7a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M8 4V1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.cherryPick') }}</span>
+        </li>
+
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+
+        <!-- History operations -->
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxEmit('revertCommit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h10a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M5 1L2 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.revert') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': !isCtxEntryHead }"
+          role="menuitem"
+          :title="!isCtxEntryHead ? t('commitCtx.amendHeadOnly') : undefined"
+          @click="isCtxEntryHead && ctxMenu.entry && (emit('editCommit', ctxMenu.entry), closeCommitContextMenu())"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.amend') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryMerge || !isCtxEntryHead }"
+          role="menuitem"
+          :title="isCtxEntryMerge ? t('splitCommit.errorMergeCommit') : !isCtxEntryHead ? t('commitCtx.splitHeadOnly') : undefined"
+          @click="onCtxSplit"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2v5m0 0l-3-3m3 3l3-3M3 10h10M5 14h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('splitCommit.contextMenuAction') }}</span>
+        </li>
+
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+
+        <!-- Clipboard -->
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(false)">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyShortSha') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(true)">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M8 8h3M8 11h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyFullSha') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyMessage">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyMessage') }}</span>
+        </li>
+
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+
+        <!-- Forge -->
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxEmit('viewOnForge')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 2h4v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 2L8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.viewOnForge') }}</span>
+        </li>
+      </ul>
+    </Teleport>
+  </div>
+</template>
+
+<style scoped>
+.commit-log {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.log-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.log-list {
+  list-style: none;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ─── Section labels ──────────────────────────────────── */
+
+.log-section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-4);
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.log-section-label--unpushed {
+  color: var(--color-warning);
+  background: var(--color-bg-secondary);
+  border-left: 3px solid var(--color-warning);
+}
+
+.log-section-label--unpublished {
+  color: var(--color-accent);
+  background: var(--color-bg-secondary);
+  border-left: 3px solid var(--color-accent);
+}
+
+.log-section-label--pushed {
+  color: var(--color-success);
+  background: var(--color-bg-secondary);
+  border-left: 3px solid var(--color-success);
+}
+
+/* ─── Commit item ─────────────────────────────────────── */
+
+.commit-item {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-left: 3px solid transparent;
+}
+
+.commit-item--unpushed {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.commit-item--unpushed:hover {
+  background: var(--color-warning-soft);
+  opacity: 0.9;
+}
+
+.unpushed-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  margin-left: var(--space-1);
+  vertical-align: middle;
+}
+
+.commit-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-item--selected {
+  background: var(--color-bg-tertiary);
+  border-left-color: var(--color-accent);
+}
+
+.commit-item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.commit-item:last-child {
+  border-bottom: none;
+}
+
+.commit-edit-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  align-self: center;
+}
+
+.commit-item:hover .commit-edit-btn {
+  opacity: 0.7;
+}
+
+.commit-edit-btn:hover {
+  opacity: 1 !important;
+  color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.commit-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  color: var(--color-accent-text);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.commit-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.commit-message {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 3px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.commit-hash {
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+}
+
+.commit-separator {
+  opacity: 0.4;
+}
+
+.commit-author {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.commit-date {
+  flex-shrink: 0;
+}
+
+.log-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-10);
+}
+
+/* ─── Search bar (Phase 1.3.4) ────────────────────────────── */
+.log-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+}
+
+.log-search-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.log-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  padding: 2px 0;
+}
+
+.log-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.log-search-clear {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+}
+
+.log-search-clear:hover {
+  color: var(--color-text);
+  background: var(--color-bg-hover);
+}
+
+.log-search-error,
+.log-search-status {
+  margin: 0;
+  padding: 6px var(--space-3);
+  font-size: var(--font-size-xs);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.log-search-error {
+  color: var(--color-danger, #ef4444);
+  background: var(--color-danger-soft, rgba(239, 68, 68, 0.06));
+}
+
+.log-search-status {
+  color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(139, 92, 246, 0.06));
+}
+
+.commit-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.commit-ref-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: var(--font-weight-medium);
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-ref-badge--head,
+.commit-ref-badge--branch {
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.12));
+  color: var(--color-accent);
+}
+
+.commit-ref-badge--tag {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+}
+
+.commit-ref-badge--remote {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+}
+
+.commit-ai-reason {
+  margin-top: 2px;
+  font-size: var(--font-size-xs);
+  color: var(--color-accent);
+  line-height: 1.3;
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+}
+</style>
+
+<style>
+/* Teleported menu — unscoped so the styles apply after mounting to <body>. */
+.commit-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, 0 8px 20px rgba(0, 0, 0, 0.18));
+  font-size: var(--font-size-sm);
+}
+
+.commit-ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.commit-ctx-menu-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-ctx-menu-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.commit-ctx-menu-item--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.commit-ctx-menu-item--disabled:hover {
+  background: transparent;
+}
+
+.commit-ctx-menu-sep {
+  height: 1px;
+  background: var(--color-border);
+  margin: 3px 6px;
+  list-style: none;
+}
+</style>
