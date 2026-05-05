@@ -4423,6 +4423,7 @@ pub struct WorkspaceRepoStatus {
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WorkspaceWipItem {
     pub path: String,
     pub name: String,
