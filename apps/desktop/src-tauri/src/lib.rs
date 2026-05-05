@@ -6166,7 +6166,7 @@ mod tests {
     }
 
     #[test]
-    fn workspace_rep_prs_serializes_camel_case_fields() {
+    fn workspace_repo_prs_serializes_camel_case_fields() {
         let item = WorkspaceRepoPrs {
             repo_path: "/path/to/repo".to_string(),
             repo_name: "my-repo".to_string(),
@@ -6179,10 +6179,11 @@ mod tests {
         assert!(json.contains("\"repoName\""), "repo_name should serialize as repoName, got: {}", json);
         assert!(!json.contains("\"repo_path\""), "snake_case must not appear: {}", json);
         assert!(!json.contains("\"repo_name\""), "snake_case must not appear: {}", json);
+        assert!(json.contains("\"prs\""), "prs field must appear in JSON, got: {}", json);
     }
 
     #[test]
-    fn workspace_rep_prs_error_serializes() {
+    fn workspace_repo_prs_error_serializes() {
         let item = WorkspaceRepoPrs {
             repo_path: "/path".to_string(),
             repo_name: "repo".to_string(),
@@ -6192,6 +6193,6 @@ mod tests {
         let json = serde_json::to_string(&item).unwrap();
         assert!(json.contains("\"gh: command not found\""), "error message must appear in JSON");
         // error field itself should be camelCase (it's a single word, stays "error")
-        assert!(json.contains("\"error\""));
+        assert!(json.contains("\"error\":\"gh: command not found\""), "error key+value must appear together: {}", json);
     }
 }
