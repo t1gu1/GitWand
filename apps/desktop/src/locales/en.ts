@@ -1091,6 +1091,9 @@ const en = {
     snoozedCount: "{0} snoozed item(s)",
     snoozedUntil: "Snoozed until {0}",
     showSnoozed: "Show snoozed",
+    pinBadge: "Pinned",
+    prMenuLabel: "Actions for PR #{0}",
+    issueMenuLabel: "Actions for issue #{0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

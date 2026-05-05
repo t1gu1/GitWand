@@ -200,7 +200,7 @@ onMounted(() => {
           class="launchpad-view__pr-item"
         >
           <!-- Pin badge — always visible on pinned items -->
-          <span v-if="isPinned(pr.url)" class="launchpad-view__pin-badge" aria-label="Pinned">📌</span>
+          <span v-if="isPinned(pr.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">📌</span>
           <span class="launchpad-view__pr-repo">{{ pr.repoName }}</span>
           <span class="launchpad-view__pr-title">
             <a :href="pr.url" target="_blank" rel="noopener noreferrer">
@@ -258,7 +258,7 @@ onMounted(() => {
             <button
               class="launchpad-view__menu-btn"
               :class="{ 'launchpad-view__menu-btn--open': openMenuUrl === pr.url }"
-              :aria-label="`Actions for PR #${pr.number}`"
+              :aria-label="t('launchpad.prMenuLabel', pr.number)"
               @click="toggleMenu(pr.url)"
             >⋮</button>
             <div v-if="openMenuUrl === pr.url" class="launchpad-view__menu-dropdown">
@@ -300,6 +300,7 @@ onMounted(() => {
         tabindex="0"
         @click="showSnoozedPrs = !showSnoozedPrs"
         @keydown.enter="showSnoozedPrs = !showSnoozedPrs"
+        @keydown.space.prevent="showSnoozedPrs = !showSnoozedPrs"
       >
         💤 {{ t("launchpad.snoozedCount", snoozedPrs.length) }}
         <span v-if="!showSnoozedPrs" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>
@@ -357,7 +358,7 @@ onMounted(() => {
           class="launchpad-view__issue-item"
         >
           <!-- Pin badge — always visible on pinned items -->
-          <span v-if="isPinned(issue.url)" class="launchpad-view__pin-badge" aria-label="Pinned">📌</span>
+          <span v-if="isPinned(issue.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">📌</span>
           <span class="launchpad-view__pr-repo">{{ issue.repoName }}</span>
           <span class="launchpad-view__issue-title">
             <a :href="issue.url" target="_blank" rel="noopener noreferrer">
@@ -379,7 +380,7 @@ onMounted(() => {
             <button
               class="launchpad-view__menu-btn"
               :class="{ 'launchpad-view__menu-btn--open': openMenuUrl === issue.url }"
-              :aria-label="`Actions for issue #${issue.number}`"
+              :aria-label="t('launchpad.issueMenuLabel', issue.number)"
               @click="toggleMenu(issue.url)"
             >⋮</button>
             <div v-if="openMenuUrl === issue.url" class="launchpad-view__menu-dropdown">
@@ -421,6 +422,7 @@ onMounted(() => {
         tabindex="0"
         @click="showSnoozedIssues = !showSnoozedIssues"
         @keydown.enter="showSnoozedIssues = !showSnoozedIssues"
+        @keydown.space.prevent="showSnoozedIssues = !showSnoozedIssues"
       >
         💤 {{ t("launchpad.snoozedCount", snoozedIssues.length) }}
         <span v-if="!showSnoozedIssues" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>

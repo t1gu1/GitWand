@@ -1074,6 +1074,9 @@ const fr: Locale = {
     snoozedCount: "{0} élément(s) snooze",
     snoozedUntil: "Snooze jusqu'au {0}",
     showSnoozed: "Afficher les snoozés",
+    pinBadge: "Épinglé",
+    prMenuLabel: "Actions pour la PR #{0}",
+    issueMenuLabel: "Actions pour l'issue #{0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

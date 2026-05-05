@@ -1064,6 +1064,9 @@ const ptBR: Locale = {
     snoozedCount: "{0} item(ns) adiado(s)",
     snoozedUntil: "Adiado até {0}",
     showSnoozed: "Mostrar adiados",
+    pinBadge: "Fixado",
+    prMenuLabel: "Ações para PR #{0}",
+    issueMenuLabel: "Ações para issue #{0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────

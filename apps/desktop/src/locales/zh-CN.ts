@@ -1052,6 +1052,9 @@ const zhCN: Locale = {
     snoozedCount: "{0} 个已推迟项目",
     snoozedUntil: "推迟至 {0}",
     showSnoozed: "显示已推迟",
+    pinBadge: "已置顶",
+    prMenuLabel: "PR #{0} 的操作",
+    issueMenuLabel: "Issue #{0} 的操作",
   },
 
   undoStack: {

@@ -1063,6 +1063,9 @@ const es: Locale = {
     snoozedCount: "{0} elemento(s) pospuesto(s)",
     snoozedUntil: "Pospuesto hasta {0}",
     showSnoozed: "Mostrar pospuestos",
+    pinBadge: "Fijado",
+    prMenuLabel: "Acciones para PR #{0}",
+    issueMenuLabel: "Acciones para issue #{0}",
   },
 
   // ─── Undo ───────────────────────────────────────────────
