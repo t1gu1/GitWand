@@ -1002,6 +1002,7 @@ const zhCN: Locale = {
     pullAll: "全部 Pull",
     pullingAll: "拉取中\u2026",
     openAll: "在标签页中全部打开",
+    openLaunchpad: "Launchpad",
     statusAll: "刷新",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",

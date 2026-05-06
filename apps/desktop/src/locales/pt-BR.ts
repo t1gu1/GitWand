@@ -1014,6 +1014,7 @@ const ptBR: Locale = {
     pullAll: "Pull all",
     pullingAll: "Baixando\u2026",
     openAll: "Abrir tudo em abas",
+    openLaunchpad: "Launchpad",
     statusAll: "Atualizar",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",

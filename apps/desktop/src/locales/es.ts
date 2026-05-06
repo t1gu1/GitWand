@@ -1013,6 +1013,7 @@ const es: Locale = {
     pullAll: "Pull all",
     pullingAll: "Descargando\u2026",
     openAll: "Abrir todo en pestañas",
+    openLaunchpad: "Launchpad",
     statusAll: "Actualizar",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",

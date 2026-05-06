@@ -1041,6 +1041,7 @@ const en = {
     pullAll: "Pull all",
     pullingAll: "Pulling\u2026",
     openAll: "Open all in tabs",
+    openLaunchpad: "Launchpad",
     statusAll: "Refresh",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",

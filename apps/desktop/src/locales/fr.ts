@@ -1024,6 +1024,7 @@ const fr: Locale = {
     pullAll: "Pull all",
     pullingAll: "Pull en cours\u2026",
     openAll: "Tout ouvrir dans des onglets",
+    openLaunchpad: "Launchpad",
     statusAll: "Actualiser",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",

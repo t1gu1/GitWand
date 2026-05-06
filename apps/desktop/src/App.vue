@@ -26,6 +26,7 @@ import AiSparkle from "./components/AiSparkle.vue";
 import WorktreeManager from "./components/WorktreeManager.vue";
 import SubmodulePanel from "./components/SubmodulePanel.vue";
 import WorkspacePanel from "./components/WorkspacePanel.vue";
+import LaunchpadView from "./components/LaunchpadView.vue";
 import AgentSessionsPanel from "./components/AgentSessionsPanel.vue";
 import SearchPalette from "./components/header/SearchPalette.vue";
 import type { PaletteAction } from "./components/header/SearchPalette.vue";
@@ -66,7 +67,7 @@ const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
 const { isOffline } = useNetworkStatus();
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState } from "./utils/backend";
-import type { UpdateInfo, RepoOperationState } from "./utils/backend";
+import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
 import UpdateModal from "./components/UpdateModal.vue";
 
 const { theme, toggle: toggleTheme } = useTheme();
@@ -963,6 +964,15 @@ const showTags = ref(false);
 const showWorkspace = ref(false);
 const showAgents = ref(false);
 
+// ─── Launchpad panel ─────────────────────────────────────
+const showLaunchpad = ref(false);
+const launchpadRepos = ref<WorkspaceRepo[]>([]);
+function openLaunchpad(repos: WorkspaceRepo[]) {
+  launchpadRepos.value = repos;
+  showLaunchpad.value = true;
+  showWorkspace.value = false;
+}
+
 // ─── Worktree manager panel ──────────────────────────────
 const showWorktrees = ref(false);
 const pendingWorktreeBranch = ref<string | undefined>(undefined);
@@ -1634,7 +1644,11 @@ onUnmounted(() => {
 
     <!-- Workspace panel -->
     <WorkspacePanel v-if="showWorkspace" @close="showWorkspace = false"
-      @open-tab="(path) => { openTab(path); showWorkspace = false; }" />
+      @open-tab="(path) => { openTab(path); showWorkspace = false; }"
+      @open-launchpad="openLaunchpad" />
+
+    <!-- Launchpad panel -->
+    <LaunchpadView v-if="showLaunchpad" :repos="launchpadRepos" @close="showLaunchpad = false" />
 
     <!-- Agent Sessions panel -->
     <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"

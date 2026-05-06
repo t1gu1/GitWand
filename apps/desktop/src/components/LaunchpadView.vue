@@ -14,6 +14,10 @@ const props = defineProps<{
   repos: WorkspaceRepo[];
 }>();
 
+const emit = defineEmits<{
+  (e: "close"): void;
+}>();
+
 const { t } = useI18n();
 
 const { wip, loading: wipLoading, error: wipError, refresh: refreshWip } = useLaunchpadWip();
@@ -158,6 +162,11 @@ onMounted(() => {
       >
         {{ isLoading() ? t("launchpad.loading") : t("launchpad.refresh") }}
       </button>
+      <button
+        class="launchpad-view__close"
+        :title="t('common.close')"
+        @click.stop="emit('close')"
+      >×</button>
     </div>
 
     <!-- Tab bar -->
@@ -649,10 +658,15 @@ onMounted(() => {
 
 <style scoped>
 .launchpad-view {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
+  overflow-y: auto;
+  background: var(--color-bg, #fff);
 }
 
 .launchpad-view__header {
@@ -676,6 +690,20 @@ onMounted(() => {
 .launchpad-view__refresh:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.launchpad-view__close {
+  padding: 4px 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  background: transparent;
+  border: none;
+  color: inherit;
+}
+.launchpad-view__close:hover {
+  opacity: 1;
 }
 
 .launchpad-view__error {
