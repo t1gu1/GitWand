@@ -529,7 +529,15 @@ function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
     headerHtml += `<div class="md-readme-nav">${navLinks.map(l => `<a href="${l.href}" class="md-link">${l.text}</a>`).join('<span class="md-readme-sep">&bull;</span>')}</div>`;
   }
   if (badges.length > 0) {
-    headerHtml += `<div class="md-readme-badges">${badges.map(b => `<img src="${b.src}" alt="${b.alt}" class="md-badge">`).join(" ")}</div>`;
+    // P1.5 — README badges (CI shields, npm, etc.) are external images that
+    // can hang the network for tens of seconds when the badge host is slow
+    // (corporate firewall on github.com observed at Dendreo: 14.7s TLS
+    // handshake → window felt frozen). Three hints to keep the dashboard
+    // fluid even when badges fail to resolve:
+    //   - loading="lazy": only fetch when scrolled into view
+    //   - decoding="async": decode off the main thread, no jank
+    //   - referrerpolicy="no-referrer": don't leak local paths in Referer
+    headerHtml += `<div class="md-readme-badges">${badges.map(b => `<img src="${b.src}" alt="${b.alt}" class="md-badge" loading="lazy" decoding="async" referrerpolicy="no-referrer">`).join(" ")}</div>`;
   }
   headerHtml += '</div>';
 
@@ -1853,7 +1861,12 @@ button.stat-card:hover {
   flex-wrap: wrap;
   gap: var(--space-3);
 }
-.readme-formatted :deep(.md-badge) { height: 20px; }
+/* Badge dimensions are fixed up-front (height + min-width) so the layout
+   doesn't reflow when images load asynchronously or fail to resolve. */
+.readme-formatted :deep(.md-badge) {
+  height: 20px;
+  min-width: 60px;
+}
 
 .readme-formatted :deep(.md-table) {
   width: 100%;

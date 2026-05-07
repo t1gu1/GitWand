@@ -1,41 +1,58 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, provide } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent } from "vue";
+
+// ─── Eager imports — main views & shared building blocks ─────────────────────
+// These are part of the always-rendered UI (header, sidebar, main content
+// panes, toasts, base modal). They must load with the initial bundle.
 import AppHeader from "./components/AppHeader.vue";
 import MergeEditor from "./components/MergeEditor.vue";
 import EmptyState from "./components/EmptyState.vue";
-import FolderPicker from "./components/FolderPicker.vue";
 import RepoSidebar from "./components/RepoSidebar.vue";
 import DiffViewer from "./components/DiffViewer.vue";
 import ImageDiffViewer from "./components/ImageDiffViewer.vue";
 import CommitDiffViewer from "./components/CommitDiffViewer.vue";
 import FileHistoryViewer from "./components/FileHistoryViewer.vue";
 import CommitGraph from "./components/CommitGraph.vue";
-import SettingsPanel from "./components/SettingsPanel.vue";
-import HelpView from "./components/HelpView.vue";
 import PrDetailView from "./components/PrDetailView.vue";
 import PrCreateView from "./components/PrCreateView.vue";
 import DashboardView from "./components/DashboardView.vue";
+// Always-mounted (state-driven internally — must stay eager):
 import EditCommitOverlay from "./components/EditCommitOverlay.vue";
-import MergeSuccessModal from "./components/MergeSuccessModal.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
-import RebaseEditor from "./components/RebaseEditor.vue";
-import RebaseProgressModal from "./components/RebaseProgressBanner.vue";
-import StashManager from "./components/StashManager.vue";
-import TagsPanel from "./components/TagsPanel.vue";
 import AiSparkle from "./components/AiSparkle.vue";
-import WorktreeManager from "./components/WorktreeManager.vue";
-import SubmodulePanel from "./components/SubmodulePanel.vue";
-import WorkspacePanel from "./components/WorkspacePanel.vue";
-import LaunchpadView from "./components/LaunchpadView.vue";
-import AgentSessionsPanel from "./components/AgentSessionsPanel.vue";
-import SearchPalette from "./components/header/SearchPalette.vue";
-import type { PaletteAction } from "./components/header/SearchPalette.vue";
-import BranchRenameModal from "./components/header/BranchRenameModal.vue";
-import BranchDeleteModal from "./components/header/BranchDeleteModal.vue";
 import BaseModal from "./components/BaseModal.vue";
-import CloneModal from "./components/CloneModal.vue";
-import ForkModal from "./components/ForkModal.vue";
-import GitTerminal from "./components/GitTerminal.vue";
+
+// ─── Type-only imports ───────────────────────────────────────────────────────
+// SearchPalette exports a named type used in computed paletteActions.
+// UpdateModal type is used to type the template ref for setProgress/setError.
+import type { PaletteAction } from "./components/header/SearchPalette.vue";
+import type UpdateModalType from "./components/UpdateModal.vue";
+
+// ─── Lazy-loaded panels & modals (P2.4) ──────────────────────────────────────
+// Each of these is gated by a v-if (or its parent is) and only mounted on
+// user action — opening Settings, Help, a modal, the Search palette, etc.
+// Splitting them out of the initial bundle shaves significant JS off the
+// cold-start parse/eval cost. Vite handles the chunk separation automatically.
+const SettingsPanel        = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
+const HelpView             = defineAsyncComponent(() => import("./components/HelpView.vue"));
+const FolderPicker         = defineAsyncComponent(() => import("./components/FolderPicker.vue"));
+const MergeSuccessModal    = defineAsyncComponent(() => import("./components/MergeSuccessModal.vue"));
+const RebaseEditor         = defineAsyncComponent(() => import("./components/RebaseEditor.vue"));
+const RebaseProgressModal  = defineAsyncComponent(() => import("./components/RebaseProgressBanner.vue"));
+const StashManager         = defineAsyncComponent(() => import("./components/StashManager.vue"));
+const TagsPanel            = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
+const WorktreeManager      = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
+const SubmodulePanel       = defineAsyncComponent(() => import("./components/SubmodulePanel.vue"));
+const WorkspacePanel       = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
+const LaunchpadView        = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
+const AgentSessionsPanel   = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
+const SearchPalette        = defineAsyncComponent(() => import("./components/header/SearchPalette.vue"));
+const BranchRenameModal    = defineAsyncComponent(() => import("./components/header/BranchRenameModal.vue"));
+const BranchDeleteModal    = defineAsyncComponent(() => import("./components/header/BranchDeleteModal.vue"));
+const CloneModal           = defineAsyncComponent(() => import("./components/CloneModal.vue"));
+const ForkModal            = defineAsyncComponent(() => import("./components/ForkModal.vue"));
+const GitTerminal          = defineAsyncComponent(() => import("./components/GitTerminal.vue"));
+const UpdateModal          = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -68,7 +85,7 @@ const { settings, refreshSettings } = useSettings();
 const { isOffline } = useNetworkStatus();
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState } from "./utils/backend";
 import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
-import UpdateModal from "./components/UpdateModal.vue";
+// UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
 const { theme, toggle: toggleTheme } = useTheme();
 
@@ -933,12 +950,22 @@ async function onRebaseBannerActionDone() {
 // ─── Rebase-state polling ────────────────────────────────────────────────────
 // Declared here (after repoOperationState + refreshRepoState) so the
 // { immediate: true } watch can safely reference both without TDZ errors.
-// We need a dedicated interval because pollStatus() skips loadStatus() when the
-// git-status snapshot hasn't changed.  During a rebase-with-conflicts the status
-// output is perfectly stable, so repoStatus never gets a new value, so a plain
-// watch(repoStatus, …) would never fire.  A 3-second interval is lightweight
-// (one fetch / Tauri invoke) and guarantees the banner appears/disappears within
-// 3 s of the rebase pausing or --continue / --abort completing.
+//
+// Strategy: we DON'T poll continuously. Instead we rely on:
+//   1. A one-shot refresh when the repo opens (covers "app launched mid-rebase")
+//   2. watch(repoStatus, …) that reruns refreshRepoState whenever git status
+//      output changes — this picks up the START of any rebase/merge/cherry-pick
+//      triggered from the app or from an external terminal (pollStatus runs
+//      every 2 s in useGitRepo).
+//   3. A 3 s belt-and-suspenders interval that ONLY runs while an operation
+//      is in progress (repoOperationState !== null). During a rebase-with-
+//      conflicts the porcelain status output is perfectly stable, so the
+//      watch above wouldn't fire on its own and we need this interval to
+//      keep step/total fresh and to detect --continue / --abort completion
+//      within 3 seconds.
+//
+// Rationale: in normal use (~99 % of the time), no rebase is in progress, so
+// this saves ~20 git invokes/min in the background.
 let _rebaseStateInterval: ReturnType<typeof setInterval> | null = null;
 
 watch(
@@ -947,7 +974,6 @@ watch(
     if (_rebaseStateInterval) { clearInterval(_rebaseStateInterval); _rebaseStateInterval = null; }
     if (path) {
       refreshRepoState();                                     // immediate check on repo open
-      _rebaseStateInterval = setInterval(refreshRepoState, 3_000);
     } else {
       repoOperationState.value = null;
     }
@@ -957,6 +983,17 @@ watch(
 // Also re-check whenever status changes (e.g. user stages a resolved file) so
 // the Continue button enables without waiting for the next 3-second tick.
 watch(repoStatus, () => { refreshRepoState(); }, { deep: false });
+
+// Start/stop the 3 s belt-and-suspenders poll based on whether an operation
+// is actually in progress. When idle, no interval runs at all.
+watch(repoOperationState, (op) => {
+  if (op && !_rebaseStateInterval) {
+    _rebaseStateInterval = setInterval(refreshRepoState, 3_000);
+  } else if (!op && _rebaseStateInterval) {
+    clearInterval(_rebaseStateInterval);
+    _rebaseStateInterval = null;
+  }
+});
 
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
@@ -1318,7 +1355,7 @@ async function setupGlobalShortcutListener() {
 
 // ─── In-app updater ────────────────────────────────────────────────────────
 const pendingUpdate = ref<UpdateInfo | null>(null);
-const updateModalRef = ref<InstanceType<typeof UpdateModal> | null>(null);
+const updateModalRef = ref<InstanceType<typeof UpdateModalType> | null>(null);
 
 async function runUpdateCheck() {
   // Stable channel uses the Tauri plugin's auto-install path; beta channel

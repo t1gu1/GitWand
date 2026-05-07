@@ -448,6 +448,13 @@ export interface GitDiff {
   isDirectory?: boolean;
   /** List of new files inside the directory (when isDirectory=true) */
   newFiles?: string[];
+  /**
+   * P2.4 — When set, the raw `git diff` output exceeded the backend's
+   * truncation threshold (5 MB). Hunks were parsed from the truncated
+   * prefix. The value is the *original* byte size, suitable for showing
+   * a "diff truncated at X MB" banner.
+   */
+  truncatedFromBytes?: number;
 }
 
 /**

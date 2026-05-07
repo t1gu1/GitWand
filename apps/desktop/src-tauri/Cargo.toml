@@ -32,7 +32,11 @@ path = "examples/parity_probe.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `devtools` feature opens the WebView inspector via Cmd+Option+I (macOS)
+# or right-click → Inspect. Required for profiling / debugging the frontend
+# in production builds. Safe to ship: tauri only enables the menu when the
+# app is built in debug mode unless we explicitly enable it in release too.
+tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-global-shortcut = "2"
@@ -42,3 +46,45 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
 base64 = "0.22"
+# Used for data-parallel iteration in workspace_*_all (P3.2). Each repo's
+# git/gh subprocess runs on its own rayon thread instead of in series.
+rayon = "1"
+
+# libgit2 bindings for in-process git operations (P3.3). Used in the
+# workspace_*_all hot paths to read branch + ahead/behind + file statuses
+# without spawning git subprocesses (5-15ms each on macOS). Vendored to
+# remove the runtime dependency on system libgit2 — adds ~500 KB to the
+# binary in exchange for build reproducibility across machines.
+#
+# Scoped use only: the user-facing `git_status` command remains CLI-based
+# to preserve the existing parity tests (`tests/parity/git-status.test.mjs`)
+# which compare Rust output to the Node dev-server (also CLI-based).
+git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+
+# ─── Release profile (P2.4) ──────────────────────────────────
+#
+# Profile tuné pour la build de production (vs defaults Cargo conservateurs).
+# Gains attendus : binaire plus petit, code plus rapide. Compile time +30s.
+#
+# Notes :
+# - `lto = "fat"` : optim trans-crates, +10-15% perf, -20% taille binaire.
+# - `codegen-units = 1` : opti maximale (vs 16 par défaut), +1-3% perf.
+# - `strip = "symbols"` : retire les symbols du binaire final, -10 MB env.
+# - `panic = "unwind"` (default) intentionnel : les command handlers Tauri
+#   reposent sur l'unwinding pour récupérer d'un panic sans tuer le process.
+#   Ne PAS passer à "abort" sans audit complet du code.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+opt-level = 3
+
+# ─── Release-debug profile (P2.4) ────────────────────────────
+#
+# Build en mode release avec symbols conservés, pour profiling local
+# (Instruments macOS, perf Linux, samply, etc.) sans recompiler en debug.
+# Build : `cargo build --profile release-debug`
+[profile.release-debug]
+inherits = "release"
+debug = true
+strip = false

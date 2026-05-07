@@ -1,0 +1,88 @@
+name: Perf benches
+
+# Runs the bench suite on every PR that touches apps/desktop/, and on push
+# to main. Compares against the committed baseline (apps/desktop/perf/
+# baseline.json) and fails the workflow if a bench regresses by > 15 %.
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/perf.yml"
+  push:
+    branches: [main]
+
+jobs:
+  bench:
+    name: Perf bench (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Cache cargo deps to keep CI under the 20 min budget.
+      # First run: ~8 min compile (rayon + git2 vendored). Subsequent: ~30 s.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-perf-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-perf-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Build the parity probe in release mode — bench should reflect what
+      # users actually run, not a debug build.
+      - name: Build parity probe
+        working-directory: apps/desktop/src-tauri
+        run: cargo build --example parity-probe --release
+
+      - name: Run benches
+        working-directory: apps/desktop
+        run: |
+          if [ -f perf/baseline.json ] && [ -n "$(jq -r '.timestamp // empty' perf/baseline.json)" ]; then
+            node perf/bench.mjs --check-against perf/baseline.json
+          else
+            echo "::warning::No baseline.json yet — running bench without comparison."
+            echo "::warning::Once perf is stable, run 'pnpm bench:write-baseline' on a representative machine and commit the file."
+            node perf/bench.mjs
+          fi
+
+      # Frontend bundle size budgets — catches accidental eager imports
+      # that would undo §1.2 (lazy panels) or §4.3 (lazy highlight.js).
+      - name: Build frontend
+        working-directory: apps/desktop
+        run: pnpm build
+
+      - name: Bundle size check
+        working-directory: apps/desktop
+        run: node perf/bundle-check.mjs
+
+      # Always upload the run artifact so we can inspect even when the job
+      # fails. Useful when investigating a regression.
+      - name: Upload bench results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results-${{ github.sha }}
+          path: apps/desktop/perf/last-run.json
+          retention-days: 14

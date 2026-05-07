@@ -254,14 +254,37 @@ export function useGitRepo() {
     }
   }
 
+  // ─── Polling lifecycle (P2.2 — visibility-aware) ────────────────────────
+  //
+  // Two intervals tick while a repo is open: pollStatus (2 s, refreshes the
+  // changes list) and fetchRemote (30 s, background fetch). Both are gated
+  // on `document.hidden` so the app stops burning CPU + spawning git
+  // processes when the user is on another window. We track each poll's
+  // *intended* state separately from whether it's actually running, so
+  // visibility transitions can pause/resume without losing the user's
+  // openRepo → startStatusPoll wiring.
+  //
+  // Pattern: start*Poll() / stop*Poll() flip the "enabled" flag, then
+  // ensure*Poll() reconciles the actual interval to match (enabled &&
+  // !document.hidden).
+  let _statusPollEnabled = false;
+  let _fetchPollEnabled = false;
+
   function startAutoFetch() {
-    stopAutoFetch();
-    // Initial fetch after a short delay, then every 30s
-    fetchInterval = setInterval(fetchRemote, 30_000);
+    _fetchPollEnabled = true;
+    ensureAutoFetch();
   }
 
   function stopAutoFetch() {
-    if (fetchInterval) {
+    _fetchPollEnabled = false;
+    ensureAutoFetch();
+  }
+
+  function ensureAutoFetch() {
+    const shouldRun = _fetchPollEnabled && !isHidden();
+    if (shouldRun && !fetchInterval) {
+      fetchInterval = setInterval(fetchRemote, 30_000);
+    } else if (!shouldRun && fetchInterval) {
       clearInterval(fetchInterval);
       fetchInterval = null;
     }
@@ -300,15 +323,43 @@ export function useGitRepo() {
   }
 
   function startStatusPoll() {
-    stopStatusPoll();
-    statusPollInterval = setInterval(pollStatus, 2_000);
+    _statusPollEnabled = true;
+    ensureStatusPoll();
   }
 
   function stopStatusPoll() {
-    if (statusPollInterval) {
+    _statusPollEnabled = false;
+    ensureStatusPoll();
+  }
+
+  function ensureStatusPoll() {
+    const shouldRun = _statusPollEnabled && !isHidden();
+    if (shouldRun && !statusPollInterval) {
+      statusPollInterval = setInterval(pollStatus, 2_000);
+    } else if (!shouldRun && statusPollInterval) {
       clearInterval(statusPollInterval);
       statusPollInterval = null;
     }
+  }
+
+  // SSR/test guard: `document` may not exist in a node-only context.
+  function isHidden(): boolean {
+    return typeof document !== "undefined" && document.hidden;
+  }
+
+  // Single visibility listener shared by both polls. On return to focus,
+  // we eagerly trigger pollStatus so the user sees fresh data immediately
+  // (vs. waiting up to 2 s for the next tick). We deliberately skip an
+  // eager fetch — network operations are heavier and the next 30 s tick
+  // is fine for ahead/behind freshness.
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      ensureStatusPoll();
+      ensureAutoFetch();
+      if (!document.hidden && _statusPollEnabled && folderPath.value) {
+        void pollStatus();
+      }
+    });
   }
 
   /**
