@@ -54,22 +54,28 @@ export function computeDagLayout(
     hashToIndex.set(commits[i].hashFull, i);
   }
 
-  // Active lanes: each slot holds the hash of the commit it's expecting next,
-  // or null if the lane is free.
+  // Hash → lane lookup for O(1) findLane (instead of O(L) linear scan).
+  const hashToLane = new Map<string, number>();
+  // Reusable free lane slots (previously occupied but now freed).
+  const freeLanes: number[] = [];
+  // Active lanes: each slot holds the hash of the commit it's expecting next.
   const lanes: (string | null)[] = [];
   let maxLane = 0;
 
   function findLane(hash: string): number {
-    // Check if this hash is already expected in a lane
-    for (let i = 0; i < lanes.length; i++) {
-      if (lanes[i] === hash) return i;
+    const existing = hashToLane.get(hash);
+    if (existing !== undefined) return existing;
+
+    if (freeLanes.length > 0) {
+      const lane = freeLanes.pop()!;
+      hashToLane.set(hash, lane);
+      return lane;
     }
-    // Assign a new or reused lane
-    for (let i = 0; i < lanes.length; i++) {
-      if (lanes[i] === null) { lanes[i] = hash; return i; }
-    }
+
+    const lane = lanes.length;
+    hashToLane.set(hash, lane);
     lanes.push(hash);
-    return lanes.length - 1;
+    return lane;
   }
 
   for (let i = 0; i < commits.length; i++) {
@@ -85,8 +91,9 @@ export function computeDagLayout(
       lane,
     });
 
-    // Free this lane (the commit has been placed)
-    lanes[lane] = null;
+    // Free this lane for reuse
+    hashToLane.delete(hash);
+    freeLanes.push(lane);
 
     // Assign parents to lanes
     for (let p = 0; p < commit.parents.length; p++) {
@@ -94,15 +101,10 @@ export function computeDagLayout(
       const parentIndex = hashToIndex.get(parentHash);
 
       if (parentIndex !== undefined) {
-        // Check if parent is already expected in some lane
-        let parentLane = -1;
-        for (let l = 0; l < lanes.length; l++) {
-          if (lanes[l] === parentHash) { parentLane = l; break; }
-        }
-        if (parentLane === -1) {
-          // First parent takes current lane, others get new lane
-          if (p === 0 && lanes[lane] === null) {
-            lanes[lane] = parentHash;
+        let parentLane = hashToLane.get(parentHash);
+        if (parentLane === undefined) {
+          if (p === 0) {
+            hashToLane.set(parentHash, lane);
             parentLane = lane;
           } else {
             parentLane = findLane(parentHash);

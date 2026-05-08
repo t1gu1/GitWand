@@ -49,6 +49,18 @@ const emit = defineEmits<{
 }>();
 
 const query = ref("");
+// R5 — debouncedQuery lags 150ms behind raw query so filtering
+// branches/commits/actions doesn't run on every keystroke. The raw
+// query still drives the input display and selectedIndex reset
+// (instant feedback for keyboard navigation).
+const debouncedQuery = ref("");
+let _debounceTimer: ReturnType<typeof setTimeout> | undefined;
+watch(query, (val) => {
+  selectedIndex.value = 0;
+  if (_debounceTimer) clearTimeout(_debounceTimer);
+  _debounceTimer = setTimeout(() => { debouncedQuery.value = val; }, 150);
+});
+
 const selectedIndex = ref(0);
 const inputEl = ref<HTMLInputElement | null>(null);
 const listEl = ref<HTMLDivElement | null>(null);
@@ -58,14 +70,14 @@ const DEFAULT_BRANCHES = 20;
 const DEFAULT_COMMITS = 10;
 
 const filteredBranches = computed<GitBranch[]>(() => {
-  const q = query.value.trim().toLowerCase();
+  const q = debouncedQuery.value.trim().toLowerCase();
   const pool = props.branches.filter((b) => !b.isCurrent);
   if (!q) return pool.slice(0, DEFAULT_BRANCHES);
   return pool.filter((b) => b.name.toLowerCase().includes(q));
 });
 
 const filteredCommits = computed<GitLogEntry[]>(() => {
-  const q = query.value.trim().toLowerCase();
+  const q = debouncedQuery.value.trim().toLowerCase();
   if (!q) return props.commits.slice(0, DEFAULT_COMMITS);
   return props.commits.filter((c) => {
     const haystack = `${c.message} ${c.hash}`.toLowerCase();
@@ -74,7 +86,7 @@ const filteredCommits = computed<GitLogEntry[]>(() => {
 });
 
 const filteredActions = computed<PaletteAction[]>(() => {
-  const q = query.value.trim().toLowerCase();
+  const q = debouncedQuery.value.trim().toLowerCase();
   if (!q) return props.actions;
   return props.actions.filter((a) => {
     const haystack = `${a.label} ${a.hint ?? ""}`.toLowerCase();
@@ -103,10 +115,6 @@ watch(flatItems, (items) => {
   } else if (selectedIndex.value < 0 && items.length > 0) {
     selectedIndex.value = 0;
   }
-});
-
-watch(query, () => {
-  selectedIndex.value = 0;
 });
 
 const branchOffset = computed(() => 0);

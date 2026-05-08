@@ -8,6 +8,25 @@ import {
 import type { WorkspaceRepo } from "../utils/backend";
 import type { PrWithRepo } from "./useLaunchpadPrs";
 
+/** Run async `fn` on each item with at most `limit` concurrent in-flight promises. */
+async function concurrentMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  limit: number,
+): Promise<R[]> {
+  const results: R[] = [];
+  const executing = new Set<Promise<void>>();
+  for (let i = 0; i < items.length; i++) {
+    const p = fn(items[i]).then((r) => { results[i] = r; });
+    executing.add(p.finally(() => executing.delete(p)));
+    if (executing.size >= limit) {
+      await Promise.race(executing);
+    }
+  }
+  await Promise.allSettled(executing);
+  return results;
+}
+
 export interface OverlappingPr extends PrWithRepo {
   overlappingFiles: string[];
   myContext: "wip" | "branch";
@@ -64,16 +83,20 @@ export function useLaunchpadTeam() {
 
       // 4. Branch fallback: if WIP is empty and I have open PRs, use their file lists
       if (myFiles.length === 0 && myPrs.length > 0) {
-        const myPrFileLists = await Promise.all(
-          myPrs.map((pr) => ghPrFiles(pr.repoPath, pr.number).catch(() => []))
+        const myPrFileLists = await concurrentMap(
+          myPrs,
+          (pr) => ghPrFiles(pr.repoPath, pr.number).catch(() => []),
+          5,
         );
         myFiles = [...new Set(myPrFileLists.flat())];
         myContext = "branch";
       }
 
-      // 5. Fetch file lists for all colleague PRs in parallel
-      const colleagueFileLists = await Promise.all(
-        colleaguePrs.map((pr) => ghPrFiles(pr.repoPath, pr.number).catch(() => []))
+      // 5. Fetch file lists for all colleague PRs with concurrency limit
+      const colleagueFileLists = await concurrentMap(
+        colleaguePrs,
+        (pr) => ghPrFiles(pr.repoPath, pr.number).catch(() => []),
+        5,
       );
 
       // 6. Build TeamMemberActivity map

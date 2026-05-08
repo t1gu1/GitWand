@@ -66,9 +66,22 @@ function fileName(path: string): string {
 /** Detected language for syntax highlighting */
 const language = computed(() => props.filePath ? detectLanguage(props.filePath) : null);
 
-/** Highlight a line's content, returns HTML */
+// R2 — module-level cache: keyed by content + language.
+// highlightLine + safeHtml are called ONCE per unique line text
+// instead of every render cycle. Cache is shared across all
+// DiffViewer instances (e.g. CommitDiffViewer also imports hl).
+const _dvHlCache = new Map<string, string>();
+const _DV_HL_MAX = 5_000;
+
+/** Highlight a line's content, returns pre-sanitized HTML safe for v-html. */
 function hl(content: string): string {
-  return highlightLine(content, language.value);
+  const lang = language.value;
+  const key = content + '|' + (lang ?? '');
+  const cached = _dvHlCache.get(key);
+  if (cached) return cached;
+  const html = safeHtml(highlightLine(content, lang));
+  if (_dvHlCache.size < _DV_HL_MAX) _dvHlCache.set(key, html);
+  return html;
 }
 
 // ─── Side-by-side: pair lines into left/right rows ─────

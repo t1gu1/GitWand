@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-05-08T00:17:55.319Z",
+  "commit": "1aee1dc",
+  "machine": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpus": 11,
+    "node": "v25.2.1"
+  },
+  "results": {
+    "git_status": {
+      "samples": 50,
+      "median_ms": 44.95,
+      "p95_ms": 51.39,
+      "stddev_ms": 3.34,
+      "min_ms": 39.1,
+      "max_ms": 52.78
+    },
+    "git_status_fast": {
+      "samples": 50,
+      "median_ms": 29.43,
+      "p95_ms": 34.6,
+      "stddev_ms": 2.51,
+      "min_ms": 25.17,
+      "max_ms": 36.11
+    },
+    "git_log_50": {
+      "samples": 50,
+      "median_ms": 31.43,
+      "p95_ms": 33.63,
+      "stddev_ms": 1.4,
+      "min_ms": 28.95,
+      "max_ms": 36.42
+    },
+    "git_log_500": {
+      "samples": 50,
+      "median_ms": 42.51,
+      "p95_ms": 57.24,
+      "stddev_ms": 10.17,
+      "min_ms": 40.08,
+      "max_ms": 110.01
+    },
+    "git_branches": {
+      "samples": 50,
+      "median_ms": 30.22,
+      "p95_ms": 50.44,
+      "stddev_ms": 8.95,
+      "min_ms": 18.59,
+      "max_ms": 57.02
+    }
+  }
+}

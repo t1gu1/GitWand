@@ -18,7 +18,21 @@ const emit = defineEmits<{
 }>();
 
 // ─── DAG layout ──────────────────────────────────────
-const layout = computed<DagLayout>(() => computeDagLayout(props.commits));
+// R6 — fingerprint cache: we compare first/last hash + length.
+// When getGitLog() returns a new array with the same content
+// (e.g. after `.map()` in the parent), we avoid recomputing the
+// full O(N*L) layout.  Saves ~1-5 ms on every status poll tick.
+let _prevFingerprint = "";
+let _cachedLayout: DagLayout | null = null;
+const layout = computed<DagLayout>(() => {
+  const commits = props.commits;
+  const n = commits.length;
+  const fp = n + ':' + (commits[0]?.hashFull ?? '') + ':' + (commits[n - 1]?.hashFull ?? '');
+  if (fp === _prevFingerprint && _cachedLayout) return _cachedLayout;
+  _prevFingerprint = fp;
+  _cachedLayout = computeDagLayout(commits);
+  return _cachedLayout;
+});
 
 // ─── Rendering constants ─────────────────────────────
 const ROW_H = 32;       // height per commit row

@@ -68,6 +68,7 @@ import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
 import { useNetworkStatus } from "./composables/useNetworkStatus";
 import { useScheduler } from "./composables/useScheduler";
+import { useRepoPoller } from "./composables/useRepoPoller";
 import { useReleaseNotes } from "./composables/useReleaseNotes";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
@@ -1304,7 +1305,7 @@ function onSettingsClose() {
 // ─── Scheduler (v2.8) ────────────────────────────────────
 const { generate: generateReleaseNotesFn } = useReleaseNotes();
 
-const { triggerReleaseNotesIfEnabled } = useScheduler({
+const scheduler = useScheduler({
   cwd: repoFolderPath as import("vue").Ref<string>,
   settings,
   isOffline,
@@ -1334,6 +1335,24 @@ const { triggerReleaseNotesIfEnabled } = useScheduler({
   },
   hasStagedFiles: () => (repoStatus.value?.staged.length ?? 0) > 0,
 });
+const { triggerReleaseNotesIfEnabled } = scheduler;
+
+// ─── Consolidated poller (§2.1) — single 2s interval replacing 5 independent polls ──
+const poller = useRepoPoller({
+  onStatusChange: async (cwd) => {
+    await repoRefresh();
+  },
+  onConflictDetected: async (cwd) => {
+    await scheduler.onConflictDetected(cwd);
+  },
+  onFetchTick: async (cwd) => {
+    await doFetch();
+  },
+  onNightlyTick: async () => {
+    await scheduler.onNightlyTick();
+  },
+});
+watch(repoFolderPath, (p) => poller.setFolderPath(p), { immediate: true });
 
 // ─── Global shortcut listener (Cmd+Shift+G from anywhere) ─
 let unlistenGlobalShortcut: (() => void) | null = null;

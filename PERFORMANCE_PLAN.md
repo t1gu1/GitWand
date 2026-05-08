@@ -39,7 +39,7 @@
 | R12 | dagLayout.ts findLane() Map O(1) au lieu de scan O(L) | ⏳ À faire |  |
 | R13 | useAbsorb.ts paralléliser blameRange() | ⏳ À faire |  |
 | R14 | useLaunchpadTeam.ts concurrency limiter | ⏳ À faire |  |
-| 2.1 | Consolider polls dans useRepoPoller | ⏳ Backlog |  |
+| 2.1 | Consolider polls dans useRepoPoller | ✅ Appliqué | 2026-05-08 |  |
 | 3.4 | Découper lib.rs en sous-modules | ⏳ Backlog |  |
 | 4.1 | Mesurer le code splitting Vite réel | ⏳ Couvert par §6.2 |  |
 | 5.1 | FS watchers au lieu de poll | 📋 3.x |  |
@@ -107,6 +107,21 @@ Cible documentée dans `apps/desktop/perf/baseline.md` avec les chiffres v2.5 (r
 Ces chantiers ont été implémentés entre le 07 et le 08 mai 2026 par l'équipe GitWand,
 sur la base de l'audit initial (v2.8.1). Chaque entrée référence le fichier modifié et
 le § du plan original.
+
+### § 2.1 Consolidated poller (useRepoPoller)
+
+**Fichiers** : `apps/desktop/src/composables/useRepoPoller.ts` (nouveau),
+`apps/desktop/src/composables/useGitRepo.ts`, `apps/desktop/src/composables/useScheduler.ts`,
+`apps/desktop/src/App.vue`
+**Changement** : 5 `setInterval` indépendants (pollStatus 2s, fetchRemote 30s,
+refreshRepoState 3s, autoResolve 5s, nightlyPull 60s) remplacés par un unique
+`setInterval(2_000)` dans `useRepoPoller.ts`. Le poller consolide le
+`git status --porcelain --branch`, détecte les changements + conflits, et notifie
+les consommateurs via des callbacks. Visibility gating généralisé (pause sur
+`document.hidden`, eager check au retour).
+**Gain** : ~20 invokes/min de moins (autoResolve ne fait plus son propre
+`getGitStatus`). Plus de tirs concurrents sur le repo. Visibility gating
+appliqué à autoResolve et nightlyPull (manquait avant).
 
 ### § 0.1 DevTools Cargo feature
 
@@ -680,7 +695,8 @@ Ajouter aux critères de review pour toute PR qui modifie `apps/desktop/` :
 │ ├─ 4.3 Lazy highlight.js (9 eager + 17 lazy)                │
 │ ├─ 6.1 Bench suite + CI                                     │
 │ ├─ 6.2 Bundle size budget                                   │
-│ └─ 6.4 Invariants perf dans CLAUDE.md                       │
+│ ├─ 6.4 Invariants perf dans CLAUDE.md                       │
+│ └─ 2.1 useRepoPoller consolidé                              │
 ├─────────────────────────────────────────────────────────────┤
 │ Sprint 3 (semaine 3-4) — Vue rendering & IPC timeout        │
 │ ├─ R1  timeout tauriInvoke                   (½ jour)       │
@@ -751,5 +767,6 @@ Tous les patches ci-dessous ont été implémentés entre le 07 et le 08 mai 202
 | **6.1** | Bench suite + CI | `apps/desktop/perf/bench.mjs`, `package.json` |
 | **6.2** | Bundle size budget | `apps/desktop/perf/bundle-check.mjs`, `package.json` |
 | **6.4** | Invariants perf dans CLAUDE.md | `apps/desktop/CLAUDE.md` |
+| **2.1** | useRepoPoller consolidé | `apps/desktop/src/composables/useRepoPoller.ts` |
 
 Chacun de ces patches a été appliqué indépendamment et n'impacte pas la sémantique fonctionnelle de l'app.

@@ -2639,8 +2639,10 @@ fn git_blame(cwd: String, path: String, algorithm: Option<String>) -> Result<Vec
     let raw = String::from_utf8_lossy(&output.stdout);
     let lines: Vec<&str> = raw.lines().collect();
     let mut blame_lines: Vec<BlameLine> = Vec::new();
+    // Limit to 10 000 blame entries to cap memory & runtime on huge files.
+    const BLAME_MAX_ENTRIES: usize = 10_000;
     let mut i = 0;
-    while i < lines.len() {
+    while i < lines.len() && blame_lines.len() < BLAME_MAX_ENTRIES {
         // Header: <40-char-sha> <orig-line> <final-line> [<num-lines-in-group>]
         let parts: Vec<&str> = lines[i].split_whitespace().collect();
         if parts.len() < 3 || parts[0].len() != 40 {
@@ -3609,6 +3611,94 @@ struct GhPrStatusCheck {
 }
 
 #[derive(serde::Deserialize)]
+struct GhPrDetailRaw {
+    number: i64,
+    title: String,
+    body: String,
+    state: String,
+    author: GhPrAuthor,
+    #[serde(rename = "headRefName")]
+    head_ref_name: String,
+    #[serde(rename = "baseRefName")]
+    base_ref_name: String,
+    #[serde(rename = "isDraft")]
+    is_draft: bool,
+    #[serde(rename = "createdAt")]
+    created_at: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+    #[serde(rename = "mergedAt")]
+    merged_at: Option<String>,
+    url: String,
+    #[serde(default)]
+    additions: i64,
+    #[serde(default)]
+    deletions: i64,
+    #[serde(rename = "changedFiles", default)]
+    changed_files: i64,
+    #[serde(default)]
+    labels: Vec<GhPrLabel>,
+    #[serde(rename = "reviewRequests", default)]
+    review_requests: Vec<GhPrReviewRequest>,
+    #[serde(default)]
+    comments: Vec<serde_json::Value>,
+    #[serde(default)]
+    reviews: Vec<serde_json::Value>,
+    #[serde(default)]
+    mergeable: Option<String>,
+    #[serde(rename = "statusCheckRollup", default)]
+    status_check_rollup: Vec<GhPrStatusCheck>,
+}
+
+fn gh_pr_detail_raw_to_detail(r: GhPrDetailRaw) -> PullRequestDetail {
+    let comments = r.comments.len() as i64;
+    let review_comments = r.reviews.len() as i64;
+    let labels: Vec<String> = r.labels.into_iter().map(|l| l.name).collect();
+    let reviewers: Vec<String> = r.review_requests
+        .into_iter()
+        .filter_map(|rr| rr.requested_reviewer?.login)
+        .collect();
+    let checks_status = {
+        let mut has_failure = false;
+        let mut has_pending = false;
+        for c in &r.status_check_rollup {
+            match c.conclusion.as_deref() {
+                Some("FAILURE" | "ERROR") => has_failure = true,
+                Some("PENDING" | "QUEUED" | "IN_PROGRESS") => has_pending = true,
+                _ => {}
+            }
+        }
+        if has_failure { "failure".to_string() }
+        else if has_pending { "pending".to_string() }
+        else if !r.status_check_rollup.is_empty() { "success".to_string() }
+        else { "unknown".to_string() }
+    };
+    PullRequestDetail {
+        number: r.number,
+        title: r.title,
+        body: r.body,
+        state: r.state,
+        author: r.author.login,
+        branch: r.head_ref_name,
+        base: r.base_ref_name,
+        draft: r.is_draft,
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+        merged_at: r.merged_at.unwrap_or_default(),
+        url: r.url,
+        additions: r.additions,
+        deletions: r.deletions,
+        changed_files: r.changed_files,
+        comments,
+        review_comments,
+        labels,
+        reviewers,
+        mergeable: r.mergeable.unwrap_or_default(),
+        checks_status,
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct GhPrRaw {
     number: i64,
     title: String,
@@ -3984,141 +4074,11 @@ fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
         return Err(format!("gh pr view failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    let json = String::from_utf8_lossy(&output.stdout);
-    let json = json.trim();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let raw: GhPrDetailRaw = serde_json::from_str(stdout.trim())
+        .map_err(|e| format!("Failed to parse gh pr view output: {}", e))?;
 
-    let get_str = |key: &str| -> String {
-        extract_json_string(json, key).unwrap_or_default()
-    };
-    let get_num = |key: &str| -> i64 {
-        let needle = format!("\"{}\"", key);
-        if let Some(pos) = json.find(&needle) {
-            let rest = &json[pos + needle.len()..];
-            if let Some(colon) = rest.find(':') {
-                let after = rest[colon + 1..].trim_start();
-                let end = after.find(|c: char| !c.is_ascii_digit() && c != '-').unwrap_or(after.len());
-                return after[..end].parse().unwrap_or(0);
-            }
-        }
-        0
-    };
-    let get_bool = |key: &str| -> bool {
-        let needle = format!("\"{}\"", key);
-        if let Some(pos) = json.find(&needle) {
-            let rest = &json[pos + needle.len()..];
-            if let Some(colon) = rest.find(':') {
-                let after = rest[colon + 1..].trim_start();
-                return after.starts_with("true");
-            }
-        }
-        false
-    };
-
-    // Parse author.login
-    let author = if let Some(pos) = json.find("\"author\"") {
-        let rest = &json[pos..];
-        extract_json_string(rest, "login").unwrap_or_default()
-    } else { String::new() };
-
-    // Parse labels array
-    let mut labels = Vec::new();
-    if let Some(pos) = json.find("\"labels\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                let mut search_start = 0;
-                while let Some(name_pos) = arr[search_start..].find("\"name\"") {
-                    let abs_pos = search_start + name_pos;
-                    if let Some(val) = extract_json_string(&arr[abs_pos..], "name") {
-                        labels.push(val);
-                    }
-                    search_start = abs_pos + 6;
-                }
-            }
-        }
-    }
-
-    // Parse reviewers from reviewRequests
-    let mut reviewers = Vec::new();
-    if let Some(pos) = json.find("\"reviewRequests\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                let mut search_start = 0;
-                while let Some(login_pos) = arr[search_start..].find("\"login\"") {
-                    let abs_pos = search_start + login_pos;
-                    if let Some(val) = extract_json_string(&arr[abs_pos..], "login") {
-                        reviewers.push(val);
-                    }
-                    search_start = abs_pos + 7;
-                }
-            }
-        }
-    }
-
-    // Parse comments count
-    let comments = if let Some(pos) = json.find("\"comments\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                arr.matches('{').count() as i64
-            } else { 0 }
-        } else { 0 }
-    } else { 0 };
-
-    // Parse review comments count from reviews
-    let review_comments = if let Some(pos) = json.find("\"reviews\"") {
-        let rest = &json[pos..];
-        if let Some(arr_start) = rest.find('[') {
-            if let Some(arr_end) = rest[arr_start..].find(']') {
-                let arr = &rest[arr_start..arr_start + arr_end + 1];
-                arr.matches('{').count() as i64
-            } else { 0 }
-        } else { 0 }
-    } else { 0 };
-
-    // Parse checks status from statusCheckRollup
-    let checks_status = if let Some(pos) = json.find("\"statusCheckRollup\"") {
-        let rest = &json[pos..];
-        if rest.contains("\"FAILURE\"") || rest.contains("\"ERROR\"") {
-            "failure".to_string()
-        } else if rest.contains("\"PENDING\"") || rest.contains("\"QUEUED\"") || rest.contains("\"IN_PROGRESS\"") {
-            "pending".to_string()
-        } else if rest.contains("\"SUCCESS\"") {
-            "success".to_string()
-        } else {
-            "unknown".to_string()
-        }
-    } else {
-        "unknown".to_string()
-    };
-
-    Ok(PullRequestDetail {
-        number: get_num("number"),
-        title: get_str("title"),
-        body: get_str("body"),
-        state: get_str("state"),
-        author,
-        branch: get_str("headRefName"),
-        base: get_str("baseRefName"),
-        draft: get_bool("isDraft"),
-        created_at: get_str("createdAt"),
-        updated_at: get_str("updatedAt"),
-        merged_at: get_str("mergedAt"),
-        url: get_str("url"),
-        additions: get_num("additions"),
-        deletions: get_num("deletions"),
-        changed_files: get_num("changedFiles"),
-        comments,
-        review_comments,
-        labels,
-        reviewers,
-        mergeable: get_str("mergeable"),
-        checks_status,
-    })
+    Ok(gh_pr_detail_raw_to_detail(raw))
 }
 
 /// Get the diff of a PR using `gh` CLI.
@@ -6462,7 +6422,7 @@ fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
 #[tauri::command]
 fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
     let output = git_cmd()
-        .args(["shortlog", "-sne", "HEAD"])
+        .args(["shortlog", "-sne", "HEAD", "--max-count=50"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git shortlog: {}", e))?;
@@ -6684,6 +6644,17 @@ fn open_in_editor(cwd: String, path: String, editor: String) -> Result<(), Strin
 /// dev-server also uses. Don't redirect this to the libgit2 version.
 pub fn git_status_parity(cwd: String) -> Result<GitStatus, String> {
     git_status_cli(cwd)
+}
+
+/// Bench entry point — calls the libgit2 fast path *in isolation*, so the
+/// bench can measure it directly without the CLI fallback masking the
+/// numbers. NOT used for parity testing — the libgit2 output may diverge
+/// from CLI on edge cases (and the CLI fallback handles those at runtime).
+///
+/// The bench runs both `git_status_parity` (CLI) and this function
+/// (libgit2) on the same fixture so the delta is visible.
+pub fn git_status_libgit2_parity(cwd: String) -> Result<GitStatus, String> {
+    git_status_libgit2(&cwd)
 }
 
 pub fn git_log_parity(

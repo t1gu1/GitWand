@@ -4,12 +4,20 @@
  * Given two strings (old line and new line), produces an array of segments
  * marking which characters are common, deleted, or inserted.
  * Uses a simple LCS-based approach on word tokens for performance.
+ *
+ * R3 — module-level LRU cache deduplicates wordDiff calls across all
+ * consumers (DiffViewer pairedHunks + inlineWordDiff, MergeEditor, etc.).
+ * The same delete+add pair in SBS and inline mode now computes LCS once.
  */
 
 export interface DiffSegment {
   type: "equal" | "delete" | "insert";
   text: string;
 }
+
+// R3 — module-level cache: keyed by oldLine + '\0' + newLine
+const _wdCache = new Map<string, { oldSegments: DiffSegment[]; newSegments: DiffSegment[] }>();
+const _WD_CACHE_MAX = 2_000;
 
 /** Tokenise a line into words and whitespace chunks. */
 function tokenise(line: string): string[] {
@@ -45,29 +53,39 @@ export function wordDiff(
   oldLine: string,
   newLine: string,
 ): { oldSegments: DiffSegment[]; newSegments: DiffSegment[] } {
+  const cacheKey = oldLine + '\0' + newLine;
+  const cached = _wdCache.get(cacheKey);
+  if (cached) return cached;
+
   const oldTokens = tokenise(oldLine);
   const newTokens = tokenise(newLine);
 
   // Short-circuit: identical lines
   if (oldLine === newLine) {
-    return {
+    const result: ReturnType<typeof wordDiff> = {
       oldSegments: [{ type: "equal", text: oldLine }],
       newSegments: [{ type: "equal", text: newLine }],
     };
+    if (_wdCache.size < _WD_CACHE_MAX) _wdCache.set(cacheKey, result);
+    return result;
   }
 
   // Short-circuit: completely different (one side empty)
   if (oldTokens.length === 0) {
-    return {
+    const result: ReturnType<typeof wordDiff> = {
       oldSegments: [],
       newSegments: [{ type: "insert", text: newLine }],
     };
+    if (_wdCache.size < _WD_CACHE_MAX) _wdCache.set(cacheKey, result);
+    return result;
   }
   if (newTokens.length === 0) {
-    return {
+    const result: ReturnType<typeof wordDiff> = {
       oldSegments: [{ type: "delete", text: oldLine }],
       newSegments: [],
     };
+    if (_wdCache.size < _WD_CACHE_MAX) _wdCache.set(cacheKey, result);
+    return result;
   }
 
   const dp = lcsTable(oldTokens, newTokens);
@@ -117,7 +135,9 @@ export function wordDiff(
     }
   }
 
-  return { oldSegments: oldSegs, newSegments: newSegs };
+  const result = { oldSegments: oldSegs, newSegments: newSegs };
+  if (_wdCache.size < _WD_CACHE_MAX) _wdCache.set(cacheKey, result);
+  return result;
 }
 
 function pushSegment(segs: DiffSegment[], type: DiffSegment["type"], text: string) {

@@ -32,7 +32,9 @@
 // privés de lib.rs. On ne peut pas importer les commandes directement : la
 // proc-macro de Tauri génère une aide `__cmd__<name>` qui entre en conflit si
 // la fn elle-même est `pub`. Voir le bloc "Parity probe re-exports" dans lib.rs.
-use gitwand_desktop_lib::{git_branches_parity, git_log_parity, git_status_parity};
+use gitwand_desktop_lib::{
+    git_branches_parity, git_log_parity, git_status_libgit2_parity, git_status_parity,
+};
 use serde_json::{json, Value};
 use std::io::{self, Read};
 use std::process::ExitCode;
@@ -41,7 +43,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         eprintln!("usage: parity-probe <command>");
-        eprintln!("commands: git-status, git-log, git-branches");
+        eprintln!("commands: git-status, git-status-fast, git-log, git-branches");
         return ExitCode::from(2);
     }
 
@@ -86,6 +88,18 @@ fn main() -> ExitCode {
                 Err(code) => return code,
             };
             to_json(git_status_parity(cwd))
+        }
+        // Bench-only: libgit2 fast path in isolation. NOT used for parity
+        // testing — the libgit2 output may diverge from CLI on edge cases.
+        // The bench in `apps/desktop/perf/bench.mjs` runs both `git-status`
+        // (CLI) and `git-status-fast` (libgit2) on the same fixture so the
+        // delta is visible in the results table.
+        "git-status-fast" => {
+            let cwd = match must_str("cwd") {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            to_json(git_status_libgit2_parity(cwd))
         }
         "git-log" => {
             let cwd = match must_str("cwd") {

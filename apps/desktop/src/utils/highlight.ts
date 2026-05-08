@@ -85,7 +85,7 @@ const PENDING: Record<string, Promise<boolean>> = {};
 export async function ensureLanguage(lang: string | null): Promise<boolean> {
   if (!lang) return false;
   if (REGISTERED.has(lang)) return true;
-  if (PENDING[lang]) return PENDING[lang];
+  if (lang in PENDING) return PENDING[lang]!;
   const loader = LAZY_LOADERS[lang];
   if (!loader) return false;
   PENDING[lang] = loader()
@@ -169,6 +169,13 @@ export function detectLanguage(filePath: string): string | null {
   return extToLang[ext] ?? null;
 }
 
+// R2 — module-level cache: keyed by content + '\0' + lang.
+// Avoids re-highlighting identical lines on every render (DiffViewer
+// calls hl() per line in the template — without cache, hljs.highlight
+// runs for every line on every render cycle).
+const _hlCache = new Map<string, string>();
+const _HL_CACHE_MAX = 10_000;
+
 /**
  * Highlight a single line of code.
  * Returns HTML string with <span> elements for syntax tokens.
@@ -177,18 +184,25 @@ export function detectLanguage(filePath: string): string | null {
  * off the load and the next render call will highlight properly).
  */
 export function highlightLine(content: string, language: string | null): string {
-  if (!content || !language) return escapeHtml(content);
+  const cacheKey = content + '\0' + (language ?? '');
+  const cached = _hlCache.get(cacheKey);
+  if (cached) return cached;
+
+  const store = (html: string): string => {
+    if (_hlCache.size < _HL_CACHE_MAX) _hlCache.set(cacheKey, html);
+    return html;
+  };
+
+  if (!content || !language) return store(escapeHtml(content));
   if (!REGISTERED.has(language)) {
-    // Trigger background load. Subsequent calls (after Vue re-renders
-    // when reactive deps change, or after any state poke) will succeed.
     void ensureLanguage(language);
-    return escapeHtml(content);
+    return store(escapeHtml(content));
   }
   try {
     const result = hljs.highlight(content, { language, ignoreIllegals: true });
-    return result.value;
+    return store(result.value);
   } catch {
-    return escapeHtml(content);
+    return store(escapeHtml(content));
   }
 }
 

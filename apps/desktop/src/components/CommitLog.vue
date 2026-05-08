@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, inject, nextTick, onMounted, onUnmounted, type Ref } from "vue";
 import type { GitLogEntry } from "../utils/backend";
+import { useVirtualizer } from "@tanstack/vue-virtual";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useCommitSearch, filterCommitsLocal, type CommitMatch } from "../composables/useCommitSearch";
@@ -29,6 +30,92 @@ const props = defineProps<{
 const effectiveAhead = computed(() =>
   props.needsPublish ? props.entries.length : (props.aheadCount ?? 0),
 );
+
+// ─── Virtual scroll ─────────────────────────────────────
+const scrollContainerRef = ref<HTMLDivElement | null>(null);
+
+type RowSection =
+  | { type: "section-unpushed" }
+  | { type: "section-unpublished" }
+  | { type: "section-pushed" };
+
+type RowCommit = { type: "commit"; entry: GitLogEntry; originalIndex: number };
+type Row = RowSection | RowCommit;
+
+const rows = computed<Row[]>(() => {
+  const entries = displayedEntries.value;
+  const ahead = effectiveAhead.value;
+  const searchActive = isSearchActive.value;
+  const showUnpushed = !searchActive && ahead > 0;
+  const showPushed = showUnpushed && !props.needsPublish;
+
+  const items: Row[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    if (showUnpushed && i === 0) {
+      items.push(props.needsPublish
+        ? { type: "section-unpublished" }
+        : { type: "section-unpushed" });
+    }
+    if (showPushed && i === ahead) {
+      items.push({ type: "section-pushed" });
+    }
+    items.push({ type: "commit", entry: entries[i], originalIndex: i });
+  }
+  return items;
+});
+
+const virtualizer = useVirtualizer({
+  count: 0,
+  getScrollElement: () => scrollContainerRef.value,
+  estimateSize: () => 72,
+  overscan: 5,
+});
+
+watch(() => rows.value.length, (count) => {
+  virtualizer.value?.setOptions({
+    ...virtualizer.value.options,
+    count,
+  });
+}, { immediate: true });
+
+function isSectionRow(row: Row): boolean {
+  return row.type !== "commit";
+}
+
+function sectionLabelClass(row: Row): string {
+  if (row.type === "section-unpublished") return "log-section-label--unpublished";
+  if (row.type === "section-unpushed")    return "log-section-label--unpushed";
+  if (row.type === "section-pushed")      return "log-section-label--pushed";
+  return "";
+}
+
+function sectionLabelText(row: Row): string {
+  if (row.type === "section-unpublished") return t("log.unpublishedBranch");
+  if (row.type === "section-unpushed")    return `${effectiveAhead.value} ${effectiveAhead.value === 1 ? t("log.unpushedOne") : t("log.unpushedMany")}`;
+  if (row.type === "section-pushed")      return t("log.pushed");
+  return "";
+}
+
+function vrStyle(vr: { start: number; size: number }) {
+  return {
+    position: "absolute" as const,
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: vr.size + "px",
+    transform: "translateY(" + vr.start + "px)",
+  };
+}
+
+/** Get commit entry from row index (only use inside v-else where row is guaranteed commit). */
+function c(index: number): GitLogEntry {
+  return (rows.value[index] as RowCommit).entry;
+}
+
+/** Get original displayedEntries index from row index. */
+function oi(index: number): number {
+  return (rows.value[index] as RowCommit).originalIndex;
+}
 
 const emit = defineEmits<{
   selectCommit: [hash: string];
@@ -308,82 +395,72 @@ function authorColor(name: string): string {
       <span class="muted">{{ t('common.loading') }}</span>
     </div>
 
-    <ul class="log-list" v-else-if="displayedEntries.length > 0">
-      <template v-for="(entry, idx) in displayedEntries" :key="entry.hashFull">
-        <!-- Section label before first unpushed commit (or unpublished branch) -->
-        <li
-          v-if="!isSearchActive && effectiveAhead > 0 && idx === 0"
-          class="log-section-label"
-          :class="needsPublish ? 'log-section-label--unpublished' : 'log-section-label--unpushed'"
-        >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 13V3M5 6l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span v-if="needsPublish">{{ t('log.unpublishedBranch') }}</span>
-          <span v-else>{{ effectiveAhead }} {{ effectiveAhead === 1 ? t('log.unpushedOne') : t('log.unpushedMany') }}</span>
-        </li>
-        <!-- Section label before first pushed commit -->
-        <li v-if="!isSearchActive && !needsPublish && effectiveAhead > 0 && idx === effectiveAhead" class="log-section-label log-section-label--pushed">
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M13.5 3.5l-7 7L3 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{{ t('log.pushed') }}</span>
-        </li>
-        <!-- Commit item -->
-        <li
-          class="commit-item"
-          :class="{
-            'commit-item--selected': selectedHash === entry.hashFull,
-            'commit-item--unpushed': isUnpushed(entry),
-          }"
-          @click="emit('selectCommit', entry.hashFull)"
-          @contextmenu="openCommitContextMenu($event, entry, idx)"
-          tabindex="0"
-          @keydown.enter="emit('selectCommit', entry.hashFull)"
-        >
-          <div class="commit-avatar" :style="{ background: authorColor(entry.author) }">
-            {{ authorInitials(entry.author) }}
-          </div>
-          <div class="commit-info">
-            <div class="commit-message">
-              {{ entry.message }}
-              <span v-if="isUnpushed(entry)" class="unpushed-badge">{{ needsPublish ? t('log.unpublishedBadge') : 'unpushed' }}</span>
+    <div ref="scrollContainerRef" class="log-list" v-else-if="displayedEntries.length > 0">
+      <div :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative', width: '100%' }">
+        <div v-for="vr in virtualizer.getVirtualItems()" :key="'' + vr.key" :style="vrStyle(vr)">
+          <template v-if="isSectionRow(rows[vr.index])">
+            <div class="log-section-label" :class="sectionLabelClass(rows[vr.index])">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 13V3M5 6l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ sectionLabelText(rows[vr.index]) }}</span>
             </div>
-            <div v-if="reasonByHash.get(entry.hashFull)" class="commit-ai-reason">
-              <AiSparkle :size="12" :animated="false" />
-              <span>{{ reasonByHash.get(entry.hashFull) }}</span>
+          </template>
+          <template v-else>
+            <div
+              class="commit-item"
+              :class="{
+                'commit-item--selected': selectedHash === c(vr.index).hashFull,
+                'commit-item--unpushed': isUnpushed(c(vr.index)),
+              }"
+              @click="emit('selectCommit', c(vr.index).hashFull)"
+              @contextmenu="openCommitContextMenu($event, c(vr.index), oi(vr.index))"
+              tabindex="0"
+              @keydown.enter="emit('selectCommit', c(vr.index).hashFull)"
+            >
+              <div class="commit-avatar" :style="{ background: authorColor(c(vr.index).author) }">
+                {{ authorInitials(c(vr.index).author) }}
+              </div>
+              <div class="commit-info">
+                <div class="commit-message">
+                  {{ c(vr.index).message }}
+                  <span v-if="isUnpushed(c(vr.index))" class="unpushed-badge">{{ needsPublish ? t('log.unpublishedBadge') : 'unpushed' }}</span>
+                </div>
+                <div v-if="reasonByHash.get(c(vr.index).hashFull)" class="commit-ai-reason">
+                  <AiSparkle :size="12" :animated="false" />
+                  <span>{{ reasonByHash.get(c(vr.index).hashFull) }}</span>
+                </div>
+                <div class="commit-meta">
+                  <span class="commit-hash mono">{{ c(vr.index).hash }}</span>
+                  <span class="commit-separator" aria-hidden="true">&middot;</span>
+                  <span class="commit-author">{{ c(vr.index).author }}</span>
+                  <span class="commit-separator" aria-hidden="true">&middot;</span>
+                  <time class="commit-date" :datetime="c(vr.index).date">{{ relativeDate(c(vr.index).date) }}</time>
+                </div>
+                <div v-if="!isSearchActive && c(vr.index).refs" class="commit-refs">
+                  <span
+                    v-for="badge in parseRefBadges(c(vr.index).refs)"
+                    :key="badge.label"
+                    class="commit-ref-badge"
+                    :class="`commit-ref-badge--${badge.type}`"
+                  >{{ badge.label }}</span>
+                </div>
+              </div>
+              <button
+                v-if="!isSearchActive && aheadCount != null && oi(vr.index) === 0"
+                class="commit-edit-btn"
+                @click.stop="emit('editCommit', c(vr.index))"
+                :title="t('log.editMessage')"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </div>
-            <div class="commit-meta">
-              <span class="commit-hash mono">{{ entry.hash }}</span>
-              <span class="commit-separator" aria-hidden="true">&middot;</span>
-              <span class="commit-author">{{ entry.author }}</span>
-              <span class="commit-separator" aria-hidden="true">&middot;</span>
-              <time class="commit-date" :datetime="entry.date">{{ relativeDate(entry.date) }}</time>
-            </div>
-            <!-- Ref badges (branch + tag) — hidden when search active to save space -->
-            <div v-if="!isSearchActive && entry.refs" class="commit-refs">
-              <span
-                v-for="badge in parseRefBadges(entry.refs)"
-                :key="badge.label"
-                class="commit-ref-badge"
-                :class="`commit-ref-badge--${badge.type}`"
-              >{{ badge.label }}</span>
-            </div>
-          </div>
-          <!-- Edit button — HEAD unpushed only (hidden in search mode) -->
-          <button
-            v-if="!isSearchActive && aheadCount != null && idx === 0"
-            class="commit-edit-btn"
-            @click.stop="emit('editCommit', entry)"
-            :title="t('log.editMessage')"
-          >
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </li>
-      </template>
-    </ul>
+          </template>
+        </div>
+      </div>
+    </div>
 
     <div class="log-empty" v-else>
       <span class="muted">{{ t('log.noCommit') }}</span>

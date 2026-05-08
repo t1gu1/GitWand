@@ -1,5 +1,4 @@
 import { ref, computed, watch } from "vue";
-import { gitExec } from "../utils/backend";
 import {
   getGitStatus,
   getGitDiff,
@@ -226,13 +225,13 @@ export function useGitRepo() {
     }
   }
 
+  const isFetching = ref(false);
+
   /**
    * Fetch from remote (background, non-blocking).
    * Updates tracking refs so ahead/behind counts become accurate.
+   * Used by both manual user action and the consolidated useRepoPoller.
    */
-  let fetchInterval: ReturnType<typeof setInterval> | null = null;
-  const isFetching = ref(false);
-
   async function fetchRemote() {
     // Skip fetch during merge operations to avoid git lock conflicts
     if (!folderPath.value || isFetching.value || isMerging.value || hasConflicts.value) return;
@@ -252,114 +251,6 @@ export function useGitRepo() {
     } finally {
       isFetching.value = false;
     }
-  }
-
-  // ─── Polling lifecycle (P2.2 — visibility-aware) ────────────────────────
-  //
-  // Two intervals tick while a repo is open: pollStatus (2 s, refreshes the
-  // changes list) and fetchRemote (30 s, background fetch). Both are gated
-  // on `document.hidden` so the app stops burning CPU + spawning git
-  // processes when the user is on another window. We track each poll's
-  // *intended* state separately from whether it's actually running, so
-  // visibility transitions can pause/resume without losing the user's
-  // openRepo → startStatusPoll wiring.
-  //
-  // Pattern: start*Poll() / stop*Poll() flip the "enabled" flag, then
-  // ensure*Poll() reconciles the actual interval to match (enabled &&
-  // !document.hidden).
-  let _statusPollEnabled = false;
-  let _fetchPollEnabled = false;
-
-  function startAutoFetch() {
-    _fetchPollEnabled = true;
-    ensureAutoFetch();
-  }
-
-  function stopAutoFetch() {
-    _fetchPollEnabled = false;
-    ensureAutoFetch();
-  }
-
-  function ensureAutoFetch() {
-    const shouldRun = _fetchPollEnabled && !isHidden();
-    if (shouldRun && !fetchInterval) {
-      fetchInterval = setInterval(fetchRemote, 30_000);
-    } else if (!shouldRun && fetchInterval) {
-      clearInterval(fetchInterval);
-      fetchInterval = null;
-    }
-  }
-
-  /**
-   * Lightweight status polling — runs `git status --porcelain` every 2s
-   * and only triggers a full `loadStatus` when the output changes.
-   * This detects external file changes (editor saves, branch operations
-   * from CLI, etc.) with minimal overhead (~20ms per check).
-   */
-  let statusPollInterval: ReturnType<typeof setInterval> | null = null;
-  let lastStatusSnapshot = "";
-
-  async function pollStatus() {
-    if (!folderPath.value || isMerging.value || loading.value) return;
-    try {
-      const result = await gitExec(folderPath.value, [
-        "status",
-        "--porcelain",
-        "--branch",
-      ]);
-      if (result.exitCode !== 0) return;
-      const snapshot = result.stdout ?? "";
-      if (snapshot !== lastStatusSnapshot) {
-        lastStatusSnapshot = snapshot;
-        await loadStatus(folderPath.value);
-        // Also refresh diff if a file is selected
-        if (selectedFilePath.value) {
-          await loadDiff(selectedFilePath.value, selectedFileStaged.value);
-        }
-      }
-    } catch {
-      // Silently ignore — polling errors are non-critical
-    }
-  }
-
-  function startStatusPoll() {
-    _statusPollEnabled = true;
-    ensureStatusPoll();
-  }
-
-  function stopStatusPoll() {
-    _statusPollEnabled = false;
-    ensureStatusPoll();
-  }
-
-  function ensureStatusPoll() {
-    const shouldRun = _statusPollEnabled && !isHidden();
-    if (shouldRun && !statusPollInterval) {
-      statusPollInterval = setInterval(pollStatus, 2_000);
-    } else if (!shouldRun && statusPollInterval) {
-      clearInterval(statusPollInterval);
-      statusPollInterval = null;
-    }
-  }
-
-  // SSR/test guard: `document` may not exist in a node-only context.
-  function isHidden(): boolean {
-    return typeof document !== "undefined" && document.hidden;
-  }
-
-  // Single visibility listener shared by both polls. On return to focus,
-  // we eagerly trigger pollStatus so the user sees fresh data immediately
-  // (vs. waiting up to 2 s for the next tick). We deliberately skip an
-  // eager fetch — network operations are heavier and the next 30 s tick
-  // is fine for ahead/behind freshness.
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", () => {
-      ensureStatusPoll();
-      ensureAutoFetch();
-      if (!document.hidden && _statusPollEnabled && folderPath.value) {
-        void pollStatus();
-      }
-    });
   }
 
   /**
@@ -388,11 +279,6 @@ export function useGitRepo() {
 
     // Background fetch then refresh status — awaited so UI updates before user interacts
     fetchRemote();
-    startAutoFetch();
-
-    // Start lightweight status polling to detect external changes
-    lastStatusSnapshot = ""; // Reset so first poll picks up current state
-    startStatusPoll();
   }
 
   /**
@@ -400,13 +286,10 @@ export function useGitRepo() {
    * the app returns to its empty/landing screen.
    *
    * This is called when the last repo tab is closed (see App.vue's
-   * `activeTabId` watcher). We also stop the auto-fetch and status-poll
-   * intervals — leaving them running on a null folderPath is harmless
-   * but wasteful.
+   * `activeTabId` watcher). Polling is stopped by useRepoPoller's
+   * watch on repoFolderPath.
    */
   function closeRepo() {
-    stopAutoFetch();
-    stopStatusPoll();
     folderPath.value = null;
     status.value = null;
     selectedFilePath.value = null;
@@ -705,8 +588,6 @@ export function useGitRepo() {
 
   async function mergeBranch(branchName: string) {
     if (!folderPath.value || !branchName) return;
-    stopAutoFetch();
-    stopStatusPoll();
     isMerging.value = true;
     try {
       const result = await gitMerge(folderPath.value, branchName);
@@ -746,11 +627,6 @@ export function useGitRepo() {
       error.value = `merge: ${err?.message || String(err) || "unknown error"}`;
     } finally {
       isMerging.value = false;
-      // Restart auto-fetch only if no conflicts remain (conflicts = merge still in progress)
-      if (!hasConflicts.value) {
-        startAutoFetch();
-        startStatusPoll();
-      }
     }
   }
 
@@ -763,9 +639,6 @@ export function useGitRepo() {
       await refresh();
     } catch (err: any) {
       error.value = `abort merge: ${err?.message || String(err)}`;
-    } finally {
-      startAutoFetch();
-      startStatusPoll();
     }
   }
 
@@ -788,8 +661,6 @@ export function useGitRepo() {
       error.value = `merge --continue: ${err?.message || String(err)}`;
     } finally {
       isMerging.value = false;
-      startAutoFetch();
-      startStatusPoll();
     }
   }
 
@@ -799,8 +670,6 @@ export function useGitRepo() {
 
   async function cherryPick(hashes: string[]) {
     if (!folderPath.value || hashes.length === 0) return;
-    stopAutoFetch();
-    stopStatusPoll();
     isCherryPicking.value = true;
     try {
       const result = await gitCherryPick(folderPath.value, hashes);
@@ -833,11 +702,8 @@ export function useGitRepo() {
     } catch (err: any) {
       error.value = `cherry-pick: ${err.message}`;
     } finally {
-      // Only reset flag when there are no ongoing conflicts
       if (!hasConflicts.value) {
         isCherryPicking.value = false;
-        startAutoFetch();
-        startStatusPoll();
       }
     }
   }
@@ -853,8 +719,6 @@ export function useGitRepo() {
       error.value = `cherry-pick abort: ${err.message}`;
     } finally {
       isCherryPicking.value = false;
-      startAutoFetch();
-      startStatusPoll();
     }
   }
 
@@ -882,8 +746,6 @@ export function useGitRepo() {
     } finally {
       if (!hasConflicts.value) {
         isCherryPicking.value = false;
-        startAutoFetch();
-        startStatusPoll();
       }
     }
   }

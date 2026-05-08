@@ -2,20 +2,22 @@
  * useScheduler — lightweight automation layer (v2.8).
  *
  * Four predefined tasks, all opt-in:
- *   - autoResolve     : poll for MERGE_HEAD → trigger conflict resolution
+ *   - autoResolve     : detect conflict → trigger conflict resolution
  *   - nightlyPull     : run `git pull --rebase` at a configured time each day
  *   - releaseNotes    : generate CHANGELOG entry when a v* tag is pushed
  *   - aiCommitBatch   : prompt AI commit message on app blur / close if staged files present
  *
+ * Since §2.1 (perf consolidation), polling is owned by `useRepoPoller`. This
+ * composable provides the event-driven handler methods that the poller calls.
+ *
  * Design rules:
- *   - No external daemon — pure TypeScript, setInterval + visibility/beforeunload events
- *   - Completely silent when a task is disabled (no intervals, no listeners)
+ *   - Completely silent when a task is disabled (no ops)
  *   - Always wrapped in try/catch — a failing task never crashes the app
  *   - Disabled automatically while offline (isOffline = true)
  *   - Log entries go to the caller-supplied `onLog` callback (→ Logs tab in Settings)
  */
 
-import { watch, onUnmounted } from "vue";
+import { onUnmounted } from "vue";
 import type { Ref } from "vue";
 import type { AppSettings } from "./useSettings";
 
@@ -44,10 +46,6 @@ export interface SchedulerCallbacks {
 
 // ─── Constants ────────────────────────────────────────────
 
-/** How often (ms) to poll for MERGE_HEAD (auto-resolve). */
-const AUTO_RESOLVE_POLL_MS = 5_000;
-/** How often (ms) to check the nightly-pull schedule. */
-const NIGHTLY_POLL_MS = 60_000;
 /** localStorage key for last-run timestamps. */
 const LAST_RUN_KEY = "gitwand-scheduler-last-run";
 
@@ -81,92 +79,69 @@ function sameDay(a: string, b: Date): boolean {
 // ─── Main composable ──────────────────────────────────────
 
 export function useScheduler(cb: SchedulerCallbacks) {
-  // Track all active intervals so we can clear them on unmount
-  const intervals: ReturnType<typeof setInterval>[] = [];
-  // Track visibility/beforeunload listeners
+  // Track visibility/beforeunload listeners for cleanup
   let visibilityHandler: (() => void) | null = null;
   let unloadHandler: (() => void) | null = null;
 
-  // ── 1. Auto-resolve ──────────────────────────────────────
-  {
-    let mergeHeadWasPresent = false;
-    let autoResolveInterval: ReturnType<typeof setInterval> | null = null;
+  // ── Auto-resolve state ────────────────────────────────────
+  let mergeHeadWasPresent = false;
 
-    function startAutoResolve() {
-      if (autoResolveInterval) return;
-      autoResolveInterval = setInterval(async () => {
-        if (cb.isOffline.value) return;
-        const cwd = cb.cwd.value;
-        if (!cwd) return;
-        if (!cb.settings.value.automations?.autoResolve?.enabled) return;
+  /**
+   * Called by useRepoPoller on conflict rising edge (new `UU` entries).
+   * Triggers conflict resolution if the autoResolve setting is enabled.
+   */
+  async function onConflictDetected() {
+    if (cb.isOffline.value) return;
+    if (!cb.settings.value.automations?.autoResolve?.enabled) return;
 
-        // Check for MERGE_HEAD via a lightweight git status call
-        // We detect conflicts by watching the hasStagedFiles + unresolved markers
-        // Simplest cross-platform approach: the presence of conflict markers in status
-        const nowPresent = await checkMergeConflictPresent(cwd);
-
-        if (nowPresent && !mergeHeadWasPresent) {
-          // Rising edge — new conflict detected
-          mergeHeadWasPresent = true;
-          cb.onLog(`[${timestamp()}] [auto-resolve] Merge conflict detected in ${cwd} — resolving…`);
-          try {
-            await cb.resolveConflicts();
-            cb.onLog(`[${timestamp()}] [auto-resolve] Resolution complete.`);
-          } catch (e: any) {
-            cb.onLog(`[${timestamp()}] [auto-resolve] Error: ${e?.message ?? e}`);
-          }
-        } else if (!nowPresent) {
-          mergeHeadWasPresent = false;
-        }
-      }, AUTO_RESOLVE_POLL_MS);
-      intervals.push(autoResolveInterval);
-    }
-
-    // Start immediately if enabled; watch settings changes
-    if (cb.settings.value.automations?.autoResolve?.enabled) startAutoResolve();
-    watch(
-      () => cb.settings.value.automations?.autoResolve?.enabled,
-      (enabled) => {
-        if (enabled) startAutoResolve();
-        else if (autoResolveInterval) {
-          clearInterval(autoResolveInterval);
-          autoResolveInterval = null;
-        }
-      }
-    );
-  }
-
-  // ── 2. Nightly pull ──────────────────────────────────────
-  {
-    const nightlyInterval = setInterval(async () => {
-      if (cb.isOffline.value) return;
-      const cfg = cb.settings.value.automations?.nightlyPull;
-      if (!cfg?.enabled) return;
-      const cwd = cb.cwd.value;
-      if (!cwd) return;
-
-      const now = new Date();
-      if (now.getHours() !== cfg.hour || now.getMinutes() !== cfg.minute) return;
-
-      // Don't run more than once per day
-      const lastRun = loadLastRun()["nightlyPull"];
-      if (lastRun && sameDay(lastRun, now)) return;
-
-      saveLastRun("nightlyPull", now.toISOString());
-      cb.onLog(`[${timestamp()}] [nightly-pull] Running pull --rebase on ${cwd}…`);
+    if (!mergeHeadWasPresent) {
+      mergeHeadWasPresent = true;
+      cb.onLog(`[${timestamp()}] [auto-resolve] Merge conflict detected — resolving…`);
       try {
-        await cb.pullAndRebase();
-        cb.onLog(`[${timestamp()}] [nightly-pull] Done.`);
+        await cb.resolveConflicts();
+        cb.onLog(`[${timestamp()}] [auto-resolve] Resolution complete.`);
       } catch (e: any) {
-        cb.onLog(`[${timestamp()}] [nightly-pull] Error: ${e?.message ?? e}`);
+        cb.onLog(`[${timestamp()}] [auto-resolve] Error: ${e?.message ?? e}`);
       }
-    }, NIGHTLY_POLL_MS);
-    intervals.push(nightlyInterval);
+    }
   }
 
-  // ── 3. Release notes on tag ──────────────────────────────
-  // Triggered externally via triggerReleaseNotesIfEnabled()
-  // (called from App.vue after a successful push that includes tags)
+  /** Reset conflict-tracking state (call when conflict is manually resolved). */
+  function resetConflictState() {
+    mergeHeadWasPresent = false;
+  }
+
+  // ── Nightly pull ──────────────────────────────────────────
+
+  /**
+   * Called by useRepoPoller every ~60 s. Checks the configured schedule
+   * and runs `git pull --rebase` at most once per day.
+   */
+  async function onNightlyTick() {
+    if (cb.isOffline.value) return;
+    const cfg = cb.settings.value.automations?.nightlyPull;
+    if (!cfg?.enabled) return;
+    const cwd = cb.cwd.value;
+    if (!cwd) return;
+
+    const now = new Date();
+    if (now.getHours() !== cfg.hour || now.getMinutes() !== cfg.minute) return;
+
+    // Don't run more than once per day
+    const lastRun = loadLastRun()["nightlyPull"];
+    if (lastRun && sameDay(lastRun, now)) return;
+
+    saveLastRun("nightlyPull", now.toISOString());
+    cb.onLog(`[${timestamp()}] [nightly-pull] Running pull --rebase on ${cwd}…`);
+    try {
+      await cb.pullAndRebase();
+      cb.onLog(`[${timestamp()}] [nightly-pull] Done.`);
+    } catch (e: any) {
+      cb.onLog(`[${timestamp()}] [nightly-pull] Error: ${e?.message ?? e}`);
+    }
+  }
+
+  // ── Release notes on tag ──────────────────────────────────
 
   function triggerReleaseNotesIfEnabled() {
     const cfg = cb.settings.value.automations?.releaseNotes;
@@ -179,7 +154,7 @@ export function useScheduler(cb: SchedulerCallbacks) {
     });
   }
 
-  // ── 4. AI commit batch ───────────────────────────────────
+  // ── AI commit batch ───────────────────────────────────────
   {
     visibilityHandler = () => {
       if (document.visibilityState !== "hidden") return;
@@ -196,7 +171,6 @@ export function useScheduler(cb: SchedulerCallbacks) {
       const cfg = cb.settings.value.automations?.aiCommitBatch;
       if (!cfg?.enabled || cb.isOffline.value) return;
       if (!cb.hasStagedFiles()) return;
-      // Synchronous — just mark that we should suggest on next open
       localStorage.setItem("gitwand-pending-ai-commit", cb.cwd.value);
     };
 
@@ -206,23 +180,17 @@ export function useScheduler(cb: SchedulerCallbacks) {
 
   // ── Cleanup ──────────────────────────────────────────────
   onUnmounted(() => {
-    intervals.forEach(clearInterval);
     if (visibilityHandler) document.removeEventListener("visibilitychange", visibilityHandler);
     if (unloadHandler) window.removeEventListener("beforeunload", unloadHandler);
   });
 
-  return { triggerReleaseNotesIfEnabled };
-}
-
-// ─── Internal helpers ─────────────────────────────────────
-
-/** Check whether the repo at `cwd` currently has unresolved merge conflicts. */
-async function checkMergeConflictPresent(cwd: string): Promise<boolean> {
-  try {
-    const { getGitStatus } = await import("../utils/backend");
-    const status = await getGitStatus(cwd);
-    return status.conflicted.length > 0;
-  } catch {
-    return false;
-  }
+  return {
+    triggerReleaseNotesIfEnabled,
+    /** Handler for useRepoPoller's onConflictDetected callback. */
+    onConflictDetected,
+    /** Reset conflict-tracking state (call when conflict is manually resolved). */
+    resetConflictState,
+    /** Handler for useRepoPoller's onNightlyTick callback. */
+    onNightlyTick,
+  };
 }

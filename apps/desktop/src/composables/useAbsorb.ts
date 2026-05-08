@@ -337,15 +337,20 @@ export function useAbsorb() {
       const result: AbsorbCandidate[] = [];
 
       for (const [file, fileHunks] of byFile) {
-        // Blame each hunk range to find which commit(s) own those lines
+        // Blame each hunk range in parallel to find which commit(s) own those lines.
+        // Each `git blame -L` is I/O-bound, so concurrent spawning is safe.
+        const blameResults = await Promise.all(
+          fileHunks.map(async (hunk) => {
+            const end = hunk.origStart + hunk.origCount - 1;
+            const hashes = await blameRange(cwd, file, hunk.origStart, end);
+            return { hashes, range: `${hunk.origStart}-${end}` };
+          }),
+        );
         const allHashes = new Set<string>();
         const lineRanges: string[] = [];
-
-        for (const hunk of fileHunks) {
-          const end = hunk.origStart + hunk.origCount - 1;
-          const hashes = await blameRange(cwd, file, hunk.origStart, end);
-          for (const h of hashes) allHashes.add(h);
-          lineRanges.push(`${hunk.origStart}-${end}`);
+        for (const br of blameResults) {
+          for (const h of br.hashes) allHashes.add(h);
+          lineRanges.push(br.range);
         }
 
         // If all hunks point to a single commit → clean absorb candidate

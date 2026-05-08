@@ -66,12 +66,19 @@ export function isTauri(): boolean {
 }
 
 /** Call a Tauri command via the invoke IPC bridge. */
-async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
   const internals = (window as any).__TAURI_INTERNALS__;
   if (!internals?.invoke) {
     throw new Error("Tauri invoke not available");
   }
-  return internals.invoke(cmd, args) as Promise<T>;
+  const promise = internals.invoke(cmd, args) as Promise<T>;
+  if (timeoutMs <= 0) return promise;
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`IPC timeout after ${timeoutMs}ms: ${cmd}`)), timeoutMs),
+    ),
+  ]);
 }
 
 /** Open a native folder picker (Tauri only). */

@@ -140,7 +140,11 @@ function main() {
 
   console.log(`Running benches (${SAMPLES} samples each, ${WARMUP} warmup)...`);
   const results = Object.fromEntries([
+    // CLI vs libgit2 comparison on the same fixture (P3.3b validation).
+    // The first measures the parity-test path, the second the user-facing
+    // path that the Tauri command actually runs.
     bench("git_status", "git-status", { cwd }),
+    bench("git_status_fast", "git-status-fast", { cwd }),
     bench("git_log_50", "git-log", { cwd, count: 50 }),
     bench("git_log_500", "git-log", { cwd, count: 500 }),
     bench("git_branches", "git-branches", { cwd }),
@@ -158,11 +162,25 @@ function main() {
     results,
   };
 
-  // Print summary table
+  // Print summary table. For paired benches (e.g. git_status / git_status_fast),
+  // the second row gets a ↓ delta% column showing the gain over the first.
+  const PAIRS = { git_status_fast: "git_status" };
   console.log("\nResults:");
-  console.log("Bench           median   p95     stddev");
+  console.log("Bench                  median    p95       stddev   vs CLI");
   for (const [name, s] of Object.entries(results)) {
-    console.log(`${name.padEnd(15)} ${String(s.median_ms).padStart(6)}ms ${String(s.p95_ms).padStart(6)}ms ${String(s.stddev_ms).padStart(6)}ms`);
+    const baseName = PAIRS[name];
+    let vsTag = "";
+    if (baseName) {
+      const base = results[baseName];
+      if (base) {
+        const delta = (s.median_ms - base.median_ms) / base.median_ms;
+        const arrow = delta < 0 ? "↓" : "↑";
+        vsTag = `   ${arrow} ${(Math.abs(delta) * 100).toFixed(0)}%`;
+      }
+    }
+    console.log(
+      `${name.padEnd(22)} ${String(s.median_ms).padStart(6)}ms  ${String(s.p95_ms).padStart(6)}ms  ${String(s.stddev_ms).padStart(6)}ms${vsTag}`
+    );
   }
 
   if (checkAgainst) {
