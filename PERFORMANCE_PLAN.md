@@ -52,7 +52,7 @@
 | 3.4f | Migrer 5 commandes AI CLI + helpers → `commands/ai.rs` (~430 LOC) | ✅ Appliqué | 2026-05-11 |
 | #6.a | Fix CREATE_NO_WINDOW (CommandExt import) — terminal flashes Windows | ✅ Appliqué | 2026-05-11 |
 | #6.b | Skip ping AI au boot Settings (privacy + cost) | ✅ Appliqué | 2026-05-11 |
-| 3.4g | Migrer 5 commandes file I/O → `commands/files.rs` (~250 LOC) | ⏳ Backlog |  |
+| 3.4g | Migrer 5 commandes file I/O → `commands/files.rs` (~250 LOC) | ✅ Appliqué | 2026-05-11 |
 | 3.4h | Migrer ~10 commandes git read → `commands/read.rs` (~1100 LOC) | ⏳ Backlog |  |
 | 4.1 | Mesurer le code splitting Vite réel | ⏳ Couvert par §6.2 |  |
 | **Architecture 3.x** | | | |
@@ -78,18 +78,24 @@ La refonte structurelle a bien progressé. Au total, lib.rs perd ~830 lignes net
 - §3.4b — `workspace_read` / `workspace_write` → `commands/workspace.rs` (premier squelette).
 - §3.4c — 6 helpers libgit2 (`libgit2_branch_ab`, `libgit2_modified_count`, `libgit2_wip_status`, `libgit2_last_commit_at`, `format_iso8601`, `unix_to_ymdhms`) → `src/git/libgit2.rs`.
 - §3.4d — 6 commandes `workspace_*_all` (status / fetch / pull / wip / prs / issues) → `commands/workspace.rs`.
+- §3.4e — 8 commandes `gh_*` (issues, PRs, view, comment) → `commands/gh.rs`.
+- §3.4f — 5 commandes AI CLI (`detect_claude_cli`, `claude_cli_prompt`, `claude_cli_login`, `detect_codex_cli`, `codex_cli_prompt`) + helpers → `commands/ai.rs`.
+- §3.4g — 5 commandes file I/O (`read_file`, `write_file`, `read_file_at_revision`, `folder_diff`, `list_dir`) → `commands/files.rs`. lib.rs perd ~255 lignes nettes.
 
 **Architecture backend Rust à date :**
 
 ```
-lib.rs              ~2400  bootstrap + invoke_handler! + ~35 commandes restantes
+lib.rs              1868  bootstrap + invoke_handler! + ~20 commandes git-read restantes
 commands/
+  ├── ai.rs          384  detect/prompt/login Claude + Codex CLI
+  ├── files.rs       272  read_file / write_file / read_file_at_revision / folder_diff / list_dir
+  ├── gh.rs          360  gh_issue_* + gh_pr_* (8 commandes)
   ├── ops.rs        2193  stage/unstage/commit/push/pull/merge/rebase/discard
   └── workspace.rs   268  workspace_read/write + 6 *_all aggregates
 git/
-  ├── cmd.rs         130  git_cmd() + hidden_cmd()
+  ├── cmd.rs         142  git_cmd() + hidden_cmd() + safe_repo_path
   ├── libgit2.rs     168  helpers libgit2 (branch_ab, statuses, last_commit, format)
-  └── parse.rs       638  porcelain v2 + gh JSON parsers
+  └── parse.rs       638  porcelain v2 + gh JSON parsers + folder_diff helpers
 types.rs             690  toutes les structs partagées
 main.rs                6  entry point
 ```
