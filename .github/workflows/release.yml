@@ -116,6 +116,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Force pkg-config to look in the standard Ubuntu multi-arch path.
+          # On the current GHA ubuntu-22.04 runner image, apt-get install leaves
+          # `glib-2.0.pc` in /usr/lib/x86_64-linux-gnu/pkgconfig but cargo's
+          # build script (glib-sys / gio-sys / soup3-sys) reports the path as
+          # not set, suggesting tauri-action runs cargo in a context where the
+          # default pkg-config search path is reset. Pin it here explicitly so
+          # the resolution is independent of runner image quirks.
+          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/usr/lib/pkgconfig
           # macOS code signing & notarization
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}

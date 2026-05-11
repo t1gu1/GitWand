@@ -117,6 +117,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Pin pkg-config search path explicitly — tauri-action sometimes runs
+          # cargo in a context where the default Ubuntu multi-arch path is reset.
+          # Without this, glib-sys / gio-sys / soup3-sys can't find their .pc
+          # files even when libglib2.0-dev is installed. See release.yml comment.
+          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/usr/lib/pkgconfig
         with:
           projectPath: apps/desktop
           args: ${{ matrix.args }}
