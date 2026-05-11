@@ -105,6 +105,10 @@ jobs:
             echo "::error::One or more Tauri Linux prereqs are missing — fix the apt-get install list above"
             exit 1
           fi
+          # Belt + braces: also export PKG_CONFIG_PATH at the runner level so
+          # every subsequent step (including tauri-action's internal cargo
+          # subprocess) inherits it, not just the step's `env:` block.
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig:/usr/lib/pkgconfig" >> "$GITHUB_ENV"
 
       - run: pnpm install --frozen-lockfile
 
