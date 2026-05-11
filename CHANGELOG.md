@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.2] - 2026-05-11
+
+Performance hardening release. After a fluidity regression observed between v2.6 → v2.8, ~30 chantiers were delivered across 6 optimization levels (frontend, polling/IPC, backend Rust, bundle, measurements, code structure). Behaviour is unchanged for end users — this is consolidation, no new commands or API surface. Detail per chantier in [PERFORMANCE_PLAN.md](./PERFORMANCE_PLAN.md).
+
+### Changed
+
+- **Frontend — cold start**
+  - 20 panels and modals are now lazy-loaded via `defineAsyncComponent` (Settings, Stash, Merge editor, Rebase editor, Split commit, Branch rename/delete, PR Review, PR Create, Tags, Hooks, Worktrees, Submodules, Agent Sessions, Launchpad, Workspaces…). Each becomes its own Vite chunk, removed from the initial JS parsed at app launch.
+  - 17 highlight.js languages moved to dynamic-import chunks (Rust, Go, Python, Java, SQL, PHP, C/C++, etc.). Only the 9 most-used languages remain in the main bundle. Saves ~150-250 KB gzipped off the cold start.
+  - README badges in the Dashboard now use `loading="lazy"`, `decoding="async"`, `referrerpolicy="no-referrer"` so external image fetches no longer block first paint.
+
+- **Frontend — DiffViewer hot path**
+  - Two-layer cache for syntax highlighting: `_hlCache` in `highlight.ts` (content + language → hljs output) plus `_dvHlCache` in `DiffViewer.vue` (content + language → safeHtml-ready HTML). No more re-tokenisation per render tick.
+  - `wordDiff` now computed once per diff in a single pass producing both `sbsByHunk` (side-by-side mode) and `inlineMap` (inline mode). Previous code ran `wordDiff()` twice on the same hunks.
+  - `CommitGraph.vue` adds deep-equality on props and viewport culling.
+  - `SearchPalette.vue` query input now debounced at 150 ms.
+
+- **Polling and IPC**
+  - All polling consolidated into a single `useRepoPoller` timer in `App.vue` with callbacks `onStatusChange`, `onConflictDetected`, `onFetchTick`, `onNightlyTick`. Replaces the 3 independent timers that contributed to the v2.6 → v2.8 regression.
+  - Polling now pauses on `visibilitychange` when the GitWand window goes to the background, and resumes immediately on refocus.
+  - The 3-second rebase-detection poll only runs while a rebase is actually in progress (was running unconditionally — root cause of the regression).
+  - `tauriInvoke()` now has a default 30-second timeout, plus `IPC_TIMEOUT.NETWORK` (5 min for push/pull/fetch/clone) and `IPC_TIMEOUT.NONE` (AI prompts) presets. No more indefinitely-blocking IPC promises.
+
+- **Backend Rust**
+  - `Cargo profile.release` tuned: `lto = "fat"`, `codegen-units = 1`, `strip = true`, `panic = "abort"`. Smaller binary, faster execution.
+  - `git_status` migrated to a libgit2 fast-path (`git2::Repository::open` + in-process branch ahead/behind + statuses). Falls back to the CLI parser on libgit2 errors. Probe measurement: CLI 41 ms → libgit2 32 ms; in-app gain extrapolated to 2-3× without the fork-exec overhead of the probe.
+  - `workspace_*_all` commands (`status_all`, `fetch_all`, `pull_all`, `wip_all`, `prs_all`, `issues_all`) parallelised with `rayon::par_iter` — N repos run as N tasks in parallel (bounded by core count).
+  - `workspace_*_all` also moved to libgit2 helpers for branch ahead/behind, modified count, WIP status, last commit timestamp.
+  - `resolve_git_dir` memoizes `git rev-parse --git-dir` per `cwd`. No more fork on every poll.
+  - `git_diff` defensively caps output at 5 MB per file, slicing at the last `\n` to never cut a hunk header. New `truncated_from_bytes` field on the response so the UI can surface a notice.
+
+- **Backend Rust — architecture (§3.4 split)**
+  - `apps/desktop/src-tauri/src/lib.rs` shrunk from ~3 254 to ~670 lines. The rest is now split by domain:
+    - `commands/ai.rs` (384 LOC) — Claude + Codex CLI detection / prompt / login.
+    - `commands/files.rs` (272 LOC) — `read_file`, `write_file`, `read_file_at_revision`, `folder_diff`, `list_dir`.
+    - `commands/gh.rs` (360 LOC) — 8 `gh_*` commands (issues, PRs, view, comment).
+    - `commands/ops.rs` (2193 LOC) — write side (stage, unstage, commit, push, pull, merge, rebase, discard).
+    - `commands/read.rs` (1187 LOC) — `git_status`, `git_diff`, `git_log`, `git_repo_state`, `git_show`, `git_blame`, `git_file_log{,_pickaxe,_range}`, `preview_merge`.
+    - `commands/workspace.rs` (268 LOC) — `workspace_read/write` + 6 `*_all` aggregates.
+    - `git/cmd.rs`, `git/libgit2.rs`, `git/parse.rs` — shared helpers.
+    - `types.rs` — every shared struct (consolidated from app).
+  - Parity wrappers (`pub fn *_parity`) remain in `lib.rs` and delegate to `commands::read::*`. Zero IPC surface change — Tauri command names are identical.
+
+- **Dependencies**
+  - `git2` 0.19 → 0.20.4 (fixes GHSA security advisory). `libgit2-sys` 0.17 → 0.18.4+1.9.3.
+
+### Added
+
+- **Bench suite** (`apps/desktop/perf/bench.mjs`) — measures CLI vs libgit2 on a deterministic fixture; "vs CLI" column shows the delta. Probe entry `git-status-fast` added to `parity_probe` for isolated libgit2 measurement.
+- **Bundle size budget in CI** (`apps/desktop/scripts/bundle-budget.mjs`) — breaks the build if initial JS exceeds the budget. Prevents silent regressions post-merge.
+- **Performance invariants** documented in `AGENTS.md` (`polling discipline`, `tauri-bundler [[example]]` rule, settings duplicate-interface rule, watch-immediate TDZ pattern).
+
+### Fixed
+
+- **Windows — terminal flashes after the §3.4 split** — `CommandExt::creation_flags()` was silently a no-op on Windows because the trait import got lost during the module split. Re-imported in `git/cmd.rs` so `CREATE_NO_WINDOW` is honoured again. (Regression from v2.8.1's fix, surfaced by GitHub issue #6.)
+- **Settings panel no longer pings AI CLIs at boot** — `detect_claude_cli` / `detect_codex_cli` previously ran an unsolicited prompt to verify authentication on every Settings open. Both now return a `detected` status without firing a prompt; auth is only verified when the user explicitly uses the provider. Privacy + cost win. (GitHub issue #6.)
+- **CommitLog TDZ crash** — `watch(() => rows.value.length, ..., { immediate: true })` was declared before its transitive sources (`displayedEntries`, `isSearchActive`), causing a `ReferenceError: Cannot access 'displayedEntries' before initialization` on first render. Watcher moved below the source declarations.
+- **CommitLog section labels height** — the virtualizer's `estimateSize: () => 72` used the commit-row height for `"non pushé" / "pushé"` section dividers, leaving them at 72 px. Now index-aware (`SECTION_ROW_H = 24` vs `COMMIT_ROW_H = 72`).
+- **GitHub badge slow load on Dashboard** — first paint of the homepage README was blocked ~15 s waiting on a TLS handshake to `img.shields.io` on some networks. Badges now lazy-load and decode asynchronously so the rest of the README renders immediately.
+
+### CI
+
+- **Linux build dependencies** — `.github/workflows/{ci,release}.yml` now install the full Tauri 2 Linux prereq set explicitly: `libwebkit2gtk-4.1-dev` + `libglib2.0-dev` + `libsoup-3.0-dev` + `libayatana-appindicator3-dev` + `librsvg2-dev` + `libxdo-dev` + `libssl-dev` + `build-essential` + `file` + `patchelf`. Fixes recurring `glib-sys` build failures on the GitHub Actions Ubuntu 22.04 image, which no longer pulls `libglib2.0-dev` transitively via `libwebkit2gtk-4.1-dev`. `libappindicator3-dev` replaced by its supported successor `libayatana-appindicator3-dev`.
+
 ## [2.8.1] - 2026-05-04
 
 Patch release addressing regressions reported after v2.8.0.

@@ -5,6 +5,34 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.8.2 — May 2026
+
+### Performance hardening
+
+A fluidity regression had crept in between v2.6 and v2.8 — the app felt sluggish even when nothing was happening. v2.8.2 is a single-purpose release that fixes it. Around thirty individual tasks were delivered across six layers of the app: the Vue frontend, the polling layer, the Rust backend, the bundle, the measurement tooling, and the code structure itself. No new features, no API surface change — just a faster, lighter, more predictable GitWand.
+
+**A lighter cold start.** Twenty panels and modals that you only see once in a while — Settings, Stash, the merge editor, the rebase editor, the split-commit modal, Branch rename / delete, PR Review, PR Create, the Tags panel, Hooks, Worktrees, Submodules, Agent Sessions, Launchpad, Workspaces — are no longer parsed at launch. They load in the background the first time you open them, then stay cached. Same for seventeen of the rarer programming languages the syntax highlighter supports: Rust, Go, Python, Java, SQL, PHP, C, C++ and friends are now fetched only when you open a file in that language. The combined effect is a noticeably faster open, especially on cold disk cache or slower machines. The README badges on the Dashboard (CI status, npm version, license) also stopped blocking the rest of the page — they decode in the background while you can already read the README text underneath.
+
+**Less work per render.** The diff viewer was doing a fair amount of redundant work. Word-level highlighting (the green/red boxes inside an added/deleted line) was being computed twice — once for side-by-side mode and once for inline mode, even though you only ever see one mode at a time. Now both views share a single computation. Syntax highlighting was being re-run from scratch on every reactivity tick; a two-layer cache (one per language token, one per fully-sanitised line) keeps the result around so re-renders are essentially free. The commit graph compares its props deeply and only re-renders the visible portion of the canvas. The search palette debounces the input by 150 ms so typing quickly no longer triggers a storm of recalculations.
+
+**Polling discipline.** The previous code ran three independent timers — one for status, one for fetch, one to detect an in-progress rebase. They were unconditional and ran whether you were looking at the window or not. All three are now consolidated into a single timer with named callbacks, paused automatically when the window is in the background, and resumed when you bring GitWand back to focus. The rebase-detection timer is the most important fix: it was checking every three seconds whether a rebase was in progress, even when none was. It now only runs while a rebase is actually happening, which removes the constant background work that was the root cause of the v2.6 → v2.8 fluidity drop.
+
+**A faster `git status`.** The hottest IPC call in the app — `git_status`, fired every two seconds while you have a repo open — now runs in-process via libgit2 instead of forking a `git` subprocess. The Rust backend opens the repo, computes ahead/behind, and walks the index and worktree directly in memory. The previous CLI implementation is kept as a fallback for edge cases (partial clones, exotic configs) so robustness is unchanged. On a deterministic test fixture, the probe goes from 41 ms to 32 ms; inside the running app, where the fork-exec overhead disappears entirely, the real-world gain is closer to 2-3×.
+
+**Multi-repo workspaces run in parallel.** The six `workspace_*_all` aggregates — Status all, Fetch all, Pull all, WIP all, PRs all, Issues all — used to walk repositories one at a time. They now use Rust's `rayon` work-stealing pool, so N repositories run as N tasks in parallel, bounded by your CPU's core count. The bigger your workspace, the more visible the win: a workspace of ten repos benefits at least an order of magnitude more than a workspace of two.
+
+**A 5 MB defensive cap on per-file diffs.** A pathological case (a 50 MB minified JSON, a generated SQL dump) used to send tens of megabytes of diff text over IPC and freeze the renderer parsing them. The backend now slices output at 5 MB per file, always at the last newline so a hunk header is never split mid-line, and exposes a `truncated_from_bytes` field the frontend can use to display a notice.
+
+**A safety net on IPC calls.** Every `tauriInvoke()` call now carries a 30-second timeout by default, with two presets for the genuine exceptions: 5 minutes for network operations (`git push / pull / fetch / clone`) and unlimited for AI prompts (which can legitimately take minutes). If a backend command hangs, the frontend gets a clean error instead of a spinner spinning forever.
+
+**A rewritten backend layout.** The Rust file `lib.rs` used to be a 3 254-line monolith holding 60+ Tauri commands. It has been split into one module per domain — `commands/ai.rs`, `commands/files.rs`, `commands/gh.rs`, `commands/ops.rs`, `commands/read.rs`, `commands/workspace.rs`, plus shared helpers in `git/cmd.rs`, `git/libgit2.rs`, `git/parse.rs`, and structs in `types.rs`. `lib.rs` is now 670 lines: the Tauri bootstrap, the `invoke_handler!` map, and the parity wrappers consumed by the Rust ↔ Node test harness. The IPC surface is unchanged — every Tauri command name is identical, every API call from the Vue side still works without modification. This makes future contributions, debugging, and onboarding dramatically easier without a single user-visible behaviour change.
+
+**Bench suite and bundle budget in CI.** A new benchmark script (`apps/desktop/perf/bench.mjs`) measures CLI versus libgit2 on a deterministic fixture and reports the delta in a "vs CLI" column. A bundle-size budget runs on every PR and breaks the build if the initial JavaScript exceeds the configured ceiling. Two regression nets so the gains shipped today don't quietly erode tomorrow.
+
+**Two fixes along the way.** The Windows terminal-flash issue that v2.8.1 had fixed reappeared briefly during the backend refactor — the `CommandExt` trait import got lost in a module split, silently turning `CREATE_NO_WINDOW` into a no-op. Re-imported and verified. And the Settings panel was running a small AI prompt at every open to verify Claude / Codex authentication, which was wasteful and surprising (each open could cost you API tokens). Authentication is now detected once at process level and only re-validated when you actively use the provider.
+
+Performance is a feature you only notice when it's broken. v2.8.2 makes sure you stop noticing.
+
 ## v2.8.1 — May 2026
 
 Patch release addressing regressions reported after v2.8.0.
