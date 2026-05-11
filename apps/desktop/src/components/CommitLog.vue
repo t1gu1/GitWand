@@ -71,12 +71,12 @@ const virtualizer = useVirtualizer({
   overscan: 5,
 });
 
-watch(() => rows.value.length, (count) => {
-  virtualizer.value?.setOptions({
-    ...virtualizer.value.options,
-    count,
-  });
-}, { immediate: true });
+// NOTE: the watcher that syncs `rows.value.length` into the virtualizer
+// is declared further down in this file — AFTER `displayedEntries` and
+// `isSearchActive` are defined. Putting `{ immediate: true }` here would
+// trigger `rows` synchronously, which reads `displayedEntries.value` and
+// raises a TDZ ReferenceError because those constants aren't initialized
+// yet. See `// ─── virtualizer sync (post-decl) ───` below.
 
 function isSectionRow(row: Row): boolean {
   return row.type !== "commit";
@@ -250,6 +250,17 @@ const displayedEntries = computed<GitLogEntry[]>(() => {
 const isSearchActive = computed(
   () => aiMatches.value !== null || searchQuery.value.trim().length > 0,
 );
+
+// ─── virtualizer sync (post-decl) ─────────────────────────
+// Moved here so `{ immediate: true }` doesn't fire before
+// `displayedEntries` / `isSearchActive` (which `rows` depends on) are
+// initialized — see comment near the virtualizer declaration above.
+watch(() => rows.value.length, (count) => {
+  virtualizer.value?.setOptions({
+    ...virtualizer.value.options,
+    count,
+  });
+}, { immediate: true });
 
 /** Hashes of the commits considered "unpushed" in the original list. */
 const unpushedHashes = computed<Set<string>>(() => {

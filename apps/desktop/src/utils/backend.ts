@@ -65,7 +65,21 @@ export function isTauri(): boolean {
   return !!(window as any).__TAURI_INTERNALS__;
 }
 
-/** Call a Tauri command via the invoke IPC bridge. */
+/**
+ * Call a Tauri command via the invoke IPC bridge.
+ *
+ * `timeoutMs` controls the IPC timeout:
+ *   - default 30 000 ms — safe for any read-only command (git_status,
+ *     git_log, git_diff, git_branches, workspace_*_all, etc.)
+ *   - pass a higher value (e.g. 300 000) for network operations:
+ *     git_push, git_pull, git_fetch, git_clone — these can legitimately
+ *     take minutes on a slow link
+ *   - pass `0` to disable the timeout entirely for arbitrarily-long
+ *     operations like AI prompts (claude_cli_prompt, codex_cli_prompt)
+ *
+ * The timer is cleared when the underlying invoke resolves so we don't
+ * leak a no-op setTimeout for the full timeout duration.
+ */
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>, timeoutMs = 30_000): Promise<T> {
   const internals = (window as any).__TAURI_INTERNALS__;
   if (!internals?.invoke) {
@@ -73,13 +87,34 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>, timeo
   }
   const promise = internals.invoke(cmd, args) as Promise<T>;
   if (timeoutMs <= 0) return promise;
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`IPC timeout after ${timeoutMs}ms: ${cmd}`)), timeoutMs),
-    ),
-  ]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise.finally(() => { if (timer) clearTimeout(timer); }),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`IPC timeout after ${timeoutMs}ms: ${cmd}`)),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
+
+/**
+ * Timeout presets for tauriInvoke. Use these instead of hardcoding
+ * magic numbers at call sites — keeps the policy in one place.
+ */
+const IPC_TIMEOUT = {
+  /** Default — short read-only commands. */
+  DEFAULT: 30_000,
+  /** Network git operations: push, pull, fetch, clone. */
+  NETWORK: 300_000,       // 5 min
+  /** AI prompts — no timeout, can run arbitrarily long. */
+  NONE: 0,
+} as const;
 
 /** Open a native folder picker (Tauri only). */
 async function tauriOpenFolder(): Promise<string | null> {
@@ -777,7 +812,7 @@ export async function gitPush(
   setUpstream: boolean = false,
 ): Promise<GitPushPullResult> {
   if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream });
+    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-push`, {
     method: "POST",
@@ -792,7 +827,7 @@ export async function gitPush(
  */
 export async function gitPull(cwd: string, rebase: boolean = false): Promise<GitPushPullResult> {
   if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_pull", { cwd, rebase });
+    return tauriInvoke<GitPushPullResult>("git_pull", { cwd, rebase }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-pull`, {
     method: "POST",
@@ -807,7 +842,7 @@ export async function gitPull(cwd: string, rebase: boolean = false): Promise<Git
  */
 export async function gitFetch(cwd: string): Promise<GitPushPullResult> {
   if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_fetch", { cwd });
+    return tauriInvoke<GitPushPullResult>("git_fetch", { cwd }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-fetch`, {
     method: "POST",
@@ -1628,7 +1663,7 @@ export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
  */
 export async function gitClone(url: string, dest: string): Promise<string> {
   if (isTauri()) {
-    return tauriInvoke<string>("git_clone", { url, dest });
+    return tauriInvoke<string>("git_clone", { url, dest }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-clone`, {
     method: "POST",
@@ -2563,7 +2598,7 @@ export async function claudeCliPrompt(
       systemPrompt,
       cwd,
       outputFormat,
-    });
+    }, IPC_TIMEOUT.NONE);
   }
   const res = await devFetch(`${DEV_SERVER}/api/claude-cli-prompt`, {
     method: "POST",
@@ -2632,7 +2667,7 @@ export async function codexCliPrompt(
       prompt,
       systemPrompt,
       cwd,
-    });
+    }, IPC_TIMEOUT.NONE);
   }
   const res = await devFetch(`${DEV_SERVER}/api/codex-cli-prompt`, {
     method: "POST",
@@ -2901,7 +2936,7 @@ export async function workspaceStatusAll(repos: WorkspaceRepo[]): Promise<Worksp
 /** Fetch all repos in a workspace and return updated statuses. */
 export async function workspaceFetchAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoStatus[]> {
   if (isTauri()) {
-    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_fetch_all", { repos });
+    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_fetch_all", { repos }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/workspace-fetch-all`, {
     method: "POST",
@@ -2915,7 +2950,7 @@ export async function workspaceFetchAll(repos: WorkspaceRepo[]): Promise<Workspa
 /** Pull all repos in a workspace and return updated statuses. */
 export async function workspacePullAll(repos: WorkspaceRepo[]): Promise<WorkspaceRepoStatus[]> {
   if (isTauri()) {
-    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_pull_all", { repos });
+    return tauriInvoke<WorkspaceRepoStatus[]>("workspace_pull_all", { repos }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/workspace-pull-all`, {
     method: "POST",

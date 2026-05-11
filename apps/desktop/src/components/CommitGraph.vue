@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { GitLogEntry } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
@@ -107,11 +107,88 @@ function formatDate(raw: string): string {
 function commitRefs(entry: GitLogEntry) {
   return parseRefs(entry.refs);
 }
+
+// ─── R6 viewport culling ─────────────────────────────
+// For repos with hundreds of commits, the SVG used to render every edge +
+// node + info row at once. We now track the scroll position and only
+// render the rows visible (plus an overscan margin for smooth scrolling).
+//
+// Effects:
+//   - SVG <path> for edges and <g> for nodes only emit visible items
+//   - <div class="cg-row"> only emits visible rows, positioned via their
+//     original `index * ROW_H` so the scrollbar / total height stay correct
+//   - On 1000-commit repos, DOM nodes drop from 3*N to ~3*(visibleRows + 2*overscan)
+const OVERSCAN_ROWS = 8;
+const scrollContainer = ref<HTMLDivElement | null>(null);
+const scrollTop = ref(0);
+const clientHeight = ref(0);
+
+function onScroll() {
+  if (scrollContainer.value) {
+    scrollTop.value = scrollContainer.value.scrollTop;
+  }
+}
+
+let _ro: ResizeObserver | null = null;
+onMounted(() => {
+  if (scrollContainer.value) {
+    clientHeight.value = scrollContainer.value.clientHeight;
+    _ro = new ResizeObserver(() => {
+      if (scrollContainer.value) clientHeight.value = scrollContainer.value.clientHeight;
+    });
+    _ro.observe(scrollContainer.value);
+  }
+});
+onUnmounted(() => {
+  _ro?.disconnect();
+  _ro = null;
+});
+
+const visibleRange = computed(() => {
+  const total = props.commits.length;
+  if (total === 0) return { first: 0, last: -1 };
+  // Before mount or during a 0-height layout, clientHeight is 0 and we'd
+  // render only the overscan. Fall back to a safe minimum so first paint
+  // shows something meaningful even before ResizeObserver fires.
+  const ch = clientHeight.value > 0 ? clientHeight.value : 600;
+  const first = Math.max(0, Math.floor(scrollTop.value / ROW_H) - OVERSCAN_ROWS);
+  const visibleRows = Math.ceil(ch / ROW_H);
+  const last = Math.min(total - 1, first + visibleRows + 2 * OVERSCAN_ROWS);
+  return { first, last };
+});
+
+const visibleNodes = computed(() => {
+  const { first, last } = visibleRange.value;
+  return layout.value.nodes.filter((n) => n.index >= first && n.index <= last);
+});
+
+const visibleEdges = computed(() => {
+  const { first, last } = visibleRange.value;
+  return layout.value.edges.filter((e) => {
+    const lo = Math.min(e.fromIndex, e.toIndex);
+    const hi = Math.max(e.fromIndex, e.toIndex);
+    // Render any edge that overlaps the visible window — partial overlaps
+    // still need the path drawn so the user sees lines entering/leaving
+    // the viewport.
+    return lo <= last && hi >= first;
+  });
+});
+
+interface VisibleCommit { entry: GitLogEntry; index: number }
+const visibleCommits = computed<VisibleCommit[]>(() => {
+  const { first, last } = visibleRange.value;
+  const out: VisibleCommit[] = [];
+  for (let i = first; i <= last; i++) {
+    const entry = props.commits[i];
+    if (entry) out.push({ entry, index: i });
+  }
+  return out;
+});
 </script>
 
 <template>
   <div class="cg" v-if="commits.length > 0">
-    <div class="cg-scroll">
+    <div class="cg-scroll" ref="scrollContainer" @scroll="onScroll">
       <!-- SVG graph column -->
       <svg
         class="cg-svg"
@@ -119,10 +196,12 @@ function commitRefs(entry: GitLogEntry) {
         :height="totalHeight"
         :viewBox="`0 0 ${graphWidth} ${totalHeight}`"
       >
-        <!-- Edges first (behind nodes) -->
+        <!-- Edges first (behind nodes). R6: only visible edges are emitted.
+             Key uses content (lanes + indices) so Vue can re-use DOM nodes
+             stably across scrolls without stale-key collisions. -->
         <path
-          v-for="(edge, eIdx) in layout.edges"
-          :key="'e' + eIdx"
+          v-for="edge in visibleEdges"
+          :key="'e-' + edge.fromIndex + '-' + edge.toIndex + '-' + edge.fromLane + '-' + edge.toLane"
           :d="edgePath(edge)"
           :stroke="laneColor(edge.fromLane)"
           :stroke-width="edge.isMerge ? 1.2 : 1.6"
@@ -130,9 +209,9 @@ function commitRefs(entry: GitLogEntry) {
           fill="none"
           stroke-linecap="round"
         />
-        <!-- Nodes -->
+        <!-- Nodes (R6: visible only). -->
         <g
-          v-for="node in layout.nodes"
+          v-for="node in visibleNodes"
           :key="'n' + node.index"
           class="cg-node"
           @click="emit('select-commit', node.hash)"
@@ -158,32 +237,34 @@ function commitRefs(entry: GitLogEntry) {
         </g>
       </svg>
 
-      <!-- Commit info rows (absolutely positioned to align with SVG rows) -->
+      <!-- Commit info rows — R6: visible-only with original index for
+           positioning. The wrapper keeps `height: totalHeight` so the
+           scrollbar matches the full commit list. -->
       <div class="cg-info" :style="{ height: totalHeight + 'px' }">
         <div
-          v-for="(entry, idx) in commits"
-          :key="entry.hashFull"
+          v-for="vc in visibleCommits"
+          :key="vc.entry.hashFull"
           class="cg-row"
-          :class="{ 'cg-row--selected': entry.hashFull === selectedHash }"
-          :style="{ top: idx * ROW_H + 'px', height: ROW_H + 'px' }"
-          @click="emit('select-commit', entry.hashFull)"
+          :class="{ 'cg-row--selected': vc.entry.hashFull === selectedHash }"
+          :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
+          @click="emit('select-commit', vc.entry.hashFull)"
         >
           <!-- Ref badges -->
           <span
-            v-for="r in commitRefs(entry)"
+            v-for="r in commitRefs(vc.entry)"
             :key="r.name"
             class="cg-ref"
             :class="`cg-ref--${r.type}`"
           >{{ r.name }}</span>
           <!-- Message -->
-          <span class="cg-msg">{{ entry.message }}</span>
+          <span class="cg-msg">{{ vc.entry.message }}</span>
           <!-- Author + date -->
           <span class="cg-meta muted">
-            <span>{{ entry.author }}</span>
+            <span>{{ vc.entry.author }}</span>
             <span class="cg-sep">&middot;</span>
-            <span>{{ formatDate(entry.date) }}</span>
+            <span>{{ formatDate(vc.entry.date) }}</span>
             <span class="cg-sep">&middot;</span>
-            <span class="mono cg-hash">{{ entry.hash }}</span>
+            <span class="mono cg-hash">{{ vc.entry.hash }}</span>
           </span>
         </div>
       </div>

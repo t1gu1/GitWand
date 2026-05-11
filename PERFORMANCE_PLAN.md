@@ -1,7 +1,7 @@
 # GitWand — Plan d'amélioration des performances
 
 > Audit conduit sur la base v2.8.1 vs v2.6.0 — régression de fluidité observée.
-> Date : 2026-05-07
+> Date initiale : 2026-05-07. Dernière mise à jour : 2026-05-11.
 
 ## Statut des chantiers
 
@@ -25,26 +25,84 @@
 | 6.1 | Bench suite + CI workflow | ✅ Appliqué | 2026-05-07 |
 | 6.2 | Bundle size budget en CI | ✅ Appliqué | 2026-05-07 |
 | 6.4 | Invariants perf dans CLAUDE.md | ✅ Appliqué | 2026-05-07 |
+| 2.1 | Consolider polls dans useRepoPoller (cf. App.vue) | ✅ Appliqué | 2026-05-08 |
+| R2 | highlight.ts cache content+lang → HTML (DiffViewer hot path) | ✅ Appliqué | 2026-05-08 |
+| — | bump git2 0.19 → 0.20.4 (GHSA security) | ✅ Appliqué | 2026-05-11 |
+| 3.3b+ | bench probe `git-status-fast` (mesure libgit2 isolé) | ✅ Appliqué | 2026-05-11 |
+| 3.4a | Dédupliquer types/parsers lib.rs ↔ types.rs/parse.rs | ✅ Appliqué | 2026-05-11 |
+| 3.4b | Migrer `workspace_read`/`write` → `commands/workspace.rs` | ✅ Appliqué | 2026-05-11 |
+| 3.4c | Extraire helpers libgit2 → `src/git/libgit2.rs` | ✅ Appliqué | 2026-05-11 |
+| 3.4d | Migrer 6 `workspace_*_all` → `commands/workspace.rs` | ✅ Appliqué | 2026-05-11 |
+| — | Fix TDZ `CommitLog.vue` (`watch immediate` avant decl) | ✅ Appliqué | 2026-05-11 |
+| **Backlog actionnable** | | | |
 | R1 | backend.ts `tauriInvoke()` timeout | ⏳ À faire |  |
-| R2 | DiffViewer.vue safeHtml(hl()) DOMPurify overhead | ⏳ À faire |  |
 | R3 | DiffViewer.vue double wordDiff (pairedHunks + inlineWordDiff) | ⏳ À faire |  |
 | R4 | highlight.ts per-line → batch highlighting | ⏳ À faire |  |
-| R5 | SearchPalette.vue debounce sur query | ⏳ À faire |  |
-| R6 | CommitGraph.vue deep-equality sur commits + viewport culling | ⏳ À faire |  |
-| R7 | CommitLog.vue virtual scroll | ⏳ À faire |  |
-| R8 | MergeEditor.vue virtualisation des segments | ⏳ À faire |  |
-| R9 | lib.rs git_shortlog — max-count limit | ⏳ À faire |  |
-| R10 | lib.rs gh_pr_detail — serde_json au lieu de parsing artisanal | ⏳ À faire |  |
-| R11 | lib.rs git_blame — limite de taille | ⏳ À faire |  |
-| R12 | dagLayout.ts findLane() Map O(1) au lieu de scan O(L) | ⏳ À faire |  |
-| R13 | useAbsorb.ts paralléliser blameRange() | ⏳ À faire |  |
-| R14 | useLaunchpadTeam.ts concurrency limiter | ⏳ À faire |  |
-| 2.1 | Consolider polls dans useRepoPoller | ✅ Appliqué | 2026-05-08 |  |
-| 3.4 | Découper lib.rs en sous-modules | ⏳ Backlog |  |
+| R5 | SearchPalette.vue debounce sur query | ✅ Appliqué (150ms) |  |
+| R6 | CommitGraph.vue deep-equality + viewport culling | ✅ Appliqué | 2026-05-11 |
+| R7 | CommitLog.vue virtual scroll (@tanstack/vue-virtual) | ✅ Vérifié |  |
+| R8 | MergeEditor.vue virtualisation des segments | 🟡 Skip (cas rare, 3-pane layout complexe — déclenche sur signal user) |  |
+| R9 | git_shortlog — max-count=50 (ops.rs) | ✅ Vérifié |  |
+| R10 | gh_pr_detail serde_json (lib.rs:1541) | ✅ Vérifié |  |
+| R11 | git_blame max 10 000 entrées (lib.rs:1235) | ✅ Vérifié |  |
+| R12 | dagLayout.ts findLane() hashToLane Map O(1) | ✅ Vérifié |  |
+| R13 | useAbsorb.ts blameRange Promise.all (L342) | ✅ Vérifié |  |
+| R14 | useLaunchpadTeam.ts concurrentMap (L12) | ✅ Vérifié |  |
+| 3.4e | Migrer 8 commandes `gh_*` → `commands/gh.rs` (~400 LOC) | ⏳ Backlog |  |
+| 3.4f | Migrer 5 commandes AI CLI → `commands/ai.rs` (~600 LOC) | ⏳ Backlog |  |
+| 3.4g | Migrer 5 commandes file I/O → `commands/files.rs` (~250 LOC) | ⏳ Backlog |  |
+| 3.4h | Migrer ~10 commandes git read → `commands/read.rs` (~1100 LOC) | ⏳ Backlog |  |
 | 4.1 | Mesurer le code splitting Vite réel | ⏳ Couvert par §6.2 |  |
+| **Architecture 3.x** | | | |
 | 5.1 | FS watchers au lieu de poll | 📋 3.x |  |
 | 5.2 | Web Workers pour parsing lourd | 📋 3.x |  |
 | 5.4 | Tauri Channels pour streaming | 📋 3.x |  |
+
+## Mise à jour — 2026-05-11
+
+Depuis la session perf du 7 mai, une seconde vague de chantiers a livré :
+
+**Sécurité / dépendances**
+- Bump `git2` 0.19 → 0.20.4 pour corriger la GHSA. `libgit2-sys` 0.17 → 0.18.4+1.9.3. Compile clean.
+
+**Validation libgit2 (§3.3b suite)**
+- Wrapper bench `git_status_libgit2_parity` ajouté + entrée `git-status-fast` dans `parity_probe`.
+- `bench.mjs` étendu : colonne "vs CLI" qui affiche le delta. Mesure observée sur fixture déterministe : **CLI 41 ms / libgit2 32 ms** via le probe (overhead fork-exec dominant), soit ~22 % de gain visible. Le gain réel dans l'app (sans fork-exec de probe) est plus important — extrapolation 2-3× sur le travail Rust pur.
+
+**Migration §3.4 — split lib.rs**
+La refonte structurelle a bien progressé. Au total, lib.rs perd ~830 lignes nettes sur la session :
+
+- §3.4a — **Dédup types/parsers** (parse_gh_pr_json, gh_pr_raw_to_pr, parse_gh_issue_json, Issue + GhIssue*, WorkspaceRepoIssues, WorkspaceRepo, WorkspaceConfig, WorkspaceWipItem, WorkspaceRepoPrs, WorkspaceRepoStatus, ClaudeCliInfo, CodexCliInfo, CLAUDE_AUTH_OVERRIDE_ENV) → 17 warnings → 0.
+- §3.4b — `workspace_read` / `workspace_write` → `commands/workspace.rs` (premier squelette).
+- §3.4c — 6 helpers libgit2 (`libgit2_branch_ab`, `libgit2_modified_count`, `libgit2_wip_status`, `libgit2_last_commit_at`, `format_iso8601`, `unix_to_ymdhms`) → `src/git/libgit2.rs`.
+- §3.4d — 6 commandes `workspace_*_all` (status / fetch / pull / wip / prs / issues) → `commands/workspace.rs`.
+
+**Architecture backend Rust à date :**
+
+```
+lib.rs              ~2400  bootstrap + invoke_handler! + ~35 commandes restantes
+commands/
+  ├── ops.rs        2193  stage/unstage/commit/push/pull/merge/rebase/discard
+  └── workspace.rs   268  workspace_read/write + 6 *_all aggregates
+git/
+  ├── cmd.rs         130  git_cmd() + hidden_cmd()
+  ├── libgit2.rs     168  helpers libgit2 (branch_ab, statuses, last_commit, format)
+  └── parse.rs       638  porcelain v2 + gh JSON parsers
+types.rs             690  toutes les structs partagées
+main.rs                6  entry point
+```
+
+**Fix de stabilité — TDZ `CommitLog.vue`**
+- `watch(() => rows.value.length, ..., { immediate: true })` était déclaré AVANT ses sources transitives (`displayedEntries`, `isSearchActive`). Crash `ReferenceError: Cannot access 'displayedEntries' before initialization` au premier render. Watcher déplacé après les deux declarations.
+- Pattern documenté pour le futur : tout `{ immediate: true }` doit vivre EN-DESSOUS de toutes ses sources transitives dans `<script setup>`.
+
+**Frontend : R2 cache highlight.js**
+- `highlight.ts` ajoute un cache module-level keyé par `content + '\0' + lang` (cap 10k entrées). Le DiffViewer faisant un `highlightLine` par ligne à chaque render, le cache évite de re-tokeniser à chaque tick reactivity. Gain mesurable dès qu'on scroll un diff plusieurs fois.
+
+**Frontend : §2.1 consolidation polls**
+- L'App.vue utilise maintenant un seul `useRepoPoller` (callbacks `onStatusChange`, `onConflictDetected`, `onFetchTick`, `onNightlyTick`) au lieu des 3 polls indépendants antérieurs. La pause sur `visibilitychange` (§2.2) reste effective.
+
+---
 
 ## Résumé exécutif
 

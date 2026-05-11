@@ -94,81 +94,70 @@ interface SbsPair {
   rightHtml?: string;
 }
 
-function pairLines(lines: DiffLine[]): SbsPair[] {
-  const pairs: SbsPair[] = [];
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].type === "context") {
-      pairs.push({ left: lines[i], right: lines[i] });
-      i++;
-    } else {
-      const deletes: DiffLine[] = [];
-      const adds: DiffLine[] = [];
-      while (i < lines.length && lines[i].type === "delete") {
-        deletes.push(lines[i]);
-        i++;
-      }
-      while (i < lines.length && lines[i].type === "add") {
-        adds.push(lines[i]);
-        i++;
-      }
-      const maxLen = Math.max(deletes.length, adds.length);
-      for (let j = 0; j < maxLen; j++) {
-        const del = j < deletes.length ? deletes[j] : null;
-        const add = j < adds.length ? adds[j] : null;
-        const pair: SbsPair = { left: del, right: add };
-        // Compute word-level diff when both sides exist
-        if (del && add) {
-          const wd = wordDiff(del.content, add.content);
-          pair.leftHtml = segmentsToHtml(wd.oldSegments);
-          pair.rightHtml = segmentsToHtml(wd.newSegments);
-        }
-        pairs.push(pair);
-      }
-    }
-  }
-  return pairs;
-}
-
-/** Precomputed paired lines for each hunk (SBS and inline word-diff) */
-const pairedHunks = computed(() => {
-  if (!props.diff) return [];
-  return props.diff.hunks.map((hunk) => pairLines(hunk.lines));
-});
-
-/**
- * For inline mode: build a map from DiffLine index to word-diff HTML.
- * We detect consecutive delete+add runs and pair them for word-diff.
- */
-const inlineWordDiff = computed(() => {
-  if (!props.diff) return new Map<string, string>();
-  const map = new Map<string, string>();
+// R3 — Single source of truth for the wordDiff computation.
+//
+// Before this refactor, `pairedHunks` (SBS mode) and `inlineWordDiff`
+// (inline mode) each performed their own pass through the hunks AND
+// called `wordDiff(del.content, add.content)` independently. The user
+// only sees one mode at a time, but Vue's per-computed cache meant that
+// toggling SBS ↔ inline ran the word-diff work twice over the diff's
+// lifetime — wasted CPU.
+//
+// We now compute both shapes in one pass:
+//   - `sbsByHunk` — the side-by-side pair list, ready for the SBS view
+//   - `inlineMap` — the line-index → HTML map, ready for the inline view
+//
+// Both downstream computeds become thin field accessors that share the
+// same underlying memoized value.
+const _diffPaired = computed<{ sbsByHunk: SbsPair[][]; inlineMap: Map<string, string> }>(() => {
+  const sbsByHunk: SbsPair[][] = [];
+  const inlineMap = new Map<string, string>();
+  if (!props.diff) return { sbsByHunk, inlineMap };
 
   for (let hIdx = 0; hIdx < props.diff.hunks.length; hIdx++) {
     const lines = props.diff.hunks[hIdx].lines;
+    const pairs: SbsPair[] = [];
     let i = 0;
     while (i < lines.length) {
-      if (lines[i].type !== "delete") { i++; continue; }
-      // Collect consecutive delete+add run
+      if (lines[i].type === "context") {
+        pairs.push({ left: lines[i], right: lines[i] });
+        i++;
+        continue;
+      }
+      // Walk a consecutive delete-run, then a consecutive add-run.
       const delStart = i;
       while (i < lines.length && lines[i].type === "delete") i++;
       const addStart = i;
       while (i < lines.length && lines[i].type === "add") i++;
       const delCount = addStart - delStart;
       const addCount = i - addStart;
-      // Pair up for word-diff
-      const pairCount = Math.min(delCount, addCount);
-      for (let j = 0; j < pairCount; j++) {
-        const del = lines[delStart + j];
-        const add = lines[addStart + j];
-        const wd = wordDiff(del.content, add.content);
-        map.set(`${hIdx}:${delStart + j}`, segmentsToHtml(wd.oldSegments));
-        map.set(`${hIdx}:${addStart + j}`, segmentsToHtml(wd.newSegments));
+      const maxLen = Math.max(delCount, addCount);
+      for (let j = 0; j < maxLen; j++) {
+        const del = j < delCount ? lines[delStart + j] : null;
+        const add = j < addCount ? lines[addStart + j] : null;
+        const pair: SbsPair = { left: del, right: add };
+        // Word-level diff only when both sides exist — compute ONCE
+        // and populate both views.
+        if (del && add) {
+          const wd = wordDiff(del.content, add.content);
+          pair.leftHtml = segmentsToHtml(wd.oldSegments);
+          pair.rightHtml = segmentsToHtml(wd.newSegments);
+          inlineMap.set(`${hIdx}:${delStart + j}`, pair.leftHtml);
+          inlineMap.set(`${hIdx}:${addStart + j}`, pair.rightHtml);
+        }
+        pairs.push(pair);
       }
     }
+    sbsByHunk.push(pairs);
   }
-  return map;
+  return { sbsByHunk, inlineMap };
 });
+
+/** Precomputed paired lines for each hunk (SBS view). */
+const pairedHunks = computed(() => _diffPaired.value.sbsByHunk);
+
+/** Line-key → word-diff HTML map for the inline view. */
+const inlineWordDiff = computed(() => _diffPaired.value.inlineMap);
 
 /** Get word-diff HTML for a line in inline mode, falling back to syntax highlight */
 function hlWord(hunkIdx: number, lineIdx: number, content: string): string {
