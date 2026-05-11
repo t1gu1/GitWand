@@ -105,6 +105,23 @@ pub(crate) fn git_cmd() -> std::process::Command {
     hidden_cmd(&git_binary())
 }
 
+/// Returns the list of files that differ between two revs (names only).
+/// Shared between `commands::read::preview_merge` and the rebase preview in
+/// `commands::ops::*`.
+pub(crate) fn git_changed_files(git: &str, cwd: &str, base: &str, rev: &str) -> Result<Vec<String>, String> {
+    let out = hidden_cmd(git)
+        .args(["diff", "--name-only", base, rev])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("diff --name-only failed: {}", e))?;
+
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.to_string())
+        .collect())
+}
+
 static GIT_DIR_CACHE: OnceLock<Mutex<HashMap<String, PathBuf>>> = OnceLock::new();
 
 /// Resolve the `.git` directory for a given cwd, with caching (P2.3).

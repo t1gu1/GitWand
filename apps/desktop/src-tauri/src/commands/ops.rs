@@ -1077,8 +1077,8 @@ pub(crate) fn git_conflict_check(cwd: String, target_branch: String) -> Result<C
     }
     let base = String::from_utf8_lossy(&base_out.stdout).trim().to_string();
 
-    let ours_files = crate::git_changed_files(&git, &cwd, &base, "HEAD")?;
-    let theirs_files = crate::git_changed_files(&git, &cwd, &base, &target_branch)?;
+    let ours_files = crate::git::git_changed_files(&git, &cwd, &base, "HEAD")?;
+    let theirs_files = crate::git::git_changed_files(&git, &cwd, &base, &target_branch)?;
 
     let ours_set: HashSet<&String> = ours_files.iter().collect();
     let overlapping: Vec<String> = theirs_files

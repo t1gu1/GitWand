@@ -53,7 +53,7 @@
 | #6.a | Fix CREATE_NO_WINDOW (CommandExt import) — terminal flashes Windows | ✅ Appliqué | 2026-05-11 |
 | #6.b | Skip ping AI au boot Settings (privacy + cost) | ✅ Appliqué | 2026-05-11 |
 | 3.4g | Migrer 5 commandes file I/O → `commands/files.rs` (~250 LOC) | ✅ Appliqué | 2026-05-11 |
-| 3.4h | Migrer ~10 commandes git read → `commands/read.rs` (~1100 LOC) | ⏳ Backlog |  |
+| 3.4h | Migrer ~10 commandes git read → `commands/read.rs` (~1100 LOC) | ✅ Appliqué | 2026-05-11 |
 | 4.1 | Mesurer le code splitting Vite réel | ⏳ Couvert par §6.2 |  |
 | **Architecture 3.x** | | | |
 | 5.1 | FS watchers au lieu de poll | 📋 3.x |  |
@@ -81,19 +81,22 @@ La refonte structurelle a bien progressé. Au total, lib.rs perd ~830 lignes net
 - §3.4e — 8 commandes `gh_*` (issues, PRs, view, comment) → `commands/gh.rs`.
 - §3.4f — 5 commandes AI CLI (`detect_claude_cli`, `claude_cli_prompt`, `claude_cli_login`, `detect_codex_cli`, `codex_cli_prompt`) + helpers → `commands/ai.rs`.
 - §3.4g — 5 commandes file I/O (`read_file`, `write_file`, `read_file_at_revision`, `folder_diff`, `list_dir`) → `commands/files.rs`. lib.rs perd ~255 lignes nettes.
+- §3.4h — 10 commandes git read (`git_status`, `git_diff`, `git_log`, `git_repo_state`, `git_show`, `git_blame`, `git_file_log{,_pickaxe,_range}`, `preview_merge`) + 5 helpers privés (libgit2_branch_status, libgit2_file_statuses, compute_push_remote_via_cli, git_status_cli, merge_file_preview) → `commands/read.rs` (1187 LOC). Le helper partagé `git_changed_files` part dans `src/git/cmd.rs` puisqu'il est consommé aussi par `commands::ops`. Wrappers parity (`git_status_parity`, `git_status_libgit2_parity`, `git_log_parity`) restent dans lib.rs et délèguent maintenant vers `commands::read::*`. lib.rs perd ~1163 lignes nettes (1868 → 705).
 
 **Architecture backend Rust à date :**
 
 ```
-lib.rs              1868  bootstrap + invoke_handler! + ~20 commandes git-read restantes
+lib.rs               705  bootstrap + invoke_handler! + 4 parity wrappers (pub fn) + leftovers parse_wip_status
 commands/
   ├── ai.rs          384  detect/prompt/login Claude + Codex CLI
   ├── files.rs       272  read_file / write_file / read_file_at_revision / folder_diff / list_dir
   ├── gh.rs          360  gh_issue_* + gh_pr_* (8 commandes)
   ├── ops.rs        2193  stage/unstage/commit/push/pull/merge/rebase/discard
+  ├── read.rs       1187  git_status (libgit2 + CLI fallback) / git_diff / git_log / git_repo_state /
+  │                       git_show / git_blame / git_file_log* / preview_merge
   └── workspace.rs   268  workspace_read/write + 6 *_all aggregates
 git/
-  ├── cmd.rs         142  git_cmd() + hidden_cmd() + safe_repo_path
+  ├── cmd.rs         159  git_cmd() + hidden_cmd() + safe_repo_path + git_changed_files
   ├── libgit2.rs     168  helpers libgit2 (branch_ab, statuses, last_commit, format)
   └── parse.rs       638  porcelain v2 + gh JSON parsers + folder_diff helpers
 types.rs             690  toutes les structs partagées
