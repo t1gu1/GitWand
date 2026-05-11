@@ -47,7 +47,22 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          # Full Tauri 2 prereqs (https://v2.tauri.app/start/prerequisites/#linux).
+          # `libglib2.0-dev` + `libsoup-3.0-dev` are required by glib-sys / soup3-sys
+          # on Ubuntu 22.04 — libwebkit2gtk-4.1-dev no longer pulls them transitively
+          # in current GHA runner images. `libayatana-appindicator3-dev` is the
+          # supported replacement for the deprecated `libappindicator3-dev`.
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libglib2.0-dev \
+            libsoup-3.0-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            libssl-dev \
+            build-essential \
+            file \
+            patchelf
 
       - run: pnpm install --frozen-lockfile
 
