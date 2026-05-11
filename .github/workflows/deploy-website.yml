@@ -39,36 +39,63 @@ jobs:
 
       # Pull the auto-update manifest from the latest stable release so that
       # any deploy of `website/` (including blog posts, doc tweaks, roadmap edits)
-      # republishes /update/latest.json — without this step, every push to main
-      # that touches website/ would overwrite the Pages site and drop the
-      # auto-update manifest, breaking the in-app updater for users.
+      # republishes /update/latest.json. Strategy:
+      #   1. Try the GitHub release's latest.json. If valid (darwin-aarch64 +
+      #      windows-x86_64 present), use it.
+      #   2. If the release manifest is missing or partial (matrix race
+      #      condition, mid-release moment, etc.), fall back to the manifest
+      #      currently served by https://gitwand.devlint.fr/update/latest.json.
+      #      That guarantees the auto-update keeps pointing at the last known
+      #      good version, even when the website is redeployed for an unrelated
+      #      reason (changelog update, doc tweak…).
+      #   3. If both are missing, deploy the website without /update/latest.json
+      #      — auto-update will be temporarily unavailable but the site itself
+      #      stays publishable (changelog, docs, README are independent of the
+      #      updater).
       - name: Pull auto-update manifest from latest release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p website/public/update
-          # `gh release view --json tagName` returns the latest non-prerelease tag.
+          out=website/public/update/latest.json
+
+          manifest_is_valid() {
+            local file="$1"
+            [ -s "$file" ] || return 1
+            jq -e '.platforms["darwin-aarch64"].url' "$file" >/dev/null 2>&1 || return 1
+            jq -e '.platforms["windows-x86_64"].url' "$file" >/dev/null 2>&1 || return 1
+          }
+
+          # ── Step 1 — try the latest release ─────────────────────────────────
           LATEST_TAG=$(gh release view --json tagName --jq .tagName --repo ${{ github.repository }} 2>/dev/null || true)
-          if [ -z "$LATEST_TAG" ]; then
-            echo "::warning::No release found yet — skipping latest.json (auto-update will be unavailable until first release)"
+          if [ -n "$LATEST_TAG" ]; then
+            echo "Trying latest.json from release $LATEST_TAG"
+            if gh release download "$LATEST_TAG" \
+                --pattern "latest.json" \
+                --output "$out" \
+                --clobber \
+                --repo ${{ github.repository }} 2>/dev/null \
+               && manifest_is_valid "$out"; then
+              echo "::notice::Published $(jq -r .version "$out") auto-update manifest from release $LATEST_TAG"
+              exit 0
+            fi
+            echo "::warning::latest.json on release $LATEST_TAG is missing or incomplete — falling back to currently-deployed manifest"
+            rm -f "$out"
+          else
+            echo "::warning::No release found yet"
+          fi
+
+          # ── Step 2 — fall back to the live site's existing manifest ────────
+          if curl -fsSL -o "$out" https://gitwand.devlint.fr/update/latest.json \
+             && manifest_is_valid "$out"; then
+            echo "::notice::Reusing existing auto-update manifest from live site ($(jq -r .version "$out"))"
             exit 0
           fi
-          echo "Pulling latest.json from release $LATEST_TAG"
-          if ! gh release download "$LATEST_TAG" \
-              --pattern "latest.json" \
-              --output website/public/update/latest.json \
-              --repo ${{ github.repository }}; then
-            echo "::error::latest.json missing from release $LATEST_TAG — auto-update will be broken"
-            exit 1
-          fi
-          [ -s website/public/update/latest.json ] || { echo "::error::latest.json downloaded but empty"; exit 1; }
-          if ! grep -q '"darwin-aarch64"' website/public/update/latest.json; then
-            echo "::error::latest.json has no darwin-aarch64 entry"
-            cat website/public/update/latest.json
-            exit 1
-          fi
-          echo "::notice::Published $(jq -r .version website/public/update/latest.json) auto-update manifest"
+
+          # ── Step 3 — deploy without manifest ────────────────────────────────
+          rm -f "$out"
+          echo "::warning::No valid latest.json available (neither on the release nor on the live site). Deploying website without /update/latest.json — in-app updater will be temporarily unavailable."
 
       - name: Build website
         run: pnpm --filter gitwand-website build
