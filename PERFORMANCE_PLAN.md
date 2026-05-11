@@ -48,7 +48,7 @@
 | R12 | dagLayout.ts findLane() hashToLane Map O(1) | ✅ Vérifié |  |
 | R13 | useAbsorb.ts blameRange Promise.all (L342) | ✅ Vérifié |  |
 | R14 | useLaunchpadTeam.ts concurrentMap (L12) | ✅ Vérifié |  |
-| 3.4e | Migrer 8 commandes `gh_*` → `commands/gh.rs` (~400 LOC) | ⏳ Backlog |  |
+| 3.4e | Migrer 8 commandes `gh_*` → `commands/gh.rs` (~340 LOC) | ✅ Appliqué | 2026-05-11 |
 | 3.4f | Migrer 5 commandes AI CLI → `commands/ai.rs` (~600 LOC) | ⏳ Backlog |  |
 | 3.4g | Migrer 5 commandes file I/O → `commands/files.rs` (~250 LOC) | ⏳ Backlog |  |
 | 3.4h | Migrer ~10 commandes git read → `commands/read.rs` (~1100 LOC) | ⏳ Backlog |  |

@@ -64,10 +64,20 @@ const rows = computed<Row[]>(() => {
   return items;
 });
 
+// Row heights — must match the CSS values (.log-section-label padding
+// + font + border = ~24px, .log-commit-row = 72px). The estimate is
+// per-index so section labels don't inherit the commit-row height
+// (visible regression: legends "unpushed" / "pushed" rendered at 72px).
+const COMMIT_ROW_H = 72;
+const SECTION_ROW_H = 24;
+
 const virtualizer = useVirtualizer({
   count: 0,
   getScrollElement: () => scrollContainerRef.value,
-  estimateSize: () => 72,
+  estimateSize: (index: number) => {
+    const row = rows.value[index];
+    return row && row.type !== "commit" ? SECTION_ROW_H : COMMIT_ROW_H;
+  },
   overscan: 5,
 });
 
