@@ -2,6 +2,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+// Windows-only: `creation_flags` is an inherent method added by the
+// `CommandExt` trait. Without this `use`, `cmd.creation_flags(...)` at
+// `hidden_cmd` below would fail to compile on Windows, defeating the
+// CREATE_NO_WINDOW flag and causing visible console windows to flash
+// for every spawned subprocess (see issue #6).
+//
+// This `use` was historically at the top of `lib.rs`. The §3.4 split
+// moved `hidden_cmd` into this module but the trait import didn't
+// follow — re-imported here so it's collocated with the call site.
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 /// Ensure `rel_path`, resolved under `cwd`, stays inside the canonical `cwd`.
 ///
 /// Rejects empty paths, absolute `rel_path` that would escape the root,
