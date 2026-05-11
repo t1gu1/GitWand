@@ -108,6 +108,21 @@ fn resolve_codex_binary() -> Option<String> {
 
 // ─── Claude commands ─────────────────────────────────────────────────────
 
+/// Detect Claude Code CLI presence and version — WITHOUT sending an AI
+/// prompt to verify auth.
+///
+/// Historically this also ran `claude -p ping` to test that the user
+/// was logged in. That had three problems:
+///   1. It sent a real prompt to Claude — billed to the user's account
+///      even if they never asked GitWand to use Claude (issue #6).
+///   2. On Windows, the spawn produced a visible console window flash
+///      before the CREATE_NO_WINDOW fix landed.
+///   3. It blocked the Settings panel mount for the prompt's RTT.
+///
+/// We now skip the ping. Auth is verified implicitly on the first real
+/// prompt the user makes through GitWand — if it fails, the CLI's
+/// stderr surfaces a clear "please log in" message that the calling
+/// command (`claude_cli_prompt`) propagates as an error.
 #[tauri::command]
 pub(crate) fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
     let binary = match resolve_claude_binary() {
@@ -125,61 +140,24 @@ pub(crate) fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
         }
     };
 
-    // Query version
+    // Query version only — no auth ping.
     let version = hidden_cmd(&binary)
         .arg("--version")
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
-    // Ping with a tiny prompt to check auth. Timeout is enforced by the
-    // caller via the Tauri command; here we just run synchronously with a
-    // short output cap. The CLI exits non-zero when auth is missing.
-    //
-    // We strip API-key env vars here too so the detection reflects the
-    // actual OAuth-session state that prompts will use — otherwise a stale
-    // `ANTHROPIC_API_KEY` in the shell would mask the real auth status.
-    let mut ping_cmd = hidden_cmd(&binary);
-    ping_cmd.args(["-p", "ping", "--output-format", "text"]);
-    strip_claude_auth_env(&mut ping_cmd);
-    let ping = ping_cmd.output();
-
-    match ping {
-        Ok(out) if out.status.success() => Ok(ClaudeCliInfo {
-            found: true,
-            path: binary,
-            version,
-            logged_in: true,
-            status: "ok".to_string(),
-            detail: String::new(),
-        }),
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            let combined = if stderr.is_empty() { stdout } else { stderr };
-            let lower = combined.to_lowercase();
-            let looks_like_auth = lower.contains("login")
-                || lower.contains("authenticat")
-                || lower.contains("unauthor")
-                || lower.contains("api key");
-            Ok(ClaudeCliInfo {
-                found: true,
-                path: binary,
-                version,
-                logged_in: false,
-                status: if looks_like_auth { "not_logged_in" } else { "error" }.to_string(),
-                detail: combined,
-            })
-        }
-        Err(e) => Ok(ClaudeCliInfo {
-            found: true,
-            path: binary,
-            version,
-            logged_in: false,
-            status: "error".to_string(),
-            detail: format!("Impossible d'exécuter `claude`: {}", e),
-        }),
-    }
+    Ok(ClaudeCliInfo {
+        found: true,
+        path: binary,
+        version,
+        // logged_in stays false because we have NOT verified — the UI
+        // should treat `status == "detected"` distinctly from
+        // `not_logged_in` and not show a "please log in" hint.
+        logged_in: false,
+        status: "detected".to_string(),
+        detail: String::new(),
+    })
 }
 
 /// Run `claude -p <prompt>` and return stdout.
@@ -253,6 +231,10 @@ pub(crate) fn claude_cli_prompt(
 // when neither is set, so detection matches the Claude pattern: tiny ping
 // prompt that exits 0 when auth works.
 
+/// Detect Codex CLI presence and version — same privacy stance as
+/// `detect_claude_cli`: no `codex exec ping` to avoid billing the user
+/// for a prompt they never asked for. Auth verifies implicitly on the
+/// first real prompt via `codex_cli_prompt`.
 #[tauri::command]
 pub(crate) fn detect_codex_cli() -> Result<CodexCliInfo, String> {
     let binary = match resolve_codex_binary() {
@@ -276,54 +258,14 @@ pub(crate) fn detect_codex_cli() -> Result<CodexCliInfo, String> {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default();
 
-    // Lightweight ping. The CLI exits non-zero if auth (OAuth session or
-    // OPENAI_API_KEY) is missing, with stderr describing the problem.
-    let ping = hidden_cmd(&binary)
-        .args(["exec", "ping"])
-        .output();
-
-    match ping {
-        Ok(out) if out.status.success() => Ok(CodexCliInfo {
-            found: true,
-            path: binary,
-            version,
-            logged_in: true,
-            status: "ok".to_string(),
-            detail: String::new(),
-        }),
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            let combined = if stderr.is_empty() { stdout } else { stderr };
-            let lower = combined.to_lowercase();
-            let looks_like_auth = lower.contains("login")
-                || lower.contains("authenticat")
-                || lower.contains("unauthor")
-                || lower.contains("api key")
-                || lower.contains("openai_api_key");
-            Ok(CodexCliInfo {
-                found: true,
-                path: binary,
-                version,
-                logged_in: false,
-                status: if looks_like_auth {
-                    "not_logged_in"
-                } else {
-                    "error"
-                }
-                .to_string(),
-                detail: combined,
-            })
-        }
-        Err(e) => Ok(CodexCliInfo {
-            found: true,
-            path: binary,
-            version,
-            logged_in: false,
-            status: "error".to_string(),
-            detail: format!("Impossible d'exécuter `codex`: {}", e),
-        }),
-    }
+    Ok(CodexCliInfo {
+        found: true,
+        path: binary,
+        version,
+        logged_in: false,
+        status: "detected".to_string(),
+        detail: String::new(),
+    })
 }
 
 #[tauri::command]

@@ -914,6 +914,8 @@ const fr: Locale = {
     aiCliRedetect: "Re-d\u00e9tecter",
     aiCliConnected: "Connect\u00e9 \u2014 {0}",
     aiCliConnectedHint: "Les appels utiliseront votre abonnement Claude Max/Pro.",
+    aiCliDetected: "D\u00e9tect\u00e9 \u2014 {0}",
+    aiCliDetectedHint: "L'authentification sera v\u00e9rifi\u00e9e \u00e0 la premi\u00e8re utilisation. Aucun prompt envoy\u00e9 pour le moment.",
     aiCliNotAuthenticated: "CLI trouv\u00e9 mais non authentifi\u00e9.",
     aiCliLoginHint: "Lance `claude login` pour te connecter.",
     aiCliLoginWaiting: "En attente de connexion\u2026",

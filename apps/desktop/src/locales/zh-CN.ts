@@ -892,6 +892,8 @@ const zhCN: Locale = {
     aiCliRedetect: "重新检测",
     aiCliConnected: "已连接 — {0}",
     aiCliConnectedHint: "调用将使用你的 Claude Max/Pro 订阅。",
+    aiCliDetected: "已检测到 — {0}",
+    aiCliDetectedHint: "首次使用时将验证身份。目前未发送任何请求。",
     aiCliNotAuthenticated: "已找到 CLI，但未认证。",
     aiCliLoginHint: "运行 `claude login` 以登录。",
     aiCliLoginWaiting: "等待登录…",

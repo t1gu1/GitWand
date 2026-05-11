@@ -904,6 +904,8 @@ const ptBR: Locale = {
     aiCliRedetect: "Redetectar",
     aiCliConnected: "Conectado — {0}",
     aiCliConnectedHint: "As chamadas usarão sua assinatura Claude Max/Pro.",
+    aiCliDetected: "Detectado — {0}",
+    aiCliDetectedHint: "A autenticação será verificada no primeiro uso. Nenhum prompt enviado ainda.",
     aiCliNotAuthenticated: "CLI encontrado, mas não autenticado.",
     aiCliLoginHint: "Execute `claude login` para entrar.",
     aiCliLoginWaiting: "Aguardando login…",

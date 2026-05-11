@@ -925,6 +925,8 @@ const en = {
     aiCliRedetect: "Re-detect",
     aiCliConnected: "Connected \u2014 {0}",
     aiCliConnectedHint: "Calls will use your Claude Max/Pro subscription.",
+    aiCliDetected: "Detected \u2014 {0}",
+    aiCliDetectedHint: "Auth will be verified on first use. No prompt sent yet.",
     aiCliNotAuthenticated: "CLI found but not authenticated.",
     aiCliLoginHint: "Run `claude login` to sign in.",
     aiCliLoginWaiting: "Waiting for login\u2026",

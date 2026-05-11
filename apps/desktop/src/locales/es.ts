@@ -903,6 +903,8 @@ const es: Locale = {
     aiCliRedetect: "Re-detectar",
     aiCliConnected: "Conectado — {0}",
     aiCliConnectedHint: "Las llamadas usarán tu suscripción Claude Max/Pro.",
+    aiCliDetected: "Detectado — {0}",
+    aiCliDetectedHint: "La autenticación se verificará en el primer uso. Ningún prompt enviado aún.",
     aiCliNotAuthenticated: "CLI encontrado pero no autenticado.",
     aiCliLoginHint: "Ejecuta `claude login` para iniciar sesión.",
     aiCliLoginWaiting: "Esperando inicio de sesión…",

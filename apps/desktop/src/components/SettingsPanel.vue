@@ -879,6 +879,19 @@ onMounted(() => {
                     </div>
                     <span class="sp-hint">{{ t('settings.aiCliConnectedHint') }}</span>
                   </template>
+                  <template v-else-if="claudeCliInfo.status === 'detected'">
+                    <!-- R6/#6 — Detected but auth NOT verified. We no
+                         longer send an unsolicited `claude -p ping` prompt
+                         at panel mount (would bill the user's account for
+                         a check they didn't ask for). Auth is verified
+                         implicitly on first real use. -->
+                    <div class="sp-connected-badge">
+                      <span class="sp-connected-dot sp-connected-dot--neutral"></span>
+                      <span>{{ t('settings.aiCliDetected', claudeCliInfo.version || 'claude') }}</span>
+                      <button class="sp-disconnect-btn" @click="runClaudeCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                    <span class="sp-hint">{{ t('settings.aiCliDetectedHint') }}</span>
+                  </template>
                   <template v-else>
                     <div class="sp-connect-error-block">
                       <div class="sp-connect-error">
@@ -933,6 +946,15 @@ onMounted(() => {
                       <button class="sp-disconnect-btn" @click="runCodexCliDetect">{{ t('settings.aiCliRedetect') }}</button>
                     </div>
                     <span class="sp-hint">{{ t('settings.aiCodexCliConnectedHint') }}</span>
+                  </template>
+                  <template v-else-if="codexCliInfo.status === 'detected'">
+                    <!-- Detected, auth not verified — see Claude block above. -->
+                    <div class="sp-connected-badge">
+                      <span class="sp-connected-dot sp-connected-dot--neutral"></span>
+                      <span>{{ t('settings.aiCliDetected', codexCliInfo.version || 'codex') }}</span>
+                      <button class="sp-disconnect-btn" @click="runCodexCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                    <span class="sp-hint">{{ t('settings.aiCliDetectedHint') }}</span>
                   </template>
                   <template v-else>
                     <div class="sp-connect-error-block">
@@ -1462,6 +1484,12 @@ onMounted(() => {
   border-radius: var(--radius-pill);
   background: var(--color-success);
   flex-shrink: 0;
+}
+
+/* Neutral variant — shown when a CLI is detected but auth wasn't
+   verified (we skip the unsolicited ping at panel mount). */
+.sp-connected-dot--neutral {
+  background: var(--color-text-subtle);
 }
 
 .sp-disconnect-btn {
