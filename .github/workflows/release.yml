@@ -46,6 +46,7 @@ jobs:
       - name: Install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          set -euxo pipefail
           sudo apt-get update
           # Full Tauri 2 prereqs (https://v2.tauri.app/start/prerequisites/#linux).
           # `libglib2.0-dev` + `libsoup-3.0-dev` are required by glib-sys / soup3-sys
@@ -63,6 +64,25 @@ jobs:
             build-essential \
             file \
             patchelf
+          # Diagnostic — if these fail the build will fail with a clear error
+          # before tauri-action runs cargo, instead of a cryptic glib-sys panic.
+          echo "=== pkg-config search paths ==="
+          pkg-config --variable=pc_path pkg-config
+          echo "=== probe glib stack ==="
+          for pkg in glib-2.0 gobject-2.0 gio-2.0 cairo gdk-pixbuf-2.0 pango \
+                    gtk+-3.0 webkit2gtk-4.1 javascriptcoregtk-4.1 \
+                    libsoup-3.0 ayatana-appindicator3-0.1 librsvg-2.0; do
+            if version=$(pkg-config --modversion "$pkg" 2>/dev/null); then
+              printf '  ✓ %-32s %s\n' "$pkg" "$version"
+            else
+              printf '  ✗ %-32s MISSING\n' "$pkg"
+              missing=1
+            fi
+          done
+          if [ "${missing:-0}" = "1" ]; then
+            echo "::error::One or more Tauri Linux prereqs are missing — fix the apt-get install list above"
+            exit 1
+          fi
 
       - run: pnpm install --frozen-lockfile
 
