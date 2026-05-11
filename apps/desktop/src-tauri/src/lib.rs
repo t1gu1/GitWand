@@ -346,43 +346,9 @@ pub fn run() {
         .expect("error while running GitWand");
 }
 
-/// Parse `git status --porcelain` output.
-/// Returns (staged_count, unstaged_count, untracked_count).
-///
-/// P3.3a — No longer called by production code: `workspace_wip_all` now uses
-/// `libgit2_wip_status` instead. We keep this parser around because its
-/// `#[cfg(test)]` tests below validate the porcelain v1 status XY semantics
-/// (a documented invariant) AND because libgit2 may need to be disabled
-/// or rolled back in the future, in which case we'd reinstate this path.
-/// `dead_code` because cargo's non-test build doesn't see the test callers.
-#[allow(dead_code)]
-fn parse_wip_status(output: &str) -> (u32, u32, u32) {
-    let mut staged = 0u32;
-    let mut unstaged = 0u32;
-    let mut untracked = 0u32;
-    // Note: merge-conflict codes (UU, AA, AU, etc.) have U in X and/or Y positions.
-    // Under this classification, they increment both staged and unstaged counts,
-    // which is intentional for v1 — the WIP panel shows "activity", not a detailed conflict view.
-    // A future iteration may add a dedicated conflict_count field.
-    for line in output.lines() {
-        if line.len() < 2 {
-            continue;
-        }
-        let x = &line[0..1];
-        let y = &line[1..2];
-        if x == "?" && y == "?" {
-            untracked += 1;
-        } else {
-            if x != " " && x != "?" && x != "!" {
-                staged += 1;
-            }
-            if y != " " && y != "?" && y != "!" {
-                unstaged += 1;
-            }
-        }
-    }
-    (staged, unstaged, untracked)
-}
+// `parse_wip_status` lives in `src/git/parse.rs`. Tests below import it via
+// `use super::*` + the glob `pub(crate) use crate::git::*;` re-export at the
+// top of this file.
 
 #[cfg(test)]
 mod tests {

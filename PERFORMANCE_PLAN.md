@@ -35,9 +35,9 @@
 | 3.4d | Migrer 6 `workspace_*_all` → `commands/workspace.rs` | ✅ Appliqué | 2026-05-11 |
 | — | Fix TDZ `CommitLog.vue` (`watch immediate` avant decl) | ✅ Appliqué | 2026-05-11 |
 | **Backlog actionnable** | | | |
-| R1 | backend.ts `tauriInvoke()` timeout | ⏳ À faire |  |
-| R3 | DiffViewer.vue double wordDiff (pairedHunks + inlineWordDiff) | ⏳ À faire |  |
-| R4 | highlight.ts per-line → batch highlighting | ⏳ À faire |  |
+| R1 | backend.ts `tauriInvoke()` timeout (30 s défaut + presets `IPC_TIMEOUT.NETWORK/NONE`) | ✅ Vérifié | 2026-05-11 |
+| R3 | DiffViewer.vue double wordDiff (pairedHunks + inlineWordDiff) | ✅ Appliqué | 2026-05-11 |
+| R4 | highlight.ts per-line → batch highlighting | ⏳ À faire (cache 2-couches existant ; gain incertain — bench requis avant chantier) |  |
 | R5 | SearchPalette.vue debounce sur query | ✅ Appliqué (150ms) |  |
 | R6 | CommitGraph.vue deep-equality + viewport culling | ✅ Appliqué | 2026-05-11 |
 | R7 | CommitLog.vue virtual scroll (@tanstack/vue-virtual) | ✅ Vérifié |  |
@@ -81,12 +81,13 @@ La refonte structurelle a bien progressé. Au total, lib.rs perd ~830 lignes net
 - §3.4e — 8 commandes `gh_*` (issues, PRs, view, comment) → `commands/gh.rs`.
 - §3.4f — 5 commandes AI CLI (`detect_claude_cli`, `claude_cli_prompt`, `claude_cli_login`, `detect_codex_cli`, `codex_cli_prompt`) + helpers → `commands/ai.rs`.
 - §3.4g — 5 commandes file I/O (`read_file`, `write_file`, `read_file_at_revision`, `folder_diff`, `list_dir`) → `commands/files.rs`. lib.rs perd ~255 lignes nettes.
-- §3.4h — 10 commandes git read (`git_status`, `git_diff`, `git_log`, `git_repo_state`, `git_show`, `git_blame`, `git_file_log{,_pickaxe,_range}`, `preview_merge`) + 5 helpers privés (libgit2_branch_status, libgit2_file_statuses, compute_push_remote_via_cli, git_status_cli, merge_file_preview) → `commands/read.rs` (1187 LOC). Le helper partagé `git_changed_files` part dans `src/git/cmd.rs` puisqu'il est consommé aussi par `commands::ops`. Wrappers parity (`git_status_parity`, `git_status_libgit2_parity`, `git_log_parity`) restent dans lib.rs et délèguent maintenant vers `commands::read::*`. lib.rs perd ~1163 lignes nettes (1868 → 705).
+- §3.4h — 10 commandes git read (`git_status`, `git_diff`, `git_log`, `git_repo_state`, `git_show`, `git_blame`, `git_file_log{,_pickaxe,_range}`, `preview_merge`) + 5 helpers privés (libgit2_branch_status, libgit2_file_statuses, compute_push_remote_via_cli, git_status_cli, merge_file_preview) → `commands/read.rs` (1187 LOC). Le helper partagé `git_changed_files` part dans `src/git/cmd.rs` puisqu'il est consommé aussi par `commands::ops`. Wrappers parity (`git_status_parity`, `git_status_libgit2_parity`, `git_log_parity`) restent dans lib.rs et délèguent maintenant vers `commands::read::*`. lib.rs perd ~1163 lignes nettes (1868 → 705). Warning post-migration : `use crate::git::*` n'est plus consommé par le code prod de lib.rs (seuls les tests via `super::*`) → annoté `#[allow(unused_imports)]`.
+- Cleanup : doublon `parse_wip_status` retiré de lib.rs (les tests `#[cfg(test)] mod tests` continuent de l'importer via `super::*` qui pointe vers `crate::git::parse::parse_wip_status`).
 
 **Architecture backend Rust à date :**
 
 ```
-lib.rs               705  bootstrap + invoke_handler! + 4 parity wrappers (pub fn) + leftovers parse_wip_status
+lib.rs              ~670  bootstrap + invoke_handler! + 4 parity wrappers (pub fn)
 commands/
   ├── ai.rs          384  detect/prompt/login Claude + Codex CLI
   ├── files.rs       272  read_file / write_file / read_file_at_revision / folder_diff / list_dir
