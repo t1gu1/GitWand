@@ -1903,32 +1903,9 @@ pub struct WorkspaceRepoStatus {
 // `src/git/parse.rs` as part of §3.4. Resolved here via
 // `pub(crate) use crate::types::*;` and `pub(crate) use crate::git::*;`.
 
-/// Read a `.gitwand-workspace.json` from the given directory.
-#[tauri::command]
-fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
-    let dir = std::path::Path::new(&path);
-    let file = dir.join(".gitwand-workspace.json");
-    if !file.exists() {
-        return Err(format!("No workspace file found at {}", file.display()));
-    }
-    let content = std::fs::read_to_string(&file)
-        .map_err(|e| format!("Failed to read workspace: {}", e))?;
-    serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse workspace: {}", e))
-}
-
-/// Write a `.gitwand-workspace.json` to the given directory.
-#[tauri::command]
-fn workspace_write(path: String, workspace: WorkspaceConfig) -> Result<(), String> {
-    let dir = std::path::Path::new(&path);
-    let file = dir.join(".gitwand-workspace.json");
-    std::fs::create_dir_all(dir)
-        .map_err(|e| format!("Failed to create directory: {}", e))?;
-    let content = serde_json::to_string_pretty(&workspace)
-        .map_err(|e| format!("Failed to serialize workspace: {}", e))?;
-    std::fs::write(&file, content)
-        .map_err(|e| format!("Failed to write workspace: {}", e))
-}
+// `workspace_read` + `workspace_write` migrated to
+// `src/commands/workspace.rs` (§3.4). The handler entries below now
+// point to `commands::workspace::*`.
 
 // ─── libgit2 helpers (P3.3) ──────────────────────────────────────────────
 //
@@ -2846,8 +2823,8 @@ pub fn run() {
             commands::ops::git_hook_create,
             commands::ops::git_hook_delete,
             commands::ops::shell_exec,
-            workspace_read,
-            workspace_write,
+            commands::workspace::workspace_read,
+            commands::workspace::workspace_write,
             workspace_status_all,
             workspace_fetch_all,
             workspace_pull_all,
