@@ -1342,8 +1342,10 @@ const poller = useRepoPoller({
   onStatusChange: async (cwd) => {
     await repoRefresh();
   },
-  onConflictDetected: async (cwd) => {
-    await scheduler.onConflictDetected(cwd);
+  onConflictDetected: async (_cwd) => {
+    // scheduler.onConflictDetected reads cwd from its callback ref
+    // (cb.cwd) so we don't pass it explicitly here.
+    await scheduler.onConflictDetected();
   },
   onFetchTick: async (cwd) => {
     await doFetch();

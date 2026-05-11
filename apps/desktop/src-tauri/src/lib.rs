@@ -6,7 +6,6 @@ pub(crate) use crate::types::*;
 pub(crate) use crate::git::*;
 
 use rayon::prelude::*;
-use serde::Serialize;
 use std::path::PathBuf;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -1296,47 +1295,9 @@ fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
     parse_gh_pr_json(&stdout)
 }
 
-fn parse_gh_pr_json(json: &str) -> Result<Vec<PullRequest>, String> {
-    let trimmed = json.trim();
-    if trimmed.is_empty() || trimmed == "[]" {
-        return Ok(Vec::new());
-    }
-    let raws: Vec<GhPrRaw> = serde_json::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse gh pr list output: {}", e))?;
-    Ok(raws.into_iter().map(gh_pr_raw_to_pr).collect())
-}
-
-fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
-    let review_requested = r.review_requests
-        .into_iter()
-        .filter_map(|rr| rr.requested_reviewer?.login)
-        .collect();
-    let checks_rollup = r.status_check_rollup
-        .into_iter()
-        .filter_map(|c| c.conclusion)
-        .next()
-        .unwrap_or_default();
-    PullRequest {
-        number: r.number,
-        title: r.title,
-        state: r.state,
-        author: r.author.login,
-        branch: r.head_ref_name,
-        base: r.base_ref_name,
-        draft: r.is_draft,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        url: r.url,
-        additions: r.additions,
-        deletions: r.deletions,
-        labels: r.labels.into_iter().map(|l| l.name).collect(),
-        assignees: r.assignees.into_iter().map(|a| a.login).collect(),
-        review_requested,
-        review_decision: r.review_decision.unwrap_or_default(),
-        merge_state_status: r.merge_state_status.unwrap_or_default(),
-        checks_rollup,
-    }
-}
+// `parse_gh_pr_json` + `gh_pr_raw_to_pr` migrated to `src/git/parse.rs`
+// as part of §3.4 (lib.rs split). Resolved here via the glob
+// `pub(crate) use crate::git::*;` at the top of this file.
 
 /// Create a pull request using `gh` CLI.
 #[tauri::command]
@@ -1864,31 +1825,9 @@ fn merge_file_preview(
 // ourselves. Inspired by Solo's approach, but headless (no PTY): we only
 // need one-shot prompts for commit messages, merge resolution and PR review.
 
-#[derive(Serialize)]
-struct ClaudeCliInfo {
-    found: bool,
-    /// Absolute path of the resolved binary (empty when `found == false`).
-    path: String,
-    /// Raw `claude --version` output (e.g. "2.0.14 (Claude Code)").
-    version: String,
-    /// True if `claude -p "ping"` answered without an auth error.
-    logged_in: bool,
-    /// Human-readable status: "ok", "not_found", "not_logged_in", "error".
-    status: String,
-    /// Optional detail line surfaced to the UI on errors.
-    detail: String,
-}
-
-/// Environment variables that make the Claude Code CLI fall back to
-/// API-key auth instead of using the OAuth session from `claude login`.
-/// When the user explicitly picks the "Claude Code CLI" provider in GitWand,
-/// they've asked to use their Max/Pro subscription — so we strip these to
-/// avoid a stale/invalid key in the shell hijacking the call.
-const CLAUDE_AUTH_OVERRIDE_ENV: &[&str] = &[
-    "ANTHROPIC_API_KEY",
-    "CLAUDE_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-];
+// `ClaudeCliInfo` struct + `CLAUDE_AUTH_OVERRIDE_ENV` const migrated
+// to `src/types.rs` as part of §3.4. Resolved here via
+// `pub(crate) use crate::types::*;`.
 
 /// Apply the API-key env strip to a `std::process::Command` before spawning.
 fn strip_claude_auth_env(cmd: &mut std::process::Command) {
@@ -1937,17 +1876,8 @@ fn resolve_claude_binary() -> Option<String> {
 
 // ─── Workspaces ───────────────────────────────────────────────
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct WorkspaceRepo {
-    pub path: String,
-    pub name: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct WorkspaceConfig {
-    pub name: String,
-    pub repos: Vec<WorkspaceRepo>,
-}
+// `WorkspaceRepo` and `WorkspaceConfig` migrated to `src/types.rs` as
+// part of §3.4. Resolved here via `pub(crate) use crate::types::*;`.
 
 #[derive(serde::Serialize)]
 pub struct WorkspaceRepoStatus {
@@ -1965,144 +1895,13 @@ pub struct WorkspaceRepoStatus {
     pub error: Option<String>,
 }
 
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WorkspaceWipItem {
-    pub path: String,
-    pub name: String,
-    /// Current branch name (empty if detached HEAD).
-    pub branch: String,
-    /// Commits ahead of upstream.
-    pub ahead: u32,
-    /// Commits behind upstream.
-    pub behind: u32,
-    /// Files with changes staged for commit (index modified).
-    pub staged_count: u32,
-    /// Tracked files modified in the working tree (not staged).
-    pub unstaged_count: u32,
-    /// Untracked files not ignored by .gitignore.
-    pub untracked_count: u32,
-    /// ISO 8601 committer date of HEAD commit (empty on brand-new repo).
-    pub last_commit_at: String,
-    /// True when no upstream branch is configured for the current branch.
-    pub has_no_upstream: bool,
-    /// Error fetching data (None = OK).
-    pub error: Option<String>,
-    /// Relative paths of staged and unstaged changed files (excludes untracked).
-    pub changed_files: Vec<String>,
-}
+// `WorkspaceWipItem` and `WorkspaceRepoPrs` migrated to `src/types.rs`
+// as part of §3.4. Resolved here via `pub(crate) use crate::types::*;`.
 
-/// Per-repo aggregator for the Launchpad PRs panel.
-/// `prs` contains all open PRs fetched via `gh pr list` for this repo.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WorkspaceRepoPrs {
-    /// Filesystem path to the repository root.
-    repo_path: String,
-    /// Display name for the repository.
-    repo_name: String,
-    /// Open pull requests (empty on error or when none exist).
-    prs: Vec<PullRequest>,
-    /// Error message if `gh pr list` failed for this repo (None = OK).
-    error: Option<String>,
-}
-
-/// A GitHub issue as returned by `gh issue list`.
-/// `rename_all = "camelCase"` means Tauri IPC serializes fields directly to
-/// camelCase TypeScript — no mapping layer needed (unlike `PullRequest`).
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Issue {
-    number: i64,
-    title: String,
-    state: String,
-    author: String,
-    assignees: Vec<String>,
-    labels: Vec<String>,
-    url: String,
-    created_at: String,
-    updated_at: String,
-    /// Milestone title, empty string if none.
-    milestone: String,
-}
-
-// Intermediate structs for serde_json deserialization of `gh issue list --json` output.
-
-#[derive(serde::Deserialize)]
-struct GhIssueAuthor {
-    login: String,
-}
-
-#[derive(serde::Deserialize)]
-struct GhIssueAssignee {
-    login: String,
-}
-
-#[derive(serde::Deserialize)]
-struct GhIssueLabel {
-    name: String,
-}
-
-#[derive(serde::Deserialize)]
-struct GhIssueMilestone {
-    title: String,
-}
-
-#[derive(serde::Deserialize)]
-struct GhIssueRaw {
-    number: i64,
-    title: String,
-    state: String,
-    author: GhIssueAuthor,
-    #[serde(default)]
-    assignees: Vec<GhIssueAssignee>,
-    #[serde(default)]
-    labels: Vec<GhIssueLabel>,
-    url: String,
-    #[serde(rename = "createdAt")]
-    created_at: String,
-    #[serde(rename = "updatedAt")]
-    updated_at: String,
-    milestone: Option<GhIssueMilestone>,
-}
-
-fn parse_gh_issue_json(json: &str) -> Result<Vec<Issue>, String> {
-    let trimmed = json.trim();
-    if trimmed.is_empty() || trimmed == "[]" {
-        return Ok(Vec::new());
-    }
-    let raws: Vec<GhIssueRaw> = serde_json::from_str(trimmed)
-        .map_err(|e| format!("Failed to parse gh issue list output: {}", e))?;
-    Ok(raws.into_iter().map(|r| Issue {
-        number: r.number,
-        title: r.title,
-        state: r.state,
-        author: r.author.login,
-        assignees: r.assignees.into_iter().map(|a| a.login).collect(),
-        labels: r.labels.into_iter().map(|l| l.name).collect(),
-        url: r.url,
-        created_at: r.created_at,
-        updated_at: r.updated_at,
-        milestone: r.milestone.map(|m| m.title).unwrap_or_default(),
-    }).collect())
-}
-
-/// Per-repo aggregator for the Launchpad Issues panel.
-/// Used by `workspace_issues_all`.
-#[derive(serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WorkspaceRepoIssues {
-    /// Filesystem path to the repository root.
-    repo_path: String,
-    /// Display name for the repository.
-    repo_name: String,
-    /// Open issues filtered by the `filter` parameter.
-    issues: Vec<Issue>,
-    /// Filter applied: "" = all, "assigned", "mentioned", "created".
-    filter: String,
-    /// Error message if `gh issue list` failed for this repo (None = OK).
-    error: Option<String>,
-}
+// `Issue`, `GhIssue*` deserialization helpers, `parse_gh_issue_json`,
+// and `WorkspaceRepoIssues` migrated to `src/types.rs` and
+// `src/git/parse.rs` as part of §3.4. Resolved here via
+// `pub(crate) use crate::types::*;` and `pub(crate) use crate::git::*;`.
 
 /// Read a `.gitwand-workspace.json` from the given directory.
 #[tauri::command]
@@ -2672,15 +2471,8 @@ fn claude_cli_prompt(
 // when neither is set, so detection matches the Claude pattern: tiny ping
 // prompt that exits 0 when auth works.
 
-#[derive(serde::Serialize)]
-struct CodexCliInfo {
-    found: bool,
-    path: String,
-    version: String,
-    logged_in: bool,
-    status: String,
-    detail: String,
-}
+// `CodexCliInfo` migrated to `src/types.rs` as part of §3.4.
+// Resolved here via `pub(crate) use crate::types::*;`.
 
 fn resolve_codex_binary() -> Option<String> {
     // 1) PATH first

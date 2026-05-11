@@ -59,7 +59,9 @@ rayon = "1"
 # Scoped use only: the user-facing `git_status` command remains CLI-based
 # to preserve the existing parity tests (`tests/parity/git-status.test.mjs`)
 # which compare Rust output to the Node dev-server (also CLI-based).
-git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+# Pinned to >= 0.20.4 for the security advisory fixed in that release.
+# Don't loosen this below 0.20.4 without checking the GHSA again.
+git2 = { version = "0.20.4", default-features = false, features = ["vendored-libgit2"] }
 
 # ─── Release profile (P2.4) ──────────────────────────────────
 #
