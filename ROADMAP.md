@@ -554,6 +554,74 @@ Le manager worktree de v1.6.3 crée / liste / supprime. Ici on passe au paradigm
 
 ---
 
+### ✅ v2.8.2 — Performance hardening
+
+Vague de durcissement perf après diagnostic d'une régression de fluidité v2.6 → v2.8. ~30 chantiers livrés sur les 6 niveaux d'optimisation (UI, polling, backend Rust, bundle, mesures, structure du code). Voir [PERFORMANCE_PLAN.md](./PERFORMANCE_PLAN.md) pour le détail chantier-par-chantier.
+
+**Frontend — démarrage & rendu**
+
+- **Lazy-load 20 panels et modaux** (§1.2) via `defineAsyncComponent` — Settings, Stash, Merge editor, Rebase editor, Split commit, Branch rename/delete, PR Review, PR Create, Tags, Hooks, Worktrees, Submodules, Agent Sessions, Launchpad, Workspaces… découpés en chunks Vite séparés. Le bundle initial parsé au cold start est divisé d'autant.
+- **Lazy-load 17 langages highlight.js** (§4.3) — seuls 9 langages courants restent dans le bundle principal, les autres (Rust, Go, Python, Java, SQL…) en chunks dynamic-import à la première utilisation. ~150-250 KB gzipped retirés du cold start.
+- **Lazy-load badges README** (§1.5) — `loading="lazy"`, `decoding="async"`, `referrerpolicy="no-referrer"` sur les images externes du Dashboard pour ne plus bloquer le rendu.
+- **Cache 2-couches du syntax highlighting** (R2) — `_hlCache` dans `highlight.ts` (content + langue) + `_dvHlCache` dans `DiffViewer.vue` (content + langue → safeHtml-ready). DiffViewer ne re-tokenise plus à chaque tick reactivity.
+- **Single-pass wordDiff** (R3) — `_diffPaired` computed unique qui produit en une passe `sbsByHunk` (SBS mode) ET `inlineMap` (inline mode). Avant : deux passes indépendantes appelaient `wordDiff()` chacune sur les mêmes paires.
+- **CommitGraph deep-equality + viewport culling** (R6) — comparaison de props fine, rendu limité à la fenêtre visible.
+- **SearchPalette debounce 150ms** (R5) — plus de tempête de recalculs sur frappe rapide.
+
+**Polling & IPC**
+
+- **useRepoPoller consolidé** (§2.1) — un seul timer App.vue avec callbacks `onStatusChange`, `onConflictDetected`, `onFetchTick`, `onNightlyTick`. Remplace les 3 timers indépendants antérieurs.
+- **Pause sur `visibilitychange`** (§2.2) — quand l'onglet GitWand passe en arrière-plan, le polling s'arrête. Reprise immédiate au refocus.
+- **Rebase poll conditionnel** (§1.1) — le timer 3 s de détection rebase ne tourne que pendant un rebase, pas en permanence. Cause directe identifiée de la régression v2.6 → v2.8.
+- **`tauriInvoke()` timeout par défaut 30 s** (R1) — presets `IPC_TIMEOUT.NETWORK` (5 min pour push/pull/fetch/clone) et `IPC_TIMEOUT.NONE` (AI prompts arbitrairement longs). Plus de Promise IPC bloquante indéfinie.
+
+**Backend Rust**
+
+- **`Cargo profile.release` tuné** (§3.1) — `lto = "fat"`, `codegen-units = 1`, `strip = true`, `panic = "abort"`. Build release réduit, exécution accélérée.
+- **`workspace_*_all` parallélisés** (§3.2) — `status_all`, `fetch_all`, `pull_all`, `wip_all`, `prs_all`, `issues_all` passent en `rayon::par_iter` ; N repos = N tâches en parallèle (borné aux cores).
+- **libgit2 sur `git_status`** (§3.3b) — fast-path in-process via `git2::Repository::open`. Fallback CLI préservé pour les edge cases (partial clones, configs exotiques). Mesure CLI 41 ms → libgit2 32 ms via probe externe ; extrapolation 2-3× dans l'app (sans overhead fork-exec).
+- **libgit2 sur `workspace_*_all`** (§3.3a) — branch ahead/behind, modified count, WIP status, last commit timestamp en in-process.
+- **Cache `.git` dir résolu** (§2.3) — `resolve_git_dir` mémoïse `git rev-parse --git-dir` par cwd. Plus de re-fork à chaque poll.
+- **Truncation défensive `git_diff`** (§2.4) — limite 5 MB par fichier, coupe au dernier `\n` pour ne pas casser un hunk header. Champ `truncated_from_bytes` exposé au frontend.
+- **Bump `git2` 0.19 → 0.20.4** — corrige la GHSA `libgit2-sys` 0.17 → 0.18.4+1.9.3.
+- **Fix Windows `CREATE_NO_WINDOW`** (#6.a) — réimport du trait `CommandExt` dans `git/cmd.rs` après le split §3.4 : `creation_flags()` redevient effectif, plus de flash de terminal sur Windows.
+
+**Architecture backend — split de lib.rs (§3.4)**
+
+`apps/desktop/src-tauri/src/lib.rs` part de ~3 254 lignes et termine à ~670. Le reste est éclaté par domaine :
+
+```
+commands/
+  ├── ai.rs        384   Claude + Codex CLI (detect/prompt/login)
+  ├── files.rs     272   read_file / write_file / read_file_at_revision / folder_diff / list_dir
+  ├── gh.rs        360   gh_issue_* + gh_pr_* (8 commandes)
+  ├── ops.rs      2193   stage/unstage/commit/push/pull/merge/rebase/discard
+  ├── read.rs     1187   git_status (libgit2 + fallback CLI) / git_diff / git_log / git_repo_state /
+  │                      git_show / git_blame / git_file_log* / preview_merge
+  └── workspace.rs 268   workspace_read/write + 6 *_all aggregates
+git/
+  ├── cmd.rs       159   git_cmd() + hidden_cmd() + safe_repo_path + git_changed_files
+  ├── libgit2.rs   168   helpers libgit2 partagés
+  └── parse.rs     638   porcelain v2 + gh JSON parsers + folder_diff
+types.rs           690   structs partagées (rapatriement de l'app)
+```
+
+Les wrappers `pub fn *_parity` (consommés par `examples/parity_probe.rs` pour les tests Rust ↔ Node) restent dans `lib.rs` et délèguent vers `commands::read::*`. Refactor à coût zéro sur l'IPC public : les noms de commandes Tauri sont inchangés.
+
+**Mesures & CI**
+
+- **Bench suite** (§6.1) — `apps/desktop/perf/bench.mjs` mesure CLI vs libgit2 sur fixture déterministe ; colonne "vs CLI" affichant le delta.
+- **Bundle size budget en CI** (§6.2) — `apps/desktop/scripts/bundle-budget.mjs` casse le build si la taille initiale du JS dépasse le seuil. Évite les régressions silencieuses post-merge.
+- **Probe `git-status-fast`** dans `parity_probe` — bench libgit2 isolé, sans masquage par le fallback CLI.
+- **`AGENTS.md` enrichi** (§6.4) — invariants perf documentés pour les futurs chantiers (cf. CLAUDE.md `polling discipline`, `tauri-bundler [[example]]` rule, etc.).
+
+**Fix de stabilité**
+
+- **TDZ `CommitLog.vue`** — `watch(() => rows.value.length, ..., { immediate: true })` était déclaré AVANT ses sources transitives ; déplacé sous les déclarations pour éviter le `ReferenceError` au premier render. Pattern documenté en mémoire pour les futures sessions.
+- **AI CLI ping désactivé au boot** (#6.b) — `detect_claude_cli` / `detect_codex_cli` ne lancent plus de prompt-ping non sollicité à l'ouverture du SettingsPanel. Statut `detected` ajouté ; le prompt réel n'est tenté qu'à l'utilisation explicite.
+
+---
+
 ### ✅ v2.8.0 — Agent Sessions View + Scheduled AI tasks
 
 Réponse directe au lancement GitKraken d'avril 2026 — GitWand peut aller plus loin grâce à `@gitwand/mcp` déjà indexé sur le MCP Registry officiel. Complété par une couche d'automatisation IA planifiée.
