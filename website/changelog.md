@@ -25,6 +25,14 @@ The Launchpad also gets a new "Refresh all" button that fans out the four refres
 
 Under the hood: 36 unit tests cover the five composables (`useLaunchpadWip`, `useLaunchpadPrs`, `useLaunchpadIssues`, `useLaunchpadPins`, `useLaunchpadTeam`), plus 11 new UI smoke tests for `LaunchpadView.vue` itself. Total desktop test suite is now 95/95 green.
 
+### Homepage redesign — from 21 flat cards to 3 Pillars + 4 tabs
+
+The landing page had been collecting feature cards since v1.0 and ended up with 21 of them in a flat list, all with identical visual weight. With v2.5 LLM fallback, v2.7 Workspaces, v2.8 offline mode, and v2.9 Launchpad shipping in quick succession, the gap between "what GitWand is" and "what the homepage tells you GitWand is" had become awkward. v2.9 ships a complete rework of `HomeLanding.vue`.
+
+Three pillars now sit directly under the hero: auto-resolve 95% of trivial conflicts (the resolution engine), Tauri 2 + Rust native performance (no Electron, sub-second cold start), and AI assists where humans get stuck (LLM fallback + MCP server, always opt-in). Each pillar has a stat, a one-line subtitle, and a "learn more" link into the relevant guide section. The conflict before/after demo moved up to sit right under the pillars instead of being buried below the feature list — it's the most concrete thing on the page and should be visible without scrolling past 20 cards.
+
+The features section is now four tabs: Core Git (Resolve, PR, Diff, Folder tree, Split commit, Tags), Power user (Worktrees, Submodules, File history, History, Commit context, Fork workflow), AI (AI merge, AI PR, AI flow, Commit trailers, MCP, Commit context), and New in v2.9 (Launchpad, LLM fallback, Workspaces, Offline mode, In-app logs, Image diff, Performance, UI polish). The default tab is Core Git, but a prominent "New in v2.9 — Launchpad" banner sits above the tabs and jumps you to the New tab on click.
+
 ---
 
 ## v2.8.5 — May 2026

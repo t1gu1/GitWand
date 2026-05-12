@@ -40,7 +40,21 @@ function runTerminalDemo() {
 }
 
 // ── Feature tabs ──────────────────────────────────────────────────────────────
-const activeTab = ref<'core' | 'ai' | 'tools' | 'new'>('core')
+// "core" by default — first-time visitors land on workflow-essentials,
+// the highlight banner above the tabs drives traffic to "new" for repeat visits.
+type TabId = 'core' | 'power' | 'ai' | 'new'
+const activeTab = ref<TabId>('core')
+
+// Jump to "new" tab and smooth-scroll the features section into view —
+// used by the "New in v2.9" highlight banner CTA.
+function jumpToNewTab(): void {
+  activeTab.value = 'new'
+  // Defer to next tick so the panel content has rendered before scrolling
+  setTimeout(() => {
+    if (typeof document === 'undefined') return
+    document.querySelector('.features')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, 0)
+}
 
 // ── 10 resolution patterns (technical — not localised) ────────────────────────
 const PATTERNS = [
@@ -178,7 +192,42 @@ const i18n: Record<Locale, any> = {
     patternsSub: 'Chaque hunk passe par le classifieur. Chaque pattern a son profil de confiance et son résolveur automatique.',
     benchTitle: 'Des chiffres, pas des adjectifs.',
     benchSub: 'Performances mesurées sur puce M, dépôts types.',
-    tabCore: 'Git de base', tabAI: 'IA', tabTools: 'Intégrations', tabNew: 'Nouveautés v2.8',
+    tabCore: 'Git de base', tabAI: 'IA', tabPower: 'Power user', tabNew: 'Nouveautés v2.9',
+    featuresAria: 'Catégories de fonctionnalités',
+    // 3 Pillars
+    pillarsTitle: 'Trois piliers, une promesse',
+    pillarsSub: 'Conflits auto-résolus, performance native, IA opt-in et auditable.',
+    pillar1Title: 'Résolution auto de 95 % des conflits triviaux',
+    pillar1Sub: '10 patterns déterministes. Score de confiance composite. Trace de décision pour chaque hunk.',
+    pillar1Stat: '95 %',
+    pillar1StatLabel: 'conflits triviaux résolus automatiquement',
+    pillar1Cta: 'Voir le moteur →',
+    pillar2Title: 'Tauri 2 + Rust. Natif, rapide, prévisible.',
+    pillar2Sub: 'Panneaux lazy-load. Fast-path libgit2. Polling discipliné. Aucun overhead Electron.',
+    pillar2Stat: '<1s',
+    pillar2StatLabel: 'au démarrage à froid',
+    pillar2Cta: 'Pourquoi natif →',
+    pillar3Title: 'L\'IA prend le relais quand vous bloquez',
+    pillar3Sub: 'Fallback LLM pour les hunks complexes. Serveur MCP pour les agents. Toujours opt-in, toujours audité.',
+    pillar3Stat: 'Claude · OpenAI · Ollama',
+    pillar3StatLabel: 'votre LLM, votre clé',
+    pillar3Cta: 'Guide du fallback IA →',
+    // 5 new features (v2.5 → v2.9)
+    featLaunchpad: 'Launchpad — dashboard cross-repo',
+    featLaunchpadDesc: 'Agrège PRs, issues, WIP et activité d\'équipe sur tous les repos d\'un workspace. Pin, snooze, enrichissement Team lazy. ⌘L depuis n\'importe où.',
+    featLlmFallback: 'Fallback LLM pour les hunks complexes',
+    featLlmFallbackDesc: 'Résolution opt-in via Claude / OpenAI / Ollama / MCP. Validée par le même pipeline parse-tree que les patterns déterministes. Trace de décision et bouton reject inclus.',
+    featWorkspaces: 'Workspaces multi-repo',
+    featWorkspacesDesc: 'Regroupez vos repos par projet, client ou squad. Fetch all, pull all, status all en un clic. Local-first — pas de cloud, pas de compte.',
+    featOffline: 'Mode hors-ligne',
+    featOfflineDesc: 'Connectivité testée par probe. Les opérations réseau dégradent proprement, les opérations locales continuent. Fini les spinners infinis.',
+    featLogs: 'Logs d\'erreurs in-app',
+    featLogsDesc: 'Les erreurs ne squattent plus le header. Parcourez 500 entrées horodatées dans Settings, avec compteur unread dans la status bar.',
+    // "New in v2.9" highlight banner
+    newReleaseBadge: 'Nouveau dans la v2.9',
+    newReleaseTitle: 'Launchpad — votre workspace d\'un seul coup d\'œil',
+    newReleaseSub: 'PRs, issues, WIP et activité d\'équipe cross-repo dans une vue full-screen. Pin l\'important, snooze le reste, repérez les chevauchements avec vos coéquipiers.',
+    newReleaseCta: 'Voir les nouveautés',
     faqTitle: 'Questions fréquentes',
     faqItems: [
       { q: 'GitWand est-il vraiment gratuit ?', a: 'Oui, GitWand est entièrement open source sous licence MIT. Vous pouvez l\'utiliser, le modifier et le redistribuer librement.' },
@@ -279,7 +328,42 @@ const i18n: Record<Locale, any> = {
     patternsSub: 'Every hunk runs through the classifier. Each pattern has its own confidence profile and automatic resolver.',
     benchTitle: 'Numbers, not adjectives.',
     benchSub: 'Performance measured on an M-series chip with typical repositories.',
-    tabCore: 'Core Git', tabAI: 'AI', tabTools: 'Integrations', tabNew: 'New in v2.8',
+    tabCore: 'Core Git', tabAI: 'AI', tabPower: 'Power user', tabNew: 'New in v2.9',
+    featuresAria: 'Feature categories',
+    // 3 Pillars
+    pillarsTitle: 'Three pillars, one promise',
+    pillarsSub: 'Auto-resolved conflicts, native performance, opt-in and auditable AI.',
+    pillar1Title: 'Auto-resolve 95% of trivial conflicts',
+    pillar1Sub: '10 deterministic patterns. Composite confidence scoring. Decision traces for every hunk.',
+    pillar1Stat: '95%',
+    pillar1StatLabel: 'trivial conflicts auto-resolved',
+    pillar1Cta: 'See the engine →',
+    pillar2Title: 'Tauri 2 + Rust. Native, fast, predictable.',
+    pillar2Sub: 'Lazy-loaded panels. libgit2 fast-path. Polling discipline. No Electron bloat.',
+    pillar2Stat: '<1s',
+    pillar2StatLabel: 'cold start',
+    pillar2Cta: 'Why native →',
+    pillar3Title: 'AI assists where humans get stuck',
+    pillar3Sub: 'LLM fallback for complex hunks. MCP server for agents. Always opt-in, always audited.',
+    pillar3Stat: 'Claude · OpenAI · Ollama',
+    pillar3StatLabel: 'your LLM, your key',
+    pillar3Cta: 'AI fallback guide →',
+    // 5 new features (v2.5 → v2.9)
+    featLaunchpad: 'Launchpad — cross-repo dashboard',
+    featLaunchpadDesc: 'Aggregate PRs, issues, WIP, and team activity across every repo in a workspace. Pin, snooze, lazy team enrichment. ⌘L from anywhere.',
+    featLlmFallback: 'LLM fallback for complex hunks',
+    featLlmFallbackDesc: 'Opt-in resolution via Claude / OpenAI / Ollama / MCP. Validated through the same parse-tree pipeline as deterministic patterns. Decision trace and reject button included.',
+    featWorkspaces: 'Multi-repo workspaces',
+    featWorkspacesDesc: 'Group repos by project, client, or squad. Fetch all, pull all, status all in one click. Local-first — no cloud, no account.',
+    featOffline: 'Offline mode',
+    featOfflineDesc: 'Probe-based connectivity. Network ops degrade gracefully, local ops keep working. No infinite spinners.',
+    featLogs: 'In-app error log',
+    featLogsDesc: 'Errors no longer hijack the header. Browse a 500-entry timestamped log in Settings, with unread-count indicator in the status bar.',
+    // "New in v2.9" highlight banner
+    newReleaseBadge: 'New in v2.9',
+    newReleaseTitle: 'Launchpad — your workspace at a glance',
+    newReleaseSub: 'Cross-repo PRs, issues, WIP, and team activity in a single full-screen view. Pin what matters, snooze the rest, see overlap with teammates.',
+    newReleaseCta: 'See what\'s new',
     faqTitle: 'Frequently asked questions',
     faqItems: [
       { q: 'Is GitWand really free?', a: 'Yes, GitWand is fully open source under the MIT license. You can use, modify, and redistribute it freely.' },
@@ -380,7 +464,42 @@ const i18n: Record<Locale, any> = {
     patternsSub: 'Cada hunk pasa por el clasificador. Cada patrón tiene su perfil de confianza y resolución automática.',
     benchTitle: 'Números, no adjetivos.',
     benchSub: 'Rendimiento medido en chip M con repositorios típicos.',
-    tabCore: 'Git básico', tabAI: 'IA', tabTools: 'Integraciones', tabNew: 'Novedades v2.8',
+    tabCore: 'Git básico', tabAI: 'IA', tabPower: 'Power user', tabNew: 'Novedades v2.9',
+    featuresAria: 'Categorías de funcionalidades',
+    // 3 Pillars
+    pillarsTitle: 'Tres pilares, una promesa',
+    pillarsSub: 'Conflictos auto-resueltos, rendimiento nativo, IA opt-in y auditable.',
+    pillar1Title: 'Resuelve automáticamente el 95 % de los conflictos triviales',
+    pillar1Sub: '10 patrones deterministas. Puntuación de confianza compuesta. Traza de decisión para cada hunk.',
+    pillar1Stat: '95 %',
+    pillar1StatLabel: 'conflictos triviales resueltos automáticamente',
+    pillar1Cta: 'Ver el motor →',
+    pillar2Title: 'Tauri 2 + Rust. Nativo, rápido, predecible.',
+    pillar2Sub: 'Paneles con lazy-load. Fast-path libgit2. Polling disciplinado. Sin sobrecarga de Electron.',
+    pillar2Stat: '<1s',
+    pillar2StatLabel: 'arranque en frío',
+    pillar2Cta: 'Por qué nativo →',
+    pillar3Title: 'La IA toma el relevo cuando te atascas',
+    pillar3Sub: 'Fallback LLM para hunks complejos. Servidor MCP para agentes. Siempre opt-in, siempre auditado.',
+    pillar3Stat: 'Claude · OpenAI · Ollama',
+    pillar3StatLabel: 'tu LLM, tu clave',
+    pillar3Cta: 'Guía del fallback IA →',
+    // 5 new features (v2.5 → v2.9)
+    featLaunchpad: 'Launchpad — dashboard multi-repo',
+    featLaunchpadDesc: 'Agrega PRs, issues, WIP y actividad del equipo en todos los repos de un workspace. Pin, snooze, enriquecimiento Team lazy. ⌘L desde cualquier lugar.',
+    featLlmFallback: 'Fallback LLM para hunks complejos',
+    featLlmFallbackDesc: 'Resolución opt-in vía Claude / OpenAI / Ollama / MCP. Validada por el mismo pipeline parse-tree que los patrones deterministas. Traza de decisión y botón reject incluidos.',
+    featWorkspaces: 'Workspaces multi-repo',
+    featWorkspacesDesc: 'Agrupa tus repos por proyecto, cliente o squad. Fetch all, pull all, status all con un clic. Local-first — sin cloud, sin cuenta.',
+    featOffline: 'Modo sin conexión',
+    featOfflineDesc: 'Conectividad por probe. Las operaciones de red degradan limpiamente, las operaciones locales siguen funcionando. Adiós a los spinners infinitos.',
+    featLogs: 'Log de errores in-app',
+    featLogsDesc: 'Los errores ya no acaparan el header. Consulta un log de 500 entradas con timestamp en Settings, con contador unread en la status bar.',
+    // "New in v2.9" highlight banner
+    newReleaseBadge: 'Nuevo en v2.9',
+    newReleaseTitle: 'Launchpad — tu workspace de un vistazo',
+    newReleaseSub: 'PRs, issues, WIP y actividad de equipo cross-repo en una única vista full-screen. Fija lo importante, aplaza el resto, detecta solapamientos con tu equipo.',
+    newReleaseCta: 'Ver las novedades',
     faqTitle: 'Preguntas frecuentes',
     faqItems: [
       { q: '¿GitWand es realmente gratis?', a: 'Sí, GitWand es totalmente open source bajo licencia MIT. Puedes usarlo, modificarlo y redistribuirlo libremente.' },
@@ -481,7 +600,42 @@ const i18n: Record<Locale, any> = {
     patternsSub: 'Cada hunk passa pelo classificador. Cada padrão tem seu perfil de confiança e resolução automática.',
     benchTitle: 'Números, não adjetivos.',
     benchSub: 'Performance medida em chip M com repositórios típicos.',
-    tabCore: 'Git básico', tabAI: 'IA', tabTools: 'Integrações', tabNew: 'Novidades v2.8',
+    tabCore: 'Git básico', tabAI: 'IA', tabPower: 'Power user', tabNew: 'Novidades v2.9',
+    featuresAria: 'Categorias de funcionalidades',
+    // 3 Pillars
+    pillarsTitle: 'Três pilares, uma promessa',
+    pillarsSub: 'Conflitos auto-resolvidos, desempenho nativo, IA opt-in e auditável.',
+    pillar1Title: 'Resolva 95% dos conflitos triviais automaticamente',
+    pillar1Sub: '10 padrões deterministas. Score de confiança composto. Trace de decisão em cada hunk.',
+    pillar1Stat: '95%',
+    pillar1StatLabel: 'conflitos triviais resolvidos automaticamente',
+    pillar1Cta: 'Ver o motor →',
+    pillar2Title: 'Tauri 2 + Rust. Nativo, rápido, previsível.',
+    pillar2Sub: 'Painéis lazy-load. Fast-path libgit2. Polling disciplinado. Zero overhead do Electron.',
+    pillar2Stat: '<1s',
+    pillar2StatLabel: 'inicialização a frio',
+    pillar2Cta: 'Por que nativo →',
+    pillar3Title: 'A IA assume quando você empaca',
+    pillar3Sub: 'Fallback LLM para hunks complexos. Servidor MCP para agentes. Sempre opt-in, sempre auditado.',
+    pillar3Stat: 'Claude · OpenAI · Ollama',
+    pillar3StatLabel: 'seu LLM, sua chave',
+    pillar3Cta: 'Guia do fallback IA →',
+    // 5 new features (v2.5 → v2.9)
+    featLaunchpad: 'Launchpad — dashboard cross-repo',
+    featLaunchpadDesc: 'Agrega PRs, issues, WIP e atividade da equipe em todos os repos de um workspace. Pin, snooze, enriquecimento Team lazy. ⌘L de qualquer lugar.',
+    featLlmFallback: 'Fallback LLM para hunks complexos',
+    featLlmFallbackDesc: 'Resolução opt-in via Claude / OpenAI / Ollama / MCP. Validada pelo mesmo pipeline parse-tree dos padrões deterministas. Trace de decisão e botão reject inclusos.',
+    featWorkspaces: 'Workspaces multi-repo',
+    featWorkspacesDesc: 'Agrupe seus repos por projeto, cliente ou squad. Fetch all, pull all, status all em um clique. Local-first — sem cloud, sem conta.',
+    featOffline: 'Modo offline',
+    featOfflineDesc: 'Conectividade por probe. Operações de rede degradam de forma elegante, operações locais continuam funcionando. Sem spinners infinitos.',
+    featLogs: 'Log de erros in-app',
+    featLogsDesc: 'Os erros não sequestram mais o header. Navegue por um log de 500 entradas com timestamp em Settings, com contador unread na status bar.',
+    // "New in v2.9" highlight banner
+    newReleaseBadge: 'Novo na v2.9',
+    newReleaseTitle: 'Launchpad — seu workspace em uma só tela',
+    newReleaseSub: 'PRs, issues, WIP e atividade do time cross-repo numa única view full-screen. Fixe o importante, adie o resto, veja sobreposições com o time.',
+    newReleaseCta: 'Ver as novidades',
     faqTitle: 'Perguntas frequentes',
     faqItems: [
       { q: 'O GitWand é realmente gratuito?', a: 'Sim, o GitWand é totalmente open source sob licença MIT. Você pode usar, modificar e redistribuir livremente.' },
@@ -582,7 +736,42 @@ const i18n: Record<Locale, any> = {
     patternsSub: '每个 hunk 都经过分类器处理。每种模式都有自己的置信度配置和自动解析器。',
     benchTitle: '数字，而非形容词。',
     benchSub: '在 M 系列芯片上使用典型仓库测量的性能。',
-    tabCore: 'Git 核心', tabAI: 'AI', tabTools: '集成', tabNew: 'v2.8 新特性',
+    tabCore: 'Git 核心', tabAI: 'AI', tabPower: '高级玩法', tabNew: 'v2.9 新特性',
+    featuresAria: '功能类别',
+    // 3 Pillars
+    pillarsTitle: '三大支柱,一个承诺',
+    pillarsSub: '冲突自动解决、原生性能、可选可审计的 AI。',
+    pillar1Title: '自动解决 95% 的简单冲突',
+    pillar1Sub: '10 种确定性模式。组合式置信度评分。每个 hunk 都有决策追踪。',
+    pillar1Stat: '95%',
+    pillar1StatLabel: '简单冲突自动解决',
+    pillar1Cta: '查看引擎 →',
+    pillar2Title: 'Tauri 2 + Rust。原生、快速、可预测。',
+    pillar2Sub: '懒加载面板。libgit2 快路径。轮询自律。零 Electron 开销。',
+    pillar2Stat: '<1 秒',
+    pillar2StatLabel: '冷启动',
+    pillar2Cta: '为什么选原生 →',
+    pillar3Title: 'AI 在你卡住的地方接管',
+    pillar3Sub: '复杂 hunk 的 LLM fallback。面向代理的 MCP 服务器。始终可选,始终可审计。',
+    pillar3Stat: 'Claude · OpenAI · Ollama',
+    pillar3StatLabel: '你的 LLM,你的密钥',
+    pillar3Cta: 'AI fallback 指南 →',
+    // 5 new features (v2.5 → v2.9)
+    featLaunchpad: 'Launchpad — 跨仓库仪表盘',
+    featLaunchpadDesc: '聚合 workspace 中所有仓库的 PR、issues、WIP 和团队动态。固定、暂缓、Team 懒加载。从任意位置按 ⌘L 唤起。',
+    featLlmFallback: '复杂 hunk 的 LLM fallback',
+    featLlmFallbackDesc: '通过 Claude / OpenAI / Ollama / MCP 进行可选解析。与确定性模式走同一条 parse-tree 校验管线。附带决策追踪与拒绝按钮。',
+    featWorkspaces: '多仓库工作区',
+    featWorkspacesDesc: '按项目、客户或小队对仓库分组。一键 fetch all、pull all、status all。Local-first — 无云,无账号。',
+    featOffline: '离线模式',
+    featOfflineDesc: '基于 probe 的连通性检测。网络操作优雅降级,本地操作持续可用。告别无限旋转的 spinner。',
+    featLogs: '应用内错误日志',
+    featLogsDesc: '错误不再霸占头部。在 Settings 中浏览 500 条带时间戳的日志,状态栏附带未读计数指示。',
+    // "New in v2.9" highlight banner
+    newReleaseBadge: 'v2.9 新特性',
+    newReleaseTitle: 'Launchpad — 一眼看尽你的 workspace',
+    newReleaseSub: '跨仓库 PR、issues、WIP 与团队动态汇聚在一个全屏视图。固定重要内容,暂缓其他,识别与队友的重叠工作。',
+    newReleaseCta: '查看新特性',
     faqTitle: '常见问题',
     faqItems: [
       { q: 'GitWand 真的免费吗?', a: '是的,GitWand 在 MIT 许可下完全开源。你可以自由使用、修改和分发。' },
@@ -771,6 +960,69 @@ function cellClass(v: CompareValue | undefined): string {
     </section>
 
     <!-- ══════════════════════════════════════
+         3 PILLARS — strategic positioning under the Hero/Stats
+    ══════════════════════════════════════ -->
+    <section class="hl-pillars">
+      <div class="section-inner">
+        <h2 class="section-title">{{ t.pillarsTitle }}</h2>
+        <p class="section-sub">{{ t.pillarsSub }}</p>
+        <div class="hl-pillars__grid">
+          <!-- Pillar 1 — Conflict resolution -->
+          <article class="hl-pillar">
+            <div class="hl-pillar__icon hl-pillar__icon--purple">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3v6a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v6"/>
+                <circle cx="6" cy="3" r="1.5"/>
+                <circle cx="18" cy="21" r="1.5"/>
+                <path d="M9 12l2 2 4-4"/>
+              </svg>
+            </div>
+            <h3 class="hl-pillar__title">{{ t.pillar1Title }}</h3>
+            <p class="hl-pillar__sub">{{ t.pillar1Sub }}</p>
+            <div class="hl-pillar__stat">
+              <span class="hl-pillar__stat-n">{{ t.pillar1Stat }}</span>
+              <span class="hl-pillar__stat-l">{{ t.pillar1StatLabel }}</span>
+            </div>
+            <a href="/guide/conflict-resolution" class="hl-pillar__cta">{{ t.pillar1Cta }}</a>
+          </article>
+
+          <!-- Pillar 2 — Native performance -->
+          <article class="hl-pillar">
+            <div class="hl-pillar__icon hl-pillar__icon--green">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            </div>
+            <h3 class="hl-pillar__title">{{ t.pillar2Title }}</h3>
+            <p class="hl-pillar__sub">{{ t.pillar2Sub }}</p>
+            <div class="hl-pillar__stat">
+              <span class="hl-pillar__stat-n">{{ t.pillar2Stat }}</span>
+              <span class="hl-pillar__stat-l">{{ t.pillar2StatLabel }}</span>
+            </div>
+            <a href="/guide/desktop" class="hl-pillar__cta">{{ t.pillar2Cta }}</a>
+          </article>
+
+          <!-- Pillar 3 — AI assists -->
+          <article class="hl-pillar">
+            <div class="hl-pillar__icon hl-pillar__icon--gradient">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3v3M12 18v3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M3 12h3M18 12h3M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>
+                <circle cx="12" cy="12" r="3.2"/>
+              </svg>
+            </div>
+            <h3 class="hl-pillar__title">{{ t.pillar3Title }}</h3>
+            <p class="hl-pillar__sub">{{ t.pillar3Sub }}</p>
+            <div class="hl-pillar__stat">
+              <span class="hl-pillar__stat-n hl-pillar__stat-n--small">{{ t.pillar3Stat }}</span>
+              <span class="hl-pillar__stat-l">{{ t.pillar3StatLabel }}</span>
+            </div>
+            <a href="/guide/llm-fallback" class="hl-pillar__cta">{{ t.pillar3Cta }}</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
          CONFLICT RESOLUTION DEMO (moved before features)
     ══════════════════════════════════════ -->
     <section class="conflict-section">
@@ -845,6 +1097,24 @@ function cellClass(v: CompareValue | undefined): string {
     </section>
 
     <!-- ══════════════════════════════════════
+         "NEW IN v2.9" HIGHLIGHT BANNER — drives traffic to the "new" tab
+    ══════════════════════════════════════ -->
+    <section class="hl-new-release">
+      <div class="hl-new-release__inner">
+        <div class="hl-new-release__copy">
+          <span class="hl-new-release__badge">{{ t.newReleaseBadge }}</span>
+          <h2 class="hl-new-release__title">{{ t.newReleaseTitle }}</h2>
+          <p class="hl-new-release__sub">{{ t.newReleaseSub }}</p>
+        </div>
+        <div class="hl-new-release__cta">
+          <a class="hl-new-release__link" href="/blog/v2-9-launchpad" @click.prevent="jumpToNewTab">
+            {{ t.newReleaseCta }} →
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
          FEATURES (tabbed — replaces flat grid)
     ══════════════════════════════════════ -->
     <section class="features">
@@ -853,144 +1123,150 @@ function cellClass(v: CompareValue | undefined): string {
         <p class="section-sub">{{ t.featSub }}</p>
 
         <!-- Tab navigation -->
-        <div class="feat-tabs">
-          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'core' }" @click="activeTab = 'core'">{{ t.tabCore }}</button>
-          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'ai' }" @click="activeTab = 'ai'">{{ t.tabAI }}</button>
-          <button class="feat-tab" :class="{ 'feat-tab--active': activeTab === 'tools' }" @click="activeTab = 'tools'">{{ t.tabTools }}</button>
-          <button class="feat-tab feat-tab--highlight" :class="{ 'feat-tab--active': activeTab === 'new' }" @click="activeTab = 'new'">{{ t.tabNew }}</button>
+        <div class="feat-tabs" role="tablist" :aria-label="t.featuresAria">
+          <button role="tab" class="feat-tab" :aria-selected="activeTab === 'core'" :class="{ 'feat-tab--active': activeTab === 'core' }" @click="activeTab = 'core'">{{ t.tabCore }}</button>
+          <button role="tab" class="feat-tab" :aria-selected="activeTab === 'power'" :class="{ 'feat-tab--active': activeTab === 'power' }" @click="activeTab = 'power'">{{ t.tabPower }}</button>
+          <button role="tab" class="feat-tab" :aria-selected="activeTab === 'ai'" :class="{ 'feat-tab--active': activeTab === 'ai' }" @click="activeTab = 'ai'">{{ t.tabAI }}</button>
+          <button role="tab" class="feat-tab feat-tab--highlight" :aria-selected="activeTab === 'new'" :class="{ 'feat-tab--active': activeTab === 'new' }" @click="activeTab = 'new'">{{ t.tabNew }}</button>
         </div>
 
-        <!-- Core Git tab -->
-        <div v-if="activeTab === 'core'" class="features-grid">
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featDiff }}</h3><p>{{ t.featDiffDesc }}</p>
+        <!-- Core Git tab — daily workflow essentials -->
+        <Transition name="hl-tab-fade" mode="out-in">
+          <div v-if="activeTab === 'core'" key="core" class="features-grid" role="tabpanel">
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#7C3AED" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featResolve }}</h3><p>{{ t.featResolveDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featPR }}</h3><p>{{ t.featPRDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featDiff }}</h3><p>{{ t.featDiffDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5a1 1 0 011-1h4l2 2h10a1 1 0 011 1v2H3V5z" stroke="#7C3AED" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 9h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z" stroke="#7C3AED" stroke-width="1.8"/><path d="M7 13h4M7 17h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featFolderTree }}</h3><p>{{ t.featFolderTreeDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5V16" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featSplitCommit }}</h3><p>{{ t.featSplitCommitDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 7h10M7 12h6" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="17" r="4" stroke="#7C3AED" stroke-width="1.8"/><path d="M17 15v2l1 1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featTags }}</h3><p>{{ t.featTagsDesc }}</p>
+            </div>
           </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 6h8M7 8l-2 8M17 8l2 8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featHistory }}</h3><p>{{ t.featHistoryDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featPR }}</h3><p>{{ t.featPRDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8h2M6 12h2M6 16h2M17 8h1M17 12h1M17 16h1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featWorktrees }}</h3><p>{{ t.featWorktreesDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8.5v3a2 2 0 002 2h8a2 2 0 002-2v-3M12 13.5V16" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featSplitCommit }}</h3><p>{{ t.featSplitCommitDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg></div>
-            <h3>{{ t.featImgDiff }}</h3><p>{{ t.featImgDiffDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 5a1 1 0 011-1h4l2 2h10a1 1 0 011 1v2H3V5z" stroke="#7C3AED" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 9h18v11a1 1 0 01-1 1H4a1 1 0 01-1-1V9z" stroke="#7C3AED" stroke-width="1.8"/><path d="M7 13h4M7 17h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featFolderTree }}</h3><p>{{ t.featFolderTreeDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6.5 9v3.5a1 1 0 001 1h9a1 1 0 001-1V9" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><rect x="8" y="14" width="8" height="8" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/></svg></div>
-            <h3>{{ t.featSubmodules }}</h3><p>{{ t.featSubmodulesDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featCommitCtx }}</h3><p>{{ t.featCommitCtxDesc }}</p>
-          </div>
-        </div>
 
-        <!-- AI tab -->
-        <div v-if="activeTab === 'ai'" class="features-grid">
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#10B981" stroke-width="1.8"/></svg></div>
-            <h3>{{ t.featAIPR }}</h3><p>{{ t.featAIPRDesc }}</p>
+          <!-- Power user tab (was "Integrations") -->
+          <div v-else-if="activeTab === 'power'" key="power" class="features-grid" role="tabpanel">
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6 8h2M6 12h2M6 16h2M17 8h1M17 12h1M17 16h1" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featWorktrees }}</h3><p>{{ t.featWorktreesDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="2" width="9" height="7" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/><path d="M6.5 9v3.5a1 1 0 001 1h9a1 1 0 001-1V9" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><rect x="8" y="14" width="8" height="8" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/></svg></div>
+              <h3>{{ t.featSubmodules }}</h3><p>{{ t.featSubmodulesDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="3" stroke="#7C3AED" stroke-width="1.6"/><path d="M21.5 19.5l1.5 1.5" stroke="#7C3AED" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featFileHistory }}</h3><p>{{ t.featFileHistoryDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="18" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M8 6h8M7 8l-2 8M17 8l2 8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featHistory }}</h3><p>{{ t.featHistoryDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#7C3AED" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featCommitCtx }}</h3><p>{{ t.featCommitCtxDesc }}</p>
+            </div>
+            <div class="feat-card">
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><path d="M7.5 12h9M16.5 6l-4 4.5M16.5 18l-4-4.5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featForkWorkflow }}</h3><p>{{ t.featForkWorkflowDesc }}</p>
+            </div>
           </div>
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 3v12M6 21a3 3 0 100-6 3 3 0 000 6zM18 9a3 3 0 100-6 3 3 0 000 6zM18 9v4a2 2 0 01-2 2H8" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featAIMerge }}</h3><p>{{ t.featAIMergeDesc }}</p>
-          </div>
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#10B981" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featAIFlow }}</h3><p>{{ t.featAIFlowDesc }}</p>
-          </div>
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#10B981" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featResolve }}</h3><p>{{ t.featResolveDesc }}</p>
-          </div>
-          <div class="feat-card feat-card--ai">
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M7 7h10M7 12h6" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="17" cy="17" r="4" stroke="#10B981" stroke-width="1.8"/><path d="M17 15v2l1 1" stroke="#10B981" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featTags }}</h3><p>{{ t.featTagsDesc }}</p>
-          </div>
-        </div>
 
-        <!-- Integrations tab -->
-        <div v-if="activeTab === 'tools'" class="features-grid">
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22v-5M9 7V3M15 7V3M5 11V9a2 2 0 012-2h10a2 2 0 012 2v2a5 5 0 01-5 5h-4a5 5 0 01-5-5z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featMcp }}</h3><p>{{ t.featMcpDesc }}</p>
+          <!-- AI tab -->
+          <div v-else-if="activeTab === 'ai'" key="ai" class="features-grid" role="tabpanel">
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 3v12M6 21a3 3 0 100-6 3 3 0 000 6zM18 9a3 3 0 100-6 3 3 0 000 6zM18 9v4a2 2 0 01-2 2H8" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featAIMerge }}</h3><p>{{ t.featAIMergeDesc }}</p>
+            </div>
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="#10B981" stroke-width="1.8"/></svg></div>
+              <h3>{{ t.featAIPR }}</h3><p>{{ t.featAIPRDesc }}</p>
+            </div>
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#10B981" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featAIFlow }}</h3><p>{{ t.featAIFlowDesc }}</p>
+            </div>
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#10B981" stroke-width="1.8"/><path d="M3 9h18M8 13h3M8 16h5" stroke="#10B981" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featTrailers }}</h3><p>{{ t.featTrailersDesc }}</p>
+            </div>
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22v-5M9 7V3M15 7V3M5 11V9a2 2 0 012-2h10a2 2 0 012 2v2a5 5 0 01-5 5h-4a5 5 0 01-5-5z" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featMcp }}</h3><p>{{ t.featMcpDesc }}</p>
+            </div>
+            <div class="feat-card feat-card--ai">
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="6" cy="6" r="2" stroke="#10B981" stroke-width="1.8"/><circle cx="18" cy="6" r="2" stroke="#10B981" stroke-width="1.8"/><circle cx="12" cy="20" r="2" stroke="#10B981" stroke-width="1.8"/><path d="M6 8v4a2 2 0 002 2h4M18 8v4a2 2 0 01-2 2h-4M12 14v4" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+              <h3>{{ t.featCommitCtx }}</h3><p>{{ t.featCommitCtxDesc }}</p>
+            </div>
           </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featUI }}</h3><p>{{ t.featUIDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#7C3AED" stroke-width="1.8"/><path d="M3 9h18M8 13h3M8 16h5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featTrailers }}</h3><p>{{ t.featTrailersDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h10M4 18h7" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round"/><circle cx="19" cy="17" r="3" stroke="#7C3AED" stroke-width="1.6"/><path d="M21.5 19.5l1.5 1.5" stroke="#7C3AED" stroke-width="1.6" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featFileHistory }}</h3><p>{{ t.featFileHistoryDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="6" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><circle cx="19" cy="18" r="2.5" stroke="#7C3AED" stroke-width="1.8"/><path d="M7.5 12h9M16.5 6l-4 4.5M16.5 18l-4-4.5" stroke="#7C3AED" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-            <h3>{{ t.featForkWorkflow }}</h3><p>{{ t.featForkWorkflowDesc }}</p>
-          </div>
-          <div class="feat-card">
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>{{ t.featPerf }}</h3><p>{{ t.featPerfDesc }}</p>
-          </div>
-        </div>
 
-        <!-- New in v2.8 tab -->
-        <div v-if="activeTab === 'new'" class="features-grid">
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.8</div>
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>Custom automations</h3>
-            <p>Glob-trigger rules that run a shell command when a conflicted file matches a pattern. Auto-commit the result.</p>
+          <!-- New in v2.9 tab — 5 new features shipped since the homepage was last refreshed -->
+          <div v-else-if="activeTab === 'new'" key="new" class="features-grid" role="tabpanel">
+            <!-- Launchpad — v2.9 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.9</div>
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+              <h3>{{ t.featLaunchpad }}</h3><p>{{ t.featLaunchpadDesc }}</p>
+            </div>
+            <!-- LLM fallback — v2.5 / v2.8.3 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.5</div>
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/><path d="M5 14l.6 1.8L7.4 16l-1.8.6L5 18.4 4.4 16.6 2.6 16l1.8-.6L5 14z"/></svg></div>
+              <h3>{{ t.featLlmFallback }}</h3><p>{{ t.featLlmFallbackDesc }}</p>
+            </div>
+            <!-- Workspaces — v2.7 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.7</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a1.5 1.5 0 011.5-1.5h3.6l1.5 2H14a1.5 1.5 0 011.5 1.5v2H3V6z"/><path d="M5 10h16l-1.5 9.5A1.5 1.5 0 0118 21H7a1.5 1.5 0 01-1.5-1.3L4 10z"/><path d="M9 14.5h6"/></svg></div>
+              <h3>{{ t.featWorkspaces }}</h3><p>{{ t.featWorkspacesDesc }}</p>
+            </div>
+            <!-- Offline mode — v2.8.4 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.8</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M8.5 16.5a5 5 0 017 0"/><path d="M5 12.5a10 10 0 019-2.7"/><path d="M2 9a15 15 0 015-3"/><path d="M22 9a15 15 0 00-5.5-3.1"/><circle cx="12" cy="20" r="1"/></svg></div>
+              <h3>{{ t.featOffline }}</h3><p>{{ t.featOfflineDesc }}</p>
+            </div>
+            <!-- Logs panel — v2.8.4 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.8</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
+              <h3>{{ t.featLogs }}</h3><p>{{ t.featLogsDesc }}</p>
+            </div>
+            <!-- Image diff — v1.6 (recent enough to live here) -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v1.6</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg></div>
+              <h3>{{ t.featImgDiff }}</h3><p>{{ t.featImgDiffDesc }}</p>
+            </div>
+            <!-- Perf hardening — v2.8.2 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.8</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featPerf }}</h3><p>{{ t.featPerfDesc }}</p>
+            </div>
+            <!-- 3 interfaces — design refresh -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.9</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+              <h3>{{ t.featUI }}</h3><p>{{ t.featUIDesc }}</p>
+            </div>
           </div>
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.8</div>
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 100 14A7 7 0 0012 2z" stroke="#10B981" stroke-width="1.8"/><path d="M9 12l2 2 4-4" stroke="#10B981" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>Resolution memory</h3>
-            <p>Learns your resolution choices per file. Detects date/number patterns and re-applies them automatically.</p>
-          </div>
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.8</div>
-            <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="#10B981" stroke-width="1.8"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#10B981" stroke-width="1.8" stroke-linecap="round"/></svg></div>
-            <h3>Agent Sessions</h3>
-            <p>Launch and track AI agent sessions per worktree. Live status badges, one-click open in Claude Code.</p>
-          </div>
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.7</div>
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="13" y="3" width="9" height="18" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.07)"/></svg></div>
-            <h3>Multi-repo workspaces</h3>
-            <p>Group repositories into workspaces and switch context in one click from a unified dashboard.</p>
-          </div>
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.7</div>
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>Git Hooks manager</h3>
-            <p>List, toggle, and create pre-commit and pre-push hooks from the Settings panel. No shell scripting.</p>
-          </div>
-          <div class="feat-card feat-card--new">
-            <div class="feat-badge">v2.7</div>
-            <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#7C3AED" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-            <h3>Scheduled automations</h3>
-            <p>Daily fetch, nightly GC, leak detection — configurable tasks that run automatically on a timer.</p>
-          </div>
-        </div>
+        </Transition>
 
       </div>
     </section>
@@ -2717,6 +2993,200 @@ function cellClass(v: CompareValue | undefined): string {
 }
 
 /* ───────────────────────────────────────────
+   3 PILLARS (Wave 1)
+─────────────────────────────────────────── */
+.hl-pillars {
+  padding: 72px 0 64px;
+  background: var(--gw-bg);
+  border-bottom: 1px solid var(--gw-border-soft);
+}
+.hl-pillars__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 8px;
+}
+.hl-pillar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 28px 26px 26px;
+  background: var(--gw-bg-card);
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+  transition: border-color 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.hl-pillar:hover {
+  border-color: var(--gw-purple);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px -16px rgba(124, 58, 237, 0.35);
+}
+.hl-pillar__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.hl-pillar__icon--purple {
+  color: var(--gw-purple-light);
+  background: rgba(124, 58, 237, 0.12);
+}
+.hl-pillar__icon--green {
+  color: var(--gw-green);
+  background: rgba(16, 185, 129, 0.12);
+}
+.hl-pillar__icon--gradient {
+  color: var(--gw-green);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(16, 185, 129, 0.16));
+}
+.hl-pillar__title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--gw-text);
+  line-height: 1.3;
+}
+.hl-pillar__sub {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--gw-text-muted);
+  margin: 0;
+}
+.hl-pillar__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 12px;
+  margin-top: auto;
+  border-top: 1px dashed var(--gw-border-soft);
+}
+.hl-pillar__stat-n {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--gw-purple-light), var(--gw-green));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+.hl-pillar__stat-n--small {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.hl-pillar__stat-l {
+  font-size: 12px;
+  color: var(--gw-text-muted);
+  line-height: 1.4;
+}
+.hl-pillar__cta {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gw-purple-light);
+  text-decoration: none;
+  align-self: flex-start;
+  margin-top: 2px;
+  transition: color 0.15s, transform 0.1s;
+}
+.hl-pillar__cta:hover {
+  color: var(--gw-green);
+  transform: translateX(2px);
+}
+
+/* ───────────────────────────────────────────
+   "NEW IN v2.9" HIGHLIGHT BANNER (Wave 3)
+─────────────────────────────────────────── */
+.hl-new-release {
+  padding: 56px 0 8px;
+  background: var(--gw-bg);
+}
+.hl-new-release__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.18) 0%, rgba(16, 185, 129, 0.08) 60%, transparent 100%);
+  border: 1px solid rgba(124, 58, 237, 0.35);
+  border-radius: var(--gw-radius);
+  box-shadow: 0 8px 28px -16px rgba(124, 58, 237, 0.4);
+}
+.hl-new-release__copy {
+  flex: 1 1 460px;
+  min-width: 0;
+}
+.hl-new-release__badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.22);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.hl-new-release__title {
+  font-size: clamp(20px, 2.6vw, 26px);
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--gw-text);
+  letter-spacing: -0.01em;
+}
+.hl-new-release__sub {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--gw-text-muted);
+  margin: 0;
+  max-width: 64ch;
+}
+.hl-new-release__cta {
+  flex-shrink: 0;
+}
+.hl-new-release__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 20px;
+  background: var(--gw-purple);
+  color: #fff;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.hl-new-release__link:hover {
+  background: var(--gw-purple-light);
+  transform: translateY(-1px);
+}
+
+/* ───────────────────────────────────────────
+   FEATURE TAB FADE TRANSITION (Wave 2)
+─────────────────────────────────────────── */
+.hl-tab-fade-enter-active,
+.hl-tab-fade-leave-active {
+  transition: opacity 180ms ease-out, transform 180ms ease-out;
+}
+.hl-tab-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.hl-tab-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ───────────────────────────────────────────
    RESPONSIVE
 ─────────────────────────────────────────── */
 @media (max-width: 900px) {
@@ -2733,6 +3203,8 @@ function cellClass(v: CompareValue | undefined): string {
   .llm-layout { grid-template-columns: 1fr; gap: 40px; }
   .bench-grid { grid-template-columns: repeat(2, 1fr); }
   .patterns-grid { grid-template-columns: repeat(2, 1fr); }
+  .hl-pillars__grid { grid-template-columns: 1fr; gap: 16px; }
+  .hl-new-release__inner { flex-direction: column; align-items: flex-start; padding: 24px 26px; }
 }
 @media (max-width: 600px) {
   .features-grid { grid-template-columns: 1fr; }
@@ -2744,5 +3216,9 @@ function cellClass(v: CompareValue | undefined): string {
   .feat-tab { padding: 8px 12px; font-size: 12px; }
   .hero-term { max-width: 100%; }
   .hero-term__line { white-space: pre-wrap; word-break: break-all; }
+  .hl-pillars { padding: 56px 0 48px; }
+  .hl-pillar { padding: 22px 20px; }
+  .hl-new-release__title { font-size: 19px; }
+  .hl-new-release__sub { font-size: 13px; }
 }
 </style>

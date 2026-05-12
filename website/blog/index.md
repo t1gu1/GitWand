@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-9-launchpad" class="blog-card">
+    <div class="blog-meta">May 12, 2026 · 12 min read</div>
+    <h2 class="blog-title">Launchpad: GitWand's cross-repo dashboard</h2>
+    <p class="blog-excerpt">The v2.9 release ships a single full-screen view aggregating WIP, PRs, Issues, and Team activity across every repo in your workspace. Four tabs, pin and snooze with localStorage, <code>⌘L</code> from anywhere, lazy Team tab to keep first open snappy, and the design pass that finally aligns the panel with the rest of the app.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-5-llm-fallback" class="blog-card">
     <div class="blog-meta">May 11, 2026 · 14 min read</div>
     <h2 class="blog-title">Why we made LLM resolution opt-in (and how): GitWand v2.5</h2>

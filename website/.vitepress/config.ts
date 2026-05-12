@@ -146,6 +146,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: "Launchpad: cross-repo dashboard (v2.9)", link: '/blog/v2-9-launchpad' },
             { text: 'Why we made LLM resolution opt-in (v2.5)', link: '/blog/v2-5-llm-fallback' },
             { text: 'Hooks, workspaces & agent sessions (v2.7–v2.8)', link: '/blog/agent-sessions-automations-v2-8' },
             { text: 'The state of merge conflict resolution in 2026', link: '/blog/state-of-merge-conflict-resolution-2026' },
