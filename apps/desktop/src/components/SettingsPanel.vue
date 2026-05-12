@@ -5,6 +5,7 @@ import { useTheme } from "../composables/useTheme";
 import BaseModal from "./BaseModal.vue";
 import HooksPanel from "./HooksPanel.vue";
 import AutomationsPanel from "./AutomationsPanel.vue";
+import SettingsAccountsTab from "./SettingsAccountsTab.vue";
 import {
   localeLabels,
   supportedLocales,
@@ -40,7 +41,7 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
+  initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts";
   /** Current repo path (for Hooks tab) */
   cwd?: string;
 }>();
@@ -151,7 +152,7 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
+type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 // ─── Logs tab — formatting + clipboard ──────────────────
@@ -207,6 +208,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
   { id: "ai", icon: "ai" },
+  { id: "accounts", icon: "accounts" },
   { id: "automations", icon: "automations" },
   { id: "hooks", icon: "hooks" },
   { id: "logs", icon: "logs" },
@@ -724,11 +726,17 @@ watch(
             <path d="M5.5 5.5L4 4M11.5 11.5L10 10M10.5 5.5L12 4M4.5 11.5L3 13"/>
             <circle cx="8" cy="8" r="2.5"/>
           </svg>
+          <!-- Accounts icon -->
+          <svg v-else-if="tab.icon === 'accounts'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="6" cy="5" r="2.5"/>
+            <path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
+            <path d="M13 7v4m-2-2h4"/>
+          </svg>
           <!-- Logs icon -->
           <svg v-else-if="tab.icon === 'logs'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
           </svg>
-          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
+          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'accounts' ? t('settings.tabAccounts') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
           <!-- Error count badge on Logs tab -->
           <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-tab-badge">
             {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
@@ -1466,6 +1474,11 @@ watch(
         </template>
 
         <!-- ═══ AUTOMATIONS ═══ -->
+        <!-- ═══ ACCOUNTS ═══ -->
+        <template v-if="activeSettingsTab === 'accounts'">
+          <SettingsAccountsTab />
+        </template>
+
         <template v-if="activeSettingsTab === 'automations'">
           <AutomationsPanel />
         </template>

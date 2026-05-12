@@ -1001,6 +1001,22 @@ const zhCN: Locale = {
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "\u81ea\u52a8\u5316",
+    tabAccounts: "\u8d26\u53f7",
+    accountsEmpty: "\u672a\u914d\u7f6e\u8d26\u53f7\u3002\u6dfb\u52a0\u4e00\u4e2a\u4ee5\u542f\u7528 GitLab \u548c Bitbucket\u3002",
+    accountsAdd: "\u6dfb\u52a0\u8d26\u53f7",
+    accountsRemove: "\u5220\u9664",
+    accountsSetActive: "\u8bbe\u4e3a\u6d3b\u8dc3",
+    accountsActiveBadge: "\u6d3b\u8dc3",
+    accountsForgeLabel: "Forge",
+    accountsLabelLabel: "\u6807\u7b7e",
+    accountsUsernameLabel: "\u7528\u6237\u540d",
+    accountsWorkspaceLabel: "\u5de5\u4f5c\u533a / \u7ec4\u7ec7",
+    accountsAppPasswordLabel: "\u5e94\u7528\u5bc6\u7801",
+    accountsTokenLabel: "Token / \u5e94\u7528\u5bc6\u7801",
+    accountsSaveBtn: "\u4fdd\u5b58",
+    accountsCancelBtn: "\u53d6\u6d88",
+    accountsSaved: "\u8d26\u53f7\u5df2\u4fdd\u5b58\u3002",
+    accountsDeleteConfirm: "\u5220\u9664\u6b64\u8d26\u53f7\uff1f",
   },
 
   hooks: {

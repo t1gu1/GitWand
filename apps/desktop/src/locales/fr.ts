@@ -1024,6 +1024,22 @@ const fr: Locale = {
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automatisations",
+    tabAccounts: "Comptes",
+    accountsEmpty: "Aucun compte configuré. Ajoutez-en un pour activer GitLab et Bitbucket.",
+    accountsAdd: "Ajouter un compte",
+    accountsRemove: "Supprimer",
+    accountsSetActive: "Activer",
+    accountsActiveBadge: "Actif",
+    accountsForgeLabel: "Forge",
+    accountsLabelLabel: "Libellé",
+    accountsUsernameLabel: "Nom d'utilisateur",
+    accountsWorkspaceLabel: "Workspace / org",
+    accountsAppPasswordLabel: "Mot de passe d'application",
+    accountsTokenLabel: "Token / Mot de passe d'application",
+    accountsSaveBtn: "Enregistrer",
+    accountsCancelBtn: "Annuler",
+    accountsSaved: "Compte enregistré.",
+    accountsDeleteConfirm: "Supprimer ce compte ?",
   },
 
   hooks: {

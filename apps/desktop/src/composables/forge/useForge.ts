@@ -15,6 +15,13 @@
  *   est déjà connu, ou en mode async si la détection réseau est nécessaire.
  * - Le fallback est toujours `githubProvider` pour assurer la rétro-compatibilité
  *   avec les repos GitHub existants avant que le provider soit détecté.
+ *
+ * §4.3 Account-aware resolution:
+ * - `getCurrentForgeAccount(forge)` returns the active `Account` for a given
+ *   forge from `useAccounts()`. Components use this to display "Connected as …".
+ * - Provider selection itself is still forge-name-based (no multi-account
+ *   provider switching yet — deferred to v2.11 when providers accept an Account
+ *   context). This is the no-op fallthrough documented in the v2.10 plan.
  */
 
 import { gitRemoteInfo } from "../../utils/backend";
@@ -22,6 +29,8 @@ import type { ForgeProvider, ForgeName } from "./types";
 import { githubProvider } from "./GitHubProvider";
 import { gitlabProvider } from "./GitLabProvider";
 import { bitbucketProvider } from "./BitbucketProvider";
+import { useAccounts } from "../useAccounts";
+import type { Account } from "../useAccounts";
 
 // ─── Registry ───────────────────────────────────────────────────────────────
 
@@ -79,6 +88,40 @@ export function forgeFromRemoteInfo(info: { provider: string; url: string }): Fo
   return getProviderByUrl(info.url);
 }
 
+// ─── Account-aware helpers (§4.3) ────────────────────────────────────────────
+
+/**
+ * Return the active `Account` for a given forge, or `null` if no account has
+ * been configured in Settings > Accounts.
+ *
+ * In v2.10 this is purely informational — the provider selection still goes
+ * through `getProviderByName()` above. Multi-account provider switching
+ * (passing the account context into provider methods) is deferred to v2.11.
+ *
+ * Typical use: show "Connected as alice" badge in PrPanel / LaunchpadView.
+ *
+ * @example
+ *   const account = getCurrentForgeAccount("bitbucket");
+ *   // → { forge: "bitbucket", label: "work", username: "alice", ... } | null
+ */
+export function getCurrentForgeAccount(forge: ForgeName): Account | null {
+  const { activeAccount } = useAccounts();
+  return activeAccount(forge);
+}
+
+/**
+ * Return the active account for the forge detected from a RemoteInfo object.
+ * Convenient shorthand for components that have already resolved RemoteInfo.
+ */
+export function getForgeAccountFromRemote(info: {
+  provider: string;
+  url: string;
+}): Account | null {
+  const provider = forgeFromRemoteInfo(info);
+  return getCurrentForgeAccount(provider.name as ForgeName);
+}
+
 // ─── Re-exports pratiques ───────────────────────────────────────────────────
 export { githubProvider, gitlabProvider, bitbucketProvider };
 export type { ForgeProvider, ForgeName };
+export type { Account };

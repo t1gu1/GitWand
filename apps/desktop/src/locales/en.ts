@@ -1038,6 +1038,23 @@ const en = {
       // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automations",
+    // Accounts tab (v2.10)
+    tabAccounts: "Accounts",
+    accountsEmpty: "No accounts configured. Add one to enable GitLab and Bitbucket.",
+    accountsAdd: "Add account",
+    accountsRemove: "Remove",
+    accountsSetActive: "Set active",
+    accountsActiveBadge: "Active",
+    accountsForgeLabel: "Forge",
+    accountsLabelLabel: "Label",
+    accountsUsernameLabel: "Username",
+    accountsWorkspaceLabel: "Workspace / org",
+    accountsAppPasswordLabel: "App Password",
+    accountsTokenLabel: "Token / App Password",
+    accountsSaveBtn: "Save",
+    accountsCancelBtn: "Cancel",
+    accountsSaved: "Account saved.",
+    accountsDeleteConfirm: "Remove this account?",
   },
 
   // \u2500\u2500\u2500 Hooks \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

@@ -1013,6 +1013,22 @@ const ptBR: Locale = {
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automa\u00e7\u00f5es",
+    tabAccounts: "Contas",
+    accountsEmpty: "Nenhuma conta configurada. Adicione uma para ativar GitLab e Bitbucket.",
+    accountsAdd: "Adicionar conta",
+    accountsRemove: "Remover",
+    accountsSetActive: "Ativar",
+    accountsActiveBadge: "Ativa",
+    accountsForgeLabel: "Forge",
+    accountsLabelLabel: "R\u00f3tulo",
+    accountsUsernameLabel: "Nome de usu\u00e1rio",
+    accountsWorkspaceLabel: "Workspace / org",
+    accountsAppPasswordLabel: "Senha de aplicativo",
+    accountsTokenLabel: "Token / Senha de aplicativo",
+    accountsSaveBtn: "Salvar",
+    accountsCancelBtn: "Cancelar",
+    accountsSaved: "Conta salva.",
+    accountsDeleteConfirm: "Remover esta conta?",
   },
 
   hooks: {
