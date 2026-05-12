@@ -7,27 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.5] - 2026-05-12
+
+Critical lag fixes that surfaced post-2.8.4 release. The v2.8.2 perf hardening had attacked the symptoms (slow renders, polling churn) but missed the dominant root causes hiding beneath. Two compounding bugs were responsible for the bulk of the perceived lag and the wave of mysterious `[TAURI] Couldn't find callback id` warnings in the console. Diagnosed from Safari Web Inspector logs.
+
+### Fixed
+
+- **CSP blocked Tauri 2 IPC — every command was falling back to `postMessage`.**
+  - `connect-src` in `tauri.conf.json` was `'self' http://localhost:3001` only. Tauri 2 IPC uses `ipc://localhost/<cmd>` (macOS/Linux) or `http://ipc.localhost/<cmd>` (Windows), neither of which were allowed. Every IPC call (`git_status`, `git_repo_state`, `git_exec`, `git_remote_info`, `set_git_config`, `plugin:menu|*`, …) was rejected by the CSP, triggering Tauri's `postMessage` fallback path — significantly slower and prone to callback-id races.
+  - Fix: `connect-src` now includes `ipc: http://ipc.localhost http: https:` to cover Tauri IPC on all platforms plus user-configurable AI providers (Anthropic / OpenAI-compat / Ollama / custom endpoints, e.g. `http://localhost:11434/api/tags` for the Ollama detection probe). `img-src` opened to `https: http:` for README badges (shields.io, github user-content) that were also rejected.
+  - Security posture preserved: `script-src 'self' 'wasm-unsafe-eval'` is unchanged — no remote code execution surface added. Only data fetches and IPC channels were unblocked.
+
+- **macOS GUI apps lacked the user's shell env — subprocess auth lookups hung indefinitely.**
+  - Apps launched from Finder/Dock/Spotlight inherit `PATH=/usr/bin:/bin:/usr/sbin:/sbin` plus `HOME`/`USER`/`TMPDIR` from launchd, but nothing from `~/.zshrc`, `~/.zprofile`, `~/.bashrc` — so no `SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `LANG`, custom `PATH` prefixes (asdf/mise/nvm), nix-darwin exports, etc. `gh`'s credential chain then fell back to the macOS keychain helper from a launchd-spawned process, where the authorization prompt fires silently or retries indefinitely.
+  - Fix in new `apps/desktop/src-tauri/src/shell_env.rs`: at `run()` startup, spawn `$SHELL -l -c env` once (bounded by a 3-second timeout — a misbehaving rc file can't freeze app launch), parse the output, and `std::env::set_var` everything not already set. `PATH` is skipped (`hidden_cmd` owns it for Homebrew-prefix enrichment predictability); `PWD`/`OLDPWD`/`SHLVL`/`_`/`SHELL` skipped (shell-local noise). All subsequent subprocess (`gh`, `claude`, `codex`, `git`, etc.) inherit the enriched env. No-op on Linux/Windows. Same approach used by VS Code, Sublime, IntelliJ.
+
+- **Offline detection false-positive on networks that block SSH port 22.**
+  - The connectivity probe was using the URL-derived port (22 for SSH remotes, 9418 for `git://`, etc.) to test if the host was reachable. Corporate networks like Dendreo's routinely block outbound port 22 while allowing HTTPS through proxies/tunnels — so SSH remotes would falsely report "Offline" even though `git fetch` worked fine.
+  - Fix in `commands/network.rs#check_remote_reachable`: always probe HTTPS/443 first (universally open wherever internet exists), and only fall back to the URL-derived port if 443 itself fails. Catches enterprise SSH-only hosts as a last resort. Connectivity is now a "can I reach this host?" question, not "can I git over this exact protocol?".
+
+- **`gh` subprocess hung on signed Tauri.app even with the right env — keychain ACL trust mismatch.**
+  - Even with the full shell env, `gh pr list` from the signed GitWand.app subprocess hung because the macOS keychain ACL treats the signed Developer ID app as a different application than iTerm/Terminal, and the `security` helper called by `gh` to retrieve the OAuth token waited for a foreground UI prompt that never fires in the webview context.
+  - Fix: `init_login_shell_env()` also runs `$SHELL -l -c "gh auth token"` once from the login shell (where the keychain ACL is authorized) and `std::env::set_var("GH_TOKEN", …)`. `git/cmd.rs#hidden_cmd` now explicitly propagates `GH_TOKEN` and `GITHUB_TOKEN` to every subprocess (belt-and-suspenders against any future `env_clear()` or tokio-runtime peculiarity). gh subprocess from Tauri now skip the keychain helper entirely.
+
+### Changed
+
+- **Boot perf — `gh pr list` payload + lazy PR loading.**
+  - `gh_list_prs` heavy fields (`statusCheckRollup`, `mergeStateStatus`, `reviewRequests`, `reviewDecision`, `additions`, `deletions`) dropped from the initial list. Each cost a per-PR roundtrip to the GitHub API internally — for a repo with 100+ open PRs (Dendreo-class), the full query returned `HTTP 502 Bad Gateway` from GitHub's GraphQL endpoint after >30s, tripping the IPC timeout. The list query now returns 12 cheap fields; heavy data is lazy-loaded when the user opens a PR's detail view.
+  - `--limit` reduced 50 → **10** with new cursor-friendly pagination. `gh_list_prs(cwd, state, limit, offset)` accepts page parameters; `PrListSidebar.vue` uses `IntersectionObserver` on a sentinel `<div>` to trigger the next 10-PR page when the user scrolls near the bottom. Deduplication by PR `number` handles list shifts between fetches.
+  - New lightweight `gh_pr_count(cwd, state)` Rust command (3-layer: `commands/gh.rs` + dev-server `/api/gh-pr-count` + TS `ghPrCount`). Single GraphQL `totalCount` call (~150 ms, no per-PR roundtrip) replaces the heavy `gh pr list` call previously fired at every boot just to populate the Dashboard "Open PRs" stat card.
+  - `DashboardView.vue` boot Promise.all dropped from 8 to 7 entries: the old `ghListPrs(cwd, "open")` slot is now `ghPrCount(cwd)` (assignment, not `.length`). The merged-PRs count is deferred to v2.9 (Phase 2 — needs a `ghMergedSinceCount(cwd, since)` command to stay cheap).
+  - `PullRequestPanel.vue` no longer auto-loads PRs on `onMounted` — `loadPrs()` only runs when `props.show` flips to true (PR tab opened). cwd changes while the panel is hidden reset the list without spawning `gh`.
+  - `workspace_prs_all` (`commands/workspace.rs`) reduced `--limit 100 → 10` with the same lighter JSON field set, since multi-repo workspaces multiply the per-PR roundtrip cost.
+
+### Phase 2 deferred (v2.9)
+
+- Cursor-based `gh api graphql` `pullRequests(first:N, after:CURSOR)` to replace the naive `offset+limit` re-walk (current implementation re-fetches all previously-loaded pages each scroll).
+- `gh_pr_status_rollup(cwd, numbers[])` batched call to repopulate CI/merge badges on the list without requiring a click.
+- `ghMergedSinceCount(cwd, since)` for the Dashboard "N merged this week" hint (currently stuck at 0).
+- Re-enrich the "Reviews" PR filter (currently shows empty list — depends on lazy enrichment landing).
+
+### Notes
+
+- The previous v2.8.4 tag bundled only the Quick Fixes work (see entry below). The CSP / shell_env / boot-perf fixes here were on top but the tag did not move — so v2.8.5 is the first release where they ship to users.
+- Verified: `pnpm test` → 84/84 desktop, `pnpm exec vue-tsc --noEmit` → clean. Rust changes (`shell_env.rs`, `commands/gh.rs`, `commands/workspace.rs`, `git/cmd.rs`, `commands/network.rs`) require `cargo check` host-side.
+
+---
+
 ## [2.8.4] - 2026-05-12
-
-**Critical CSP fix — Tauri IPC was silently falling back to postMessage in v2.8.2/2.8.3.**
-
-The `connect-src` directive in `tauri.conf.json` was `'self' http://localhost:3001` only. Tauri 2 IPC uses `ipc://localhost/<cmd>` (macOS/Linux) or `http://ipc.localhost/<cmd>` (Windows), neither of which were allowed. Every IPC call (`git_status`, `git_repo_state`, `git_exec`, `git_remote_info`, `set_git_config`, `plugin:menu|*`, …) was rejected by the CSP, triggering Tauri's `postMessage` fallback path — significantly slower and prone to callback-id race conditions ("Couldn't find callback id" warnings in the console). This was the dominant source of perceived lag in v2.8.2 (worse than any of the 30 chantiers fixed in the perf hardening). Diagnosis came from Safari Web Inspector logs showing `Refused to connect to ipc://localhost/...`.
-
-Fix: `connect-src` now includes `ipc: http://ipc.localhost http: https:` to cover Tauri IPC on all platforms plus user-configurable AI providers (Anthropic / OpenAI-compat / Ollama / custom endpoints — previously hitting CSP rejection too, e.g. `http://localhost:11434/api/tags` for the Ollama detection probe). `img-src` opened to `https: http:` for README badges (shields.io, github user-content) that were also rejected.
-
-Security posture preserved: `script-src 'self' 'wasm-unsafe-eval'` is unchanged — no remote code execution surface added. Only data fetches and IPC channels were unblocked.
-
-**macOS login-shell environment preload at startup.**
-
-Companion fix surfaced after the CSP repair restored proper IPC: `gh` subprocess calls were timing out at 30 s (the v2.8.2 `IPC_TIMEOUT.NETWORK` default) producing waves of "Couldn't find callback id" warnings. Same `gh pr list` ran in ~1 s from the user's terminal but hung from the app — classic macOS launchd env gap. Apps launched from Finder/Dock/Spotlight inherit `PATH=/usr/bin:/bin:/usr/sbin:/sbin` plus `HOME`/`USER`/`TMPDIR`, but **nothing from `~/.zshrc`, `~/.zprofile`, `~/.bashrc`** — so no `SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `LANG`, `GH_TOKEN`, custom `PATH` prefixes from asdf/mise/nvm, nix-darwin exports, etc. `gh`'s credential chain then falls back to the macOS keychain helper from a launchd-spawned process, where the prompt fires silently or retries indefinitely.
-
-Fix in `apps/desktop/src-tauri/src/shell_env.rs`: at `run()` startup, spawn `$SHELL -l -c env` once (3 s timeout bound — a misbehaving rc file can't freeze app launch), parse the output, and `std::env::set_var` everything not already set. `PATH` is skipped (`hidden_cmd` owns it for Homebrew enrichment predictability); `PWD`/`OLDPWD`/`SHLVL`/`_`/`SHELL` are skipped (shell-local noise). All subsequent subprocess (`gh`, `claude`, `codex`, `git`, etc.) inherit the enriched env via `Command::new`. No-op on Linux (session manager already provides full env) and Windows (HKCU\\Environment). Same approach used by VS Code, Sublime, IntelliJ.
-
-**`gh` subprocess hang on signed Tauri.app — GH_TOKEN preload + payload reduction.**
-
-Companion to shell_env: even with the full shell env, `gh pr list` from the signed GitWand.app subprocess can hang on macOS keychain ACL. The keychain treats the signed Developer ID app as a different application than iTerm/Terminal, and the `security` helper called by `gh` to retrieve the OAuth token from the `keyring` auth method waits for a foreground UI prompt that never fires in the webview context. Fix: at `init_login_shell_env()`, also run `$SHELL -l -c "gh auth token"` once from a login shell where the keychain ACL is authorized, capture the token, `std::env::set_var("GH_TOKEN", …)`. `git/cmd.rs#hidden_cmd` now explicitly propagates `GH_TOKEN` and `GITHUB_TOKEN` to every subprocess (belt-and-suspenders against any future env-clear or runtime peculiarity). gh subprocess from Tauri now skip the keychain helper entirely.
-
-Companion perf reduction: `gh_list_prs` and `workspace_prs_all` reduced `--limit` from 300/100 → **50** PRs. The heavy fields requested (`statusCheckRollup`, `mergeStateStatus`) each cost a per-PR API roundtrip internally, scaling badly on big repos (Dendreo-class: 100+ open PRs took 20-40s vs 1-2s for a `--limit 5` query). Sidebar UI renders ≤50 anyway; deeper navigation goes through the search palette.
 
 Quick fixes batch — 2 bugs, 6 UX polish, 1 feature (Mode hors-ligne). Closes the "Quick Fixes" section of the ROADMAP. Detail per chantier in [PLAN-quick-fixes.md](./PLAN-quick-fixes.md).
 

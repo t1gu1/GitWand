@@ -155,7 +155,23 @@ pub(crate) fn check_remote_reachable(url: String, timeout_ms: u64) -> Result<boo
     };
     let ms = timeout_ms.max(250);
     let timeout = Duration::from_millis(ms);
-    Ok(tcp_probe(&parsed.host, parsed.port, timeout))
+
+    // Connectivity philosophy: we want to know whether the user can reach
+    // the host at all, not whether the specific protocol they use for git
+    // is open. Corporate networks (Dendreo, many enterprise VPNs) routinely
+    // block outbound port 22 while letting HTTPS through, so SSH remotes
+    // would falsely report "Offline" even though `git fetch` works through
+    // a proxy or tunnel. Probe HTTPS/443 first — it's universally open
+    // anywhere there's internet — and fall back to the URL-derived port
+    // only if 443 fails (catches enterprise SSH-only hosts).
+    const HTTPS_PORT: u16 = 443;
+    if tcp_probe(&parsed.host, HTTPS_PORT, timeout) {
+        return Ok(true);
+    }
+    if parsed.port != HTTPS_PORT && tcp_probe(&parsed.host, parsed.port, timeout) {
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 #[cfg(test)]
