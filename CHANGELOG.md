@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-05-12
+
+Launchpad — cross-repo dashboard inspired by GitKraken's Launchpad but local-first (no cloud, no account). Closes the v2.9.0 ROADMAP entry. Audit established the chantier was ~95% implemented across previous unmerged work; this release wraps the closure (keyboard shortcut, tab persistence, lazy Team tab, UI tests) and ships. Detail per task in [PLAN-v2.9-launchpad.md](./PLAN-v2.9-launchpad.md).
+
+### Added
+
+- **Launchpad — cross-repo dashboard for workspaces** (depends on v2.7.0 Workspaces). Single full-screen view with four tabs aggregating across every repo in the active workspace:
+  - **WIP tab** — repos with uncommitted changes or branches behind upstream. Staged / unstaged / untracked counts, ahead/behind, no-upstream warning, last commit timestamp. Powered by `workspace_wip_all` (libgit2, P3.3a — from v2.8.2 perf hardening).
+  - **PRs tab** — open pull requests across all workspace repos via `gh pr list` (now with the v2.8.5 lightweight payload). Renders Draft / Approved / ChangesRequested / Review-Required badges, CI rollup status, labels, per-repo error states. Secondary row shows assignees and review-requested users as chips (up to 3 each + `+N` overflow).
+  - **Issues tab** — open GitHub Issues via `gh issue list` with three filters (Assigned to me / Mentioned / Created by me). Milestone badge, labels, per-repo errors.
+  - **Team tab** — colleagues' open PRs grouped by author with overlap detection: intersection between my WIP files (staged + unstaged) OR my un-merged commits and the files touched by each colleague's PR. Avatars use deterministic colour from a 6-colour palette. Auto-expand members with overlap. Identity resolved via `gh api user --jq .login` (module-level cache). PR file lists fetched lazily with `concurrentMap(limit=5)` to stay within GitHub rate limits.
+- **Pin / snooze for PRs and Issues** — module-singleton `useLaunchpadPins` composable persists to `localStorage` under key `gitwand-launchpad-pins`. Pin sorts the item to the top of its list; snooze removes it from view for 1, 3, 7, or 14 days. Per-item `⋮` menu in the row exposes both actions. A "N item(s) snoozed" banner above the list lets you peek at the snoozed items and unsnooze any of them. Snooze takes priority over pin so a snoozed-and-pinned item stays hidden until its preset elapses. Lazy-prune of expired snoozes on every write. 8 unit tests cover the singleton, sort order, expiry, and persistence round-trip.
+- **Keyboard shortcut `⌘L` / `Ctrl+L`** — opens the Launchpad from anywhere via the new **View > Open Launchpad** menu entry. Gating: if no workspace is defined, the shortcut toasts a warning ("Create a workspace first to use the Launchpad") and opens the Workspace panel instead.
+- **Tab persistence** — `launchpadActiveTab` (`"wip" | "prs" | "issues" | "team"`) is now part of `AppSettings` and survives between Launchpad opens. If the persisted tab is "team" the lazy fetch fires on mount instead of waiting for a click. Default remains `"wip"`.
+- **Refresh all button** — alongside the existing "refresh current tab" button, a new "Refresh all" button fans out `refreshWip` / `refreshPrs` / `refreshIssues` / `refreshTeam` via `Promise.all`. SVG double-arrow icon with spin animation during the run. Combined loading state disables both refresh buttons.
+- **Settings toggle "Disable Launchpad Team tab"** — `launchpadTeamTabEnabled` (default `true`) hides the Team tab entirely when off, for users on small teams or perf-sensitive setups who don't want the per-PR `gh pr view --json files` cost.
+
+### Changed
+
+- **Launchpad re-framed as a full-screen modal.** Previously the Launchpad was an opaque panel that filled the viewport edge-to-edge, hiding the app entirely. Now it renders as a centered card with a 2 rem inset on every side over a dimmed-and-blurred backdrop (`var(--color-overlay)` + `backdrop-filter: blur(4px)`, same pattern as `BaseModal`). The card itself uses `--color-bg-secondary` (the canonical white surface, `#ffffff` light / `#1a1a26` dark — no more "is it grey?" ambiguity), `--radius-2xl` rounded corners, `--shadow-xl` elevation, and a subtle `scale(0.985) → scale(1)` slide-in animation. The blurred view of the app behind keeps spatial context (you remember which repo you came from, where the menu is, etc.) and matches user expectations of a modal overlay.
+
+- **Launchpad design pass — full alignment with the app's design system.** The original `LaunchpadView.vue` styles were written with hardcoded fallback hex colours (`#3182ce`, `#718096`, `#e53e3e`, etc.) and references to **non-existent tokens** (`--color-surface-raised`, `--color-surface`) which silently fell through to the hardcoded white/grey backgrounds in dark mode — the whole tab read "work in progress". Refactor (style block only, template/script intact so the 95 tests stay green):
+  - All hardcoded hex fallbacks removed. Every colour now resolves through the canonical tokens defined in `assets/main.css`: `--color-bg{,-secondary,-tertiary}`, `--color-text{,-muted,-subtle}`, `--color-border{,-strong}`, `--color-accent{,-hover,-soft,-text}`, `--color-{success,warning,danger,info}{,-soft}`, `--color-focus-ring`.
+  - All spacing converted from ad-hoc `12px` / `0.5rem 1rem` literals to `var(--space-N)` (4 px base). All `border-radius` to `var(--radius-{xs,sm,md,lg,pill})`. All font sizes to `var(--font-size-{xs,sm,base,md,lg,xl})` and weights to `--font-weight-{regular,medium,semibold,bold}`.
+  - **PR / Issue / WIP rows** : surface `--color-bg-secondary` with `1px` border that brightens to `--color-border-strong` on hover; padding and density match `PullRequestPanel.vue` / `StashManager.vue`. Repo / milestone chips use `--color-bg-tertiary` pill shape.
+  - **Status badges** mapped semantically: Approved + CI Success → `--color-success-soft`/`--color-success`, Changes Requested + CI Failure → `--color-danger-soft`/`--color-danger`, Review Required + CI Pending → `--color-warning-soft`/`--color-warning`, Draft → `--color-bg-tertiary`/`--color-text-muted`. All pill-shaped with `--font-weight-semibold`.
+  - **Tab strip** : active indicator is a 2 px underline (replaces the previous solid accent block), inactive tabs muted, hover lifts to `--color-text`, tab badges use `--color-accent-soft` idle / full accent when active. Focus-visible outline on every interactive element.
+  - **`⋮` menu dropdowns** now use `--shadow-popover` (the canonical popover shadow), `--color-bg-secondary` panel, slide-down animation via `--transition-base`. Snooze submenu items are aligned to the same x-position as parent menu items.
+  - **Team panel** : member cards use `--color-bg-secondary` + border + `--radius-md`. Overlap members use `--color-warning-soft` background + `--color-warning` border + warning-text badge (replaces the previous Catppuccin hardcoded `#f38ba8` / `#2a1e2e` that didn't read in light mode). Avatars enlarged 20 px → 24 px with subtle border. Per-PR rows in expanded member cards use `--color-bg` with proper borders (replaces `rgba(0, 0, 0, 0.2)` which inverted in light mode).
+  - **Snoozed bandeau** : tertiary background with hover that grades through to primary surface; reveal/hide toggle aligned right via `margin-left: auto`.
+  - **PR people chips** (assignees / reviewers from v2.9 Wave B) : assignees use `--color-accent-soft` + `--color-accent`, reviewers use `--color-warning-soft` + `--color-warning` (replaces the v2.9 first-pass `#fef3c7` + `#92400e` hardcoded values). Separated from the row body by a dashed border-top.
+  - **All 12 emojis** (📌 pin × 6, 💤 snooze × 6, ⚠ warning × 2) replaced with 14 px SVG inline icons consistent with the rest of the app. Each menu item now uses `display: flex; align-items: center; gap: var(--space-2)` to align the icon and the label cleanly. New CSS slots `__pin-badge`, `__menu-icon`, `__bandeau-icon`, `__warning-icon`.
+  - Hover, focus-visible, and transition states added to every interactive element. Dark mode parity verified: now that everything resolves through tokens, both themes are first-class.
+  - Style block grew from 674 → 962 lines, but the added volume is hover/focus/transition declarations + comments, not duplication. No new dependencies. No template changes — 95/95 tests still green.
+
+- **Team tab is now lazy-loaded** — `refreshTeam(repos)` no longer fires in `LaunchpadView.vue#onMounted`. Eager refreshes stay on `wip` / `prs` / `issues` (fast, parallel, bounded). Team only fetches on the first click of the tab (or via Refresh-all). A placeholder ("Team activity not loaded yet") with a "Load team activity" button shows on the empty Team panel. Same pattern as the lazy PR loading shipped in v2.8.5; on a 50-PR-colleague workspace this saves ~10 s off the Launchpad first open.
+- **Homogeneous loading state across all four tabs** — central 24 px SVG spinner on first load (empty tab), top-right 16 px spinner on subsequent refreshes (data already shown). Uses `var(--color-accent)`. Same animation across tabs; previously only Team had a plain "Loading…" string.
+
+### Tests
+
+- **`apps/desktop/src/components/__tests__/LaunchpadView.test.ts`** — 11 new UI smoke tests using Vue 3's native `createApp` + `nextTick` (no `@vue/test-utils` dependency added). Coverage: initial render (4 tabs), Team tab hidden when toggle off, default tab from settings, tab switch fires correct refresh, `⋮` menu opens with Pin + Snooze, Pin action wired to `useLaunchpadPins.pin`, Snooze submenu with 4 presets, close emit on `✕`, Refresh all fans out to all four refresh mocks, Team click triggers lazy refresh, persisted activeTab honoured at mount, `onMounted` eager refreshes wip/prs/issues.
+- 36 existing Launchpad composable tests preserved (pins / prs / issues / wip / team).
+- **Total desktop tests: 95/95 passing** (84 from v2.8.5 + 11 new UI smoke), `vue-tsc --noEmit` clean.
+
+### Notes
+
+- Naming inconsistency `pr_files` (Rust) vs `ghPrFiles` (TS wrapper): documented in `commands/ops.rs` above the command. Renaming the Tauri command would be a breaking change for external callers (parity probes), not worth it.
+- Homepage redesign still pending decision (see `project_homepage_redesign.md` memory). A Launchpad feature card on `HomeLanding.vue` will be added in the next homepage pass, not piecemeal here.
+
+---
+
 ## [2.8.5] - 2026-05-12
 
 Critical lag fixes that surfaced post-2.8.4 release. The v2.8.2 perf hardening had attacked the symptoms (slow renders, polling churn) but missed the dominant root causes hiding beneath. Two compounding bugs were responsible for the bulk of the perceived lag and the wave of mysterious `[TAURI] Couldn't find callback id` warnings in the console. Diagnosed from Safari Web Inspector logs.

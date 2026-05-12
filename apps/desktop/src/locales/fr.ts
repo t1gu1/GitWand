@@ -1010,6 +1010,15 @@ const fr: Locale = {
     updateChannelBeta: "Bêta (installation manuelle)",
     updateChannelStableHint: "Installation auto in-app. Défaut — recommandé pour la plupart des utilisateurs.",
     updateChannelBetaHint: "Vous notifie des builds de pré-release. L'installation auto est désactivée — cliquer sur « Installer » ouvre la page GitHub Releases.",
+
+    // Launchpad — Onglet Équipe (v2.9)
+    launchpad: {
+      disableTeamTab: {
+        label: "Désactiver l'onglet Équipe du Launchpad",
+        help: "L'onglet Équipe fait un appel API par PR de collègue (~10s sur un gros workspace). Désactive-le si tu n'as pas besoin de la vue chevauchement.",
+      },
+    },
+
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automatisations",
@@ -1127,6 +1136,15 @@ const fr: Locale = {
     teamOverlapViaWip: "via WIP",
     teamOverlapViaBranch: "via branche",
     teamPrCount: "{0} PR(s)",
+    teamNotLoaded: "Activité d'équipe non chargée",
+    teamLoadButton: "Charger l'activité d'équipe",
+    assignedShort: "Assigné",
+    reviewersShort: "Reviewers",
+    refreshAll: "Tout rafraîchir",
+    refreshAllTooltip: "Rafraîchir les 4 onglets en parallèle",
+    noWorkspace: {
+      warning: "Créez d'abord un workspace pour utiliser le Launchpad",
+    },
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1488,6 +1506,7 @@ const fr: Locale = {
     openOnForge: "Ouvrir sur GitHub",
     toggleSidebar: "Afficher / masquer la sidebar",
     toggleTheme: "Basculer le thème clair/sombre",
+    openLaunchpad: "Ouvrir le Launchpad",
     documentation: "Documentation GitWand",
     whatsNew: "Nouveautés",
     reportIssue: "Signaler un problème…",

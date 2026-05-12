@@ -55,6 +55,7 @@ export interface AppMenuActions {
   // View
   toggleSidebar: () => void;
   toggleTheme: () => void;
+  openLaunchpad: () => void;
   // Help
   checkForUpdates: () => void;
   openHelp: () => void;
@@ -299,6 +300,15 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
           id: "view-toggle-theme",
           text: t("menu.toggleTheme"),
           action: () => actions.toggleTheme(),
+        }),
+        await MenuItem.new({
+          // The accelerator stays mapped even without a workspace — App.vue
+          // surfaces a toast in that case rather than disabling the binding.
+          // This keeps muscle-memory `⌘L` discoverable for new users.
+          id: "view-open-launchpad",
+          text: t("menu.openLaunchpad"),
+          accelerator: "CmdOrCtrl+L",
+          action: () => actions.openLaunchpad(),
         }),
         await PredefinedMenuItem.new({ item: "Separator" }),
         await PredefinedMenuItem.new({ item: "Fullscreen" }),

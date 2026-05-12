@@ -2157,6 +2157,13 @@ pub(crate) fn gh_current_user() -> Result<String, String> {
 
 /// Returns the list of file paths changed by a given PR number.
 /// Calls `gh pr view <number> --json files --jq '[.files[].path]'`.
+//
+// Naming note: `pr_files` lacks the `gh_` prefix used by sibling commands
+// (gh_list_prs, gh_create_pr, etc.) for historical reasons. The TS wrapper
+// `ghPrFiles` re-introduces the prefix for consistency on the consumer side.
+// Renaming the Tauri command would be a breaking change for any external
+// caller (e.g. parity probes); not worth it. Documented here so future
+// readers don't think it's missing the prefix by accident.
 #[tauri::command]
 pub(crate) fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
     let output = hidden_cmd("gh")

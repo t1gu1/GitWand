@@ -79,8 +79,9 @@ import {
   MERGE_POPOVER_REQUEST_KEY,
   UNDO_POPOVER_REQUEST_KEY,
   LOG_FOCUS_SEARCH_KEY,
+  LAUNCHPAD_OPEN_REQUEST_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags } from "./utils/backend";
+import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -217,10 +218,12 @@ const branchCreateRequest = ref(0);
 const mergePopoverRequest = ref(0);
 const undoPopoverRequest = ref(0);
 const logFocusRequest = ref(0);
+const launchpadOpenRequest = ref(0);
 provide(BRANCH_CREATE_REQUEST_KEY, branchCreateRequest);
 provide(MERGE_POPOVER_REQUEST_KEY, mergePopoverRequest);
 provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
 provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
+provide(LAUNCHPAD_OPEN_REQUEST_KEY, launchpadOpenRequest);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────
 const {
@@ -1019,6 +1022,54 @@ function openLaunchpad(repos: WorkspaceRepo[]) {
   showWorkspace.value = false;
 }
 
+/**
+ * Handle the ⌘L / Ctrl+L shortcut.
+ *
+ * Resolves the active workspace lazily — Launchpad needs the repo list and
+ * the user might have a workspace persisted from a previous session that
+ * App.vue hasn't loaded yet (WorkspacePanel owns that state). We read the
+ * same localStorage key WorkspacePanel uses (`gitwand-workspace-dir`) and
+ * call `workspaceRead` directly. If no workspace is configured, surface a
+ * warning in the existing error-toast and pop WorkspacePanel so the user
+ * can create one.
+ */
+async function handleLaunchpadShortcut(): Promise<void> {
+  // If Launchpad already open with repos, just keep it visible (no-op).
+  if (showLaunchpad.value && launchpadRepos.value.length > 0) return;
+
+  // Re-use repos already loaded for this session (e.g. WorkspacePanel was
+  // opened earlier) — fastest path, no IPC.
+  if (launchpadRepos.value.length > 0) {
+    openLaunchpad(launchpadRepos.value);
+    return;
+  }
+
+  const savedDir = localStorage.getItem("gitwand-workspace-dir");
+  if (savedDir) {
+    try {
+      const cfg = await workspaceRead(savedDir);
+      if (cfg.repos.length > 0) {
+        openLaunchpad(cfg.repos);
+        return;
+      }
+    } catch {
+      // Fall through to the no-workspace branch — best-effort.
+    }
+  }
+
+  // No workspace defined (or empty) → toast + open WorkspacePanel so the
+  // user can configure one. Reuses the error-toast pipeline so the message
+  // dismisses on its own after 3s.
+  repoError.value = t("launchpad.noWorkspace.warning");
+  showWorkspace.value = true;
+}
+
+// Watch the bridge counter — each menu invocation bumps it and triggers a
+// fresh handler call, even when the value is already non-zero.
+watch(launchpadOpenRequest, () => {
+  void handleLaunchpadShortcut();
+});
+
 // ─── Worktree manager panel ──────────────────────────────
 const showWorktrees = ref(false);
 const pendingWorktreeBranch = ref<string | undefined>(undefined);
@@ -1497,6 +1548,13 @@ useAppMenu(
     },
     openMerge: () => {
       mergePopoverRequest.value++;
+    },
+    openLaunchpad: () => {
+      // Bump the bridge counter; the watcher above resolves the active
+      // workspace and either opens Launchpad or surfaces the no-workspace
+      // toast. The accelerator stays mapped in all cases so muscle memory
+      // works even before a workspace is configured.
+      launchpadOpenRequest.value++;
     },
   },
   { hasRepo },

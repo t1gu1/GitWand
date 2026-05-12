@@ -1000,6 +1000,14 @@ const ptBR: Locale = {
     updateChannelBeta: "Beta (instalação manual)",
     updateChannelStableHint: "Instalação automática in-app. Padrão — recomendado para a maioria dos usuários.",
     updateChannelBetaHint: "Notifica sobre builds pré-release. A instalação automática está desativada — clicar em \"Instalar\" abre a página do GitHub Releases.",
+    // Launchpad \u2014 Aba Equipe (v2.9)
+    launchpad: {
+      disableTeamTab: {
+        label: "Desativar a aba Equipe do Launchpad",
+        help: "A aba Equipe faz uma chamada de API por PR de colega (~10s em workspaces grandes). Desative se voc\u00ea n\u00e3o precisa da vis\u00e3o de sobreposi\u00e7\u00e3o.",
+      },
+    },
+
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automa\u00e7\u00f5es",
@@ -1117,6 +1125,15 @@ const ptBR: Locale = {
     teamOverlapViaWip: "via WIP",
     teamOverlapViaBranch: "via branch",
     teamPrCount: "{0} PR(s)",
+    teamNotLoaded: "Atividade da equipe não carregada",
+    teamLoadButton: "Carregar atividade da equipe",
+    assignedShort: "Atribuído",
+    reviewersShort: "Revisores",
+    refreshAll: "Atualizar tudo",
+    refreshAllTooltip: "Atualizar as 4 abas em paralelo",
+    noWorkspace: {
+      warning: "Crie um workspace primeiro para usar o Launchpad",
+    },
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1477,6 +1494,7 @@ const ptBR: Locale = {
     openOnForge: "Abrir no GitHub",
     toggleSidebar: "Mostrar / ocultar barra lateral",
     toggleTheme: "Alternar modo claro/escuro",
+    openLaunchpad: "Abrir Launchpad",
     documentation: "Documentação do GitWand",
     whatsNew: "Novidades",
     reportIssue: "Relatar um problema…",

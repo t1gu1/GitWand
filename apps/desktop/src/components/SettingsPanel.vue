@@ -84,6 +84,10 @@ interface Settings {
   aiModel: string;
   aiOllamaUrl: string;
   aiOllamaModel: string;
+  // Launchpad — last active tab persisted between openings (v2.9)
+  launchpadActiveTab: "wip" | "prs" | "issues" | "team";
+  // Launchpad — Team tab enable/disable (v2.9). Hides tab + skips fetch.
+  launchpadTeamTabEnabled: boolean;
   // Automation settings (v2.8)
   automations: {
     autoResolve: { enabled: boolean };
@@ -115,6 +119,8 @@ const defaultSettings: Settings = {
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
   blameAlgorithm: "histogram",
+  launchpadActiveTab: "wip",
+  launchpadTeamTabEnabled: true,
   automations: {
     autoResolve:   { enabled: false },
     nightlyPull:   { enabled: false, hour: 8, minute: 0 },
@@ -797,6 +803,20 @@ watch(
             <span class="sp-hint">
               {{ settings.updateChannel === 'beta' ? t('settings.updateChannelBetaHint') : t('settings.updateChannelStableHint') }}
             </span>
+          </div>
+
+          <!-- Launchpad Team tab toggle (v2.9) — inverted boolean: a "Disable"
+               checkbox is friendlier when the default is "enabled". -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-launchpad-team">
+              <input
+                id="setting-launchpad-team" type="checkbox" class="sp-checkbox"
+                :checked="!settings.launchpadTeamTabEnabled"
+                @change="updateSetting('launchpadTeamTabEnabled', !($event.target as HTMLInputElement).checked)"
+              />
+              <span>{{ t('settings.launchpad.disableTeamTab.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.launchpad.disableTeamTab.help') }}</span>
           </div>
         </template>
 

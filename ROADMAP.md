@@ -657,15 +657,19 @@ Couche d'automatisation légère : des tâches IA récurrentes déclenchées par
 
 ---
 
-### v2.9.0 — Launchpad
+### ✅ v2.9.0 — Launchpad (livré 2026-05-12)
 
-_Dépend de v2.7.0 (Workspaces)._ Inspiré du Launchpad GitKraken, mais local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues et WIPs sur tous les repos du workspace.
+_Dépend de v2.7.0 (Workspaces) ✅._ Inspiré du Launchpad GitKraken, local-first (pas de cloud requis) : tableau de bord unique agrégeant PRs, issues, WIPs et activité d'équipe sur tous les repos du workspace. Détail dans [PLAN-v2.9-launchpad.md](./PLAN-v2.9-launchpad.md).
 
-- **PRs cross-repo** : liste unifiée de toutes les PRs ouvertes sur les repos dans le workspace (via `gh` CLI), avec statuts CI, reviewers, labels — sans ouvrir chaque repo un par un
-- **Issues cross-repo** : GitHub Issues agrégées (filtres : assignées à moi, mentionné, créées par moi)
-- **WIP panel** : liste des repos avec des changements non commités ou branches en retard — une vue "qu'est-ce qui m'attend" en un coup d'œil
-- **Pin / snooze** : épingler une PR importante en haut, snoozer une issue pour la semaine prochaine
-- **Vue Équipe** (optionnelle) : ce que les autres font sur les mêmes repos (via l'API GitHub), pour détecter les chevauchements avant qu'ils deviennent des conflits
+- **PRs cross-repo ✅** : liste unifiée de toutes les PRs ouvertes (via `gh` CLI), statuts CI, reviewers/assignees affichés en chips, labels, per-repo error rendering. `useLaunchpadPrs` + `workspace_prs_all` Rust + dev-server mock.
+- **Issues cross-repo ✅** : GitHub Issues agrégées avec 3 filtres (assignées à moi, mentionné, créées par moi). `useLaunchpadIssues` + `workspace_issues_all` Rust.
+- **WIP panel ✅** : staged/unstaged/untracked counts, ahead/behind, no-upstream, last commit timestamp via `workspace_wip_all` libgit2 (héritage perf v2.8.2).
+- **Pin / snooze ✅** : épingler PR/issue en haut de liste, snoozer pour 1/3/7/14 jours, menu ⋮ par item, bandeau snoozés rappel, persistance localStorage. Module singleton `useLaunchpadPins` 124 lignes.
+- **Vue Équipe ✅** : 4e onglet — PRs des collègues groupés par auteur avec détection d'overlap (mes WIP files OU mes commits non mergés ∩ files des PRs colleagues), avatars couleurs déterministes, auto-expand des membres avec overlap. Identité cachée via `ghCurrentUser`, parallélisation rate-limit-safe via `concurrentMap(5)`. **Lazy-load au premier clic** (pas dans `onMounted`) pour ne pas pénaliser le boot sur gros workspaces (~10s+ évités).
+- **Raccourci clavier `⌘L` / `Ctrl+L`** : ouvre le Launchpad depuis n'importe où via le menu **View** > Open Launchpad. Gating : toast warning si pas de workspace défini.
+- **Persistance UX** : onglet actif (`launchpadActiveTab`) sauvé entre ouvertures, bouton "Refresh all" qui rafraîchit les 4 tabs en parallèle, toggle Settings "Désactiver Team tab" pour les setups perf-sensitive.
+- **Tests** : 36 tests composables + 11 tests UI smoke `LaunchpadView.vue` = 47 nouveaux tests Launchpad. Total **95/95 tests desktop verts**.
+- **i18n** : ~40 clés Launchpad × 5 locales (en/fr/es/pt-BR/zh-CN).
 
 ---
 

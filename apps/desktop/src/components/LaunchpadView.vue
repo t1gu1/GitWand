@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
+import { saveSettings as persistAppSettings } from "../composables/useSettings";
 import { useLaunchpadWip } from "../composables/useLaunchpadWip";
 import { useLaunchpadPrs } from "../composables/useLaunchpadPrs";
 import { useLaunchpadIssues } from "../composables/useLaunchpadIssues";
@@ -7,6 +8,7 @@ import { useLaunchpadPins } from "../composables/useLaunchpadPins";
 import { useLaunchpadTeam } from "../composables/useLaunchpadTeam";
 import type { TeamMemberActivity, OverlappingPr } from "../composables/useLaunchpadTeam";
 import { useI18n } from "../composables/useI18n";
+import { useSettings } from "../composables/useSettings";
 import type { WorkspaceRepo } from "../utils/backend";
 import type { IssueFilter } from "../composables/useLaunchpadIssues";
 
@@ -19,6 +21,17 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { settings } = useSettings();
+
+// Whether the Team tab is enabled at all. When false, the tab is hidden and
+// the team activity is never fetched (perf-sensitive setups / solo teams).
+const teamTabEnabled = computed(() => settings.value.launchpadTeamTabEnabled !== false);
+
+// Lazy-load flag for the Team tab. The team fetch is the most expensive call
+// in the Launchpad (N × `gh pr view --json files`, ~10s on a 50-PR workspace),
+// so we hold off until the user explicitly opens the tab. WIP / PRs / Issues
+// stay eager because their per-tab badges need real numbers at boot.
+const teamLoaded = ref(false);
 
 const { wip, loading: wipLoading, error: wipError, refresh: refreshWip } = useLaunchpadWip();
 const { allPrs, snoozedPrs, repos: prRepos, loading: prsLoading, error: prsError, refresh: refreshPrs } = useLaunchpadPrs();
@@ -32,7 +45,18 @@ const {
 } = useLaunchpadTeam();
 
 type Tab = "wip" | "prs" | "issues" | "team";
-const activeTab = ref<Tab>("wip");
+
+// Persist active tab across openings (v2.9 §1.3). Source of truth is
+// `settings.launchpadActiveTab` — read once at boot so the user lands back on
+// the tab they were on last session, then write through `setTab()` on every
+// change. A computed getter/setter keeps the template binding ergonomic.
+const activeTab = computed<Tab>({
+  get: () => settings.value.launchpadActiveTab,
+  set: (val) => {
+    settings.value.launchpadActiveTab = val;
+    persistAppSettings(settings.value);
+  },
+});
 
 // ── ⋮ menu state ──────────────────────────────────────────────────────────────
 const openMenuUrl = ref<string | null>(null);
@@ -77,8 +101,28 @@ const membersWithoutOverlap = computed(() =>
   teamActivity.value.filter((m) => m.overlappingPrs.length === 0)
 );
 
+function loadTeam(): void {
+  refreshTeam(props.repos)
+    .then(() => {
+      teamLoaded.value = true;
+      initExpandedMembers(teamActivity.value);
+    })
+    .catch(() => {
+      // Mark as loaded anyway so the placeholder doesn't reappear over an
+      // error state — `teamError` carries the message. The user can re-try
+      // via the Refresh button.
+      teamLoaded.value = true;
+    });
+}
+
 function setTab(tab: Tab) {
   activeTab.value = tab;
+  // Lazy fetch on first visit to the Team tab. After this, the Refresh
+  // button re-fetches but `teamLoaded` stays true so the placeholder is
+  // gone for good.
+  if (tab === "team" && !teamLoaded.value && teamTabEnabled.value) {
+    loadTeam();
+  }
 }
 
 function handleRefresh() {
@@ -86,9 +130,43 @@ function handleRefresh() {
   else if (activeTab.value === "prs") refreshPrs(props.repos);
   else if (activeTab.value === "issues") refreshIssues(props.repos);
   else if (activeTab.value === "team") {
-    refreshTeam(props.repos)
-      .then(() => initExpandedMembers(teamActivity.value))
-      .catch(() => { /* errors already captured in teamError reactive ref */ });
+    loadTeam();
+  }
+}
+
+// ── Refresh all (v2.9 §1.4) ──────────────────────────────────────────────
+// Fires WIP / PRs / Issues / Team refreshes in parallel via `Promise.all`.
+// Distinct from `handleRefresh` (active-tab-only) which stays cheap for users
+// who just want to refresh what they're looking at — useful on slow networks
+// or when the Team tab triggers an expensive cross-repo `gh pr view --json
+// files` fan-out. The Team refresh is skipped when the tab is disabled so we
+// don't pay for a fetch the user has opted out of.
+const loadingAll = ref(false);
+async function handleRefreshAll() {
+  if (loadingAll.value) return;
+  loadingAll.value = true;
+  try {
+    const tasks: Promise<unknown>[] = [
+      refreshWip(props.repos),
+      refreshPrs(props.repos),
+      refreshIssues(props.repos),
+    ];
+    if (teamTabEnabled.value) {
+      tasks.push(
+        refreshTeam(props.repos)
+          .then(() => {
+            teamLoaded.value = true;
+            initExpandedMembers(teamActivity.value);
+          })
+          .catch(() => {
+            // Error captured in `teamError` reactive — see loadTeam().
+            teamLoaded.value = true;
+          }),
+      );
+    }
+    await Promise.all(tasks);
+  } finally {
+    loadingAll.value = false;
   }
 }
 
@@ -142,25 +220,63 @@ function formatSnoozedUntil(url: string): string {
 }
 
 onMounted(() => {
+  // Eager boot for WIP / PRs / Issues — these power the tab badges and
+  // are bounded fast calls (~1-2s, parallel-friendly). Team is NOT fetched
+  // here because it triggers one `gh pr view --json files` per colleague PR
+  // (concurrentMap cap 5, but still N round-trips); on a 50-PR workspace
+  // that's ~10s of fetch the user pays for at boot whether they ever open
+  // the Team tab or not. Lazy-loaded via `setTab("team")` instead.
   refreshWip(props.repos);
   refreshPrs(props.repos);
   refreshIssues(props.repos);
-  refreshTeam(props.repos)
-    .then(() => initExpandedMembers(teamActivity.value))
-    .catch(() => { /* errors already captured in teamError reactive ref */ });
+  // If the user persisted "team" as their last active tab (v2.9 §1.3),
+  // honor the lazy-load contract by fetching it now — otherwise the
+  // restored panel would render an empty placeholder until they switch
+  // tabs and back.
+  if (activeTab.value === "team" && teamTabEnabled.value && !teamLoaded.value) {
+    loadTeam();
+  }
 });
 </script>
 
 <template>
   <div class="launchpad-view" @click="closeMenu()">
+    <div class="launchpad-view__frame" @click.stop="closeMenu()">
     <div class="launchpad-view__header">
       <h2 class="launchpad-view__title">{{ t("launchpad.title") }}</h2>
       <button
         class="launchpad-view__refresh"
-        :disabled="isLoading()"
+        :disabled="isLoading() || loadingAll"
         @click.stop="handleRefresh"
       >
         {{ isLoading() ? t("launchpad.loading") : t("launchpad.refresh") }}
+      </button>
+      <button
+        class="launchpad-view__refresh launchpad-view__refresh--all"
+        :title="t('launchpad.refreshAllTooltip')"
+        :disabled="isLoading() || loadingAll"
+        @click.stop="handleRefreshAll"
+      >
+        <!-- Inline SVG (double-arrow loop) — avoids pulling an icon font and
+             keeps the loading-spin animation purely CSS. -->
+        <svg
+          class="launchpad-view__refresh-icon"
+          :class="{ 'launchpad-view__refresh-icon--spin': loadingAll }"
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="23 4 23 10 17 10"></polyline>
+          <polyline points="1 20 1 14 7 14"></polyline>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        <span>{{ t("launchpad.refreshAll") }}</span>
       </button>
       <button
         class="launchpad-view__close"
@@ -199,6 +315,7 @@ onMounted(() => {
         </span>
       </button>
       <button
+        v-if="teamTabEnabled"
         class="launchpad-view__tab"
         :class="{ 'launchpad-view__tab--active': activeTab === 'team' }"
         @click="setTab('team')"
@@ -209,8 +326,25 @@ onMounted(() => {
 
     <!-- WIP tab -->
     <div v-if="activeTab === 'wip'" class="launchpad-view__panel">
+      <span
+        v-if="wipLoading && wip.length > 0"
+        class="launchpad-view__refresh-spinner"
+        :aria-label="t('launchpad.loading')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+        </svg>
+      </span>
       <div v-if="wipError" class="launchpad-view__error">
         {{ t("launchpad.errorFetch", wipError) }}
+      </div>
+      <div v-else-if="wipLoading && wip.length === 0" class="launchpad-view__loading-block">
+        <span class="launchpad-view__spinner" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+          </svg>
+        </span>
+        <span class="launchpad-view__loading-label">{{ t("launchpad.loading") }}</span>
       </div>
       <p v-else-if="!wipLoading && wip.length === 0" class="launchpad-view__empty">
         {{ t("launchpad.noRepos") }}
@@ -254,8 +388,25 @@ onMounted(() => {
 
     <!-- PRs tab -->
     <div v-if="activeTab === 'prs'" class="launchpad-view__panel">
+      <span
+        v-if="prsLoading && (allPrs.length > 0 || snoozedPrs.length > 0)"
+        class="launchpad-view__refresh-spinner"
+        :aria-label="t('launchpad.loading')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+        </svg>
+      </span>
       <div v-if="prsError" class="launchpad-view__error">
         {{ t("launchpad.errorFetch", prsError) }}
+      </div>
+      <div v-else-if="prsLoading && allPrs.length === 0 && snoozedPrs.length === 0" class="launchpad-view__loading-block">
+        <span class="launchpad-view__spinner" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+          </svg>
+        </span>
+        <span class="launchpad-view__loading-label">{{ t("launchpad.loading") }}</span>
       </div>
       <p v-else-if="!prsLoading && allPrs.length === 0 && snoozedPrs.length === 0" class="launchpad-view__empty">
         {{ t("launchpad.noPrs") }}
@@ -267,7 +418,11 @@ onMounted(() => {
           class="launchpad-view__pr-item"
         >
           <!-- Pin badge — always visible on pinned items -->
-          <span v-if="isPinned(pr.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">📌</span>
+          <span v-if="isPinned(pr.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+            </svg>
+          </span>
           <span class="launchpad-view__pr-repo">{{ pr.repoName }}</span>
           <span class="launchpad-view__pr-title">
             <a :href="pr.url" target="_blank" rel="noopener noreferrer">
@@ -330,14 +485,29 @@ onMounted(() => {
             >⋮</button>
             <div v-if="openMenuUrl === pr.url" class="launchpad-view__menu-dropdown">
               <button v-if="!isPinned(pr.url)" class="launchpad-view__menu-item" @click="pinAndClose(pr.url, 'pr')">
-                📌 {{ t("launchpad.pin") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+                  </svg>
+                </span>
+                {{ t("launchpad.pin") }}
               </button>
               <button v-else class="launchpad-view__menu-item" @click="unpinAndClose(pr.url)">
-                📌 {{ t("launchpad.unpin") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+                  </svg>
+                </span>
+                {{ t("launchpad.unpin") }}
               </button>
               <template v-if="!isSnoozed(pr.url)">
                 <button class="launchpad-view__menu-item" @click="openSnoozeFor = pr.url">
-                  💤 {{ t("launchpad.snooze") }}
+                  <span class="launchpad-view__menu-icon" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                      <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                    </svg>
+                  </span>
+                  {{ t("launchpad.snooze") }}
                 </button>
                 <div v-if="openSnoozeFor === pr.url" class="launchpad-view__snooze-options">
                   <button class="launchpad-view__menu-item launchpad-view__menu-item--sub" @click="snoozeAndClose(pr.url, 'pr', 1)">{{ t("launchpad.snooze1d") }}</button>
@@ -347,9 +517,50 @@ onMounted(() => {
                 </div>
               </template>
               <button v-else class="launchpad-view__menu-item" @click="unsnoozeAndClose(pr.url)">
-                💤 {{ t("launchpad.unsnooze") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                  </svg>
+                </span>
+                {{ t("launchpad.unsnooze") }}
               </button>
             </div>
+          </div>
+          <!-- Secondary row: assignees & reviewers (§2.1) -->
+          <div
+            v-if="(pr.assignees && pr.assignees.length > 0) || (pr.reviewRequested && pr.reviewRequested.length > 0)"
+            class="launchpad-view__pr-people"
+          >
+            <span
+              v-if="pr.assignees && pr.assignees.length > 0"
+              class="launchpad-view__pr-people-group"
+            >
+              <span class="launchpad-view__pr-people-label">{{ t("launchpad.assignedShort") }}:</span>
+              <span
+                v-for="login in pr.assignees.slice(0, 3)"
+                :key="`a-${login}`"
+                class="launchpad-view__pr-chip launchpad-view__pr-chip--assignee"
+              >{{ login }}</span>
+              <span
+                v-if="pr.assignees.length > 3"
+                class="launchpad-view__pr-chip launchpad-view__pr-chip--more"
+              >+{{ pr.assignees.length - 3 }}</span>
+            </span>
+            <span
+              v-if="pr.reviewRequested && pr.reviewRequested.length > 0"
+              class="launchpad-view__pr-people-group"
+            >
+              <span class="launchpad-view__pr-people-label">{{ t("launchpad.reviewersShort") }}:</span>
+              <span
+                v-for="login in pr.reviewRequested.slice(0, 3)"
+                :key="`r-${login}`"
+                class="launchpad-view__pr-chip launchpad-view__pr-chip--reviewer"
+              >{{ login }}</span>
+              <span
+                v-if="pr.reviewRequested.length > 3"
+                class="launchpad-view__pr-chip launchpad-view__pr-chip--more"
+              >+{{ pr.reviewRequested.length - 3 }}</span>
+            </span>
           </div>
         </li>
       </ul>
@@ -369,7 +580,12 @@ onMounted(() => {
         @keydown.enter="showSnoozedPrs = !showSnoozedPrs"
         @keydown.space.prevent="showSnoozedPrs = !showSnoozedPrs"
       >
-        💤 {{ t("launchpad.snoozedCount", snoozedPrs.length) }}
+        <span class="launchpad-view__bandeau-icon" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+          </svg>
+        </span>
+        {{ t("launchpad.snoozedCount", snoozedPrs.length) }}
         <span v-if="!showSnoozedPrs" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>
         <span v-else class="launchpad-view__snoozed-show-label">▲</span>
       </div>
@@ -412,8 +628,25 @@ onMounted(() => {
         </button>
       </div>
 
+      <span
+        v-if="issuesLoading && (allIssues.length > 0 || snoozedIssues.length > 0)"
+        class="launchpad-view__refresh-spinner"
+        :aria-label="t('launchpad.loading')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+        </svg>
+      </span>
       <div v-if="issuesError" class="launchpad-view__error">
         {{ t("launchpad.errorFetch", issuesError) }}
+      </div>
+      <div v-else-if="issuesLoading && allIssues.length === 0 && snoozedIssues.length === 0" class="launchpad-view__loading-block">
+        <span class="launchpad-view__spinner" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+          </svg>
+        </span>
+        <span class="launchpad-view__loading-label">{{ t("launchpad.loading") }}</span>
       </div>
       <p v-else-if="!issuesLoading && allIssues.length === 0 && snoozedIssues.length === 0" class="launchpad-view__empty">
         {{ t("launchpad.noIssues") }}
@@ -425,7 +658,11 @@ onMounted(() => {
           class="launchpad-view__issue-item"
         >
           <!-- Pin badge — always visible on pinned items -->
-          <span v-if="isPinned(issue.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">📌</span>
+          <span v-if="isPinned(issue.url)" class="launchpad-view__pin-badge" :aria-label="t('launchpad.pinBadge')">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+              <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+            </svg>
+          </span>
           <span class="launchpad-view__pr-repo">{{ issue.repoName }}</span>
           <span class="launchpad-view__issue-title">
             <a :href="issue.url" target="_blank" rel="noopener noreferrer">
@@ -452,14 +689,29 @@ onMounted(() => {
             >⋮</button>
             <div v-if="openMenuUrl === issue.url" class="launchpad-view__menu-dropdown">
               <button v-if="!isPinned(issue.url)" class="launchpad-view__menu-item" @click="pinAndClose(issue.url, 'issue')">
-                📌 {{ t("launchpad.pin") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+                  </svg>
+                </span>
+                {{ t("launchpad.pin") }}
               </button>
               <button v-else class="launchpad-view__menu-item" @click="unpinAndClose(issue.url)">
-                📌 {{ t("launchpad.unpin") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .708c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146z"/>
+                  </svg>
+                </span>
+                {{ t("launchpad.unpin") }}
               </button>
               <template v-if="!isSnoozed(issue.url)">
                 <button class="launchpad-view__menu-item" @click="openSnoozeFor = issue.url">
-                  💤 {{ t("launchpad.snooze") }}
+                  <span class="launchpad-view__menu-icon" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                      <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                    </svg>
+                  </span>
+                  {{ t("launchpad.snooze") }}
                 </button>
                 <div v-if="openSnoozeFor === issue.url" class="launchpad-view__snooze-options">
                   <button class="launchpad-view__menu-item launchpad-view__menu-item--sub" @click="snoozeAndClose(issue.url, 'issue', 1)">{{ t("launchpad.snooze1d") }}</button>
@@ -469,7 +721,12 @@ onMounted(() => {
                 </div>
               </template>
               <button v-else class="launchpad-view__menu-item" @click="unsnoozeAndClose(issue.url)">
-                💤 {{ t("launchpad.unsnooze") }}
+                <span class="launchpad-view__menu-icon" aria-hidden="true">
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                    <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+                    </svg>
+                </span>
+                {{ t("launchpad.unsnooze") }}
               </button>
             </div>
           </div>
@@ -491,7 +748,12 @@ onMounted(() => {
         @keydown.enter="showSnoozedIssues = !showSnoozedIssues"
         @keydown.space.prevent="showSnoozedIssues = !showSnoozedIssues"
       >
-        💤 {{ t("launchpad.snoozedCount", snoozedIssues.length) }}
+        <span class="launchpad-view__bandeau-icon" aria-hidden="true">
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
+          </svg>
+        </span>
+        {{ t("launchpad.snoozedCount", snoozedIssues.length) }}
         <span v-if="!showSnoozedIssues" class="launchpad-view__snoozed-show-label">{{ t("launchpad.showSnoozed") }} ▼</span>
         <span v-else class="launchpad-view__snoozed-show-label">▲</span>
       </div>
@@ -508,10 +770,44 @@ onMounted(() => {
     </div>
 
     <!-- ── Team panel ─────────────────────────────────────────── -->
-    <div v-if="activeTab === 'team'" class="launchpad-view__panel">
-      <!-- Loading -->
-      <div v-if="teamLoading" class="launchpad-view__empty">
-        {{ t("launchpad.loading") }}
+    <div v-if="activeTab === 'team' && teamTabEnabled" class="launchpad-view__panel">
+      <!-- Not-loaded placeholder — shown if the user opens the tab and the
+           lazy fetch hasn't run yet. Normally setTab("team") kicks loadTeam()
+           so we go straight to the loading block; this branch is the safety
+           net for race conditions or external callers that flip activeTab. -->
+      <div
+        v-if="!teamLoaded && !teamLoading && !teamError"
+        class="launchpad-view__team-placeholder"
+      >
+        <p class="launchpad-view__empty">{{ t("launchpad.teamNotLoaded") }}</p>
+        <button
+          type="button"
+          class="launchpad-view__refresh"
+          @click.stop="loadTeam"
+        >
+          {{ t("launchpad.teamLoadButton") }}
+        </button>
+      </div>
+      <!-- In-flight refresh spinner — only after first load when we already
+           have prior data (teamActivity > 0). Hidden during the initial fetch
+           which renders the loading block below. -->
+      <span
+        v-if="teamLoaded && teamLoading && teamActivity.length > 0"
+        class="launchpad-view__refresh-spinner"
+        :aria-label="t('launchpad.loading')"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+        </svg>
+      </span>
+      <!-- Loading (initial / empty cache) -->
+      <div v-if="teamLoading && teamActivity.length === 0" class="launchpad-view__loading-block">
+        <span class="launchpad-view__spinner" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-dasharray="14 42"></circle>
+          </svg>
+        </span>
+        <span class="launchpad-view__loading-label">{{ t("launchpad.loading") }}</span>
       </div>
 
       <!-- Error -->
@@ -519,20 +815,25 @@ onMounted(() => {
         {{ t("launchpad.errorFetch", teamError) }}
       </div>
 
-      <!-- Empty state -->
-      <div v-else-if="teamActivity.length === 0" class="launchpad-view__empty">
+      <!-- Empty state — only after a successful load, so we don't show
+           "no activity" while the placeholder is also showing. -->
+      <div v-else-if="teamLoaded && teamActivity.length === 0" class="launchpad-view__empty">
         {{ t("launchpad.noTeamActivity") }}
       </div>
 
       <!-- Content -->
-      <template v-else>
+      <template v-else-if="teamLoaded">
         <!-- Overlaps section -->
         <div
           v-if="membersWithOverlap.length > 0"
           class="launchpad-view__team-section"
         >
           <div class="launchpad-view__team-section-header launchpad-view__team-section-header--overlap">
-            ⚠
+            <span class="launchpad-view__warning-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+              </svg>
+            </span>
             {{
               t(
                 "launchpad.teamOverlaps",
@@ -585,7 +886,11 @@ onMounted(() => {
                   :key="overlap.url"
                 >
                   <div class="launchpad-view__overlap-badge">
-                    <span>⚠</span>
+                    <span class="launchpad-view__warning-icon" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                      </svg>
+                    </span>
                     <span>{{ t("launchpad.teamOverlapFiles", overlap.overlappingFiles.length) }}</span>
                     <span>{{
                       overlap.myContext === "wip"
@@ -653,86 +958,211 @@ onMounted(() => {
         </div>
       </template>
     </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+/* ─────────────────────────────────────────────────────────────────────
+ * LaunchpadView — design pass v2.9
+ *
+ * Every value flows through the global design tokens defined in
+ * assets/main.css. Fallbacks are intentionally omitted: the tokens are
+ * always defined in :root / [data-theme="*"], so a hex fallback can only
+ * mismatch the theme (root cause of the v2.8 "off-color modal" reports).
+ *
+ * Components mirror existing patterns:
+ *   - StashManager.sm-item → hover/border, --color-bg surface
+ *   - BaseModal             → overlay, header, modal-style chrome
+ *   - PullRequestPanel      → pr-item rows
+ * ───────────────────────────────────────────────────────────────────── */
+
+/* ── Overlay backdrop (full-screen, blurred) ───────────── */
+/* Mirrors `BaseModal` overlay: dim the app behind, blur it, and let the
+   user feel the Launchpad as a *modal* full-screen panel rather than an
+   opaque view that replaces the whole UI. Click on the empty backdrop
+   margin will not dismiss (the panel has its own ✕) — but clicking
+   anywhere outside an open `⋮` dropdown closes it (existing behaviour). */
 .launchpad-view {
   position: fixed;
   inset: 0;
   z-index: 100;
+  background: var(--color-overlay);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  overflow-y: auto;
-  background: var(--color-bg, #fff);
+  animation: launchpad-fade var(--transition-base) ease;
 }
 
+/* ── Panel frame (the white card itself) ───────────────── */
+/* 2rem inset on every side so the dimmed/blurred app stays visible at
+   the edges. `--color-bg-secondary` resolves to `#ffffff` in light and
+   `#1a1a26` in dark — never the slightly-grey `--color-bg`. */
+.launchpad-view__frame {
+  flex: 1;
+  margin: 2rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6) var(--space-7);
+  overflow-y: auto;
+  animation: launchpad-slide-in var(--transition-slow) ease;
+}
+
+@keyframes launchpad-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes launchpad-slide-in {
+  from { transform: scale(0.985); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* ── Header ────────────────────────────────────────────── */
 .launchpad-view__header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .launchpad-view__title {
-  font-size: 1.1rem;
-  font-weight: 600;
+  flex: 1;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
   margin: 0;
 }
 
 .launchpad-view__refresh {
-  padding: 4px 10px;
-  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.launchpad-view__refresh:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-strong);
+}
+
+.launchpad-view__refresh:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .launchpad-view__refresh:disabled {
   opacity: 0.5;
-  cursor: default;
+  cursor: not-allowed;
+}
+
+/* Refresh-all variant (v2.9 §1.4) — same shell, spin-on-loading icon. */
+.launchpad-view__refresh--all {
+  /* inherits chrome from .launchpad-view__refresh */
+}
+
+.launchpad-view__refresh-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.launchpad-view__refresh-icon--spin {
+  animation: launchpad-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
 }
 
 .launchpad-view__close {
-  padding: 4px 8px;
-  font-size: 1.1rem;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xl);
   line-height: 1;
   cursor: pointer;
-  opacity: 0.6;
-  background: transparent;
-  border: none;
-  color: inherit;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
+
 .launchpad-view__close:hover {
-  opacity: 1;
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
 }
 
+.launchpad-view__close:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Error banner ──────────────────────────────────────── */
 .launchpad-view__error {
-  color: var(--color-danger, #e53e3e);
-  font-size: 0.875rem;
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
 }
 
+/* ── Tab bar ───────────────────────────────────────────── */
 .launchpad-view__tabs {
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .launchpad-view__tab {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 0.875rem;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  margin-bottom: -1px; /* sit on top of the divider so the active bar covers it */
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--color-text, inherit);
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.launchpad-view__tab:hover {
+  color: var(--color-text);
+}
+
+.launchpad-view__tab:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .launchpad-view__tab--active {
-  border-bottom-color: var(--color-accent, #3182ce);
-  font-weight: 600;
+  color: var(--color-text);
+  border-bottom-color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
 }
 
 .launchpad-view__tab-badge {
@@ -741,93 +1171,142 @@ onMounted(() => {
   justify-content: center;
   min-width: 18px;
   height: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: var(--color-accent, #3182ce);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
 }
 
+.launchpad-view__tab--active .launchpad-view__tab-badge {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+}
+
+/* ── Panel ─────────────────────────────────────────────── */
 .launchpad-view__panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-4);
+  position: relative;
 }
 
+/* ── Empty state ───────────────────────────────────────── */
 .launchpad-view__empty {
-  color: var(--color-text-muted, #718096);
-  font-size: 0.875rem;
-  margin: 12px 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  text-align: center;
+  padding: var(--space-9) var(--space-6);
+  margin: 0;
 }
 
-/* WIP list */
+/* ── WIP list ──────────────────────────────────────────── */
 .launchpad-view__repo-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-3);
 }
 
 .launchpad-view__repo-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--color-surface-raised, #f7fafc);
-  font-size: 0.875rem;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-md);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
-.launchpad-view__repo-name { font-weight: 600; min-width: 100px; }
-.launchpad-view__repo-branch { color: var(--color-text-muted, #718096); font-family: monospace; font-size: 0.8rem; }
-.launchpad-view__ahead { color: var(--color-success, #38a169); }
-.launchpad-view__behind { color: var(--color-warning, #d69e2e); }
-.launchpad-view__staged { color: var(--color-accent, #3182ce); }
-.launchpad-view__unstaged { color: var(--color-warning, #d69e2e); }
-.launchpad-view__untracked { color: var(--color-text-muted, #718096); }
-.launchpad-view__clean { color: var(--color-success, #38a169); }
-.launchpad-view__no-upstream { color: var(--color-text-muted, #718096); font-style: italic; }
-.launchpad-view__last-commit { color: var(--color-text-muted, #718096); font-size: 0.8rem; margin-left: auto; }
-.launchpad-view__repo-error { color: var(--color-danger, #e53e3e); font-size: 0.8rem; }
+.launchpad-view__repo-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-tertiary);
+}
 
-/* PR list */
+.launchpad-view__repo-name {
+  font-weight: var(--font-weight-semibold);
+  min-width: 120px;
+  color: var(--color-text);
+}
+
+.launchpad-view__repo-branch {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+
+.launchpad-view__ahead { color: var(--color-success); font-variant-numeric: tabular-nums; }
+.launchpad-view__behind { color: var(--color-warning); font-variant-numeric: tabular-nums; }
+.launchpad-view__staged { color: var(--color-accent); font-size: var(--font-size-sm); }
+.launchpad-view__unstaged { color: var(--color-warning); font-size: var(--font-size-sm); }
+.launchpad-view__untracked { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+.launchpad-view__clean { color: var(--color-success); font-size: var(--font-size-sm); }
+.launchpad-view__no-upstream {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: var(--font-size-sm);
+}
+.launchpad-view__last-commit {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+  margin-left: auto;
+}
+.launchpad-view__repo-error {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+/* ── PR list ───────────────────────────────────────────── */
 .launchpad-view__pr-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .launchpad-view__pr-item {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--color-surface-raised, #f7fafc);
-  font-size: 0.875rem;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-md);
   position: relative;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.launchpad-view__pr-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-tertiary);
 }
 
 .launchpad-view__pr-repo {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #718096);
-  background: var(--color-surface, #edf2f7);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
 .launchpad-view__pr-title {
   flex: 1;
   min-width: 200px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
 }
 
 .launchpad-view__pr-title a {
@@ -836,46 +1315,103 @@ onMounted(() => {
 }
 
 .launchpad-view__pr-title a:hover {
+  color: var(--color-accent);
   text-decoration: underline;
 }
 
+.launchpad-view__pr-title a:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ── Badges (PR review / CI) — token-driven, mirror .badge primitives ── */
 .launchpad-view__pr-badge {
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.launchpad-view__pr-badge--draft { background: var(--color-surface, #edf2f7); color: var(--color-text-muted, #718096); }
-.launchpad-view__pr-badge--approved { background: #c6f6d5; color: #276749; }
-.launchpad-view__pr-badge--changes { background: #fed7d7; color: #9b2c2c; }
-.launchpad-view__pr-badge--review { background: #fef3c7; color: #92400e; }
-.launchpad-view__pr-badge--ci-success { background: #c6f6d5; color: #276749; }
-.launchpad-view__pr-badge--ci-failure { background: #fed7d7; color: #9b2c2c; }
-.launchpad-view__pr-badge--ci-pending { background: #fef3c7; color: #92400e; }
+.launchpad-view__pr-badge--draft {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+}
+.launchpad-view__pr-badge--approved,
+.launchpad-view__pr-badge--ci-success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+.launchpad-view__pr-badge--changes,
+.launchpad-view__pr-badge--ci-failure {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+.launchpad-view__pr-badge--review,
+.launchpad-view__pr-badge--ci-pending {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
 
 .launchpad-view__pr-labels {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
 .launchpad-view__pr-label {
-  padding: 1px 6px;
-  border-radius: 10px;
-  font-size: 0.7rem;
-  background: var(--color-surface, #edf2f7);
-  color: var(--color-text-muted, #718096);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
-/* Pin badge */
+/* ── Pin badge ─────────────────────────────────────────── */
 .launchpad-view__pin-badge {
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  color: var(--color-accent);
+  line-height: 1;
 }
 
-/* ⋮ menu */
+/* Icon slot for menu items (pin / snooze / unsnooze entries). */
+.launchpad-view__menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+/* Icon slot for the snoozed bandeau. */
+.launchpad-view__bandeau-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+/* Icon slot for warning markers (team overlaps). */
+.launchpad-view__warning-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-warning);
+}
+
+/* ── ⋮ row menu ────────────────────────────────────────── */
 .launchpad-view__item-menu {
   margin-left: auto;
   flex-shrink: 0;
@@ -883,91 +1419,134 @@ onMounted(() => {
 }
 
 .launchpad-view__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   opacity: 0;
-  background: none;
+  background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: var(--color-text-muted, #718096);
+  font-size: var(--font-size-lg);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
   line-height: 1;
-  transition: opacity 0.1s, background 0.1s;
+  transition: opacity var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .launchpad-view__pr-item:hover .launchpad-view__menu-btn,
 .launchpad-view__issue-item:hover .launchpad-view__menu-btn,
 .launchpad-view__menu-btn--open,
-.launchpad-view__menu-btn:focus {
+.launchpad-view__menu-btn:focus,
+.launchpad-view__menu-btn:focus-visible {
   opacity: 1;
 }
 
 .launchpad-view__menu-btn:hover {
-  background: var(--color-surface, #edf2f7);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.launchpad-view__menu-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .launchpad-view__menu-dropdown {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--space-2));
   z-index: 100;
-  background: var(--color-surface-raised, #f7fafc);
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  min-width: 160px;
-  padding: 4px 0;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  min-width: 180px;
+  padding: var(--space-2) 0;
+  animation: launchpad-pop var(--transition-fast) ease-out;
+}
+
+@keyframes launchpad-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .launchpad-view__menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   width: 100%;
-  padding: 6px 12px;
-  background: none;
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
   border: none;
   text-align: left;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
-  color: var(--color-text, inherit);
+  color: var(--color-text);
   white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .launchpad-view__menu-item:hover {
-  background: var(--color-surface, #edf2f7);
+  background: var(--color-bg-tertiary);
 }
 
+.launchpad-view__menu-item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Sub items (snooze durations) have no leading icon — keep them visually
+   indented past where the icon column would sit on the parent rows. */
 .launchpad-view__menu-item--sub {
-  padding-left: 24px;
-  font-size: 0.8rem;
-  color: var(--color-text-muted, #718096);
+  padding-left: calc(var(--space-5) + 14px + var(--space-2));
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
 }
 
 .launchpad-view__snooze-options {
-  border-top: 1px solid var(--color-border, #e2e8f0);
-  margin-top: 2px;
-  padding-top: 2px;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
 }
 
-/* Snoozed bandeau */
+/* ── Snoozed bandeau ───────────────────────────────────── */
 .launchpad-view__snoozed-bandeau {
-  margin-top: 4px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: var(--color-surface, #edf2f7);
-  color: var(--color-text-muted, #718096);
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   cursor: pointer;
   user-select: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .launchpad-view__snoozed-bandeau:hover {
-  background: var(--color-border, #e2e8f0);
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.launchpad-view__snoozed-bandeau:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .launchpad-view__snoozed-show-label {
-  margin-left: 8px;
-  opacity: 0.75;
-  font-size: 0.75rem;
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
 }
 
 .launchpad-view__snoozed-list {
@@ -976,18 +1555,24 @@ onMounted(() => {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .launchpad-view__snoozed-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  background: var(--color-surface, #edf2f7);
-  font-size: 0.8rem;
-  opacity: 0.75;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+
+.launchpad-view__snoozed-item:hover {
+  opacity: 1;
 }
 
 .launchpad-view__snoozed-title {
@@ -996,78 +1581,116 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-muted, #718096);
+  color: var(--color-text-muted);
 }
 
 .launchpad-view__snoozed-until {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #718096);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
   white-space: nowrap;
 }
 
 .launchpad-view__snooze-cancel {
-  padding: 2px 8px;
-  font-size: 0.75rem;
-  border-radius: 4px;
-  border: 1px solid var(--color-border, #e2e8f0);
-  background: none;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
   cursor: pointer;
-  color: var(--color-text, inherit);
+  color: var(--color-text);
   flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .launchpad-view__snooze-cancel:hover {
-  background: var(--color-surface-raised, #f7fafc);
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
 }
 
-/* Issues list */
+.launchpad-view__snooze-cancel:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Issue filters ─────────────────────────────────────── */
 .launchpad-view__issue-filters {
   display: flex;
-  gap: 6px;
-  margin-bottom: 4px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .launchpad-view__filter-btn {
-  padding: 3px 10px;
-  font-size: 0.8rem;
-  border-radius: 12px;
-  border: 1px solid var(--color-border, #e2e8f0);
-  background: none;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
   cursor: pointer;
-  color: var(--color-text, inherit);
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.launchpad-view__filter-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.launchpad-view__filter-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .launchpad-view__filter-btn--active {
-  background: var(--color-accent, #3182ce);
-  color: #fff;
-  border-color: var(--color-accent, #3182ce);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
 }
 
+.launchpad-view__filter-btn--active:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
+/* ── Issue list ────────────────────────────────────────── */
 .launchpad-view__issue-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .launchpad-view__issue-item {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--color-surface-raised, #f7fafc);
-  font-size: 0.875rem;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-md);
   position: relative;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.launchpad-view__issue-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-tertiary);
 }
 
 .launchpad-view__issue-title {
   flex: 1;
   min-width: 200px;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
 }
 
 .launchpad-view__issue-title a {
@@ -1076,141 +1699,294 @@ onMounted(() => {
 }
 
 .launchpad-view__issue-title a:hover {
+  color: var(--color-accent);
   text-decoration: underline;
 }
 
+.launchpad-view__issue-title a:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
 .launchpad-view__issue-milestone {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #718096);
-  background: var(--color-surface, #edf2f7);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
-/* ── Team panel ──────────────────────────────────────────── */
+/* ── Team panel ────────────────────────────────────────── */
 .launchpad-view__team-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .launchpad-view__team-section-header {
-  font-size: 11px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted, #718096);
-  margin-bottom: 8px;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
 }
 
 .launchpad-view__team-section-header--overlap {
-  color: #f38ba8;
+  color: var(--color-warning);
 }
 
 .launchpad-view__team-member {
-  border: 1px solid var(--color-border, #e2e8f0);
-  border-radius: 6px;
-  margin-bottom: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--color-surface, #edf2f7);
+  background: var(--color-bg-secondary);
+  transition: border-color var(--transition-fast);
+}
+
+.launchpad-view__team-member:hover {
+  border-color: var(--color-border-strong);
 }
 
 .launchpad-view__team-member--overlap {
-  border-color: #f38ba8;
-  background: #2a1e2e;
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
+.launchpad-view__team-member--overlap:hover {
+  border-color: var(--color-warning);
 }
 
 .launchpad-view__team-member-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   cursor: pointer;
   user-select: none;
+  transition: background var(--transition-fast);
 }
 
 .launchpad-view__team-member-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-bg-tertiary);
+}
+
+.launchpad-view__team-member--overlap .launchpad-view__team-member-header:hover {
+  background: transparent;
 }
 
 .launchpad-view__team-member-header:focus-visible {
-  outline: 2px solid var(--color-accent, #3182ce);
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: -2px;
 }
 
 .launchpad-view__team-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: var(--font-size-xs);
   color: #1e1e2e;
-  font-weight: 700;
+  font-weight: var(--font-weight-bold);
   flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .launchpad-view__team-login {
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-md);
 }
 
 .launchpad-view__team-pr-count {
-  color: var(--color-text-muted, #718096);
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
 }
 
 .launchpad-view__team-chevron {
   margin-left: auto;
-  color: var(--color-text-muted, #718096);
-  font-size: 11px;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
 }
 
 .launchpad-view__team-prs {
-  padding: 0 10px 8px;
+  padding: 0 var(--space-4) var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .launchpad-view__team-pr-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-  font-size: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.launchpad-view__team-pr-row:hover {
+  border-color: var(--color-border-strong);
 }
 
 .launchpad-view__repo-badge {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #718096);
-  background: var(--color-surface, #edf2f7);
-  padding: 1px 6px;
-  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 
 .launchpad-view__overlap-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: #f38ba8;
-  margin-top: 2px;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-warning);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-1);
   flex-basis: 100%;
 }
 
 .launchpad-view__team-pr-link {
-  color: var(--color-text, inherit);
+  color: var(--color-text);
   text-decoration: none;
   flex: 1;
-  font-size: 12px;
+  min-width: 0;
+  font-size: var(--font-size-sm);
 }
 
 .launchpad-view__team-pr-link:hover {
+  color: var(--color-accent);
   text-decoration: underline;
+}
+
+.launchpad-view__team-pr-link:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+/* ── Loading / spinner (§2.2) ──────────────────────────── */
+@keyframes launchpad-spin {
+  to { transform: rotate(360deg); }
+}
+
+.launchpad-view__loading-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-9) 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+}
+
+/* Team tab lazy-load placeholder (§2.3) */
+.launchpad-view__team-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  background: var(--color-bg-secondary);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.launchpad-view__team-placeholder .launchpad-view__empty {
+  padding: 0;
+  margin: 0;
+}
+
+.launchpad-view__spinner {
+  display: inline-flex;
+  color: var(--color-accent);
+  animation: launchpad-spin 0.9s linear infinite;
+}
+
+.launchpad-view__loading-label {
+  font-size: var(--font-size-md);
+}
+
+.launchpad-view__refresh-spinner {
+  position: absolute;
+  top: 0;
+  right: var(--space-2);
+  display: inline-flex;
+  color: var(--color-accent);
+  animation: launchpad-spin 0.9s linear infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ── PR people row (§2.1) ──────────────────────────────── */
+.launchpad-view__pr-people {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--font-size-xs);
+}
+
+.launchpad-view__pr-people-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.launchpad-view__pr-people-label {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-semibold);
+}
+
+.launchpad-view__pr-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.launchpad-view__pr-chip--assignee {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.launchpad-view__pr-chip--reviewer {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.launchpad-view__pr-chip--more {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 </style>

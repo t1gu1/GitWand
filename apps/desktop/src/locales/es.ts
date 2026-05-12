@@ -999,6 +999,15 @@ const es: Locale = {
     updateChannelBeta: "Beta (instalación manual)",
     updateChannelStableHint: "Instalación automática in-app. Por defecto — recomendado para la mayoría de usuarios.",
     updateChannelBetaHint: "Te notifica de builds pre-release. La instalación automática está desactivada — al hacer clic en \"Instalar\" se abre la página de GitHub Releases.",
+
+    // Launchpad — Pestaña Equipo (v2.9)
+    launchpad: {
+      disableTeamTab: {
+        label: "Desactivar la pestaña Equipo del Launchpad",
+        help: "La pestaña Equipo hace una llamada API por cada PR de un compañero (~10s en workspaces grandes). Desactívala si no necesitas la vista de solapamientos.",
+      },
+    },
+
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automatizaciones",
@@ -1116,6 +1125,15 @@ const es: Locale = {
     teamOverlapViaWip: "vía WIP",
     teamOverlapViaBranch: "vía rama",
     teamPrCount: "{0} PR(s)",
+    teamNotLoaded: "Actividad del equipo no cargada",
+    teamLoadButton: "Cargar actividad del equipo",
+    assignedShort: "Asignado",
+    reviewersShort: "Revisores",
+    refreshAll: "Actualizar todo",
+    refreshAllTooltip: "Actualizar las 4 pestañas en paralelo",
+    noWorkspace: {
+      warning: "Crea un workspace primero para usar Launchpad",
+    },
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1476,6 +1494,7 @@ const es: Locale = {
     openOnForge: "Abrir en GitHub",
     toggleSidebar: "Mostrar / ocultar barra lateral",
     toggleTheme: "Alternar modo claro/oscuro",
+    openLaunchpad: "Abrir Launchpad",
     documentation: "Documentación de GitWand",
     whatsNew: "Novedades",
     reportIssue: "Reportar un problema…",

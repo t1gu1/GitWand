@@ -3467,8 +3467,13 @@ async function handleRequest(req, res) {
         const { repos } = await readBody(req);
         const results = repos.map(repo => {
           try {
+            // v2.8.5 boot-perf: dropped heavy fields (statusCheckRollup,
+            // mergeStateStatus, reviewRequests, reviewDecision, additions,
+            // deletions) — each triggers a per-PR roundtrip in `gh` internals
+            // and HTTP 502s on busy repos like dendreo at high --limit.
+            // Mirror of the Rust change in `commands/workspace.rs`.
             const raw = execSync(
-              "gh pr list --state open --json number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup --limit 100",
+              "gh pr list --state open --json number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees --limit 10",
               { cwd: repo.path, encoding: "utf-8" }
             );
             const ghPrs = JSON.parse(raw || "[]");

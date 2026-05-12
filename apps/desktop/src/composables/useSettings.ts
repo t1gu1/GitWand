@@ -18,6 +18,7 @@ import type { AIProvider } from "./useAIProvider";
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
+export type LaunchpadTab = "wip" | "prs" | "issues" | "team";
 
 export interface AppSettings {
   editor: string;
@@ -50,6 +51,15 @@ export interface AppSettings {
   aiOllamaUrl: string;
   /** Ollama model name. */
   aiOllamaModel: string;
+  /** Last active tab in Launchpad — persisted between openings (v2.9). */
+  launchpadActiveTab: LaunchpadTab;
+  /**
+   * Whether the Launchpad Team tab is enabled (v2.9). When false, the tab
+   * is hidden and the (expensive) team activity fetch — one `gh pr view
+   * --json files` per colleague PR, ~10s on a 50-PR workspace — is never
+   * triggered. Default: true.
+   */
+  launchpadTeamTabEnabled: boolean;
   /** Automation settings (v2.8). */
   automations: {
     /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
@@ -86,6 +96,8 @@ export const defaultAppSettings: AppSettings = {
   aiModel: "claude-sonnet-4-20250514",
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
+  launchpadActiveTab: "wip",
+  launchpadTeamTabEnabled: true,
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },

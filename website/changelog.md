@@ -5,6 +5,28 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.9.0 — May 2026
+
+### Launchpad — your workspace at a glance
+
+GitWand gets its cross-repo dashboard. The Launchpad is a single full-screen view that aggregates everything you care about across every repo in your active workspace — uncommitted work, open pull requests, GitHub issues, and what your teammates are doing. Inspired by GitKraken's Launchpad but local-first: no cloud account, no syncing, no monthly fee. Open it from anywhere with `⌘L` (macOS) or `Ctrl+L` (Linux/Windows), or from the Workspace panel.
+
+Four tabs, each pulling from a different angle of the workspace. **WIP** lists every repo that has uncommitted changes (staged, unstaged, or untracked) or a branch that's drifted from its upstream — useful first thing in the morning when you want to know which repos still have leftover work. **PRs** shows every open pull request across the workspace via `gh pr list`, with full status (Draft, Approved, Changes Requested, Review Required, CI rollup), labels, and a secondary chip row for assignees and review-requested users so you can spot the ones waiting on you. **Issues** does the same for GitHub Issues with three filter modes (assigned to me / mentioned / created by me) and milestone badges. **Team** is the most ambitious one — it groups colleagues' open PRs by author and detects overlap between your local work (WIP files plus un-merged commits on your branch) and the files each colleague's PR touches. Overlap members are auto-expanded so you can see the conflict before it becomes one.
+
+### Pin and Snooze
+
+Both PRs and Issues support pinning to the top of the list and snoozing for 1, 3, 7, or 14 days. The per-item `⋮` menu in every row exposes both actions. Pinned items sort first; snoozed items disappear from view until their preset elapses, and a small "N item(s) snoozed" banner above the list lets you peek and unsnooze any of them. The list of pins and snoozes persists to localStorage so it survives app restarts. Snooze takes priority over pin — a snoozed-and-pinned item stays hidden until the snooze expires, which is what you want when you're trying to focus.
+
+### Lazy Team tab + perf settings
+
+The Team tab does the most work — one `gh pr view --json files` per colleague PR — so on a busy workspace it can take ten seconds. To keep the Launchpad snappy at first open, the Team tab no longer fetches automatically. A placeholder with a "Load team activity" button shows on first click, and the data caches for subsequent opens. The other three tabs (WIP / PRs / Issues) stay eager because they're cheap and parallelised. A new Settings toggle "Disable Launchpad Team tab" lets you hide it entirely if you don't use it.
+
+The Launchpad also gets a new "Refresh all" button that fans out the four refresh calls in parallel via `Promise.all`, plus persistence of the active tab between opens so reopening the Launchpad doesn't reset you back to WIP. All four tabs now share a homogeneous loading spinner — a small SVG that animates centrally on first load and tucks into the top-right corner on subsequent refreshes.
+
+Under the hood: 36 unit tests cover the five composables (`useLaunchpadWip`, `useLaunchpadPrs`, `useLaunchpadIssues`, `useLaunchpadPins`, `useLaunchpadTeam`), plus 11 new UI smoke tests for `LaunchpadView.vue` itself. Total desktop test suite is now 95/95 green.
+
+---
+
 ## v2.8.5 — May 2026
 
 ### Critical CSP fix — Tauri IPC was secretly running on the slow path

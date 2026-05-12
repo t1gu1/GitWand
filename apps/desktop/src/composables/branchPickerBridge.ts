@@ -23,3 +23,6 @@ export const UNDO_POPOVER_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("undoP
 
 /** Focus CommitLog's existing search input (Edit menu → Find in Log). */
 export const LOG_FOCUS_SEARCH_KEY: InjectionKey<Ref<number>> = Symbol("logFocusSearch");
+
+/** Open Launchpad view (View menu → Open Launchpad, ⌘L). */
+export const LAUNCHPAD_OPEN_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("launchpadOpenRequest");

@@ -1025,6 +1025,14 @@ const en = {
     updateChannelStableHint: "In-app auto-install. The default \u2014 recommended for most users.",
     updateChannelBetaHint: "Notifies you of pre-release builds. Auto-install is disabled \u2014 clicking \u201cInstall\u201d opens the GitHub release page.",
 
+    // Launchpad \u2014 Team tab toggle (v2.9)
+    launchpad: {
+      disableTeamTab: {
+        label: "Disable Launchpad Team tab",
+        help: "The Team tab fires one API call per colleague PR (~10s on large workspaces). Turn this off if you don't need the overlap view.",
+      },
+    },
+
       // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automations",
@@ -1144,6 +1152,15 @@ const en = {
     teamOverlapViaWip: "via WIP",
     teamOverlapViaBranch: "via branch",
     teamPrCount: "{0} PR(s)",
+    teamNotLoaded: "Team activity not loaded yet",
+    teamLoadButton: "Load team activity",
+    assignedShort: "Assigned",
+    reviewersShort: "Reviewers",
+    refreshAll: "Refresh all",
+    refreshAllTooltip: "Refresh all tabs in parallel",
+    noWorkspace: {
+      warning: "Create a workspace first to use the Launchpad",
+    },
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1509,6 +1526,7 @@ const en = {
     // View
     toggleSidebar: "Toggle Sidebar",
     toggleTheme: "Toggle Light/Dark Mode",
+    openLaunchpad: "Open Launchpad",
     // Help
     documentation: "GitWand Documentation",
     whatsNew: "What's New",

@@ -988,6 +988,14 @@ const zhCN: Locale = {
     updateChannelBeta: "Beta（手动安装）",
     updateChannelStableHint: "应用内自动安装。默认 — 推荐给大多数用户。",
     updateChannelBetaHint: "通知你预发布版本。自动安装已禁用 — 点击「安装」会打开 GitHub Releases 页面。",
+    // Launchpad \u2014 \u56e2\u961f\u6807\u7b7e\u9875 (v2.9)
+    launchpad: {
+      disableTeamTab: {
+        label: "\u7981\u7528 Launchpad \u56e2\u961f\u6807\u7b7e",
+        help: "\u56e2\u961f\u6807\u7b7e\u6bcf\u4e2a\u540c\u4e8b PR \u90fd\u4f1a\u8c03\u7528\u4e00\u6b21 API\uff08\u5728\u5927\u578b\u5de5\u4f5c\u533a\u4e0a\u7ea6 10 \u79d2\uff09\u3002\u5982\u679c\u4f60\u4e0d\u9700\u8981\u6587\u4ef6\u91cd\u53e0\u89c6\u56fe\uff0c\u53ef\u4ee5\u5173\u95ed\u3002",
+      },
+    },
+
     // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "\u81ea\u52a8\u5316",
@@ -1105,6 +1113,15 @@ const zhCN: Locale = {
     teamOverlapViaWip: "来自 WIP",
     teamOverlapViaBranch: "来自分支",
     teamPrCount: "{0} 个 PR",
+    teamNotLoaded: "团队活动未加载",
+    teamLoadButton: "加载团队活动",
+    assignedShort: "已分配",
+    reviewersShort: "审阅者",
+    refreshAll: "全部刷新",
+    refreshAllTooltip: "并行刷新所有 4 个标签页",
+    noWorkspace: {
+      warning: "请先创建工作区以使用 Launchpad",
+    },
   },
 
   undoStack: {
@@ -1463,6 +1480,7 @@ const zhCN: Locale = {
     openOnForge: "在 GitHub 中打开",
     toggleSidebar: "显示 / 隐藏侧边栏",
     toggleTheme: "切换浅色 / 深色模式",
+    openLaunchpad: "打开 Launchpad",
     documentation: "GitWand 文档",
     whatsNew: "新功能",
     reportIssue: "报告问题…",
