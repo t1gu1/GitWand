@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.4] - 2026-05-12
+
+Quick fixes batch — 2 bugs, 6 UX polish, 1 feature (Mode hors-ligne). Closes the "Quick Fixes" section of the ROADMAP. Detail per chantier in [PLAN-quick-fixes.md](./PLAN-quick-fixes.md).
+
+### Fixed
+
+- **Global search palette — stale branches on repo switch** : `useGitRepo.ts` adds a `watch(folderPath, …)` that invalidates `branches` and `log` whenever the active repo changes. The inline reset inside `openRepo`/`closeRepo` is kept as defense-in-depth.
+- **PR sidebar empty when PRs exist** : root cause was an atomic `Vec<GhPrRaw>` deserialization that failed when any PR had `author: null` (deleted user, GitHub App bots) or `assignees[].login: null` — the whole list was dropped, surfacing as a generic error. Refactored `parse_gh_pr_json` to two-pass tolerant: parse to `Vec<Value>` first, then try each PR individually; structurally-broken entries are skipped and logged to stderr Rust. `GhPrAuthor.login`, `GhPrAssignee.login`, `GhPrRaw.author` now `Option<>` with `#[serde(default)]`. 3 new Rust tests (`parse_pr_with_null_author_does_not_drop_list`, `parse_pr_with_null_assignee_login_keeps_others`, `parse_pr_list_skips_unparseable_entry`).
+
+### Changed
+
+- **Repo `+` dropdown — recent and pinned repos** : `RepoTabStrip.vue` extended with two sections (pinned + recents) under the existing Open / Clone / Fork actions, separated by `<hr>`. Cap 8 entries combined (pinned first), `max-width: 320px`, `max-height: 360px`, vertical scroll. Empty state is handled cleanly (no orphan `<hr>`). +1 i18n key × 5 locales (`tabStripPinnedSection`); the existing `tabStripRecentSection` is reused.
+- **Push confirmation when unpushed tags exist** : new 3-layer command `git_unpushed_tags(cwd, remote)` (Rust `commands/ops.rs` + dev-server `GET /api/git-unpushed-tags` + TS `gitUnpushedTags`) — deterministic diff between `git tag -l` and `git ls-remote --tags --refs <remote>`. `App.vue#handlePush` intercepts the push, opens an inline `BaseModal` with 3 actions (Push with tags / Push without tags / Cancel) when the list is non-empty, otherwise pushes directly. Best-effort: a probe failure falls back to a standard push (no UX blocking). 5 i18n keys × 5 locales (`push.tagsConfirm.*`).
+- **Tags modal — buttons aligned with design system** : `TagsPanel.vue` "Nouveau tag" and "Pousser tout vers origin" buttons now use a new `.tp-btn-sm` class (`height: 32px`, `padding: var(--space-2) var(--space-4)`, `font-size: var(--font-size-sm)`) matching `StashManager`'s `.sm-btn-sm`. Specificity (0,1,0) preserved per the BaseModal rule.
+- **Rewind button — Light mode contrast** : `AppHeader.vue#.undo-entry-btn` already used `background: var(--color-bg-secondary)` which resolves cleanly to `#ffffff` (light) / `#15151f` (dark). Inline CSS comment expanded to document the theme intent and prevent future regression to `transparent`.
+- **Red error banner replaced by in-app Logs panel** : new `useLogs.ts` composable (module-level singleton, `LogEntry { id, timestamp, level: "error"|"warn"|"info", message, context? }`, FIFO cap 500 with `splice` eviction, `unreadCount` ref, `pushLog`/`clearLogs`/`markAllRead`, in-memory only — no `localStorage`). New Logs tab in `SettingsPanel.vue` with structured rendering (`[YYYY-MM-DD HH:mm:ss] LEVEL message` + optional context block), `Clear` button, `markAllRead` on tab mount. Status-bar indicator in `AppHeader.vue` with pill counter (caps visually at `99+`), tooltip "{count} unread logs". Lightweight `error-toast` (3s auto-dismiss, "View logs" jump button) is preserved for immediate critical errors (clone/push fail) — these errors also `pushLog("error", …)` so they accumulate. 15 new i18n entries (`logsLevelError`, `logsLevelWarn`, `logsLevelInfo` × 5 locales) plus reworded `logsEmpty` strings.
+
+### Added
+
+- **Sidebar PR — "Assigned to me" filter** (verified — already shipped in a prior iteration). 3-position toggle All / Assigned / Reviews in `PrListSidebar.vue`, Rust command `gh_current_user` (wraps `gh api user --jq .login`) cached at module level, `usePrPanel.ts#displayedPrs` computed filters by `assignees` (assigned mode) or `reviewRequested` (reviews mode). Identity banner with retry button when current user can't be resolved. Dedicated empty states for both modes. 15 locale keys × 5 locales already in place.
+
+- **Offline mode** :
+  - New Rust command `check_remote_reachable(url, timeout_ms)` in `commands/network.rs` — `reqwest::Client::head()` for HTTPS, `TcpStream::connect_timeout` fallback for SSH (`git@host:owner/repo` SCP-form), `ssh://`, `git://`, and IPv6 bracketed URLs. Strips `user:pass@` credentials. 11 Rust unit tests on the URL parser.
+  - New `useConnectivity.ts` composable (module-level singleton — `isOnline`, `lastCheckedAt`, `checking`). `probeConnectivity(cwd)` reads `gitRemoteInfo` then calls `checkRemoteReachable(2000ms)`. Logs `info`/`warn` transitions via `useLogs`. Listens to `window.online` (optimistic flip + poller confirmation) and `window.offline` (immediate flip).
+  - Polling integrated into `useRepoPoller`'s existing 2-second heartbeat via new optional `onConnectivityTick` callback gated to every 15 ticks (~30s). No new independent timer (respects the polling-discipline invariant from v2.8.2).
+  - New `networkGuard.ts` helper exporting `requireOnline(operationLabel): boolean` — synchronous, logs `warn` + shows toast and returns `false` when offline. Wrapped on 9 Tauri network call sites: `fetchRemote`, `push`, `pull` (`useGitRepo.ts`), `gitClone` (`CloneModal.vue`), `ghFork` (`ForkModal.vue`), `ghListPrs` / `ghCreatePr` / `ghCheckoutPr` / `ghMergePr` (`usePrPanel.ts`). Guard runs *before* IPC, so no spinner is ever started on a network operation while offline.
+  - "Offline" badge in `AppHeader.vue` driven by `isOffline = navIsOffline || !probedOnline` computed; `SyncSplitButton` accepts `:disabled="isOffline"` for push/pull/sync.
+  - 8 new i18n keys × 5 locales (`connectivity.{offline.badge,offline.tooltip,offline.disabledOp,offline.opSkipped,online.reconnected,offline.detected,probe.error,probe.label}`).
+  - 8 vitest tests in `connectivity.test.ts` covering probe flip, log transitions both ways, no-repo path, no-remote path, guard true/false, guard log. **84/84 desktop tests green.**
+
+### Test results
+
+- `cd apps/desktop && pnpm test` → 84/84
+- `cd apps/desktop && pnpm exec vue-tsc --noEmit` → clean
+- New Rust unit tests (11 in `network.rs` + 3 in PR parser): cargo run required host-side (sandbox cargo unavailable)
+
 ## [2.8.3] - 2026-05-12
 
 ### Added

@@ -108,6 +108,7 @@ const zhCN: Locale = {
     tabStripClone: "从 URL 克隆",
     tabStripFork: "在 GitHub 上 Fork",
     tabStripRecentSection: "最近的仓库",
+    tabStripPinnedSection: "收藏的仓库",
     tabStripNoRecent: "没有最近的仓库",
   },
 
@@ -846,8 +847,12 @@ const zhCN: Locale = {
     tabAi: "AI",
     tabLogs: "日志",
     logsTitle: "活动日志",
-    logsEmpty: "没有记录错误。",
+    logsEmpty: "暂无日志记录",
     logsClear: "清空",
+    logsCopyAll: "全部复制",
+    logsLevelError: "错误",
+    logsLevelWarn: "警告",
+    logsLevelInfo: "信息",
     aiEnable: "启用 AI 建议",
     aiEnableHint: "为复杂冲突（置信度 < 60%）提出智能解决方案",
     aiPrivacyNote: "AI 会分析冲突上下文（base/ours/theirs、提交信息、文件名）以提出解决方案。你的代码只会发送给你选择的服务商。任何建议都不会自动应用。",
@@ -1562,9 +1567,28 @@ const zhCN: Locale = {
     viewLogs: "查看日志",
     hasErrors: "发生了错误 — 点击查看",
   },
+  statusBar: {
+    errorsTooltip: "{0} 条未读错误 — 点击查看",
+  },
   offline: {
     label: "离线",
     tooltip: "无网络连接 — 远程操作已禁用",
+  },
+  connectivity: {
+    offline: {
+      badge: "离线",
+      tooltip: "无连接 — 网络操作已禁用",
+      disabledOp: "离线 — 此操作需要网络连接",
+      opSkipped: "操作 '{0}' 已跳过 — 离线",
+      detected: "连接已断开",
+    },
+    online: {
+      reconnected: "连接已恢复",
+    },
+    probe: {
+      error: "连接性检查失败",
+      label: "连接性",
+    },
   },
 };
 

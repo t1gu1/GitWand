@@ -1,6 +1,7 @@
 pub(crate) mod ai;
 pub(crate) mod files;
 pub(crate) mod gh;
+pub(crate) mod network;
 pub(crate) mod ops;
 pub(crate) mod read;
 pub(crate) mod workspace;

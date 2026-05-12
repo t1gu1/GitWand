@@ -39,6 +39,7 @@ import {
   type StashEntry,
   gitAddToGitignore,
 } from "../utils/backend";
+import { requireOnline } from "../utils/networkGuard";
 
 export type ViewMode = "dashboard" | "changes" | "history" | "graph" | "prs";
 
@@ -101,6 +102,25 @@ export function useGitRepo() {
   // Commit diff state (for history view)
   const selectedCommitHash = ref<string | null>(null);
   const commitDiffs = ref<GitDiff[]>([]);
+
+  /**
+   * Search-palette invalidation on active-repo change.
+   *
+   * `openRepo` / `closeRepo` already clear `branches` and `log`, but that
+   * only covers code paths that go through those two functions. Any future
+   * code path that mutates `folderPath` directly (or a hot-reload scenario
+   * mid-session) would leave stale branches in the palette — the user
+   * opens repo B and sees branches from repo A on Cmd/Ctrl+K (bug §B1).
+   *
+   * This watch is the single source of truth for "active repo changed →
+   * forget the palette's source data". It fires for null↔path↔path
+   * transitions. Not `immediate: true` — initial mount has nothing to
+   * invalidate, and we don't want to clobber the very first hydration.
+   */
+  watch(folderPath, () => {
+    branches.value = [];
+    log.value = [];
+  });
 
   /** Whether a repo is loaded. */
   const hasRepo = computed(() => !!folderPath.value && !!status.value);
@@ -235,6 +255,9 @@ export function useGitRepo() {
   async function fetchRemote() {
     // Skip fetch during merge operations to avoid git lock conflicts
     if (!folderPath.value || isFetching.value || isMerging.value || hasConflicts.value) return;
+    // F1 — Mode hors-ligne: short-circuit before hitting the IPC so we
+    // can never hang on the 5-min NETWORK timeout when the link is dead.
+    if (!requireOnline("fetch")) return;
     isFetching.value = true;
     try {
       const result = await gitFetch(folderPath.value);
@@ -538,6 +561,7 @@ export function useGitRepo() {
 
   async function push() {
     if (!folderPath.value) return;
+    if (!requireOnline("push")) return;
     isPushing.value = true;
     try {
       // If the current branch has no upstream, publish it with --set-upstream.
@@ -559,6 +583,7 @@ export function useGitRepo() {
 
   async function pull(rebase: boolean = false) {
     if (!folderPath.value) return;
+    if (!requireOnline("pull")) return;
     isPulling.value = true;
     try {
       // Fetch all branches first (updates origin/master, etc.)

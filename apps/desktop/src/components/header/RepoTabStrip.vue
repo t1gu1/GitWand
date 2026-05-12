@@ -48,13 +48,26 @@ const emit = defineEmits<{
   closeOtherTabs: [tabId: number];
 }>();
 
-// Top-5 recent repos not already open as a tab — shown in the + dropdown.
-const recentRepos = computed(() => {
+// Pinned and recent repos shown in the + dropdown (excludes repos already
+// open in a tab). Capped at 8 combined entries so the menu stays compact;
+// pinned items always win a slot, the remainder goes to recents.
+const MAX_DROPDOWN_ENTRIES = 8;
+
+const dropdownEntries = computed(() => {
   const openPaths = new Set(props.tabs.map((t) => t.path));
-  return repoHistory.value
-    .filter((e) => !openPaths.has(e.path))
-    .slice(0, 5);
+  const eligible = repoHistory.value.filter((e) => !openPaths.has(e.path));
+  const pinned = eligible.filter((e) => e.pinned);
+  const recent = eligible.filter((e) => !e.pinned);
+  const pinnedSlice = pinned.slice(0, MAX_DROPDOWN_ENTRIES);
+  const recentSlice = recent.slice(0, MAX_DROPDOWN_ENTRIES - pinnedSlice.length);
+  return { pinned: pinnedSlice, recent: recentSlice };
 });
+
+const pinnedRepos = computed(() => dropdownEntries.value.pinned);
+const recentRepos = computed(() => dropdownEntries.value.recent);
+const hasAnyRepo = computed(
+  () => pinnedRepos.value.length > 0 || recentRepos.value.length > 0,
+);
 
 // ─── + button dropdown (v2.0) ────────────────────────────
 //
@@ -264,27 +277,62 @@ function onCloseClick(e: MouseEvent, tabId: number) {
           {{ t('header.tabStripFork') }}
         </button>
 
-        <!-- Recent repos section -->
-        <div class="repo-tab-new-separator" role="separator" aria-hidden="true"></div>
-        <div class="repo-tab-new-section-label">{{ t('header.tabStripRecentSection') }}</div>
-        <template v-if="recentRepos.length > 0">
-          <button
-            v-for="entry in recentRepos"
-            :key="entry.path"
-            type="button"
-            role="menuitem"
-            class="repo-tab-new-item repo-tab-new-item--recent"
-            :title="entry.path"
-            @click="closeMenu(); emit('openRecent', entry.path)"
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 3.5A1.5 1.5 0 013.5 2h3.586a1.5 1.5 0 011.06.44l.915.914a1 1 0 00.707.293H12.5A1.5 1.5 0 0114 5.147V12.5A1.5 1.5 0 0112.5 14h-9A1.5 1.5 0 012 12.5v-9z" stroke="currentColor" stroke-width="1.2" />
-            </svg>
-            <span class="repo-tab-new-item__name">{{ entry.name }}</span>
-            <span v-if="entry.pinned" class="repo-tab-new-item__pin" aria-hidden="true">★</span>
-          </button>
+        <!--
+          Pinned + Recent sections. The separator + label combo is rendered
+          only if the corresponding list is non-empty, so we never leak an
+          orphan <hr> when the user has no history yet. Pinned comes first,
+          then a secondary separator before recents (only if both exist).
+        -->
+        <template v-if="hasAnyRepo">
+          <div class="repo-tab-new-separator" role="separator" aria-hidden="true"></div>
+          <div v-if="pinnedRepos.length > 0" class="repo-tab-new-section">
+            <div class="repo-tab-new-section-label">{{ t('header.tabStripPinnedSection') }}</div>
+            <button
+              v-for="entry in pinnedRepos"
+              :key="entry.path"
+              type="button"
+              role="menuitem"
+              class="repo-tab-new-item repo-tab-new-item--recent"
+              :title="entry.path"
+              @click="closeMenu(); emit('openRecent', entry.path)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 3.5A1.5 1.5 0 013.5 2h3.586a1.5 1.5 0 011.06.44l.915.914a1 1 0 00.707.293H12.5A1.5 1.5 0 0114 5.147V12.5A1.5 1.5 0 0112.5 14h-9A1.5 1.5 0 012 12.5v-9z" stroke="currentColor" stroke-width="1.2" />
+              </svg>
+              <span class="repo-tab-new-item__text">
+                <span class="repo-tab-new-item__name">{{ entry.name }}</span>
+                <span class="repo-tab-new-item__path">{{ entry.path }}</span>
+              </span>
+              <span class="repo-tab-new-item__pin" aria-hidden="true">★</span>
+            </button>
+          </div>
+          <div
+            v-if="pinnedRepos.length > 0 && recentRepos.length > 0"
+            class="repo-tab-new-separator repo-tab-new-separator--inner"
+            role="separator"
+            aria-hidden="true"
+          ></div>
+          <div v-if="recentRepos.length > 0" class="repo-tab-new-section">
+            <div class="repo-tab-new-section-label">{{ t('header.tabStripRecentSection') }}</div>
+            <button
+              v-for="entry in recentRepos"
+              :key="entry.path"
+              type="button"
+              role="menuitem"
+              class="repo-tab-new-item repo-tab-new-item--recent"
+              :title="entry.path"
+              @click="closeMenu(); emit('openRecent', entry.path)"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 3.5A1.5 1.5 0 013.5 2h3.586a1.5 1.5 0 011.06.44l.915.914a1 1 0 00.707.293H12.5A1.5 1.5 0 0114 5.147V12.5A1.5 1.5 0 0112.5 14h-9A1.5 1.5 0 012 12.5v-9z" stroke="currentColor" stroke-width="1.2" />
+              </svg>
+              <span class="repo-tab-new-item__text">
+                <span class="repo-tab-new-item__name">{{ entry.name }}</span>
+                <span class="repo-tab-new-item__path">{{ entry.path }}</span>
+              </span>
+            </button>
+          </div>
         </template>
-        <div v-else class="repo-tab-new-empty">{{ t('header.tabStripNoRecent') }}</div>
       </div>
     </Teleport>
   </div>
@@ -418,7 +466,10 @@ function onCloseClick(e: MouseEvent, tabId: number) {
    the data-v attribute that Vue keeps on the teleported root element. */
 .repo-tab-new-menu {
   position: fixed;
-  min-width: 200px;
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
   padding: var(--space-2);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -428,6 +479,7 @@ function onCloseClick(e: MouseEvent, tabId: number) {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  scrollbar-width: thin;
 }
 
 .repo-tab-new-item {
@@ -461,11 +513,25 @@ function onCloseClick(e: MouseEvent, tabId: number) {
   color: var(--color-accent);
 }
 
-/* ─── Recent section ───────────────────────────────────── */
+/* ─── Pinned + Recent sections ──────────────────────────
+   Two adjacent sub-sections, each with its own header. The
+   `inner` separator visually splits pinned/recent when both
+   exist, while the top-level separator splits actions from
+   the history block. */
 .repo-tab-new-separator {
   height: 1px;
   background: var(--color-border);
   margin: var(--space-2) 0;
+}
+
+.repo-tab-new-separator--inner {
+  margin: var(--space-1) 0;
+}
+
+.repo-tab-new-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .repo-tab-new-section-label {
@@ -477,19 +543,40 @@ function onCloseClick(e: MouseEvent, tabId: number) {
   color: var(--color-text-muted);
 }
 
-.repo-tab-new-empty {
-  padding: var(--space-2) var(--space-4);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  font-style: italic;
+/* History entries show name + truncated path stacked vertically.
+   `__text` is the flex column wrapper that owns the ellipsis on
+   both lines — the parent .repo-tab-new-item provides the row
+   layout (icon | text | optional pin star). */
+.repo-tab-new-item--recent {
+  align-items: center;
 }
 
-.repo-tab-new-item--recent .repo-tab-new-item__name {
-  flex: 1;
+.repo-tab-new-item__text {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.repo-tab-new-item__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.repo-tab-new-item__path {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-tab-new-item--recent:hover .repo-tab-new-item__path {
+  color: var(--color-accent);
+  opacity: 0.8;
 }
 
 .repo-tab-new-item__pin {

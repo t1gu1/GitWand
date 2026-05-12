@@ -17,6 +17,7 @@
 import { computed, onMounted, nextTick, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { gitClone, pickFolder } from "../utils/backend";
+import { requireOnline } from "../utils/networkGuard";
 import BaseModal from "./BaseModal.vue";
 
 const emit = defineEmits<{
@@ -60,6 +61,10 @@ async function browseForParent() {
 
 async function onClone() {
   if (!canClone.value) return;
+  if (!requireOnline("clone")) {
+    error.value = t("connectivity.offline.disabledOp");
+    return;
+  }
   error.value = null;
   isCloning.value = true;
   try {

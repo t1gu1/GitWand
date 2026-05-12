@@ -124,6 +124,7 @@ const emit = defineEmits<{
   openWorktrees: [branch?: string];
   openSubmodules: [];
   openSettings: [];
+  openLogs: [];
   openSearch: [];
   undoPerformed: [];
   toggleTheme: [];
@@ -536,7 +537,14 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
               <circle cx="7" cy="12" r="1.5" fill="var(--color-bg-secondary)" stroke="currentColor" stroke-width="1.2" />
             </svg>
           </button>
-          <span v-if="(props.errorCount ?? 0) > 0" class="settings-error-dot" :title="t('error.hasErrors')" />
+          <button
+            v-if="(props.errorCount ?? 0) > 0"
+            type="button"
+            class="settings-error-dot"
+            :title="t('statusBar.errorsTooltip', props.errorCount ?? 0)"
+            :aria-label="t('statusBar.errorsTooltip', props.errorCount ?? 0)"
+            @click.stop="emit('openLogs')"
+          >{{ (props.errorCount ?? 0) > 99 ? '99+' : props.errorCount }}</button>
         </div>
       </div>
     </div>
@@ -899,7 +907,10 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   height: 26px;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: var(--color-bg-secondary); /* white in light (#fff) vs #f4f4f8 bg → contraste visible */
+  /* Surface token : #ffffff en Light (sur fond popover #f4f4f8) et
+     #15151f en Dark (sur fond popover #0d0d13). Évite le fond
+     transparent qui ne contraste pas en mode clair. */
+  background: var(--color-bg-secondary);
   color: var(--color-accent);
   cursor: pointer;
   opacity: 0;
@@ -931,14 +942,27 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
 .settings-error-dot {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
   background: var(--color-danger, #f38ba8);
   border: 1.5px solid var(--color-bg-secondary);
-  pointer-events: none;
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.settings-error-dot:hover {
+  transform: scale(1.1);
 }
 
 /* ─── Offline pill ───────────────────────────────────── */

@@ -43,6 +43,7 @@ import {
   type PrFileHistory,
 } from "../utils/backend";
 import { getPersistedDiffMode, type DiffMode } from "../utils/diffMode";
+import { requireOnline } from "../utils/networkGuard";
 import { t } from "./useI18n";
 
 export const PR_PANEL_KEY = Symbol("prPanel");
@@ -211,12 +212,24 @@ export function usePrPanel(cwd: Ref<string>) {
 
   async function loadPrs() {
     if (!cwd.value) return;
+    // F1 — Mode hors-ligne: short-circuit before the gh subprocess.
+    // `gh pr list` itself would hang on DNS / TCP timeout for the user
+    // visible duration of the IPC, leaving the panel stuck on a spinner.
+    if (!requireOnline("gh pr list")) {
+      prs.value = [];
+      loading.value = false;
+      error.value = t("connectivity.offline.disabledOp");
+      return;
+    }
     loading.value = true;
     error.value = null;
     try {
       prs.value = await ghListPrs(cwd.value, filterState.value);
     } catch (err: any) {
-      const msg: string = err.message ?? "";
+      const msg: string = err?.message ?? String(err);
+      // §B2 — surface the raw underlying error so users + maintainers can
+      // see what `gh` actually returned (auth/scope/remote issue, etc.).
+      console.error("[usePrPanel] gh pr list failed:", msg);
       const isGhMissing =
         // Rust os error when binary not found in PATH
         msg.includes("No such file or directory") ||
@@ -324,6 +337,10 @@ export function usePrPanel(cwd: Ref<string>) {
   // ─── PR actions ─────────────────────────────────────────
   async function createPr() {
     if (!cwd.value || !newPrTitle.value.trim()) return;
+    if (!requireOnline("gh pr create")) {
+      error.value = t("connectivity.offline.disabledOp");
+      return;
+    }
     isCreating.value = true;
     error.value = null;
     try {
@@ -345,6 +362,10 @@ export function usePrPanel(cwd: Ref<string>) {
   }
 
   async function checkoutPr(pr: PullRequest) {
+    if (!requireOnline("gh pr checkout")) {
+      error.value = t("connectivity.offline.disabledOp");
+      return;
+    }
     try {
       await ghCheckoutPr(cwd.value, pr.number);
       success.value = t("pr.success.checkoutDone", pr.number);
@@ -353,6 +374,10 @@ export function usePrPanel(cwd: Ref<string>) {
 
   async function mergePr() {
     if (!mergingPr.value) return;
+    if (!requireOnline("gh pr merge")) {
+      error.value = t("connectivity.offline.disabledOp");
+      return;
+    }
     try {
       await ghMergePr(cwd.value, mergingPr.value.number, mergeMethod.value);
       success.value = t("pr.success.prMerged", mergingPr.value.number);

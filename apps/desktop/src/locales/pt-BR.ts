@@ -104,6 +104,7 @@ const ptBR: Locale = {
     tabStripClone: "Clonar de URL",
     tabStripFork: "Fazer fork no GitHub",
     tabStripRecentSection: "Repos recentes",
+    tabStripPinnedSection: "Repos favoritos",
     tabStripNoRecent: "Nenhum repositório recente",
   },
 
@@ -858,8 +859,12 @@ const ptBR: Locale = {
     tabAi: "IA",
     tabLogs: "Registros",
     logsTitle: "Registro de atividade",
-    logsEmpty: "Nenhum erro registrado.",
+    logsEmpty: "Sem entradas de log",
     logsClear: "Limpar",
+    logsCopyAll: "Copiar tudo",
+    logsLevelError: "ERRO",
+    logsLevelWarn: "AVISO",
+    logsLevelInfo: "INFO",
     aiEnable: "Ativar sugestões de IA",
     aiEnableHint: "Propõe resoluções inteligentes para conflitos complexos (confiança < 60%)",
     aiPrivacyNote: "A IA analisa o contexto do conflito (base/ours/theirs, mensagens de commit, nome do arquivo) para propor uma resolução. Seu código é enviado apenas ao provedor selecionado. Nenhuma sugestão é aplicada automaticamente.",
@@ -1576,9 +1581,28 @@ const ptBR: Locale = {
     viewLogs: "Ver registros",
     hasErrors: "Ocorreram erros — clique para ver",
   },
+  statusBar: {
+    errorsTooltip: "{0} erro(s) não lido(s) — clique para ver",
+  },
   offline: {
     label: "Offline",
     tooltip: "Sem conexão de rede — as operações remotas estão desativadas",
+  },
+  connectivity: {
+    offline: {
+      badge: "Offline",
+      tooltip: "Sem conexão — as operações de rede estão desativadas",
+      disabledOp: "Offline — esta ação requer uma conexão",
+      opSkipped: "Operação '{0}' ignorada — offline",
+      detected: "Conexão perdida",
+    },
+    online: {
+      reconnected: "Conexão restaurada",
+    },
+    probe: {
+      error: "Verificação de conectividade falhou",
+      label: "Conectividade",
+    },
   },
 };
 

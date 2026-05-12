@@ -325,7 +325,11 @@ pub struct PullRequest {
 
 #[derive(Deserialize)]
 pub struct GhPrAuthor {
-    pub login: String,
+    /// `None` when the original author has been deleted on GitHub, or for
+    /// some app-authored PRs (Dependabot, GitHub Actions bot, etc.) where
+    /// the GraphQL field is null. Tolerate this so we don't drop the PR.
+    #[serde(default)]
+    pub login: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -335,7 +339,8 @@ pub struct GhPrLabel {
 
 #[derive(Deserialize)]
 pub struct GhPrAssignee {
-    pub login: String,
+    #[serde(default)]
+    pub login: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -399,7 +404,11 @@ pub struct GhPrRaw {
     pub number: i64,
     pub title: String,
     pub state: String,
-    pub author: GhPrAuthor,
+    /// `None` when GitHub returns `null` for the author (deleted user,
+    /// some bot accounts). We display an empty author rather than dropping
+    /// the PR entirely.
+    #[serde(default)]
+    pub author: Option<GhPrAuthor>,
     #[serde(rename = "headRefName")]
     pub head_ref_name: String,
     #[serde(rename = "baseRefName")]

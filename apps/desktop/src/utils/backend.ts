@@ -1903,6 +1903,51 @@ export async function gitRemoteInfo(cwd: string): Promise<RemoteInfo> {
   }
 }
 
+// ─── Connectivity probe (F1 — Mode hors-ligne) ────────────────
+
+/**
+ * Probe whether the host behind a git remote URL is reachable.
+ *
+ * Mirrors the Rust `check_remote_reachable` command. Performs a bounded TCP
+ * connect to the parsed host:port (443 for https, 22 for SSH, 9418 for git
+ * protocol, or whatever explicit port the URL carries).  Returns `false`
+ * — never throws — when the URL is empty, unparseable, or the host cannot
+ * be reached within `timeoutMs`.
+ *
+ * Used by `useConnectivity` to flip the app into "offline" mode without
+ * surfacing a spinner or an error banner to the user.
+ */
+export async function checkRemoteReachable(
+  url: string,
+  timeoutMs: number = 2000,
+): Promise<boolean> {
+  if (!url) return false;
+  try {
+    if (isTauri()) {
+      // Network probe — bounded by the Rust timeout itself; we still give
+      // the IPC a slightly larger budget so a slow native call surfaces as
+      // `false` rather than as an unhandled timeout exception.
+      return await tauriInvoke<boolean>(
+        "check_remote_reachable",
+        { url, timeoutMs },
+        Math.max(5_000, timeoutMs + 2_000),
+      );
+    }
+    const res = await devFetch(`${DEV_SERVER}/api/check-remote-reachable`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, timeoutMs }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { reachable?: boolean };
+    return !!data.reachable;
+  } catch {
+    // Any IPC / fetch / parse failure → treat as unreachable. The probe is
+    // a best-effort signal; we'd rather flip into offline mode than throw.
+    return false;
+  }
+}
+
 // Module-level identity cache — one `gh api user` call per app session.
 // Store the Promise so concurrent callers reuse the same in-flight request.
 let _currentUserPromise: Promise<string> | null = null;

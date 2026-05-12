@@ -321,7 +321,7 @@ pub(crate) fn gh_pr_detail_raw_to_detail(r: GhPrDetailRaw) -> PullRequestDetail 
         title: r.title,
         body: r.body,
         state: r.state,
-        author: r.author.login,
+        author: r.author.login.unwrap_or_default(),
         branch: r.head_ref_name,
         base: r.base_ref_name,
         draft: r.is_draft,
@@ -346,9 +346,25 @@ pub(crate) fn parse_gh_pr_json(json: &str) -> Result<Vec<PullRequest>, String> {
     if trimmed.is_empty() || trimmed == "[]" {
         return Ok(Vec::new());
     }
-    let raws: Vec<GhPrRaw> = serde_json::from_str(trimmed)
+    // Two-pass tolerant parse: parse to Vec<Value> first so a single
+    // malformed PR (e.g. null `author` for a deleted user or a GitHub App
+    // that doesn't expose `.login`) doesn't drop the entire list.
+    let values: Vec<serde_json::Value> = serde_json::from_str(trimmed)
         .map_err(|e| format!("Failed to parse gh pr list output: {}", e))?;
-    Ok(raws.into_iter().map(gh_pr_raw_to_pr).collect())
+    let mut out = Vec::with_capacity(values.len());
+    for v in values {
+        match serde_json::from_value::<GhPrRaw>(v.clone()) {
+            Ok(raw) => out.push(gh_pr_raw_to_pr(raw)),
+            Err(e) => {
+                let number = v.get("number").and_then(|n| n.as_i64()).unwrap_or(-1);
+                eprintln!(
+                    "[parse_gh_pr_json] skipping PR #{}: {}",
+                    number, e
+                );
+            }
+        }
+    }
+    Ok(out)
 }
 
 pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
@@ -361,11 +377,15 @@ pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
         .filter_map(|c| c.conclusion)
         .next()
         .unwrap_or_default();
+    let author = r
+        .author
+        .and_then(|a| a.login)
+        .unwrap_or_default();
     PullRequest {
         number: r.number,
         title: r.title,
         state: r.state,
-        author: r.author.login,
+        author,
         branch: r.head_ref_name,
         base: r.base_ref_name,
         draft: r.is_draft,
@@ -375,7 +395,11 @@ pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
         additions: r.additions,
         deletions: r.deletions,
         labels: r.labels.into_iter().map(|l| l.name).collect(),
-        assignees: r.assignees.into_iter().map(|a| a.login).collect(),
+        assignees: r
+            .assignees
+            .into_iter()
+            .filter_map(|a| a.login)
+            .collect(),
         review_requested,
         review_decision: r.review_decision.unwrap_or_default(),
         merge_state_status: r.merge_state_status.unwrap_or_default(),

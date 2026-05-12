@@ -97,6 +97,7 @@ const fr: Locale = {
     tabStripClone: "Cloner depuis une URL",
     tabStripFork: "Forker sur GitHub",
     tabStripRecentSection: "Repos récents",
+    tabStripPinnedSection: "Repos favoris",
     tabStripNoRecent: "Aucun dépôt récent",
   },
 
@@ -868,8 +869,12 @@ const fr: Locale = {
     tabAi: "IA",
     tabLogs: "Journaux",
     logsTitle: "Journal d'activité",
-    logsEmpty: "Aucune erreur enregistrée.",
+    logsEmpty: "Aucune entrée de log",
     logsClear: "Effacer",
+    logsCopyAll: "Tout copier",
+    logsLevelError: "ERREUR",
+    logsLevelWarn: "AVERT",
+    logsLevelInfo: "INFO",
     aiEnable: "Activer les suggestions IA",
     aiEnableHint: "Propose des r\u00e9solutions intelligentes pour les conflits complexes (confiance < 60%)",
     aiPrivacyNote: "L'IA analyse le contexte du conflit (base/ours/theirs, messages de commit, nom de fichier) pour proposer une r\u00e9solution. Votre code n'est envoy\u00e9 qu'au provider s\u00e9lectionn\u00e9. Aucune suggestion n'est appliqu\u00e9e automatiquement.",
@@ -1588,9 +1593,28 @@ const fr: Locale = {
     viewLogs: "Voir les journaux",
     hasErrors: "Des erreurs se sont produites — cliquez pour voir",
   },
+  statusBar: {
+    errorsTooltip: "{0} erreur(s) non lue(s) — cliquez pour voir",
+  },
   offline: {
     label: "Hors ligne",
     tooltip: "Pas de connexion réseau — les opérations distantes sont désactivées",
+  },
+  connectivity: {
+    offline: {
+      badge: "Hors-ligne",
+      tooltip: "Connexion absente — les opérations réseau sont désactivées",
+      disabledOp: "Hors-ligne — cette action nécessite une connexion",
+      opSkipped: "Opération '{0}' ignorée — hors-ligne",
+      detected: "Connexion perdue",
+    },
+    online: {
+      reconnected: "Connexion rétablie",
+    },
+    probe: {
+      error: "Vérification de connectivité échouée",
+      label: "Connectivité",
+    },
   },
 };
 

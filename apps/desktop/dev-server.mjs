@@ -13,6 +13,7 @@ import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
 import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
+import { Socket } from "node:net";
 
 // ── Crash guards ────────────────────────────────────────────────────────────
 // Without these, any unhandled exception or rejected promise kills the process
@@ -270,6 +271,82 @@ function readBody(req) {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => resolve(body ? JSON.parse(body) : {}));
+  });
+}
+
+/**
+ * Extract `(host, port)` from a git remote URL.
+ * Mirrors the Rust `parse_remote_host_port` helper in `commands/network.rs`.
+ * Returns null when the URL is empty, has no parseable host, or uses an
+ * unrecognised scheme.
+ */
+function parseRemoteHostPort(rawUrl) {
+  const url = (rawUrl || "").trim();
+  if (!url) return null;
+
+  // SCP-style SSH: `git@host:owner/repo[.git]` (no `://`).
+  if (!url.includes("://")) {
+    const colon = url.indexOf(":");
+    if (colon > 0) {
+      const userhost = url.slice(0, colon);
+      const at = userhost.lastIndexOf("@");
+      const host = at >= 0 ? userhost.slice(at + 1) : userhost;
+      if (host) return { host, port: 22 };
+    }
+    return null;
+  }
+
+  const [scheme, rest] = url.split("://", 2);
+  const defaults = { https: 443, http: 80, ssh: 22, git: 9418 };
+  const def = defaults[scheme.toLowerCase()];
+  if (!def) return null;
+
+  const authority = rest.split(/[\/?#]/, 1)[0] || "";
+  const at = authority.lastIndexOf("@");
+  const hostPort = at >= 0 ? authority.slice(at + 1) : authority;
+  if (!hostPort) return null;
+
+  // IPv6 literal in brackets: `[::1]:8443`
+  if (hostPort.startsWith("[")) {
+    const end = hostPort.indexOf("]");
+    if (end < 0) return null;
+    const host = hostPort.slice(1, end);
+    const after = hostPort.slice(end + 1);
+    const portStr = after.startsWith(":") ? after.slice(1) : "";
+    const port = portStr ? Number(portStr) || def : def;
+    return host ? { host, port } : null;
+  }
+
+  const lastColon = hostPort.lastIndexOf(":");
+  if (lastColon < 0) {
+    return hostPort ? { host: hostPort, port: def } : null;
+  }
+  const host = hostPort.slice(0, lastColon);
+  const portStr = hostPort.slice(lastColon + 1);
+  const port = Number(portStr) || def;
+  return host ? { host, port } : null;
+}
+
+/** Try a bounded TCP connect to `host:port`. Resolves true on success. */
+function tcpProbe(host, port, timeoutMs) {
+  return new Promise((resolveProbe) => {
+    const sock = new Socket();
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      try { sock.destroy(); } catch { /* ignore */ }
+      resolveProbe(ok);
+    };
+    sock.setTimeout(timeoutMs);
+    sock.once("connect", () => finish(true));
+    sock.once("timeout", () => finish(false));
+    sock.once("error", () => finish(false));
+    try {
+      sock.connect(port, host);
+    } catch {
+      finish(false);
+    }
   });
 }
 
@@ -3744,6 +3821,22 @@ async function handleRequest(req, res) {
       }
     }
 
+    // POST /api/check-remote-reachable  { url, timeoutMs }
+    // Mirrors the Tauri `check_remote_reachable` command — TCP-connect probe
+    // to the host extracted from a git remote URL. Returns { reachable: bool }.
+    // Never throws on network failures: an unreachable host is a normal result.
+    if (url.pathname === "/api/check-remote-reachable" && req.method === "POST") {
+      const body = await readBody(req);
+      const targetUrl = String(body?.url ?? "").trim();
+      const timeoutMs = Math.max(250, Number(body?.timeoutMs ?? 2000) || 2000);
+      const parsed = parseRemoteHostPort(targetUrl);
+      if (!parsed) {
+        return jsonResponse(req, res, { reachable: false });
+      }
+      const reachable = await tcpProbe(parsed.host, parsed.port, timeoutMs);
+      return jsonResponse(req, res, { reachable });
+    }
+
     // ── Commit context-menu operations (v1.9) ────────────────────────────
 
     // POST /api/git-checkout-commit  { cwd, sha }
@@ -4033,5 +4126,6 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/gh-pr-diff?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/pr-files?repo=<path>&pr=<n>`);
-  console.log(`    GET  /api/git-remote-info?cwd=<path>\n`);
+  console.log(`    GET  /api/git-remote-info?cwd=<path>`);
+  console.log(`    POST /api/check-remote-reachable  { url, timeoutMs }\n`);
 });

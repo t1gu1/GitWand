@@ -103,6 +103,7 @@ const en = {
     tabStripClone: "Clone from URL",
     tabStripFork: "Fork on GitHub",
     tabStripRecentSection: "Recent repos",
+    tabStripPinnedSection: "Pinned repos",
     tabStripNoRecent: "No recent repositories",
   },
 
@@ -874,8 +875,12 @@ const en = {
     tabAi: "AI",
     tabLogs: "Logs",
     logsTitle: "Activity log",
-    logsEmpty: "No errors recorded.",
+    logsEmpty: "No log entries.",
     logsClear: "Clear",
+    logsCopyAll: "Copy all",
+    logsLevelError: "ERROR",
+    logsLevelWarn: "WARN",
+    logsLevelInfo: "INFO",
     // AI tab (header block)
     aiEnable: "Enable AI suggestions",
     aiEnableHint: "Proposes smart resolutions for complex conflicts (confidence < 60%)",
@@ -1610,9 +1615,28 @@ const en = {
     viewLogs: "View logs",
     hasErrors: "Errors occurred — click to view",
   },
+  statusBar: {
+    errorsTooltip: "{0} unread error(s) — click to view",
+  },
   offline: {
     label: "Offline",
     tooltip: "No network connection — remote operations are disabled",
+  },
+  connectivity: {
+    offline: {
+      badge: "Offline",
+      tooltip: "No connection — network operations are disabled",
+      disabledOp: "Offline — this action requires a connection",
+      opSkipped: "Operation '{0}' skipped — offline",
+      detected: "Connection lost",
+    },
+    online: {
+      reconnected: "Connection restored",
+    },
+    probe: {
+      error: "Connectivity check failed",
+      label: "Connectivity",
+    },
   },
 } as const;
 

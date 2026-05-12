@@ -342,6 +342,7 @@ pub fn run() {
             commands::ops::pr_files,
             commands::ai::detect_codex_cli,
             commands::ai::codex_cli_prompt,
+            commands::network::check_remote_reachable,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");
@@ -459,6 +460,63 @@ mod tests {
         assert_eq!(prs[1].number, 2);
         assert!(prs[1].draft);
         assert_eq!(prs[1].review_decision, "APPROVED");
+    }
+
+    #[test]
+    fn parse_pr_with_null_author_does_not_drop_list() {
+        // §B2 regression: when a PR has `author: null` (deleted GitHub user
+        // or some bot accounts) we must keep the rest of the list.
+        let json = r#"[
+          {"number":1,"title":"From a ghost","state":"OPEN","author":null,
+           "headRefName":"feat/x","baseRefName":"main","isDraft":false,
+           "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+           "labels":[],"assignees":[],"reviewRequests":[],
+           "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]},
+          {"number":2,"title":"Normal","state":"OPEN","author":{"login":"alice"},
+           "headRefName":"b","baseRefName":"main","isDraft":false,
+           "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+           "labels":[],"assignees":[],"reviewRequests":[],
+           "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]}
+        ]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 2, "null author must not drop other PRs");
+        assert_eq!(prs[0].author, "", "null author becomes empty string");
+        assert_eq!(prs[1].author, "alice");
+    }
+
+    #[test]
+    fn parse_pr_with_null_assignee_login_keeps_others() {
+        // Assignees with null login (deleted users) must not break the PR.
+        let json = r#"[{
+          "number":3,"title":"x","state":"OPEN","author":{"login":"alice"},
+          "headRefName":"a","baseRefName":"main","isDraft":false,
+          "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+          "labels":[],
+          "assignees":[{"login":null},{"login":"bob"}],
+          "reviewRequests":[],
+          "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1);
+        assert_eq!(prs[0].assignees, vec!["bob"]);
+    }
+
+    #[test]
+    fn parse_pr_list_skips_unparseable_entry() {
+        // §B2 robustness: if one entry is structurally broken, skip just
+        // that entry — don't drop the whole list (the historical silent
+        // empty-list bug).
+        let json = r#"[
+          {"number":1,"title":"good","state":"OPEN","author":{"login":"a"},
+           "headRefName":"a","baseRefName":"main","isDraft":false,
+           "createdAt":"","updatedAt":"","url":"","additions":0,"deletions":0,
+           "labels":[],"assignees":[],"reviewRequests":[],
+           "reviewDecision":null,"mergeStateStatus":null,"statusCheckRollup":[]},
+          {"number":"not-a-number","this":"is broken"}
+        ]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs.len(), 1, "broken entry must be skipped, others kept");
+        assert_eq!(prs[0].number, 1);
     }
 
     #[test]

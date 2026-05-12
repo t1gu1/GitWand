@@ -67,11 +67,13 @@ import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
 import { useSettings } from "./composables/useSettings";
 import { useNetworkStatus } from "./composables/useNetworkStatus";
+import { useConnectivity } from "./composables/useConnectivity";
 import { useScheduler } from "./composables/useScheduler";
 import { useRepoPoller } from "./composables/useRepoPoller";
 import { useReleaseNotes } from "./composables/useReleaseNotes";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
+import { useLogs } from "./composables/useLogs";
 import {
   BRANCH_CREATE_REQUEST_KEY,
   MERGE_POPOVER_REQUEST_KEY,
@@ -83,7 +85,14 @@ import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
-const { isOffline } = useNetworkStatus();
+// `useNetworkStatus` covers `navigator.onLine` — kept around because
+// `useScheduler` already consumes it and we don't want to retire that path
+// in this commit. `useConnectivity` (F1) adds a real probe-based signal
+// that flips to "offline" when the remote is unreachable even if the OS
+// thinks the wifi is fine. We OR the two: any negative signal wins.
+const { isOffline: navIsOffline } = useNetworkStatus();
+const { isOnline: probedOnline, probeConnectivity } = useConnectivity();
+const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState } from "./utils/backend";
 import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
@@ -851,33 +860,31 @@ function onPaletteSelectCommit(hash: string) {
 const showSettings = ref(false);
 const settingsInitialTab = ref<"general" | "git" | "editor" | "ai" | "logs" | undefined>(undefined);
 
-// ─── Error log (persisted, feeds SettingsPanel Logs tab) ─
-const LOG_KEY = "gitwand-error-log";
-const MAX_LOG = 200;
-
-interface ErrorLogEntry { ts: number; msg: string; }
-
-function loadErrorLog(): ErrorLogEntry[] {
-  try {
-    const raw = localStorage.getItem(LOG_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return [];
-}
-function saveErrorLog(log: ErrorLogEntry[]) {
-  try { localStorage.setItem(LOG_KEY, JSON.stringify(log)); } catch { /* ignore */ }
-}
-
-const errorLog = ref<ErrorLogEntry[]>(loadErrorLog());
+// ─── Error log (in-memory ring buffer, feeds SettingsPanel Logs tab) ─
+// Uses the useLogs() singleton composable — no localStorage persistence so a
+// reload starts with a clean buffer (errors from a previous session would
+// otherwise surface as stale unread items).
+const {
+  entries: logEntries,
+  unreadCount: logUnreadCount,
+  log: pushLogEntry,
+  clear: clearLogEntries,
+  markAllRead: markLogsRead,
+} = useLogs();
 
 function pushErrorLog(msg: string) {
-  errorLog.value = [{ ts: Date.now(), msg }, ...errorLog.value].slice(0, MAX_LOG);
-  saveErrorLog(errorLog.value);
+  pushLogEntry("error", msg);
 }
 
 function clearErrorLog() {
-  errorLog.value = [];
-  saveErrorLog([]);
+  clearLogEntries();
+}
+
+/** Opens Settings on the Logs tab and resets the unread badge. */
+function openLogsTab() {
+  settingsInitialTab.value = "logs";
+  showSettings.value = true;
+  markLogsRead();
 }
 
 // ─── Help panel ─────────────────────────────────────────
@@ -1359,6 +1366,11 @@ const poller = useRepoPoller({
   onNightlyTick: async () => {
     await scheduler.onNightlyTick();
   },
+  // F1 — connectivity probe runs on the same 2 s heartbeat, throttled to
+  // ~30 s ticks inside useRepoPoller. Skips itself when no repo is active.
+  onConnectivityTick: async (cwd) => {
+    await probeConnectivity(cwd);
+  },
 });
 watch(repoFolderPath, (p) => poller.setFolderPath(p), { immediate: true });
 
@@ -1517,7 +1529,8 @@ onUnmounted(() => {
       @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
-      :error-count="errorLog.length" :is-offline="isOffline" @switch-branch="handleSwitchBranch"
+      :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch"
+      @open-logs="openLogsTab"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
@@ -1568,7 +1581,7 @@ onUnmounted(() => {
                   <circle cx="7" cy="9.5" r="0.75" fill="currentColor" />
                 </svg>
                 <span class="error-toast-text">{{ repoError }}</span>
-                <button class="error-toast-logs" @click="settingsInitialTab = 'logs'; showSettings = true"
+                <button class="error-toast-logs" @click="openLogsTab"
                   :title="t('error.viewLogs')">
                   {{ t('error.viewLogs') }}
                 </button>
@@ -1807,7 +1820,7 @@ onUnmounted(() => {
     <HelpView v-if="showHelp" @close="showHelp = false" />
 
     <!-- Settings panel -->
-    <SettingsPanel v-if="showSettings" :error-log="errorLog" :initial-tab="settingsInitialTab"
+    <SettingsPanel v-if="showSettings" :error-log="logEntries" :initial-tab="settingsInitialTab"
       :cwd="repoFolderPath ?? undefined" @close="onSettingsClose" @update:commit-signature="onCommitSignatureChange"
       @update:diff-mode="onDiffModeChange" @update:pull-mode="onPullModeChange" @update:font-size="onFontSizeChange"
       @update:tab-size="onTabSizeChange" @clear-logs="clearErrorLog" />

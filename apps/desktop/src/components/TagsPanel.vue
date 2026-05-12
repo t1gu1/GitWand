@@ -122,7 +122,7 @@ async function pushAllTags() {
     <!-- Toolbar -->
     <template #toolbar>
       <div class="tp-toolbar">
-        <button class="bm-btn bm-btn--ghost" @click="emit('create-tag')">
+        <button class="bm-btn bm-btn--ghost tp-btn-sm" @click="emit('create-tag')">
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
@@ -130,7 +130,7 @@ async function pushAllTags() {
         </button>
         <button
           v-if="hasRemote"
-          class="bm-btn bm-btn--ghost"
+          class="bm-btn bm-btn--ghost tp-btn-sm"
           :disabled="busyPushAll || tags.length === 0"
           @click="pushAllTags"
         >
@@ -237,6 +237,17 @@ async function pushAllTags() {
 .tp-toolbar {
   display: flex;
   gap: var(--space-2);
+}
+
+/* Standardise les boutons d'action de la barre d'outils sur la
+   hauteur 32 px utilisée ailleurs dans l'app (cf. StashManager
+   `.sm-btn-sm`). La base `.bm-btn` (padding vertical var(--space-3))
+   reste destinée aux footers de modales, plus compacts. */
+.tp-btn-sm {
+  height: 32px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  line-height: 1;
 }
 
 

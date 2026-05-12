@@ -12,6 +12,7 @@
 import { computed, onMounted, nextTick, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { ghFork, pickFolder } from "../utils/backend";
+import { requireOnline } from "../utils/networkGuard";
 import BaseModal from "./BaseModal.vue";
 
 const emit = defineEmits<{
@@ -50,6 +51,10 @@ async function browseForParent() {
 
 async function onFork() {
   if (!canFork.value) return;
+  if (!requireOnline("fork")) {
+    error.value = t("connectivity.offline.disabledOp");
+    return;
+  }
   error.value = null;
   isForking.value = true;
   try {

@@ -38,6 +38,8 @@ const POLL_INTERVAL = 2_000;
 const FETCH_EVERY_TICKS = 15;
 /** How many ticks between nightly-pull checks (~60 s). */
 const NP_EVERY_TICKS = 30;
+/** How many ticks between connectivity probes (~30 s — F1 Mode hors-ligne). */
+const CONNECTIVITY_EVERY_TICKS = 15;
 
 // ─── Public interface ───────────────────────────────────────
 
@@ -54,6 +56,12 @@ export interface RepoPollerActions {
   onFetchTick: (cwd: string) => Promise<void>;
   /** Called every ~60 s to check nightly-pull schedule. */
   onNightlyTick: () => Promise<void>;
+  /**
+   * Called every ~30 s with the active repo path so the connectivity probe
+   * can decide whether to flip the app into offline mode (F1).
+   * Optional — callers that don't care about connectivity can omit it.
+   */
+  onConnectivityTick?: (cwd: string) => Promise<void>;
 }
 
 // ─── Composable ─────────────────────────────────────────────
@@ -122,6 +130,16 @@ export function useRepoPoller(actions: RepoPollerActions) {
     // 3. Nightly-pull schedule check every ~60 s
     if (_tick % NP_EVERY_TICKS === 0) {
       await actions.onNightlyTick().catch(() => {});
+    }
+
+    // 4. Connectivity probe every ~30 s (F1 — Mode hors-ligne).
+    //    Reuses this poller's clock so we don't add a 3rd setInterval —
+    //    see `feedback_gitwand_polling_discipline` in MEMORY.md.
+    if (
+      actions.onConnectivityTick &&
+      _tick % CONNECTIVITY_EVERY_TICKS === 0
+    ) {
+      await actions.onConnectivityTick(cwd).catch(() => {});
     }
   }
 

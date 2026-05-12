@@ -29,16 +29,16 @@ export type SwitchBehavior = "stash" | "ask" | "refuse";
 // importing from SettingsPanel don't break, but the canonical declaration
 // lives in `useAIProvider`.
 import type { AIProvider } from "../composables/useAIProvider";
+import { useLogs, type LogEntry } from "../composables/useLogs";
 export type { AIProvider };
 
-export interface ErrorLogEntry {
-  ts: number;
-  msg: string;
-}
+// Re-export for back-compat — earlier callers imported this shape from
+// SettingsPanel. The canonical definition lives in `useLogs.ts`.
+export type ErrorLogEntry = LogEntry;
 
 const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
-  errorLog?: ErrorLogEntry[];
+  errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
   initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
   /** Current repo path (for Hooks tab) */
@@ -147,6 +147,54 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 // ─── Tab navigation ──────────────────────────────────────
 type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
+
+// ─── Logs tab — formatting + clipboard ──────────────────
+// Pull the formatter (and markAllRead helper) from the singleton composable
+// so the formatting is shared with anything that might want to log to the
+// console in the same style.
+const {
+  formatEntry: formatLogEntry,
+  formatTimestamp: formatLogTimestamp,
+  markAllRead: markLogsRead,
+} = useLogs();
+
+/**
+ * Per-level i18n label for the LEVEL chip rendered next to each log line.
+ * Falls back to the upper-cased raw level if the locale somehow misses the
+ * key (defensive — the keys are present in all 5 locale files).
+ */
+function logLevelLabel(level: LogEntry["level"]): string {
+  switch (level) {
+    case "error": return t("settings.logsLevelError");
+    case "warn":  return t("settings.logsLevelWarn");
+    case "info":  return t("settings.logsLevelInfo");
+    default:      return String(level).toUpperCase();
+  }
+}
+
+// Reset the unread counter when the Logs tab actually becomes visible — both
+// when the panel opens directly on it and when the user later switches to it.
+watch(activeSettingsTab, (tab) => {
+  if (tab === "logs") markLogsRead();
+}, { immediate: true });
+
+async function copyAllLogs() {
+  const all = (props.errorLog ?? []).map(formatLogEntry).join("\n");
+  try {
+    await navigator.clipboard.writeText(all);
+  } catch {
+    // Clipboard API can fail (permissions, non-secure context). Fall back to
+    // a hidden textarea + execCommand — best-effort, no error surfaced.
+    const ta = document.createElement("textarea");
+    ta.value = all;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch { /* give up */ }
+    document.body.removeChild(ta);
+  }
+}
 
 const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "general", icon: "general" },
@@ -1412,15 +1460,39 @@ watch(
         <template v-if="activeSettingsTab === 'logs'">
           <div class="sp-logs-header">
             <h3 class="sp-section-title">{{ t('settings.logsTitle') }}</h3>
-            <button v-if="(props.errorLog?.length ?? 0) > 0" class="bm-btn bm-btn--ghost" @click="emit('clearLogs')">
-              {{ t('settings.logsClear') }}
-            </button>
+            <div class="sp-logs-actions">
+              <button
+                v-if="(props.errorLog?.length ?? 0) > 0"
+                class="bm-btn bm-btn--ghost"
+                @click="copyAllLogs"
+              >
+                {{ t('settings.logsCopyAll') }}
+              </button>
+              <button
+                v-if="(props.errorLog?.length ?? 0) > 0"
+                class="bm-btn bm-btn--ghost"
+                @click="emit('clearLogs')"
+              >
+                {{ t('settings.logsClear') }}
+              </button>
+            </div>
           </div>
           <div v-if="!props.errorLog?.length" class="sp-logs-empty">{{ t('settings.logsEmpty') }}</div>
           <ul v-else class="sp-logs-list">
-            <li v-for="entry in [...(props.errorLog ?? [])].reverse()" :key="entry.ts" class="sp-log-entry">
-              <span class="sp-log-time">{{ new Date(entry.ts).toLocaleTimeString() }}</span>
-              <span class="sp-log-msg">{{ entry.msg }}</span>
+            <!-- Newest entries first — the underlying buffer is append-only,
+                 so we reverse a shallow copy at render time. -->
+            <li
+              v-for="entry in [...(props.errorLog ?? [])].reverse()"
+              :key="entry.id ?? (entry.timestamp + ':' + entry.message)"
+              class="sp-log-entry"
+              :class="`sp-log-entry--${entry.level}`"
+            >
+              <span class="sp-log-line">
+                <span class="log-ts">{{ formatLogTimestamp(entry.timestamp) }}</span>
+                <span class="log-level" :class="`log-level--${entry.level}`">{{ logLevelLabel(entry.level) }}</span>
+                <span class="log-msg">{{ entry.message }}</span>
+              </span>
+              <div v-if="entry.context" class="sp-log-context">{{ entry.context }}</div>
             </li>
           </ul>
         </template>
@@ -1855,6 +1927,12 @@ watch(
   gap: var(--space-4);
 }
 
+.sp-logs-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .sp-logs-empty {
   padding: var(--space-8) 0;
   text-align: center;
@@ -1869,28 +1947,87 @@ watch(
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* Bounded height — past ~10 lines the list gets unwieldy. */
+  max-height: 480px;
+  overflow-y: auto;
 }
 
 .sp-log-entry {
-  display: flex;
-  gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--color-bg);
   font-size: var(--font-size-sm);
   line-height: 1.5;
+  border-left: 3px solid transparent;
 }
 
-.sp-log-time {
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
-.sp-log-msg {
-  color: var(--color-error, #f38ba8);
+.sp-log-line {
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: var(--font-size-xs);
   word-break: break-word;
+  white-space: pre-wrap;
+  display: inline;
+  color: var(--color-text);
+}
+
+/* Three-span layout: [timestamp] LEVEL message. Each span keeps its own
+   colour so the monospace line stays readable while the level chip pops. */
+.log-ts {
+  color: var(--color-text-muted);
+}
+
+.log-level {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  margin: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.02em;
+}
+
+.log-level--error {
+  color: var(--color-danger, #f38ba8);
+  background: var(--color-danger-soft, rgba(243, 139, 168, 0.12));
+}
+
+.log-level--warn {
+  color: var(--color-warning, #d39e3a);
+  background: var(--color-warning-soft, rgba(249, 226, 175, 0.15));
+}
+
+.log-level--info {
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary, rgba(127, 127, 127, 0.12));
+}
+
+.log-msg {
+  color: var(--color-text);
+}
+
+.sp-log-context {
+  margin-top: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--color-border);
+  font-family: var(--font-family-mono, ui-monospace, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Per-level coloring — left-border accent only. Body text inherits
+   --color-text so the message stays legible on both themes. */
+.sp-log-entry--error {
+  border-left-color: var(--color-danger, #f38ba8);
+}
+
+.sp-log-entry--warn {
+  border-left-color: var(--color-warning, #f9e2af);
+}
+
+.sp-log-entry--info {
+  border-left-color: var(--color-info, #89b4fa);
 }
 
 /* ─── v2.5 LLM fallback section ─────────────────────────── */
