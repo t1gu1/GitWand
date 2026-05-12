@@ -439,6 +439,33 @@ export function usePrPanel(cwd: Ref<string>) {
     } catch (err: any) { error.value = err.message; }
   }
 
+  /**
+   * Convert a draft PR to ready-for-review.
+   * Silently ignored for forges that don't support it (ForgeNotImplementedError).
+   * On success, refreshes the PR detail so the draft badge disappears.
+   */
+  async function convertDraftToReady(pr: PullRequest) {
+    if (!requireOnline("pr ready")) {
+      error.value = t("connectivity.offline.disabledOp");
+      return;
+    }
+    try {
+      await forge.value.convertDraftToReady(cwd.value, pr.number);
+      // Optimistic update — flip the draft flag locally so the button hides immediately.
+      if (selectedPr.value?.number === pr.number) {
+        selectedPr.value = { ...selectedPr.value, draft: false };
+      }
+      if (prDetail.value?.number === pr.number) {
+        prDetail.value = { ...prDetail.value, draft: false };
+      }
+      success.value = t("pr.success.markedAsReady", pr.number);
+    } catch (err: any) {
+      // ForgeNotImplementedError (e.g. Bitbucket) — don't surface as an error.
+      if (err.message?.includes("ForgeNotImplementedError") || err.message?.includes("deferred")) return;
+      error.value = err.message;
+    }
+  }
+
   async function mergePr() {
     if (!mergingPr.value) return;
     if (!requireOnline("gh pr merge")) {
@@ -651,7 +678,7 @@ export function usePrPanel(cwd: Ref<string>) {
     commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
     // Actions
     init, loadRemote, loadPrs, loadMorePrs, loadCurrentUser, selectPr, loadDiff,
-    createPr, checkoutPr, mergePr,
+    createPr, checkoutPr, mergePr, convertDraftToReady,
     handleCreateComment, handleReplyComment, handleEditComment,
     handleDeleteComment, handleApplySuggestion, handleAddToReview, handleSubmitReview,
     loadConflictPreview, loadHotspots, loadFileHistory,

@@ -303,6 +303,7 @@ pub fn run() {
             commands::gh::gh_pr_detail,
             commands::gh::gh_pr_diff,
             commands::gh::gh_pr_checks,
+            commands::gh::gh_pr_ready,
             commands::ops::git_exec,
             commands::ops::git_autocomplete,
             commands::ops::git_get_user,

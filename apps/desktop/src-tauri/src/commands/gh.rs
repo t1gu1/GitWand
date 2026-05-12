@@ -404,6 +404,26 @@ pub(crate) fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<()
     Ok(())
 }
 
+/// Convert a draft PR to a ready-for-review PR via `gh pr ready`.
+///
+/// Idempotent — `gh pr ready` on a non-draft PR exits 0 with a message like
+/// "Pull request #N is already marked as ready for review."
+#[tauri::command]
+pub(crate) fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+    let output = hidden_cmd("gh")
+        .args(["pr", "ready", &number.to_string()])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run gh pr ready: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "gh pr ready failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
 /// Get detailed PR information using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {

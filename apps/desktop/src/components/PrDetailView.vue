@@ -140,6 +140,16 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               <span>{{ t('pr.detail.checkout') }}</span>
             </button>
             <button
+              v-if="isOpenPr && p.prDetail.value?.draft"
+              class="pdv-btn pdv-btn--accent"
+              @click="p.convertDraftToReady(p.selectedPr.value!)"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 8l4 4 6-7"/>
+              </svg>
+              <span>{{ t('pr.detail.markAsReady') }}</span>
+            </button>
+            <button
               v-if="isOpenPr"
               class="pdv-btn pdv-btn--primary"
               @click="p.mergingPr.value = p.selectedPr.value"
@@ -1451,6 +1461,18 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   border-color: var(--color-border);
   color: var(--color-text);
   box-shadow: none;
+}
+
+.pdv-btn--accent {
+  background: var(--color-success, #22863a);
+  border-color: var(--color-success, #22863a);
+  color: #fff;
+}
+.pdv-btn--accent:hover {
+  background: var(--color-success-hover, #1a6e2e);
+  border-color: var(--color-success-hover, #1a6e2e);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
 }
 
 .mono {

@@ -32,6 +32,7 @@ import {
   ghPrConflictPreview,
   ghPrHotspots,
   ghPrFileHistory,
+  ghPrReady,
 } from "../../utils/backend";
 
 import type {
@@ -111,10 +112,8 @@ export class GitHubProvider implements ForgeProvider {
     return ghCheckoutPr(cwd, number);
   }
 
-  async convertDraftToReady(cwd: string, number: number): Promise<void> {
-    // TODO §5.x — backend Rust `gh pr ready <number>` à implémenter.
-    // Placeholder qui lance une erreur claire jusqu'à ce que le backend soit prêt.
-    throw new Error(`convertDraftToReady(${number}): backend not yet wired — implement §5.1 first`);
+  convertDraftToReady(cwd: string, number: number): Promise<void> {
+    return ghPrReady(cwd, number);
   }
 
   // ── Comments ──────────────────────────────────────────────────────────────

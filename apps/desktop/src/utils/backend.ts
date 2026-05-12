@@ -2290,6 +2290,12 @@ export async function ghMergePr(cwd: string, number: number, method: string = "m
   if (data.error) throw new Error(data.error);
 }
 
+/** Convert a draft PR to ready-for-review via `gh pr ready`. */
+export async function ghPrReady(cwd: string, number: number): Promise<void> {
+  if (!isTauri()) throw new Error("ghPrReady requires Tauri");
+  return tauriInvoke<void>("gh_pr_ready", { cwd, number });
+}
+
 // ─── PR Detail, Diff & Checks (Phase 9.1) ──────────────────
 
 export interface PullRequestDetail {
