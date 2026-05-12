@@ -108,6 +108,15 @@ jobs:
             node perf/bench.mjs
           fi
 
+      # @gitwand/core must be built before apps/desktop typechecks because
+      # the desktop frontend resolves `@gitwand/core` via pnpm workspace and
+      # vue-tsc reads the package's `dist/index.d.ts`. Without this step the
+      # typecheck fails with `TS2307: Cannot find module '@gitwand/core'`.
+      # ci.yml / publish.yml / release.yml already do this; perf.yml was the
+      # outlier. Same pattern as ci.yml L116.
+      - name: Build @gitwand/core (TS declarations for downstream typecheck)
+        run: pnpm --filter @gitwand/core run build
+
       # Frontend bundle size budgets — catches accidental eager imports
       # that would undo §1.2 (lazy panels) or §4.3 (lazy highlight.js).
       - name: Build frontend
