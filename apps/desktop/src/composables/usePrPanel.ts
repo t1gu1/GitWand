@@ -8,24 +8,7 @@
  */
 import { ref, computed, watch, type Ref } from "vue";
 import {
-  ghListPrs,
-  ghCurrentUser,
-  ghCreatePr,
-  ghCheckoutPr,
-  ghMergePr,
-  ghPrDetail,
-  ghPrDiff,
-  ghPrChecks,
-  ghPrComments,
-  ghPrCreateComment,
-  ghPrUpdateComment,
-  ghPrDeleteComment,
-  ghPrListReviews,
-  ghPrSubmitReview,
-  ghPrConflictPreview,
-  ghPrHotspots,
   gitFileCount,
-  ghPrFileHistory,
   gitRemoteInfo,
   type PullRequest,
   type PullRequestDetail,
@@ -42,6 +25,7 @@ import {
   type PrHotspot,
   type PrFileHistory,
 } from "../utils/backend";
+import { forgeFromRemoteInfo, githubProvider } from "./forge/useForge";
 import { getPersistedDiffMode, type DiffMode } from "../utils/diffMode";
 import { requireOnline } from "../utils/networkGuard";
 import { t } from "./useI18n";
@@ -52,6 +36,12 @@ export function usePrPanel(cwd: Ref<string>) {
 
   // ─── Remote / list ─────────────────────────────────────
   const remote = ref<RemoteInfo | null>(null);
+
+  /** Provider actif dérivé du remote détecté — github par défaut. */
+  const forge = computed(() =>
+    remote.value ? forgeFromRemoteInfo(remote.value) : githubProvider,
+  );
+
   const prs = ref<PullRequest[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
@@ -249,7 +239,7 @@ export function usePrPanel(cwd: Ref<string>) {
     // Reset pagination — first page only
     hasMore.value = true;
     try {
-      const page = await ghListPrs(cwd.value, filterState.value, PAGE_SIZE, 0);
+      const page = await forge.value.listPRs(cwd.value, { state: filterState.value, limit: PAGE_SIZE, offset: 0 });
       prs.value = page;
       // If gh returned fewer than asked, there's nothing more to fetch.
       hasMore.value = page.length >= PAGE_SIZE;
@@ -303,7 +293,7 @@ export function usePrPanel(cwd: Ref<string>) {
     }
     loadingMore.value = true;
     try {
-      const page = await ghListPrs(cwd.value, filterState.value, PAGE_SIZE, prs.value.length);
+      const page = await forge.value.listPRs(cwd.value, { state: filterState.value, limit: PAGE_SIZE, offset: prs.value.length });
       if (page.length === 0) {
         hasMore.value = false;
       } else {
@@ -348,10 +338,10 @@ export function usePrPanel(cwd: Ref<string>) {
     detailError.value = null;
     try {
       const [detail, checks, comments, reviews, fileCount] = await Promise.all([
-        ghPrDetail(cwd.value, pr.number),
-        ghPrChecks(cwd.value, pr.number).catch(() => [] as CICheck[]),
-        ghPrComments(cwd.value, pr.number).catch(() => [] as PrReviewComment[]),
-        ghPrListReviews(cwd.value, pr.number).catch(() => [] as PrReview[]),
+        forge.value.getPR(cwd.value, pr.number),
+        forge.value.getCIChecks(cwd.value, pr.number).catch(() => [] as CICheck[]),
+        forge.value.listComments(cwd.value, pr.number).catch(() => [] as PrReviewComment[]),
+        forge.value.listReviews(cwd.value, pr.number).catch(() => [] as PrReview[]),
         gitFileCount(cwd.value).catch(() => 0),
       ]);
       prDetail.value = detail;
@@ -369,7 +359,7 @@ export function usePrPanel(cwd: Ref<string>) {
   async function refreshComments() {
     if (!selectedPr.value) return;
     try {
-      prComments.value = await ghPrComments(cwd.value, selectedPr.value.number);
+      prComments.value = await forge.value.listComments(cwd.value, selectedPr.value.number);
     } catch { /* silent */ }
   }
 
@@ -377,7 +367,7 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!selectedPr.value || prDiffFiles.value.length) return;
     detailLoading.value = true;
     try {
-      const raw = await ghPrDiff(cwd.value, selectedPr.value.number);
+      const raw = await forge.value.getPRDiff(cwd.value, selectedPr.value.number);
       prDiffFiles.value = parseUnifiedDiff(raw);
       if (prDiffFiles.value.length) selectedDiffFile.value = prDiffFiles.value[0].path;
     } catch (err: any) {
@@ -422,14 +412,13 @@ export function usePrPanel(cwd: Ref<string>) {
     isCreating.value = true;
     error.value = null;
     try {
-      const pr = await ghCreatePr(
-        cwd.value,
-        newPrTitle.value.trim(),
-        newPrBody.value.trim(),
-        newPrBase.value.trim(),
-        newPrDraft.value,
-        newPrReviewers.value.slice(),
-      );
+      const pr = await forge.value.createPR(cwd.value, {
+        title: newPrTitle.value.trim(),
+        body: newPrBody.value.trim(),
+        base: newPrBase.value.trim(),
+        draft: newPrDraft.value,
+        reviewers: newPrReviewers.value.slice(),
+      });
       success.value = t("pr.success.prCreated", pr.number);
       showCreateForm.value = false;
       newPrTitle.value = ""; newPrBody.value = ""; newPrDraft.value = false;
@@ -445,7 +434,7 @@ export function usePrPanel(cwd: Ref<string>) {
       return;
     }
     try {
-      await ghCheckoutPr(cwd.value, pr.number);
+      await forge.value.checkoutPR(cwd.value, pr.number);
       success.value = t("pr.success.checkoutDone", pr.number);
     } catch (err: any) { error.value = err.message; }
   }
@@ -457,7 +446,7 @@ export function usePrPanel(cwd: Ref<string>) {
       return;
     }
     try {
-      await ghMergePr(cwd.value, mergingPr.value.number, mergeMethod.value);
+      await forge.value.mergePR(cwd.value, mergingPr.value.number, mergeMethod.value);
       success.value = t("pr.success.prMerged", mergingPr.value.number);
       mergingPr.value = null;
       await loadPrs();
@@ -468,7 +457,7 @@ export function usePrPanel(cwd: Ref<string>) {
   async function handleCreateComment(params: CreatePrCommentParams & { path: string }) {
     if (!selectedPr.value) return;
     try {
-      await ghPrCreateComment(cwd.value, selectedPr.value.number, params);
+      await forge.value.createComment(cwd.value, selectedPr.value.number, params);
       await refreshComments();
       if (prDetail.value) prDetail.value.reviewComments++;
     } catch (err: any) { error.value = err.message; }
@@ -477,14 +466,14 @@ export function usePrPanel(cwd: Ref<string>) {
   async function handleReplyComment(inReplyToId: number, body: string) {
     if (!selectedPr.value) return;
     try {
-      await ghPrCreateComment(cwd.value, selectedPr.value.number, { body, in_reply_to_id: inReplyToId });
+      await forge.value.createComment(cwd.value, selectedPr.value.number, { body, in_reply_to_id: inReplyToId });
       await refreshComments();
     } catch (err: any) { error.value = err.message; }
   }
 
   async function handleEditComment(id: number, body: string) {
     try {
-      await ghPrUpdateComment(cwd.value, id, body);
+      await forge.value.updateComment(cwd.value, id, body);
       const idx = prComments.value.findIndex((c) => c.id === id);
       if (idx !== -1) prComments.value[idx] = { ...prComments.value[idx], body, updated_at: new Date().toISOString() };
     } catch (err: any) { error.value = err.message; }
@@ -492,7 +481,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   async function handleDeleteComment(id: number) {
     try {
-      await ghPrDeleteComment(cwd.value, id);
+      await forge.value.deleteComment(cwd.value, id);
       prComments.value = prComments.value.filter((c) => c.id !== id && c.in_reply_to_id !== id);
       if (prDetail.value && prDetail.value.reviewComments > 0) prDetail.value.reviewComments--;
     } catch (err: any) { error.value = err.message; }
@@ -524,12 +513,12 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!selectedPr.value) return;
     submittingReview.value = true;
     try {
-      await ghPrSubmitReview(cwd.value, selectedPr.value.number, opts);
+      await forge.value.submitReview(cwd.value, selectedPr.value.number, opts);
       showReviewModal.value = false;
       draftReviewComments.value = [];
       const [reviews, comments] = await Promise.all([
-        ghPrListReviews(cwd.value, selectedPr.value.number).catch(() => [] as PrReview[]),
-        ghPrComments(cwd.value, selectedPr.value.number).catch(() => [] as PrReviewComment[]),
+        forge.value.listReviews(cwd.value, selectedPr.value.number).catch(() => [] as PrReview[]),
+        forge.value.listComments(cwd.value, selectedPr.value.number).catch(() => [] as PrReviewComment[]),
       ]);
       prReviews.value = reviews;
       prComments.value = comments;
@@ -547,7 +536,7 @@ export function usePrPanel(cwd: Ref<string>) {
     conflictLoading.value = true;
     conflictError.value = null;
     try {
-      conflictPreview.value = await ghPrConflictPreview(cwd.value, selectedPr.value.number);
+      conflictPreview.value = await forge.value.getConflictPreview(cwd.value, selectedPr.value.number);
     } catch (err: any) {
       conflictError.value = err.message;
     } finally {
@@ -559,7 +548,7 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!prDiffFiles.value.length || hotspotsLoading.value) return;
     hotspotsLoading.value = true;
     try {
-      hotspots.value = await ghPrHotspots(cwd.value, prDiffFiles.value.map((f) => f.path));
+      hotspots.value = await forge.value.getHotspots(cwd.value, prDiffFiles.value.map((f) => f.path));
     } catch { /* silent */ } finally { hotspotsLoading.value = false; }
   }
 
@@ -567,7 +556,7 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!prDiffFiles.value.length || fileHistoryLoading.value) return;
     fileHistoryLoading.value = true;
     try {
-      fileHistory.value = await ghPrFileHistory(cwd.value, prDiffFiles.value.map((f) => f.path));
+      fileHistory.value = await forge.value.getFileHistory(cwd.value, prDiffFiles.value.map((f) => f.path));
     } catch { /* silent */ } finally { fileHistoryLoading.value = false; }
   }
 
@@ -623,7 +612,7 @@ export function usePrPanel(cwd: Ref<string>) {
     currentUserLoading.value = true;
     currentUserError.value = null;
     try {
-      const login = await ghCurrentUser();
+      const login = await forge.value.getCurrentUser(cwd.value);
       currentUser.value = login;
     } catch (e: any) {
       const msg = e?.message ?? String(e);

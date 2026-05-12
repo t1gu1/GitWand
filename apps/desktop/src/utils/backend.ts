@@ -2663,6 +2663,398 @@ export async function ghPrFileHistory(
   return raw as Record<string, PrFileHistory>;
 }
 
+// ─── GitLab / glab CLI wrappers (§2.x Forge integrations) ──────────────────
+//
+// These mirror the gh* functions above but call the `glab` CLI via Rust.
+// All functions are Tauri-only for now — no dev-server fallback needed
+// since GitLab repos are only accessible in the native Tauri app context.
+//
+// Auth: managed by `glab auth login` — no token is ever passed via IPC.
+
+/** Detect if `glab` CLI is installed in the context of a given repo. */
+export async function detectGlab(cwd: string): Promise<boolean> {
+  if (isTauri()) {
+    return tauriInvoke<boolean>("detect_glab", { cwd });
+  }
+  return false;
+}
+
+/** List merge requests using `glab`. */
+export async function glListMrs(
+  cwd: string,
+  state: string = "opened",
+  limit: number = 10,
+  offset: number = 0,
+): Promise<PullRequest[]> {
+  if (!isTauri()) throw new Error("glListMrs requires Tauri");
+  return tauriInvoke<PullRequest[]>("gl_list_mrs", { cwd, state, limit, offset });
+}
+
+/** Count MRs via `glab`. Returns 0 on non-fatal errors. */
+export async function glMrCount(cwd: string, state: string = "opened"): Promise<number> {
+  if (!isTauri()) return 0;
+  return tauriInvoke<number>("gl_mr_count", { cwd, state });
+}
+
+/** Get detailed MR info. */
+export async function glGetMr(cwd: string, iid: number): Promise<PullRequestDetail> {
+  if (!isTauri()) throw new Error("glGetMr requires Tauri");
+  const raw = await tauriInvoke<{
+    number: number; title: string; body: string; state: string; author: string;
+    branch: string; base: string; draft: boolean; created_at: string; updated_at: string;
+    merged_at: string; url: string; additions: number; deletions: number;
+    changed_files: number; comments: number; review_comments: number;
+    labels: string[]; reviewers: string[]; mergeable: string; checks_status: string;
+  }>("gl_get_mr", { cwd, iid });
+  return {
+    number: raw.number, title: raw.title, body: raw.body, state: raw.state,
+    author: raw.author, branch: raw.branch, base: raw.base, draft: raw.draft,
+    createdAt: raw.created_at, updatedAt: raw.updated_at, mergedAt: raw.merged_at,
+    url: raw.url, additions: raw.additions, deletions: raw.deletions,
+    changedFiles: raw.changed_files, comments: raw.comments,
+    reviewComments: raw.review_comments, labels: raw.labels, reviewers: raw.reviewers,
+    mergeable: raw.mergeable, checksStatus: raw.checks_status,
+  } as unknown as PullRequestDetail;
+}
+
+/** Get the unified diff of a MR. */
+export async function glMrDiff(cwd: string, iid: number): Promise<string> {
+  if (!isTauri()) throw new Error("glMrDiff requires Tauri");
+  return tauriInvoke<string>("gl_mr_diff", { cwd, iid });
+}
+
+/** Get CI pipeline status for a MR. */
+export async function glMrPipelines(cwd: string, iid: number): Promise<CICheck[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<CICheck[]>("gl_mr_pipelines", { cwd, iid });
+}
+
+/** Create a MR. */
+export async function glCreateMr(
+  cwd: string,
+  title: string,
+  body: string,
+  sourceBranch: string,
+  targetBranch: string,
+  draft: boolean,
+  reviewers?: string[],
+): Promise<PullRequest> {
+  if (!isTauri()) throw new Error("glCreateMr requires Tauri");
+  return tauriInvoke<PullRequest>("gl_create_mr", {
+    cwd, title, body,
+    sourceBranch, targetBranch, draft,
+    reviewers: reviewers ?? [],
+  });
+}
+
+/** Merge a MR. */
+export async function glMergeMr(
+  cwd: string,
+  iid: number,
+  method: string = "merge",
+): Promise<void> {
+  if (!isTauri()) throw new Error("glMergeMr requires Tauri");
+  return tauriInvoke<void>("gl_merge_mr", { cwd, iid, method });
+}
+
+/** Checkout a MR branch locally. */
+export async function glCheckoutMr(cwd: string, iid: number): Promise<void> {
+  if (!isTauri()) throw new Error("glCheckoutMr requires Tauri");
+  return tauriInvoke<void>("gl_checkout_mr", { cwd, iid });
+}
+
+/** Convert a draft MR to ready-for-review. */
+export async function glConvertDraftToReady(cwd: string, iid: number): Promise<void> {
+  if (!isTauri()) throw new Error("glConvertDraftToReady requires Tauri");
+  return tauriInvoke<void>("gl_convert_draft_to_ready", { cwd, iid });
+}
+
+/**
+ * Helper — map a raw GitLab note JSON object to a PrReviewComment.
+ * GitLab notes are simpler than GitHub review comments: no diff-line
+ * anchoring in v2.10 (that requires the Discussions API).
+ */
+function glNoteToComment(note: Record<string, unknown>): PrReviewComment {
+  const author = note.author as Record<string, unknown> | null | undefined;
+  return {
+    id: (note.id as number) ?? 0,
+    body: (note.body as string) ?? "",
+    author: (author?.username as string) ?? "",
+    created_at: (note.created_at as string) ?? "",
+    updated_at: (note.updated_at as string) ?? "",
+    path: "",
+    line: null,
+    original_line: null,
+    side: "RIGHT",
+    start_line: null,
+    start_side: null,
+    in_reply_to_id: null,
+    diff_hunk: "",
+    url: "",
+  };
+}
+
+/** List notes (comments) for a MR. */
+export async function glMrNotes(cwd: string, iid: number): Promise<PrReviewComment[]> {
+  if (!isTauri()) return [];
+  const raw = await tauriInvoke<unknown[]>("gl_mr_notes", { cwd, iid });
+  return (raw as Record<string, unknown>[]).map(glNoteToComment);
+}
+
+/** Create a note (comment) on a MR. */
+export async function glMrCreateNote(
+  cwd: string,
+  iid: number,
+  body: string,
+): Promise<PrReviewComment> {
+  if (!isTauri()) throw new Error("glMrCreateNote requires Tauri");
+  const raw = await tauriInvoke<Record<string, unknown>>("gl_mr_create_note", { cwd, iid, body });
+  return glNoteToComment(raw);
+}
+
+/** Update a note on a MR. */
+export async function glMrUpdateNote(
+  cwd: string,
+  iid: number,
+  noteId: number,
+  body: string,
+): Promise<void> {
+  if (!isTauri()) throw new Error("glMrUpdateNote requires Tauri");
+  return tauriInvoke<void>("gl_mr_update_note", { cwd, iid, noteId, body });
+}
+
+/** Delete a note on a MR. */
+export async function glMrDeleteNote(
+  cwd: string,
+  iid: number,
+  noteId: number,
+): Promise<void> {
+  if (!isTauri()) throw new Error("glMrDeleteNote requires Tauri");
+  return tauriInvoke<void>("gl_mr_delete_note", { cwd, iid, noteId });
+}
+
+/** Approve a MR. */
+export async function glApproveMr(cwd: string, iid: number): Promise<void> {
+  if (!isTauri()) throw new Error("glApproveMr requires Tauri");
+  return tauriInvoke<void>("gl_approve_mr", { cwd, iid });
+}
+
+/** List approvals (reviews) for a MR. Returns PrReview[] mapped from GitLab approval data. */
+export async function glListReviews(cwd: string, iid: number): Promise<PrReview[]> {
+  if (!isTauri()) return [];
+  const raw = await tauriInvoke<Record<string, unknown>>("gl_list_reviews", { cwd, iid });
+  // GitLab approvals endpoint returns { approved_by: [{user:{...}}], ... }
+  const approvedBy = (raw.approved_by as Array<{ user: Record<string, unknown> }>) ?? [];
+  return approvedBy.map((entry, idx) => ({
+    id: idx,
+    state: "APPROVED",
+    body: "",
+    user: {
+      login: (entry.user?.username as string) ?? "",
+      avatar_url: (entry.user?.avatar_url as string) ?? "",
+    },
+    submitted_at: "",
+    html_url: "",
+  } satisfies PrReview));
+}
+
+/** Get the current GitLab user's username. */
+export async function glCurrentUser(cwd: string): Promise<string> {
+  if (!isTauri()) throw new Error("glCurrentUser requires Tauri");
+  return tauriInvoke<string>("gl_current_user", { cwd });
+}
+
+/** List reviewer candidates (project members). */
+export async function glReviewerCandidates(cwd: string): Promise<ReviewerCandidate[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<ReviewerCandidate[]>("gl_reviewer_candidates", { cwd });
+}
+
+/** List file paths changed in a MR. */
+export async function glMrFiles(cwd: string, iid: number): Promise<string[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<string[]>("gl_mr_files", { cwd, iid });
+}
+
+// ─── OS Keychain credentials ────────────────────────────────────────────────
+//
+// Thin wrappers around the `credentials.rs` Tauri commands.
+// Convention: service = "gitwand:<forge>", account = workspace identifier.
+
+/** Store a credential in the OS keychain. */
+export async function setCredential(
+  service: string,
+  account: string,
+  value: string,
+): Promise<void> {
+  if (!isTauri()) throw new Error("setCredential requires Tauri");
+  return tauriInvoke<void>("set_credential", { service, account, value });
+}
+
+/** Retrieve a credential from the OS keychain. Throws if not found. */
+export async function getCredential(service: string, account: string): Promise<string> {
+  if (!isTauri()) throw new Error("getCredential requires Tauri");
+  return tauriInvoke<string>("get_credential", { service, account });
+}
+
+/** Delete a credential from the OS keychain (idempotent). */
+export async function deleteCredential(service: string, account: string): Promise<void> {
+  if (!isTauri()) return;
+  return tauriInvoke<void>("delete_credential", { service, account });
+}
+
+// ─── Bitbucket Cloud REST v2 wrappers ───────────────────────────────────────
+//
+// All commands delegate to `bitbucket.rs` which calls the Bitbucket REST API
+// via `curl`. Credentials must be stored in the OS keychain first
+// (service="gitwand:bitbucket", account=workspace, value="username:app_password").
+
+/** Map a raw Bitbucket comment JSON to a PrReviewComment. */
+function bbCommentToReviewComment(raw: Record<string, unknown>): PrReviewComment {
+  const content = raw.content as Record<string, unknown> | undefined;
+  const user = raw.author as Record<string, unknown> | undefined;
+  const inline = raw.inline as Record<string, unknown> | undefined;
+  return {
+    id: (raw.id as number) ?? 0,
+    body: (content?.raw as string) ?? (content?.markup as string) ?? "",
+    author: (user?.nickname as string) ?? (user?.display_name as string) ?? "",
+    created_at: (raw.created_on as string) ?? "",
+    updated_at: (raw.updated_on as string) ?? "",
+    path: (inline?.path as string) ?? "",
+    line: (inline?.to as number) ?? null,
+    original_line: (inline?.from as number) ?? null,
+    side: "RIGHT",
+    start_line: null,
+    start_side: null,
+    in_reply_to_id: null,
+    diff_hunk: "",
+    url: ((raw.links as Record<string, unknown>)?.html as Record<string, unknown>)?.href as string ?? "",
+  };
+}
+
+/** List open/merged/declined Bitbucket pull requests. */
+export async function bbListPrs(
+  cwd: string,
+  state: string,
+  limit: number,
+  offset: number,
+): Promise<PullRequest[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<PullRequest[]>("bb_list_prs", { cwd, state, limit, offset });
+}
+
+/** Count PRs for a given state. */
+export async function bbPrCount(cwd: string, state: string): Promise<number> {
+  if (!isTauri()) return 0;
+  return tauriInvoke<number>("bb_pr_count", { cwd, state });
+}
+
+/** Get detailed PR info. */
+export async function bbGetPr(cwd: string, prId: number): Promise<PullRequestDetail> {
+  if (!isTauri()) throw new Error("bbGetPr requires Tauri");
+  return tauriInvoke<PullRequestDetail>("bb_get_pr", { cwd, prId });
+}
+
+/** Get the unified diff of a PR. */
+export async function bbPrDiff(cwd: string, prId: number): Promise<string> {
+  if (!isTauri()) return "";
+  return tauriInvoke<string>("bb_pr_diff", { cwd, prId });
+}
+
+/** Create a Bitbucket pull request. */
+export async function bbCreatePr(
+  cwd: string,
+  title: string,
+  body: string,
+  sourceBranch: string,
+  targetBranch: string,
+  reviewers?: string[],
+): Promise<PullRequest> {
+  if (!isTauri()) throw new Error("bbCreatePr requires Tauri");
+  return tauriInvoke<PullRequest>("bb_create_pr", {
+    cwd, title, body, sourceBranch, targetBranch, reviewers: reviewers ?? [],
+  });
+}
+
+/** Merge a Bitbucket PR. */
+export async function bbMergePr(
+  cwd: string,
+  prId: number,
+  method: string,
+): Promise<void> {
+  if (!isTauri()) throw new Error("bbMergePr requires Tauri");
+  return tauriInvoke<void>("bb_merge_pr", { cwd, prId, method });
+}
+
+/** Checkout a PR branch locally (git fetch + switch). */
+export async function bbCheckoutPr(cwd: string, prId: number): Promise<void> {
+  if (!isTauri()) throw new Error("bbCheckoutPr requires Tauri");
+  return tauriInvoke<void>("bb_checkout_pr", { cwd, prId });
+}
+
+/** List comments on a PR. */
+export async function bbPrComments(cwd: string, prId: number): Promise<PrReviewComment[]> {
+  if (!isTauri()) return [];
+  const raw = await tauriInvoke<unknown[]>("bb_pr_comments", { cwd, prId });
+  return (raw as Record<string, unknown>[]).map(bbCommentToReviewComment);
+}
+
+/** Create a comment on a Bitbucket PR. */
+export async function bbCreateComment(
+  cwd: string,
+  prId: number,
+  body: string,
+): Promise<PrReviewComment> {
+  if (!isTauri()) throw new Error("bbCreateComment requires Tauri");
+  const raw = await tauriInvoke<Record<string, unknown>>("bb_create_comment", { cwd, prId, body });
+  return bbCommentToReviewComment(raw);
+}
+
+/** Update a comment on a Bitbucket PR. */
+export async function bbUpdateComment(
+  cwd: string,
+  prId: number,
+  commentId: number,
+  body: string,
+): Promise<void> {
+  if (!isTauri()) throw new Error("bbUpdateComment requires Tauri");
+  return tauriInvoke<void>("bb_update_comment", { cwd, prId, commentId, body });
+}
+
+/** Delete a comment on a Bitbucket PR. */
+export async function bbDeleteComment(
+  cwd: string,
+  prId: number,
+  commentId: number,
+): Promise<void> {
+  if (!isTauri()) throw new Error("bbDeleteComment requires Tauri");
+  return tauriInvoke<void>("bb_delete_comment", { cwd, prId, commentId });
+}
+
+/** Approve a Bitbucket PR (current user). */
+export async function bbApprovePr(cwd: string, prId: number): Promise<void> {
+  if (!isTauri()) throw new Error("bbApprovePr requires Tauri");
+  return tauriInvoke<void>("bb_approve_pr", { cwd, prId });
+}
+
+/** List file paths changed in a PR (via diffstat). */
+export async function bbPrFiles(cwd: string, prId: number): Promise<string[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<string[]>("bb_pr_files", { cwd, prId });
+}
+
+/** Get the current Bitbucket user (from stored credentials). */
+export async function bbCurrentUser(cwd: string): Promise<string> {
+  if (!isTauri()) throw new Error("bbCurrentUser requires Tauri");
+  return tauriInvoke<string>("bb_current_user", { cwd });
+}
+
+/** List reviewer candidates (repo members with write access). */
+export async function bbReviewerCandidates(cwd: string): Promise<ReviewerCandidate[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<ReviewerCandidate[]>("bb_reviewer_candidates", { cwd });
+}
+
 // ─── Claude Code CLI wrapper ─────────────────────────────
 //
 // Thin wrappers around the Rust/dev-server commands that shell out to the

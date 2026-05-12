@@ -63,6 +63,11 @@ rayon = "1"
 # Don't loosen this below 0.20.4 without checking the GHSA again.
 git2 = { version = "0.20.4", default-features = false, features = ["vendored-libgit2"] }
 
+# OS keychain access for storing forge credentials (Bitbucket App Passwords,
+# future multi-account tokens). Uses Keychain on macOS, libsecret on Linux,
+# Windows Credential Manager on Windows.
+keyring = "2"
+
 # ─── Release profile (P2.4) ──────────────────────────────────
 #
 # Profile tuné pour la build de production (vs defaults Cargo conservateurs).
