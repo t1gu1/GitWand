@@ -2139,6 +2139,7 @@ pub(crate) fn shell_exec(cwd: String, command: String) -> Result<String, String>
 /// Calls `gh api user --jq .login` — fast, no repo context needed.
 #[tauri::command]
 pub(crate) fn gh_current_user() -> Result<String, String> {
+    // GH_TOKEN propagation: centralized in `hidden_cmd` (cf. git/cmd.rs).
     let output = hidden_cmd("gh")
         .args(["api", "user", "--jq", ".login"])
         .output()

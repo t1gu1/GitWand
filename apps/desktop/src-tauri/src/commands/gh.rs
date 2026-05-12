@@ -16,16 +16,52 @@
 use crate::git::*;
 use crate::types::*;
 
-/// List open pull requests using `gh` CLI.
+/// List pull requests using `gh` CLI.
+///
+/// **Perf note** : `statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
+/// `reviewDecision`, `additions` and `deletions` each cost a per-PR roundtrip
+/// to the GitHub API internally — gh expands the GraphQL edge by issuing a
+/// checks endpoint hit per PR. For a repo with 100+ open PRs (e.g. dendreo),
+/// the full query took >30s and tripped the IPC timeout.
+///
+/// v2.8.5 — Boot perf chantier:
+///   - `--limit 50 → 10` (first page); pagination handled via the `offset`
+///     parameter from the frontend (`PrListSidebar` IntersectionObserver).
+///   - JSON field list shrunk to 12 cheap fields. The heavy fields
+///     (`statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
+///     `reviewDecision`, `additions`, `deletions`) are now fetched lazily
+///     per-PR when the user opens the detail view. Sidebar badges that
+///     relied on them gracefully fall back to empty values until the user
+///     selects the PR. See `PrListSidebar.vue` for the UI side.
+///
+/// TODO Phase 2 (v2.9): lazy per-PR enrichment via a dedicated
+/// `gh_pr_status_rollup(cwd, numbers)` batched call that returns just the
+/// CI/merge state pieces — keeps the list query light while still letting
+/// the sidebar render CI/merge dots without a click.
 #[tauri::command]
-pub(crate) fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>, String> {
+pub(crate) fn gh_list_prs(
+    cwd: String,
+    state: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<PullRequest>, String> {
     let st = if state.is_empty() { "open" } else { &state };
+    // Naïve pagination: `gh pr list` has no native --offset, so we ask for
+    // `offset + limit` and slice. Works correctly for the small windows the
+    // UI uses (10/20/30) and stays well under any token rate-limit budget.
+    // TODO Phase 2 (v2.9): replace with a cursor-based `gh api graphql`
+    // query so we don't re-fetch already-loaded pages on each scroll.
+    let page = limit.unwrap_or(10).max(1);
+    let off = offset.unwrap_or(0).max(0);
+    let total = (page + off).to_string();
+
+    // GH_TOKEN propagation is handled centrally by `hidden_cmd` (cf. git/cmd.rs).
     let output = hidden_cmd("gh")
         .args([
             "pr", "list",
             "--state", st,
-            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
-            "--limit", "300",
+            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
+            "--limit", &total,
         ])
         .current_dir(&cwd)
         .output()
@@ -38,7 +74,111 @@ pub(crate) fn gh_list_prs(cwd: String, state: String) -> Result<Vec<PullRequest>
 
     // Parse JSON output from gh CLI
     let stdout = String::from_utf8_lossy(&output.stdout);
-    parse_gh_pr_json(&stdout)
+    let mut prs = parse_gh_pr_json(&stdout)?;
+    if off > 0 {
+        let skip = (off as usize).min(prs.len());
+        prs.drain(..skip);
+    }
+    Ok(prs)
+}
+
+/// Lightweight PR count — single GraphQL `totalCount` call, no per-PR roundtrip.
+///
+/// Used at app boot (DashboardView) and as the sidebar badge source: the
+/// dashboard only needs the number of open PRs, not the full list. Falling
+/// back to the heavy `gh_list_prs` for a count was costing 1 roundtrip per
+/// PR × 2 calls (open + merged) at every repo open (v2.8.4 → v2.8.5 perf
+/// chantier).
+///
+/// Implementation: `gh api graphql` with the `pullRequests.totalCount` edge
+/// after resolving `owner/name` via `gh repo view --json nameWithOwner`.
+/// Both calls are cheap (<200 ms) and avoid expanding the PR objects.
+///
+/// `state` accepts "open" (default), "closed", "merged" or "all". `all`
+/// maps to GraphQL `[OPEN, CLOSED, MERGED]`.
+///
+/// Returns 0 on any non-fatal failure (no remote, no token, etc.) so the
+/// dashboard can still render — the caller decides whether to surface.
+#[tauri::command]
+pub(crate) fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
+    let st = state.to_lowercase();
+    let states_expr = match st.as_str() {
+        "closed" => "[CLOSED]",
+        "merged" => "[MERGED]",
+        "all"    => "[OPEN, CLOSED, MERGED]",
+        _        => "[OPEN]",
+    };
+
+    // Resolve owner/name once via `gh repo view`. `nameWithOwner` is the
+    // canonical "org/repo" slug — splittable by '/' without ambiguity.
+    let view = hidden_cmd("gh")
+        .args(["repo", "view", "--json", "nameWithOwner"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh repo view (for pr count): {}", e))?;
+    if !view.status.success() {
+        return Err(format!(
+            "gh repo view failed: {}",
+            String::from_utf8_lossy(&view.stderr)
+        ));
+    }
+    let nwo = {
+        let stdout = String::from_utf8_lossy(&view.stdout);
+        // Tiny, dependency-free extraction — avoids dragging in serde_json
+        // just for one string field. Mirrors extract_json_string in parse.rs.
+        let key = "\"nameWithOwner\"";
+        let start = stdout.find(key)
+            .ok_or_else(|| "nameWithOwner missing from gh repo view output".to_string())?;
+        let after = &stdout[start + key.len()..];
+        let q1 = after.find('"').ok_or_else(|| "malformed nameWithOwner".to_string())?;
+        let rest = &after[q1 + 1..];
+        let q2 = rest.find('"').ok_or_else(|| "unterminated nameWithOwner".to_string())?;
+        rest[..q2].to_string()
+    };
+    let (owner, name) = match nwo.split_once('/') {
+        Some((o, n)) if !o.is_empty() && !n.is_empty() => (o.to_string(), n.to_string()),
+        _ => return Err(format!("Unexpected nameWithOwner format: {}", nwo)),
+    };
+
+    // GraphQL query — single edge, no nested objects beyond totalCount.
+    let query = format!(
+        "query($owner:String!,$name:String!) {{ repository(owner:$owner,name:$name) {{ pullRequests(states:{}) {{ totalCount }} }} }}",
+        states_expr
+    );
+    let out = hidden_cmd("gh")
+        .args([
+            "api", "graphql",
+            "-F", &format!("owner={}", owner),
+            "-F", &format!("name={}", name),
+            "-f", &format!("query={}", query),
+        ])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh api graphql (pr count): {}", e))?;
+    if !out.status.success() {
+        return Err(format!(
+            "gh api graphql pr count failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+
+    // Cheap manual extraction of `"totalCount": N` — same rationale as
+    // above: no serde_json import just for one integer. The response
+    // shape is fixed by GitHub's schema so the substring lookup is safe.
+    let key = "\"totalCount\"";
+    let start = stdout.find(key)
+        .ok_or_else(|| format!("totalCount missing from response: {}", stdout))?;
+    let after = &stdout[start + key.len()..];
+    let colon = after.find(':').ok_or_else(|| "malformed totalCount".to_string())?;
+    let tail = after[colon + 1..].trim_start();
+    let end = tail.find(|c: char| !c.is_ascii_digit()).unwrap_or(tail.len());
+    if end == 0 {
+        return Err(format!("totalCount has no digits: {}", tail));
+    }
+    tail[..end]
+        .parse::<i64>()
+        .map_err(|e| format!("totalCount parse: {}", e))
 }
 
 /// Create a pull request using `gh` CLI.

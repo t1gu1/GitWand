@@ -97,6 +97,20 @@ pub(crate) fn hidden_cmd(bin: &str) -> std::process::Command {
         }
         cmd.env("PATH", enriched);
     }
+    // Defensive: propagate auth tokens explicitly to every subprocess so
+    // `gh` (and any other CLI that respects these env vars) bypasses the
+    // macOS keychain helper, which hangs ≥30s when called from a signed
+    // Tauri app due to per-binary ACL trust differences vs the user's
+    // terminal. Shell-env preload in `shell_env.rs` populates `GH_TOKEN`
+    // at app startup. `Command::new` already inherits the parent env
+    // by default, but explicit propagation makes it survive any future
+    // `env_clear()` or tokio-runtime peculiarity.
+    if let Ok(tok) = std::env::var("GH_TOKEN") {
+        cmd.env("GH_TOKEN", tok);
+    }
+    if let Ok(tok) = std::env::var("GITHUB_TOKEN") {
+        cmd.env("GITHUB_TOKEN", tok);
+    }
     cmd
 }
 

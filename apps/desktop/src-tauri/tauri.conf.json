@@ -23,8 +23,7 @@
       }
     ],
     "security": {
-      "_csp_doc": "connect-src ouvert à http:/https: car les AI providers (Anthropic, OpenAI-compat, Ollama, custom endpoints) sont user-configurables. La sécurité repose sur script-src 'self' + 'wasm-unsafe-eval' qui bloque toute injection de code arbitraire. img-src élargi pour les badges README (shields.io, github user-content, etc.). default-src reste 'self' — seuls les sous-types listés sortent.",
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' http://localhost:3001 http: https:; img-src 'self' data: blob: https: http:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc: http://ipc.localhost http://localhost:3001 http: https:; img-src 'self' data: blob: https: http:"
     }
   },
   "bundle": {

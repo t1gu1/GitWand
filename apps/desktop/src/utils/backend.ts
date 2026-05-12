@@ -2011,8 +2011,26 @@ export interface PullRequest {
 
 /**
  * List pull requests (requires `gh` CLI).
+ *
+ * `limit` and `offset` drive the boot-perf lazy-pagination introduced in
+ * v2.8.5: the sidebar requests the first page of 10 PRs, then asks for
+ * `offset += 10` chunks as the user scrolls. The Rust side fetches
+ * `offset + limit` rows from `gh pr list` and slices — naïve but adequate
+ * for the typical 10/20/30 windows the UI uses. TODO Phase 2: cursor-based
+ * GraphQL pagination so already-loaded pages are not re-fetched.
+ *
+ * The heavy fields (`reviewDecision`, `mergeStateStatus`, `checksRollup`,
+ * `additions`, `deletions`, `reviewRequested`) are NOT populated by this
+ * call anymore — they're returned as empty strings / zeros. Callers that
+ * need them must fetch the PR detail lazily (per-PR enrichment on hover
+ * or select).
  */
-export async function ghListPrs(cwd: string, state: string = "open"): Promise<PullRequest[]> {
+export async function ghListPrs(
+  cwd: string,
+  state: string = "open",
+  limit: number = 10,
+  offset: number = 0,
+): Promise<PullRequest[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
       Array<{
@@ -2035,7 +2053,7 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
         merge_state_status: string;
         checks_rollup: string;
       }>
-    >("gh_list_prs", { cwd, state });
+    >("gh_list_prs", { cwd, state, limit, offset });
     return raw.map((pr) => ({
       number: pr.number,
       title: pr.title,
@@ -2057,12 +2075,15 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
       checksRollup: pr.checks_rollup ?? "",
     }));
   }
-  // Browser dev mode — call dev server
+  // Browser dev mode — call dev server. The dev-server endpoint doesn't
+  // accept limit/offset yet; we slice client-side from the (already
+  // capped) REST response. The Tauri path is what most users hit.
   const res = await devFetch(`${DEV_SERVER}/api/gh-list-prs?cwd=${encodeURIComponent(cwd)}&state=${state}`);
   if (!res.ok) throw new Error(`gh pr list failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
-  return raw.map((pr: any) => ({
+  const sliced = (raw as any[]).slice(offset, offset + limit);
+  return sliced.map((pr: any) => ({
     number: pr.number,
     title: pr.title,
     state: pr.state,
@@ -2082,6 +2103,43 @@ export async function ghListPrs(cwd: string, state: string = "open"): Promise<Pu
     mergeStateStatus: pr.merge_state_status ?? "",
     checksRollup: pr.checks_rollup ?? "",
   }));
+}
+
+/**
+ * Lightweight count of pull requests — used at boot (DashboardView) and
+ * for the sidebar badge.
+ *
+ * Avoids the multi-roundtrip cost of `gh_list_prs` (which expands
+ * `statusCheckRollup` and `mergeStateStatus` per PR) by hitting a single
+ * GraphQL `totalCount` edge instead.
+ *
+ * Offline-safe: short-circuits to 0 when the connectivity guard reports
+ * the app is offline so the dashboard doesn't hang on a network call
+ * during a no-internet boot. The Logs tab still records the skip.
+ *
+ * `state` accepts "open" (default), "closed", "merged" or "all".
+ */
+export async function ghPrCount(cwd: string, state: string = "open"): Promise<number> {
+  // Local require to avoid a circular import at module init time
+  // (networkGuard → useLogs → … → could touch backend in the future).
+  const { requireOnline } = await import("./networkGuard");
+  if (!requireOnline("gh pr count")) return 0;
+  try {
+    if (isTauri()) {
+      return await tauriInvoke<number>("gh_pr_count", { cwd, state });
+    }
+    const res = await devFetch(
+      `${DEV_SERVER}/api/gh-pr-count?cwd=${encodeURIComponent(cwd)}&state=${encodeURIComponent(state)}`,
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    if (typeof data === "number") return data;
+    if (data && typeof data.error === "string") return 0;
+    return 0;
+  } catch {
+    // Boot-time dashboard call — never throw, the dashboard renders 0.
+    return 0;
+  }
 }
 
 /**

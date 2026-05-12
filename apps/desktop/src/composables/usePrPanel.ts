@@ -104,6 +104,28 @@ export function usePrPanel(cwd: Ref<string>) {
   const fileHistory = ref<Record<string, PrFileHistory>>({});
   const fileHistoryLoading = ref(false);
 
+  // ─── Boot-perf gating (v2.8.5) ─────────────────────────
+  // `panelMounted` flips to true the first time the user opens the PR
+  // view (PrListSidebar mounts and calls `init()`). Until then, cwd
+  // changes (repo switches, new tab opens, dashboard interactions)
+  // must NOT trigger `gh pr list` — at 50 PRs with heavy fields this
+  // was a ~30s gh roundtrip happening at every repo open even when
+  // the user only wanted to see the dashboard.
+  const panelMounted = ref(false);
+
+  // ─── Lazy pagination (v2.8.5 — §E partial) ──────────────
+  // First page = 10 PRs (cf. `gh_list_prs` Rust limit default). Each
+  // `loadMorePrs()` bumps the offset by PAGE_SIZE and appends.
+  // `hasMore` becomes false as soon as a fetched page comes back
+  // shorter than PAGE_SIZE — gh has nothing more to give us in this
+  // state.
+  // TODO Phase 2 (v2.9): replace the naive `fetch offset+limit + slice`
+  // strategy with a cursor-based GraphQL `pullRequests(first:N, after:CURSOR)`
+  // query so we don't re-walk already-fetched pages on each scroll.
+  const PAGE_SIZE = 10;
+  const hasMore = ref(true);
+  const loadingMore = ref(false);
+
   // ─── Computed ──────────────────────────────────────────
   const commentsForFile = computed<PrReviewComment[]>(() =>
     selectedDiffFile.value
@@ -218,13 +240,19 @@ export function usePrPanel(cwd: Ref<string>) {
     if (!requireOnline("gh pr list")) {
       prs.value = [];
       loading.value = false;
+      hasMore.value = false;
       error.value = t("connectivity.offline.disabledOp");
       return;
     }
     loading.value = true;
     error.value = null;
+    // Reset pagination — first page only
+    hasMore.value = true;
     try {
-      prs.value = await ghListPrs(cwd.value, filterState.value);
+      const page = await ghListPrs(cwd.value, filterState.value, PAGE_SIZE, 0);
+      prs.value = page;
+      // If gh returned fewer than asked, there's nothing more to fetch.
+      hasMore.value = page.length >= PAGE_SIZE;
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
       // §B2 — surface the raw underlying error so users + maintainers can
@@ -247,8 +275,53 @@ export function usePrPanel(cwd: Ref<string>) {
         error.value = msg || t("pr.error.unknown");
       }
       prs.value = [];
+      hasMore.value = false;
     } finally {
       loading.value = false;
+    }
+  }
+
+  /**
+   * Append the next page of PRs to the existing list.
+   * Idempotent guards:
+   *   - `loadingMore` prevents double-fire from rapid IntersectionObserver
+   *     callbacks (the same sentinel can enter/leave the viewport several
+   *     times during inertial scroll).
+   *   - `hasMore` short-circuits once we know `gh` has nothing more to give.
+   *   - Result dedup-by-`number` defends against the (rare) case where the
+   *     PR list shifts between requests — e.g. a new PR is opened mid-scroll
+   *     and the naive `offset+limit` view double-counts the boundary item.
+   *
+   * Phase 2 (v2.9) will replace this with a cursor-based GraphQL query,
+   * making the dedup + slice cost go away.
+   */
+  async function loadMorePrs() {
+    if (!cwd.value || loadingMore.value || !hasMore.value || loading.value) return;
+    if (!requireOnline("gh pr list (more)")) {
+      hasMore.value = false;
+      return;
+    }
+    loadingMore.value = true;
+    try {
+      const page = await ghListPrs(cwd.value, filterState.value, PAGE_SIZE, prs.value.length);
+      if (page.length === 0) {
+        hasMore.value = false;
+      } else {
+        // Dedup by PR number — the underlying `gh pr list` re-fetch can
+        // shift the window if PRs are opened/closed concurrently.
+        const seen = new Set(prs.value.map((p) => p.number));
+        for (const pr of page) {
+          if (!seen.has(pr.number)) prs.value.push(pr);
+        }
+        hasMore.value = page.length >= PAGE_SIZE;
+      }
+    } catch (e) {
+      // Don't surface scroll-load errors as a banner — silent stop is
+      // less intrusive than yanking a half-loaded list to an error state.
+      console.warn("[usePrPanel] loadMorePrs failed:", e);
+      hasMore.value = false;
+    } finally {
+      loadingMore.value = false;
     }
   }
 
@@ -323,15 +396,20 @@ export function usePrPanel(cwd: Ref<string>) {
     }
   });
 
-  // Reset + reload when repo changes
+  // Reset + reload when repo changes.
+  // v2.8.5 boot-perf: previously `init()` was called unconditionally on
+  // every cwd change, which would trigger `gh pr list` (50 PRs × heavy
+  // fields × per-PR roundtrips) even when the user never opened the PR
+  // view. Now we only reload when the panel has actually been mounted
+  // at least once during this session. The flag flips inside `init()`
+  // (called from PrListSidebar.onMounted) so the first user-driven
+  // open is the trigger.
   watch(cwd, (newCwd) => {
     selectedPr.value = null;
     prs.value = [];
     remote.value = null;
     resetDetail();
-    // Re-initialise for the new repo (loads remote + prs + current user).
-    // Guard: only when cwd is set AND the PR view may already be visible.
-    if (newCwd) init();
+    if (newCwd && panelMounted.value) init();
   });
 
   // ─── PR actions ─────────────────────────────────────────
@@ -557,6 +635,10 @@ export function usePrPanel(cwd: Ref<string>) {
   }
 
   async function init() {
+    // Flip the mounted flag — see `panelMounted` declaration for rationale.
+    // From now on, cwd changes will auto-reload the PR list because the
+    // user has expressed intent by opening the PR view at least once.
+    panelMounted.value = true;
     await loadRemote();
     await loadPrs();
     // Load current user in background for "assigned / reviews" filter
@@ -574,10 +656,12 @@ export function usePrPanel(cwd: Ref<string>) {
     draftReviewComments, showReviewModal, submittingReview,
     conflictPreview, conflictLoading, conflictError,
     hotspots, hotspotsLoading, totalRepoFiles, fileHistory, fileHistoryLoading,
+    // Pagination (v2.8.5)
+    hasMore, loadingMore,
     // Computed
     commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
     // Actions
-    init, loadRemote, loadPrs, loadCurrentUser, selectPr, loadDiff,
+    init, loadRemote, loadPrs, loadMorePrs, loadCurrentUser, selectPr, loadDiff,
     createPr, checkoutPr, mergePr,
     handleCreateComment, handleReplyComment, handleEditComment,
     handleDeleteComment, handleApplySuggestion, handleAddToReview, handleSubmitReview,

@@ -7,7 +7,7 @@ import {
   gitFileCount,
   getGitShortlog,
   readFile,
-  ghListPrs,
+  ghPrCount,
   type GitLogEntry,
   type GitBranch,
   type RemoteInfo,
@@ -367,13 +367,25 @@ async function loadDashboard() {
   if (!props.cwd) return;
   loading.value = true;
 
+  // v2.8.5 boot-perf: replaced the two `ghListPrs(open/merged)` calls
+  // — each one expanded `statusCheckRollup` + `mergeStateStatus` per PR
+  // (a per-PR GitHub API roundtrip × 50 PRs × 2 lists) — with a single
+  // lightweight `ghPrCount(open)` GraphQL totalCount call. The dashboard
+  // only needs the open-PR count; the full list is loaded lazily when
+  // the user actually opens the PRs tab.
+  //
+  // `mergedPrs` (the "N merged this week" hint) is intentionally skipped
+  // for the v2.8.5 lot — a precise weekly count needs either a list
+  // walk or a search query, both lazier than what we want at boot. The
+  // hint is hidden until then (mergedPrs stays at 0).
+  // TODO Phase 2 (v2.9): bring it back via a `ghMergedSinceCount(cwd, since)`
+  // backed by GitHub `search?q=is:merged merged:>=YYYY-MM-DD`.
   const results = await Promise.allSettled([
     getGitLog(props.cwd, 250),
     getGitBranches(props.cwd),
     gitRemoteInfo(props.cwd),
     gitFileCount(props.cwd).catch(() => 0),
-    ghListPrs(props.cwd, "open").catch(() => []),
-    ghListPrs(props.cwd, "merged").catch(() => []),
+    ghPrCount(props.cwd, "open").catch(() => 0),
     loadReadme(),
     getGitShortlog(props.cwd).catch(() => [] as ShortlogEntry[]),
   ]);
@@ -409,23 +421,16 @@ async function loadDashboard() {
   if (results[3].status === "fulfilled") {
     fileCount.value = results[3].value as number;
   }
-  // PRs (open + merged for the "N merged this week" hint)
+  // PR count (open only) — single totalCount call, no list walk
   if (results[4].status === "fulfilled") {
-    openPrs.value = (results[4].value as any[]).length;
+    openPrs.value = results[4].value as number;
   }
-  if (results[5].status === "fulfilled") {
-    const list = results[5].value as any[];
-    const weekAgo = Date.now() - 7 * 24 * 3600 * 1000;
-    mergedPrs.value = list.filter((p) => {
-      const d = p.mergedAt || p.closedAt || p.updatedAt;
-      return d && new Date(d).getTime() > weekAgo;
-    }).length;
-  }
+  // mergedPrs intentionally left at 0 — see boot Promise.allSettled comment.
   // Shortlog (full-history per-author) — drives contributorCount + the
-  // contributors panel. results[6] is loadReadme (no return value to
-  // capture); results[7] is the shortlog.
-  if (results[7].status === "fulfilled") {
-    allContributors.value = results[7].value;
+  // contributors panel. results[5] is loadReadme (no return value to
+  // capture); results[6] is the shortlog.
+  if (results[6].status === "fulfilled") {
+    allContributors.value = results[6].value;
   }
 
   loading.value = false;

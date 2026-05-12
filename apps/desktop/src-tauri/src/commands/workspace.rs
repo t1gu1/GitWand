@@ -137,12 +137,19 @@ pub(crate) fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoP
         let repo_path = repo.path.clone();
         let repo_name = repo.name.clone();
 
+        // GH_TOKEN propagation: centralized in `hidden_cmd` (cf. git/cmd.rs).
+        // v2.8.5 boot-perf: limit 50 → 10 + dropped heavy fields
+        // (statusCheckRollup, mergeStateStatus, reviewRequests/Decision,
+        // additions/deletions). For multi-repo workspaces, those heavy
+        // fields cost a per-PR roundtrip × N repos at boot — multiplicative
+        // explosion. See `gh_list_prs` for the matching change.
+        // TODO Phase 2 (v2.9): cursor-based pagination + lazy enrichment.
         let output = hidden_cmd("gh")
             .args([
                 "pr", "list",
                 "--state", "open",
-                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,additions,deletions,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup",
-                "--limit", "100",
+                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
+                "--limit", "10",
             ])
             .current_dir(&repo_path)
             .output();

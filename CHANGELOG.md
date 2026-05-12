@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.8.4] - 2026-05-12
 
+**Critical CSP fix — Tauri IPC was silently falling back to postMessage in v2.8.2/2.8.3.**
+
+The `connect-src` directive in `tauri.conf.json` was `'self' http://localhost:3001` only. Tauri 2 IPC uses `ipc://localhost/<cmd>` (macOS/Linux) or `http://ipc.localhost/<cmd>` (Windows), neither of which were allowed. Every IPC call (`git_status`, `git_repo_state`, `git_exec`, `git_remote_info`, `set_git_config`, `plugin:menu|*`, …) was rejected by the CSP, triggering Tauri's `postMessage` fallback path — significantly slower and prone to callback-id race conditions ("Couldn't find callback id" warnings in the console). This was the dominant source of perceived lag in v2.8.2 (worse than any of the 30 chantiers fixed in the perf hardening). Diagnosis came from Safari Web Inspector logs showing `Refused to connect to ipc://localhost/...`.
+
+Fix: `connect-src` now includes `ipc: http://ipc.localhost http: https:` to cover Tauri IPC on all platforms plus user-configurable AI providers (Anthropic / OpenAI-compat / Ollama / custom endpoints — previously hitting CSP rejection too, e.g. `http://localhost:11434/api/tags` for the Ollama detection probe). `img-src` opened to `https: http:` for README badges (shields.io, github user-content) that were also rejected.
+
+Security posture preserved: `script-src 'self' 'wasm-unsafe-eval'` is unchanged — no remote code execution surface added. Only data fetches and IPC channels were unblocked.
+
+**macOS login-shell environment preload at startup.**
+
+Companion fix surfaced after the CSP repair restored proper IPC: `gh` subprocess calls were timing out at 30 s (the v2.8.2 `IPC_TIMEOUT.NETWORK` default) producing waves of "Couldn't find callback id" warnings. Same `gh pr list` ran in ~1 s from the user's terminal but hung from the app — classic macOS launchd env gap. Apps launched from Finder/Dock/Spotlight inherit `PATH=/usr/bin:/bin:/usr/sbin:/sbin` plus `HOME`/`USER`/`TMPDIR`, but **nothing from `~/.zshrc`, `~/.zprofile`, `~/.bashrc`** — so no `SSH_AUTH_SOCK`, `XDG_CONFIG_HOME`, `LANG`, `GH_TOKEN`, custom `PATH` prefixes from asdf/mise/nvm, nix-darwin exports, etc. `gh`'s credential chain then falls back to the macOS keychain helper from a launchd-spawned process, where the prompt fires silently or retries indefinitely.
+
+Fix in `apps/desktop/src-tauri/src/shell_env.rs`: at `run()` startup, spawn `$SHELL -l -c env` once (3 s timeout bound — a misbehaving rc file can't freeze app launch), parse the output, and `std::env::set_var` everything not already set. `PATH` is skipped (`hidden_cmd` owns it for Homebrew enrichment predictability); `PWD`/`OLDPWD`/`SHLVL`/`_`/`SHELL` are skipped (shell-local noise). All subsequent subprocess (`gh`, `claude`, `codex`, `git`, etc.) inherit the enriched env via `Command::new`. No-op on Linux (session manager already provides full env) and Windows (HKCU\\Environment). Same approach used by VS Code, Sublime, IntelliJ.
+
+**`gh` subprocess hang on signed Tauri.app — GH_TOKEN preload + payload reduction.**
+
+Companion to shell_env: even with the full shell env, `gh pr list` from the signed GitWand.app subprocess can hang on macOS keychain ACL. The keychain treats the signed Developer ID app as a different application than iTerm/Terminal, and the `security` helper called by `gh` to retrieve the OAuth token from the `keyring` auth method waits for a foreground UI prompt that never fires in the webview context. Fix: at `init_login_shell_env()`, also run `$SHELL -l -c "gh auth token"` once from a login shell where the keychain ACL is authorized, capture the token, `std::env::set_var("GH_TOKEN", …)`. `git/cmd.rs#hidden_cmd` now explicitly propagates `GH_TOKEN` and `GITHUB_TOKEN` to every subprocess (belt-and-suspenders against any future env-clear or runtime peculiarity). gh subprocess from Tauri now skip the keychain helper entirely.
+
+Companion perf reduction: `gh_list_prs` and `workspace_prs_all` reduced `--limit` from 300/100 → **50** PRs. The heavy fields requested (`statusCheckRollup`, `mergeStateStatus`) each cost a per-PR API roundtrip internally, scaling badly on big repos (Dendreo-class: 100+ open PRs took 20-40s vs 1-2s for a `--limit 5` query). Sidebar UI renders ≤50 anyway; deeper navigation goes through the search palette.
+
 Quick fixes batch — 2 bugs, 6 UX polish, 1 feature (Mode hors-ligne). Closes the "Quick Fixes" section of the ROADMAP. Detail per chantier in [PLAN-quick-fixes.md](./PLAN-quick-fixes.md).
 
 ### Fixed

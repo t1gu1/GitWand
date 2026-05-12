@@ -10,7 +10,7 @@
  * - Cards with a colored left rail matching the PR state
  * - Hover-lift + active accent border, matching the rest of the app
  */
-import { computed, inject, onMounted } from "vue";
+import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
 import { useI18n } from "../composables/useI18n";
 
@@ -18,8 +18,47 @@ const { t } = useI18n();
 
 const panel = inject<PrPanelState>(PR_PANEL_KEY)!;
 
+// ─── Lazy pagination sentinel (v2.8.5 §E) ─────────────────
+// IntersectionObserver watches a 1px element at the bottom of the list;
+// when it enters the viewport, we ask the panel for the next page.
+// `observer` is kept on the component instance so we can disconnect on
+// unmount (mounting/unmounting happens every time the user toggles
+// viewMode = "prs", so leaking observers would compound fast).
+const loadMoreSentinel = ref<HTMLDivElement | null>(null);
+let observer: IntersectionObserver | null = null;
+
+function attachObserver() {
+  if (observer) { observer.disconnect(); observer = null; }
+  const el = loadMoreSentinel.value;
+  if (!el || typeof IntersectionObserver === "undefined") return;
+  observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        // `loadMorePrs` is internally guarded (loading / loadingMore /
+        // hasMore) so calling it on every intersection event is safe.
+        panel.loadMorePrs();
+      }
+    }
+  }, { root: null, rootMargin: "120px", threshold: 0 });
+  observer.observe(el);
+}
+
 onMounted(() => {
   panel.init();
+  // Defer to next tick — the sentinel only mounts after the spinner
+  // resolves and `v-else` switches to the list. The watch below handles
+  // the actual reactive attach.
+});
+
+// Re-attach the observer when the sentinel reference appears/changes.
+// Necessary because `v-if` swaps the loading-spinner branch with the
+// list branch — the sentinel only exists in the latter.
+watch(loadMoreSentinel, (el) => {
+  if (el) attachObserver();
+});
+
+onBeforeUnmount(() => {
+  if (observer) { observer.disconnect(); observer = null; }
 });
 
 type StateCls = "pls-state--open" | "pls-state--merged" | "pls-state--closed";
@@ -219,6 +258,21 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
           <span class="pls-del">−{{ pr.deletions }}</span>
         </div>
       </button>
+
+      <!-- v2.8.5 §E — Lazy pagination sentinel.
+           A 1px probe that triggers `loadMorePrs()` via IntersectionObserver
+           as soon as it scrolls into the viewport. `rootMargin: 120px` so
+           the next page starts fetching slightly before the user hits the
+           absolute bottom — keeps scrolling visually continuous.
+           Hidden once gh has nothing more to give (panel.hasMore = false). -->
+      <div
+        v-if="panel.hasMore.value"
+        ref="loadMoreSentinel"
+        class="pls-sentinel"
+        aria-hidden="true"
+      >
+        <div v-if="panel.loadingMore.value" class="pls-spinner pls-spinner--sm" />
+      </div>
     </div>
   </div>
 </template>
@@ -686,6 +740,15 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
 .pls-del { color: var(--color-danger); }
 
 .mono { font-family: var(--font-mono); }
+
+/* ─── Lazy pagination sentinel (§E) ─────────────────────── */
+.pls-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  flex-shrink: 0;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .pls-item,

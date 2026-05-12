@@ -1,6 +1,7 @@
 pub(crate) mod git;
 pub(crate) mod types;
 pub(crate) mod commands;
+pub(crate) mod shell_env;
 
 pub(crate) use crate::types::*;
 // Used only by the `#[cfg(test)] mod tests` block below (parse_gh_pr_json,
@@ -210,6 +211,15 @@ pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String>
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // macOS GUI apps launched from Finder/Dock get a minimal launchd env
+    // (no SSH_AUTH_SOCK, GH_TOKEN, XDG_*, or anything from ~/.zshrc).
+    // Subprocess like `gh`, `claude`, `codex` then hang on auth/network
+    // lookups they can't complete. Spawn a login shell once, read its env,
+    // propagate to the current process so all subsequent subprocess
+    // (`hidden_cmd` in git/cmd.rs) inherit the enriched env automatically.
+    // No-op on Linux/Windows. See shell_env.rs for the full rationale.
+    shell_env::init_login_shell_env();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
@@ -285,6 +295,7 @@ pub fn run() {
             commands::ops::detect_monorepo,
             commands::ops::git_remote_info,
             commands::gh::gh_list_prs,
+            commands::gh::gh_pr_count,
             commands::gh::gh_create_pr,
             commands::gh::gh_list_reviewer_candidates,
             commands::gh::gh_checkout_pr,

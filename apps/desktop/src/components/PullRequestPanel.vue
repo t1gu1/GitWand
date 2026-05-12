@@ -490,14 +490,27 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") emit("close");
 }
 
+// v2.8.5 boot-perf: don't trigger `loadPrs()` on mount. The PR panel is
+// teleported into <body> and exists in the DOM regardless of `props.show`,
+// so the old mount-time `loadPrs` ran an expensive `gh pr list` (50 PRs ×
+// statusCheckRollup roundtrips) at every repo open — even when the user
+// never opens the PRs tab. The list is now loaded lazily by the
+// `props.show` watcher below, the first time the panel becomes visible.
 onMounted(() => {
   loadRemote();
-  loadPrs();
 });
 
 watch(() => props.show, (v) => { if (v) { loadRemote(); loadPrs(); } });
-watch(filterState, loadPrs);
-watch(() => props.cwd, () => { loadRemote(); loadPrs(); selectedPr.value = null; });
+watch(filterState, () => { if (props.show) loadPrs(); });
+watch(() => props.cwd, () => {
+  loadRemote();
+  selectedPr.value = null;
+  // Only re-fetch the PR list if the user is actually looking at the
+  // panel; otherwise just clear so the stale list of the previous repo
+  // doesn't flash on next open.
+  if (props.show) loadPrs();
+  else prs.value = [];
+});
 </script>
 
 <template>

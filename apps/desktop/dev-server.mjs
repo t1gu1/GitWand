@@ -2045,6 +2045,46 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/gh-pr-count?cwd=<path>&state=<open|closed|merged|all>
+    // Lightweight counter — single REST call with `per_page=1` reading the
+    // `Link: rel="last"` header to derive the total. Avoids fetching the
+    // PR objects themselves (mirrors the Rust `gh_pr_count` which uses a
+    // GraphQL totalCount edge).
+    if (url.pathname === "/api/gh-pr-count" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const stateRaw = (url.searchParams.get("state") || "open").toLowerCase();
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      // REST API doesn't have a "merged" filter — merged PRs live under
+      // state=closed with merged_at != null. For "merged" the count needs
+      // a one-page scan; for now we map merged → closed (over-counts by
+      // the # of closed-but-not-merged PRs, acceptable for the dashboard
+      // hint). TODO Phase 2: tighten via /search?q=is:merged.
+      const state =
+        stateRaw === "merged" ? "closed" :
+        stateRaw === "all" ? "all" :
+        stateRaw === "closed" ? "closed" : "open";
+      try {
+        const token = getGithubToken();
+        if (!token) return jsonResponse(req, res, 0);
+        const nwo = getRepoNwo(resolve(cwd));
+        if (!nwo) return jsonResponse(req, res, 0);
+        const resp = await githubFetch(`/repos/${nwo}/pulls?state=${state}&per_page=1`, token);
+        if (!resp.ok) return jsonResponse(req, res, 0);
+        const linkHeader = resp.headers.get("link") || "";
+        // Parse `<...&page=N>; rel="last"` to extract the total page count
+        // (which equals total items when per_page=1).
+        const m = linkHeader.match(/<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+        if (m) return jsonResponse(req, res, parseInt(m[1], 10));
+        // No Link header → fewer than per_page items on the first page;
+        // count what we got.
+        const data = await resp.json();
+        return jsonResponse(req, res, Array.isArray(data) ? data.length : 0);
+      } catch (err) {
+        console.error("[gh-pr-count]", err.message);
+        return jsonResponse(req, res, 0);
+      }
+    }
+
     // POST /api/gh-create-pr
     // Body: { cwd, title, body, base?, head?, draft?, reviewers? }
     // Creates the PR via REST, then requests reviewers in a second call
@@ -4120,6 +4160,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/git-diff?cwd=<path>&path=<file>&staged=<bool>`);
   console.log(`    GET  /api/git-log?cwd=<path>&count=<n>&all=<bool>`);
   console.log(`    GET  /api/gh-list-prs?cwd=<path>&state=<state>`);
+  console.log(`    GET  /api/gh-pr-count?cwd=<path>&state=<state>`);
   console.log(`    POST /api/gh-create-pr  { cwd, title, body, base?, draft?, reviewers? }`);
   console.log(`    GET  /api/gh-reviewer-candidates?cwd=<path>`);
   console.log(`    GET  /api/gh-pr-detail?cwd=<path>&number=<n>`);
