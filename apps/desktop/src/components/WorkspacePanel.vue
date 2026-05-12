@@ -16,7 +16,6 @@ import BaseModal from "./BaseModal.vue";
 
 const emit = defineEmits<{
   (e: "open-tab", path: string): void;
-  (e: "open-launchpad", repos: WorkspaceRepo[]): void;
   (e: "close"): void;
 }>();
 
@@ -260,13 +259,6 @@ watch(workspaceDir, (dir) => { if (dir) persistDir(dir); });
             @click="refreshStatus"
           >
             {{ t("workspace.statusAll") }}
-          </button>
-          <button
-            class="bm-btn bm-btn--primary wp-btn-sm"
-            :disabled="!workspace.repos.length"
-            @click="emit('open-launchpad', workspace!.repos)"
-          >
-            {{ t("workspace.openLaunchpad") }}
           </button>
           <button class="bm-btn bm-btn--ghost wp-btn-sm" @click="openAll" :disabled="!workspace.repos.length">
             {{ t("workspace.openAll") }}

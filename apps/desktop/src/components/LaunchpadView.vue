@@ -16,9 +16,7 @@ const props = defineProps<{
   repos: WorkspaceRepo[];
 }>();
 
-const emit = defineEmits<{
-  (e: "close"): void;
-}>();
+// close event removed — navigation is now handled by the sidebar viewMode switch
 
 const { t } = useI18n();
 const { settings } = useSettings();
@@ -278,11 +276,6 @@ onMounted(() => {
         </svg>
         <span>{{ t("launchpad.refreshAll") }}</span>
       </button>
-      <button
-        class="launchpad-view__close"
-        :title="t('common.close')"
-        @click.stop="emit('close')"
-      >×</button>
     </div>
 
     <!-- Tab bar -->
@@ -977,51 +970,27 @@ onMounted(() => {
  *   - PullRequestPanel      → pr-item rows
  * ───────────────────────────────────────────────────────────────────── */
 
-/* ── Overlay backdrop (full-screen, blurred) ───────────── */
-/* Mirrors `BaseModal` overlay: dim the app behind, blur it, and let the
-   user feel the Launchpad as a *modal* full-screen panel rather than an
-   opaque view that replaces the whole UI. Click on the empty backdrop
-   margin will not dismiss (the panel has its own ✕) — but clicking
-   anywhere outside an open `⋮` dropdown closes it (existing behaviour). */
+/* ── Main-content layout (replaces the old fixed overlay) ── */
+/* LaunchpadView is now a first-class viewMode rendered inside <main>.
+   It fills the available height and scrolls internally, matching the
+   pattern of DashboardView / PrDetailView. */
 .launchpad-view {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: var(--color-overlay);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
   display: flex;
-  animation: launchpad-fade var(--transition-base) ease;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
-/* ── Panel frame (the white card itself) ───────────────── */
-/* 2rem inset on every side so the dimmed/blurred app stays visible at
-   the edges. `--color-bg-secondary` resolves to `#ffffff` in light and
-   `#1a1a26` in dark — never the slightly-grey `--color-bg`. */
+/* ── Inner frame — scroll container ───────────────────── */
 .launchpad-view__frame {
   flex: 1;
-  margin: 2rem;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-2xl);
-  box-shadow: var(--shadow-xl);
-  color: var(--color-text);
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   padding: var(--space-6) var(--space-7);
   overflow-y: auto;
-  animation: launchpad-slide-in var(--transition-slow) ease;
-}
-
-@keyframes launchpad-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes launchpad-slide-in {
-  from { transform: scale(0.985); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
+  min-height: 0;
 }
 
 /* ── Header ────────────────────────────────────────────── */
@@ -1086,33 +1055,6 @@ onMounted(() => {
 .launchpad-view__refresh-icon--spin {
   animation: launchpad-spin 0.9s linear infinite;
   transform-origin: 50% 50%;
-}
-
-.launchpad-view__close {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xl);
-  line-height: 1;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.launchpad-view__close:hover {
-  color: var(--color-text);
-  background: var(--color-bg-tertiary);
-}
-
-.launchpad-view__close:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
 }
 
 /* ── Error banner ──────────────────────────────────────── */

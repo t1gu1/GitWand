@@ -217,6 +217,8 @@ const fr: Locale = {
     footerDashboard: "Dashboard",
     footerStash: "Stash",
     footerTags: "Tags",
+    footerLaunchpad: "Launchpad",
+    launchpad: "Launchpad",
     footerWorkspaces: "Workspaces",
     footerAgents: "Agents",
   },

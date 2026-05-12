@@ -41,7 +41,7 @@ import {
 } from "../utils/backend";
 import { requireOnline } from "../utils/networkGuard";
 
-export type ViewMode = "dashboard" | "changes" | "history" | "graph" | "prs";
+export type ViewMode = "dashboard" | "changes" | "history" | "graph" | "prs" | "launchpad";
 
 export interface RepoFileEntry {
   path: string;

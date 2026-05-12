@@ -1014,11 +1014,13 @@ const showWorkspace = ref(false);
 const showAgents = ref(false);
 
 // ─── Launchpad panel ─────────────────────────────────────
-const showLaunchpad = ref(false);
+// showLaunchpad removed — Launchpad is now a first-class viewMode ("launchpad").
+// launchpadRepos holds the workspace repos list loaded on demand; the
+// <LaunchpadView :repos="…"> in the main-content area consumes it.
 const launchpadRepos = ref<WorkspaceRepo[]>([]);
 function openLaunchpad(repos: WorkspaceRepo[]) {
   launchpadRepos.value = repos;
-  showLaunchpad.value = true;
+  viewMode.value = "launchpad";
   showWorkspace.value = false;
 }
 
@@ -1035,7 +1037,7 @@ function openLaunchpad(repos: WorkspaceRepo[]) {
  */
 async function handleLaunchpadShortcut(): Promise<void> {
   // If Launchpad already open with repos, just keep it visible (no-op).
-  if (showLaunchpad.value && launchpadRepos.value.length > 0) return;
+  if (viewMode.value === "launchpad" && launchpadRepos.value.length > 0) return;
 
   // Re-use repos already loaded for this session (e.g. WorkspacePanel was
   // opened earlier) — fastest path, no IPC.
@@ -1616,7 +1618,8 @@ onUnmounted(() => {
           @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
           @add-to-gitignore="(path) => addToGitignore(path)" @refresh="repoRefresh()" @open-stash="showStash = true"
-          @open-tags="showTags = true" @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
+          @open-tags="showTags = true" @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
+          @open-launchpad="handleLaunchpadShortcut" />
       </aside>
 
       <main class="main">
@@ -1718,6 +1721,9 @@ onUnmounted(() => {
             <!-- PRs view: detail panel fills the main area -->
             <PrDetailView v-else-if="viewMode === 'prs'" @refresh="repoRefresh"
               @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+
+            <!-- Launchpad view: cross-repo dashboard (v2.10 nav revamp) -->
+            <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" />
           </template>
         </template>
       </main>
@@ -1779,11 +1785,7 @@ onUnmounted(() => {
 
     <!-- Workspace panel -->
     <WorkspacePanel v-if="showWorkspace" @close="showWorkspace = false"
-      @open-tab="(path) => { openTab(path); showWorkspace = false; }"
-      @open-launchpad="openLaunchpad" />
-
-    <!-- Launchpad panel -->
-    <LaunchpadView v-if="showLaunchpad" :repos="launchpadRepos" @close="showLaunchpad = false" />
+      @open-tab="(path) => { openTab(path); showWorkspace = false; }" />
 
     <!-- Agent Sessions panel -->
     <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"

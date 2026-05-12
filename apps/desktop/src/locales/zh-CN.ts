@@ -221,6 +221,8 @@ const zhCN: Locale = {
     footerDashboard: "Dashboard",
     footerStash: "Stash",
     footerTags: "Tags",
+    footerLaunchpad: "启动台",
+    launchpad: "启动台",
     footerWorkspaces: "Workspaces",
     footerAgents: "Agents",
   },

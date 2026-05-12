@@ -341,18 +341,16 @@ describe("LaunchpadView — UI smoke", () => {
     unmount(mounted);
   });
 
-  it("close button calls the close emit handler", async () => {
+  it("no close button — Launchpad navigation is owned by the sidebar viewMode switch", async () => {
+    // Since v2.10 nav revamp, LaunchpadView no longer renders a ✕ close button.
+    // Dismissal is done by clicking another sidebar entry (changes viewMode in App.vue).
     const mounted = mountLaunchpad();
     await nextTick();
 
     const closeBtn = mounted.container.querySelector<HTMLButtonElement>(
       ".launchpad-view__close",
     );
-    expect(closeBtn).not.toBeNull();
-    closeBtn!.click();
-    await nextTick();
-
-    expect(mounted.emitted.close).toBe(1);
+    expect(closeBtn).toBeNull();
     unmount(mounted);
   });
 
