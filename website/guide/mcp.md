@@ -31,6 +31,14 @@ claude mcp add gitwand -- npx -y @gitwand/mcp
 
 `@gitwand/mcp` is listed in the [MCP Registry](https://registry.modelcontextprotocol.io) and ships with npm [provenance attestations](https://docs.npmjs.com/generating-provenance-statements) — you can verify that every release was built from the public `devlint/GitWand` repo in CI.
 
+## Install from the Desktop App (v2.10)
+
+The easiest way to install `@gitwand/mcp` — or any other MCP server — is from **Settings > MCP** in the GitWand desktop app. It detects every AI client config file on your machine, shows which servers are already installed where, and writes the correct JSON fragment in one click.
+
+The `@gitwand/mcp` card is pinned at the top of the list. If you have a repo open, the install fragment is pre-filled with `--cwd /path/to/your/repo`. Select the target config files and click **Install** — no terminal, no JSON editing.
+
+If you prefer to configure manually, see below.
+
 ## Configuration
 
 ### Claude Desktop
@@ -50,14 +58,27 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ### Claude Code
 
-Add to `.claude/settings.json` in your project:
+**Global** — add to `~/.claude.json`:
 
 ```json
 {
   "mcpServers": {
     "gitwand": {
       "command": "npx",
-      "args": ["@gitwand/mcp"]
+      "args": ["-y", "@gitwand/mcp", "--cwd", "/path/to/your/repo"]
+    }
+  }
+}
+```
+
+**Per-project** — add to `.claude/settings.json` in your repo:
+
+```json
+{
+  "mcpServers": {
+    "gitwand": {
+      "command": "npx",
+      "args": ["-y", "@gitwand/mcp"]
     }
   }
 }

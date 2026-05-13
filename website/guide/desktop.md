@@ -99,14 +99,19 @@ The backing `folder_diff` backend command (Rust/Tauri + Node dev-server + TypeSc
 
 Click the repo name in the header to open a dropdown with all recently opened repositories. Pin favorites, remove entries, and switch instantly.
 
-## Pull Requests
+## Pull Requests & Merge Requests
 
-Browse, create, checkout, and merge GitHub PRs without leaving the app:
+Browse, create, checkout, and merge PRs without leaving the app. GitWand supports **GitHub**, **GitLab**, and **Bitbucket Cloud** — detected automatically from the remote URL.
 
-- PR list in the sidebar
+- PR/MR list in the sidebar
 - Full detail view: diff, CI checks, comments, inline review
 - Inline comments anchored to diff lines with full threading
 - Code suggestions via ` ```suggestion ``` ` blocks, applicable in one click
+- **Draft → Ready** — convert a draft PR/MR to ready-for-review in one click
+
+### Multi-account support (v2.10)
+
+Connect multiple accounts per forge — personal + work GitHub, GitLab on multiple instances, Bitbucket Cloud. GitWand resolves the right account for each repo automatically. Credentials are stored in the OS keychain (macOS Keychain, Windows Credential Manager, Linux Secret Service). Configure in **Settings > Comptes**.
 
 ## AI Everywhere (v1.3)
 
@@ -139,14 +144,53 @@ AI is woven into every step of the workflow. Each suggestion is opt-in (explicit
 
 - **Rotating feature tips** — the empty state before repo selection cycles through ~20 localised tips every 30 s to surface features you might not have discovered
 
-## Auto-update & version (v1.4)
+## MCP Catalog (v2.10)
 
-On launch, GitWand checks the GitHub Releases feed for a newer version and shows a toast with a changelog link when one is available. The current version is displayed in the footer / About view.
+The **MCP** tab in Settings is a built-in browser for the MCP ecosystem. It lets you install any MCP server into your AI client's config file without opening a terminal or editing JSON manually.
+
+**Supported config targets** — detected and written automatically:
+
+| Config file | Client |
+|-------------|--------|
+| `~/Library/Application Support/Claude/claude_desktop_config.json` | Claude Desktop (macOS) |
+| `~/.claude.json` | Claude Code (global) |
+| `~/.cursor/mcp.json` | Cursor |
+| `~/.windsurf/mcp.json` | Windsurf |
+
+**Smart search input** — the search bar understands three input types:
+
+- **URL** (`https://registry.modelcontextprotocol.io/servers/…`) — deep-links directly to that server's install card
+- **Package** (`@scope/name` or `name`) — installs the npm package directly without searching
+- **Text** — searches names, descriptions, and package identifiers
+
+**Installed detection** — each config file is scanned at open time. Servers already configured anywhere show an "Installed" badge on their card so you never add a duplicate entry.
+
+**`@gitwand/mcp` is pinned at the top** — with a "Reconfigure" button that pre-fills the install fragment with `--cwd /path/to/current/repo` automatically.
+
+See [MCP Server guide](/guide/mcp) for full documentation of the server itself.
+
+## Auto-update & version
+
+On launch, GitWand checks for a newer version and shows a toast when one is available. You can also trigger a manual check from **Settings > Système > Vérifier les mises à jour** — the button shows a spinner while checking, a green "Up to date" confirmation for a few seconds, or opens the update modal immediately if a new version is found.
 
 ## Settings
 
-- **Language**: French / English
-- **Theme**: Light / Dark
-- **Commit signature**: Optional GPG signing
-- **Diff mode**: Side-by-side or inline (default)
-- **AI provider**: Claude Code CLI / Claude API / OpenAI-compatible / Ollama (used for every AI feature above)
+The Settings panel (keyboard shortcut: `⌘,` / `Ctrl+,`) has a left-side navigation sidebar grouped into four sections:
+
+**Application**
+- **Général** — language, theme, notifications, update channel, Launchpad options
+- **Éditeur** — font size, tab size, diff mode
+
+**Dépôt**
+- **Git** — default branch, pull mode, switch behavior, commit signature, blame algorithm
+- **Hooks** — manage Git hooks for the current repo
+- **Comptes** — connect GitHub, GitLab, and Bitbucket accounts (credentials in OS keychain)
+
+**IA & Agents**
+- **IA** — enable AI, choose provider (Claude Code CLI / Claude API / OpenAI-compatible / Ollama), API key
+- **MCP** — browse and install MCP servers (see [MCP Catalog](#mcp-catalog-v2-10) above)
+- **Automations** — auto-resolve, nightly pull, release notes, AI commit batch
+
+**Système**
+- **Logs** — activity log with copy-all and clear actions
+- **Vérifier les mises à jour** — manual update check

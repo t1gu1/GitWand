@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-05-13
+
+v2.10 opens GitWand to the broader forge ecosystem and brings the MCP ecosystem inside the app.
+
+### Added
+
+- **GitLab MR integration** — list, review, and merge GitLab Merge Requests without leaving the app. Uses the `glab` CLI, auto-detected on `$PATH`. Full feature parity with the GitHub PR panel: diff, CI status, inline comments, "Mark as ready" for drafts.
+
+- **Bitbucket PR integration** — list and manage Bitbucket Cloud Pull Requests via the REST v2 API. No CLI dependency — authenticates via credentials stored in the OS keychain (`tauri-plugin-keyring`).
+
+- **Multi-account forge support** — new **Settings > Comptes** tab to connect multiple GitHub, GitLab, and Bitbucket accounts (personal + work). GitWand resolves the right account for each repo from the remote URL; credentials persist in the system keychain and never touch localStorage.
+
+- **Draft PR → Ready** — "Mark as ready" button in the PR detail view. GitHub: `gh pr ready`. GitLab: `glab mr update --ready`. One click, no terminal.
+
+- **MCP catalog in Settings** — a new **MCP** tab in the Settings panel to browse, search, and install MCP servers without leaving GitWand.
+  - Source: npm registry fallback (250+ packages with `keywords:mcp-server`), official MCP Registry when available.
+  - **One-click install** into any detected config file: Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`), Claude Code global (`~/.claude.json`), Cursor (`~/.cursor/mcp.json`), Windsurf (`~/.windsurf/mcp.json`).
+  - **Installed badge** — reads `server_keys` from every config file to show exactly which servers are already configured where.
+  - **Smart input** — paste a `registry.modelcontextprotocol.io` URL for deep-link, type `@scope/package` to install directly from npm, or plain-text search across names and descriptions.
+  - **`@gitwand/mcp` pinned at the top** with automatic `--cwd` injection and a "Reconfigure" shortcut.
+  - **Manual fallback** — when running in browser/dev mode (no config files accessible), shows a copy-paste path with JSON copy button and the 4 standard config file locations.
+  - New Rust commands: `mcp_detect_configs`, `mcp_read_config`, `mcp_install_server`, `mcp_uninstall_server`.
+
+- **Settings panel redesign** — the Settings modal is now wider (`xl`, 960 px fixed at 72 vh) and replaces the horizontal scrolling tab bar with a left-side navigation sidebar. Groups: **Application** (Général, Éditeur), **Dépôt** (Git, Hooks, Comptes), **IA & Agents** (IA, MCP, Automations), **Système** (Logs). Footer shows the app version. No more layout shift on tab switch.
+
+- **Check for updates from Settings** — "Vérifier les mises à jour" in the Système group. Spinner while checking; green "À jour" confirmation for 4 s if up to date; opens the update modal directly if a new version is found (single network call, no double-check).
+
+### Changed
+
+- **`ForgeProvider` abstraction** — new `forge/` layer routes all PR/MR operations through a typed interface (`GitHubProvider`, `GitLabProvider`, `BitbucketProvider`). Auto-detected from remote URL; multi-account overrides applied transparently. No API change for consumers of `usePrPanel`.
+
+### Technical
+
+- New Rust commands (18): `gl_mr_list/detail/merge/ready`, `bb_pr_list/detail/merge`, `gh_pr_ready`, `keyring_set/get/delete`, `mcp_detect_configs/read_config/install_server/uninstall_server`.
+- New composables: `useForge`, `useAccounts`, `useCredentials`, `useMcpRegistry`.
+- New components: `SettingsAccountsTab.vue`, `SettingsMcpTab.vue`.
+- TypeScript: zero errors. Tests: 95/95 passing.
+
 ## [2.9.0] - 2026-05-12
 
 Launchpad — cross-repo dashboard inspired by GitKraken's Launchpad but local-first (no cloud, no account). Closes the v2.9.0 ROADMAP entry. Audit established the chantier was ~95% implemented across previous unmerged work; this release wraps the closure (keyboard shortcut, tab persistence, lazy Team tab, UI tests) and ships. Detail per task in [PLAN-v2.9-launchpad.md](./PLAN-v2.9-launchpad.md).

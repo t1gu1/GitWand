@@ -5,6 +5,24 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.10.0 — May 2026
+
+### Forge integrations — GitLab, Bitbucket, multi-account
+
+GitWand no longer assumes GitHub. v2.10 adds native support for GitLab Merge Requests (via the `glab` CLI, auto-detected) and Bitbucket Cloud Pull Requests (via the REST v2 API, no CLI needed). The full PR panel experience — diffs, CI status, inline comments, draft-to-ready conversion — works across all three forges. A new **Accounts** tab in Settings lets you connect multiple accounts per forge (personal + work). GitWand resolves the right account for each repo automatically from the remote URL; credentials are stored in the OS keychain and never written to disk in plaintext.
+
+### MCP catalog in Settings
+
+The **MCP** tab in Settings is a lightweight browser for the MCP ecosystem, built directly into GitWand. It pulls from the npm registry (250+ packages tagged `mcp-server`) and lets you install any server to your Claude Desktop, Claude Code, Cursor, or Windsurf config file in one click — no terminal, no JSON editing.
+
+The search input is context-aware: paste a `registry.modelcontextprotocol.io` URL and GitWand deep-links to that server, type `@scope/package` to install a specific npm package directly, or search by keyword across names and descriptions. Every config file is scanned to show which servers are already installed where, so you never duplicate an entry. `@gitwand/mcp` sits at the top of the list with a "Reconfigure" shortcut and automatic `--cwd` injection so it always points at the right repo.
+
+### Settings panel redesign
+
+The Settings modal grows from medium to extra-large (960 px, fixed at 72 vh) and switches from a horizontal scrolling tab bar to a left-side navigation sidebar. Items are grouped the way you actually think about them — **Application** (General, Editor), **Dépôt** (Git, Hooks, Accounts), **IA & Agents** (AI, MCP, Automations), **Système** (Logs) — with the app version in the footer. Switching tabs no longer resizes the modal. A dedicated "Check for updates" action sits in the Système group: it spins while checking, shows a green "Up to date" confirmation for a few seconds, or opens the update modal directly if a new version is found.
+
+---
+
 ## v2.9.0 — May 2026
 
 ### Launchpad — your workspace at a glance
