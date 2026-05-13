@@ -4,6 +4,7 @@ pub(crate) mod credentials;
 pub(crate) mod files;
 pub(crate) mod gh;
 pub(crate) mod gitlab;
+pub(crate) mod mcp_catalog;
 pub(crate) mod network;
 pub(crate) mod ops;
 pub(crate) mod read;

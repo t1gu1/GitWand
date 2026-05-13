@@ -1040,8 +1040,9 @@ const en = {
       // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automations",
-    // Accounts tab (v2.10)
+    // Accounts + MCP tabs (v2.10)
     tabAccounts: "Accounts",
+    tabMcp: "MCP",
     accountsEmpty: "No accounts configured. Add one to enable GitLab and Bitbucket.",
     accountsAdd: "Add account",
     accountsRemove: "Remove",

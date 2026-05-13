@@ -1016,6 +1016,7 @@ const es: Locale = {
     tabHooks: "Hooks",
     tabAutomations: "Automatizaciones",
     tabAccounts: "Cuentas",
+    tabMcp: "MCP",
     accountsEmpty: "No hay cuentas configuradas. Añade una para activar GitLab y Bitbucket.",
     accountsAdd: "Añadir cuenta",
     accountsRemove: "Eliminar",

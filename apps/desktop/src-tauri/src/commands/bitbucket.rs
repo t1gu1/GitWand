@@ -216,6 +216,7 @@ fn jdeep(v: &serde_json::Value, outer: &str, inner: &str, leaf: &str) -> String 
 }
 
 /// Extract array of `nickname` from `[{account_id, display_name, nickname, ...}]`.
+#[allow(dead_code)]
 fn jnicknames(v: &serde_json::Value, key: &str) -> Vec<String> {
     v.get(key)
         .and_then(|a| a.as_array())

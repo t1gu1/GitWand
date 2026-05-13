@@ -1016,6 +1016,7 @@ const ptBR: Locale = {
     tabHooks: "Hooks",
     tabAutomations: "Automa\u00e7\u00f5es",
     tabAccounts: "Contas",
+    tabMcp: "MCP",
     accountsEmpty: "Nenhuma conta configurada. Adicione uma para ativar GitLab e Bitbucket.",
     accountsAdd: "Adicionar conta",
     accountsRemove: "Remover",

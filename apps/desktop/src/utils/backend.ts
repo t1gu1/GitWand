@@ -3969,3 +3969,58 @@ export async function installUpdate(
   }
 }
 
+// ─── MCP catalog (§6.x) ──────────────────────────────────────────────────
+
+export interface McpConfigFile {
+  /** Human-readable label, e.g. "Claude Desktop" */
+  label: string;
+  /** Absolute path on disk */
+  path: string;
+  /** Whether the file currently exists on disk */
+  exists: boolean;
+  /** All server keys currently configured under `mcpServers` in this file */
+  serverKeys: string[];
+}
+
+/** Discover MCP config files (Claude Desktop, Claude Code, Cursor, Windsurf). */
+export async function mcpDetectConfigs(): Promise<McpConfigFile[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<McpConfigFile[]>("mcp_detect_configs");
+}
+
+/**
+ * Read the `mcpServers` map from a config file.
+ * Returns `{}` when the file doesn't exist or has no mcpServers key.
+ */
+export async function mcpReadConfig(path: string): Promise<Record<string, unknown>> {
+  if (!isTauri()) return {};
+  const json = await tauriInvoke<string>("mcp_read_config", { path });
+  try { return JSON.parse(json) as Record<string, unknown>; } catch { return {}; }
+}
+
+/**
+ * Merge a server entry into the specified config files.
+ * @param serverKey   - key under `mcpServers`, e.g. `"gitwand"`
+ * @param serverJson  - JSON string of the server descriptor
+ * @param configPaths - list of absolute paths to write to
+ */
+export async function mcpInstallServer(
+  serverKey: string,
+  serverJson: string,
+  configPaths: string[],
+): Promise<void> {
+  if (!isTauri()) throw new Error("mcpInstallServer requires Tauri");
+  return tauriInvoke<void>("mcp_install_server", { serverKey, serverJson, configPaths });
+}
+
+/**
+ * Remove a server key from the specified config files.
+ */
+export async function mcpUninstallServer(
+  serverKey: string,
+  configPaths: string[],
+): Promise<void> {
+  if (!isTauri()) throw new Error("mcpUninstallServer requires Tauri");
+  return tauriInvoke<void>("mcp_uninstall_server", { serverKey, configPaths });
+}
+

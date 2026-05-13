@@ -1004,6 +1004,7 @@ const zhCN: Locale = {
     tabHooks: "Hooks",
     tabAutomations: "\u81ea\u52a8\u5316",
     tabAccounts: "\u8d26\u53f7",
+    tabMcp: "MCP",
     accountsEmpty: "\u672a\u914d\u7f6e\u8d26\u53f7\u3002\u6dfb\u52a0\u4e00\u4e2a\u4ee5\u542f\u7528 GitLab \u548c Bitbucket\u3002",
     accountsAdd: "\u6dfb\u52a0\u8d26\u53f7",
     accountsRemove: "\u5220\u9664",

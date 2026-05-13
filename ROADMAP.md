@@ -673,7 +673,7 @@ _Dépend de v2.7.0 (Workspaces) ✅._ Inspiré du Launchpad GitKraken, local-fir
 
 ---
 
-### v2.10.0 — Intégrations forge + MCP catalog
+### v2.10.0 — Intégrations forge + MCP catalog ✅
 
 Ouvre GitWand aux utilisateurs non-GitHub, et à l'écosystème MCP grandissant.
 
@@ -688,11 +688,13 @@ Ouvre GitWand aux utilisateurs non-GitHub, et à l'écosystème MCP grandissant.
 
 Rend l'écosystème MCP Registry directement navigable depuis GitWand — sans passer par un terminal ou une page web.
 
-- **Onglet "MCP" dans Settings** : liste des serveurs MCP disponibles sur le registry officiel (recherche, catégories, étoiles)
-- **One-click install** : ajouter un serveur MCP à la config Claude Code / Cursor / Windsurf depuis GitWand — génère ou met à jour le `.mcp.json` / `claude_desktop_config.json` cible
-- **Installed vs available** : différencie clairement ce qui est déjà configuré vs ce qui peut être ajouté ; badge "Official" pour les serveurs indexés sur le MCP Registry
-- **`@gitwand/mcp` en vedette** : la carte GitWand est épinglée en haut avec statut de connexion live, version, et raccourci "Reconfigurer"
-- **Implémentation** : appels à l'API publique du MCP Registry (même endpoint que `mcp-publisher`) via `fetch` côté Tauri — pas de serveur proxy intermédiaire
+- **Onglet "MCP" dans Settings** : liste les serveurs MCP disponibles (npm registry fallback, 250+ résultats)
+- **One-click install** : ajoute un serveur MCP à la config Claude Desktop / Claude Code / Cursor / Windsurf — génère ou met à jour le fichier JSON cible
+- **Installed vs available** : `server_keys` par config → badge "Installed" précis par serveur par fichier
+- **`@gitwand/mcp` en vedette** : carte épinglée en haut avec raccourci "Reconfigure" et `--cwd` auto
+- **Smart input** : URL registry → deep-link, `@scope/pkg` → install direct, texte libre → recherche
+- **Fallback browser/dev** : JSON copy-paste + 4 chemins standards quand Tauri non disponible
+- **Implémentation** : `useMcpRegistry.ts` (official registry → npm fallback) + 4 commandes Rust (`mcp_detect_configs`, `mcp_read_config`, `mcp_install_server`, `mcp_uninstall_server`)
 
 ---
 

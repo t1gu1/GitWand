@@ -394,6 +394,11 @@ pub fn run() {
             commands::bitbucket::bb_pr_files,
             commands::bitbucket::bb_current_user,
             commands::bitbucket::bb_reviewer_candidates,
+            // ── MCP catalog ──
+            commands::mcp_catalog::mcp_detect_configs,
+            commands::mcp_catalog::mcp_read_config,
+            commands::mcp_catalog::mcp_install_server,
+            commands::mcp_catalog::mcp_uninstall_server,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

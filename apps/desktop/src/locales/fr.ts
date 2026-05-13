@@ -1027,6 +1027,7 @@ const fr: Locale = {
     tabHooks: "Hooks",
     tabAutomations: "Automatisations",
     tabAccounts: "Comptes",
+    tabMcp: "MCP",
     accountsEmpty: "Aucun compte configuré. Ajoutez-en un pour activer GitLab et Bitbucket.",
     accountsAdd: "Ajouter un compte",
     accountsRemove: "Supprimer",

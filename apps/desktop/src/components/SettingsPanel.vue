@@ -6,6 +6,7 @@ import BaseModal from "./BaseModal.vue";
 import HooksPanel from "./HooksPanel.vue";
 import AutomationsPanel from "./AutomationsPanel.vue";
 import SettingsAccountsTab from "./SettingsAccountsTab.vue";
+import SettingsMcpTab from "./SettingsMcpTab.vue";
 import {
   localeLabels,
   supportedLocales,
@@ -41,7 +42,7 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts";
+  initialTab?: "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
   /** Current repo path (for Hooks tab) */
   cwd?: string;
 }>();
@@ -152,7 +153,7 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts";
+type SettingsTab = "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 // ─── Logs tab — formatting + clipboard ──────────────────
@@ -209,6 +210,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "editor", icon: "editor" },
   { id: "ai", icon: "ai" },
   { id: "accounts", icon: "accounts" },
+  { id: "mcp", icon: "mcp" },
   { id: "automations", icon: "automations" },
   { id: "hooks", icon: "hooks" },
   { id: "logs", icon: "logs" },
@@ -732,11 +734,18 @@ watch(
             <path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
             <path d="M13 7v4m-2-2h4"/>
           </svg>
+          <!-- MCP icon -->
+          <svg v-else-if="tab.icon === 'mcp'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="3" r="1.5"/>
+            <circle cx="3" cy="11" r="1.5"/>
+            <circle cx="13" cy="11" r="1.5"/>
+            <path d="M8 4.5v3L3 9.6M8 7.5l5 2.1"/>
+          </svg>
           <!-- Logs icon -->
           <svg v-else-if="tab.icon === 'logs'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
             <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
           </svg>
-          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'accounts' ? t('settings.tabAccounts') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
+          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'accounts' ? t('settings.tabAccounts') : tab.id === 'mcp' ? t('settings.tabMcp') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
           <!-- Error count badge on Logs tab -->
           <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-tab-badge">
             {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
@@ -1477,6 +1486,11 @@ watch(
         <!-- ═══ ACCOUNTS ═══ -->
         <template v-if="activeSettingsTab === 'accounts'">
           <SettingsAccountsTab />
+        </template>
+
+        <!-- ═══ MCP ═══ -->
+        <template v-if="activeSettingsTab === 'mcp'">
+          <SettingsMcpTab :cwd="props.cwd" />
         </template>
 
         <template v-if="activeSettingsTab === 'automations'">
