@@ -5,22 +5,14 @@ import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncCompo
 // These are part of the always-rendered UI (header, sidebar, main content
 // panes, toasts, base modal). They must load with the initial bundle.
 import AppHeader from "./components/AppHeader.vue";
-import MergeEditor from "./components/MergeEditor.vue";
 import EmptyState from "./components/EmptyState.vue";
 import RepoSidebar from "./components/RepoSidebar.vue";
 import DiffViewer from "./components/DiffViewer.vue";
-import ImageDiffViewer from "./components/ImageDiffViewer.vue";
-import CommitDiffViewer from "./components/CommitDiffViewer.vue";
-import FileHistoryViewer from "./components/FileHistoryViewer.vue";
-import CommitGraph from "./components/CommitGraph.vue";
-import PrDetailView from "./components/PrDetailView.vue";
-import PrCreateView from "./components/PrCreateView.vue";
-import DashboardView from "./components/DashboardView.vue";
+import AiSparkle from "./components/AiSparkle.vue";
+import BaseModal from "./components/BaseModal.vue";
 // Always-mounted (state-driven internally — must stay eager):
 import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
-import AiSparkle from "./components/AiSparkle.vue";
-import BaseModal from "./components/BaseModal.vue";
 
 // ─── Type-only imports ───────────────────────────────────────────────────────
 // SearchPalette exports a named type used in computed paletteActions.
@@ -33,6 +25,16 @@ import type UpdateModalType from "./components/UpdateModal.vue";
 // user action — opening Settings, Help, a modal, the Search palette, etc.
 // Splitting them out of the initial bundle shaves significant JS off the
 // cold-start parse/eval cost. Vite handles the chunk separation automatically.
+// ─── Main content views (lazy — rendered only when the matching viewMode/flag
+// is active; never part of the initial paint) ─────────────────────────────────
+const MergeEditor          = defineAsyncComponent(() => import("./components/MergeEditor.vue"));
+const ImageDiffViewer      = defineAsyncComponent(() => import("./components/ImageDiffViewer.vue"));
+const CommitDiffViewer     = defineAsyncComponent(() => import("./components/CommitDiffViewer.vue"));
+const FileHistoryViewer    = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
+const CommitGraph          = defineAsyncComponent(() => import("./components/CommitGraph.vue"));
+const PrDetailView         = defineAsyncComponent(() => import("./components/PrDetailView.vue"));
+const PrCreateView         = defineAsyncComponent(() => import("./components/PrCreateView.vue"));
+const DashboardView        = defineAsyncComponent(() => import("./components/DashboardView.vue"));
 const SettingsPanel        = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
 const HelpView             = defineAsyncComponent(() => import("./components/HelpView.vue"));
 const FolderPicker         = defineAsyncComponent(() => import("./components/FolderPicker.vue"));

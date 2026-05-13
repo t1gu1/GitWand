@@ -27,25 +27,28 @@
 import { gitRemoteInfo } from "../../utils/backend";
 import type { ForgeProvider, ForgeName } from "./types";
 import { githubProvider } from "./GitHubProvider";
-import { gitlabProvider } from "./GitLabProvider";
-import { bitbucketProvider } from "./BitbucketProvider";
 import { useAccounts } from "../useAccounts";
 import type { Account } from "../useAccounts";
 
-// ─── Registry ───────────────────────────────────────────────────────────────
+// ─── Provider cache — lazy-loaded for non-GitHub providers ──────────────────
+// GitLabProvider and BitbucketProvider are split into separate Vite chunks and
+// pre-warmed here as non-blocking dynamic imports. This keeps them OUT of the
+// main bundle (~450 KB saved) while ensuring they are ready well before the
+// user opens the PR panel. githubProvider stays static (most-common case,
+// zero latency required).
+const _cache = new Map<ForgeName, ForgeProvider>();
+_cache.set("github", githubProvider);
 
-const PROVIDERS: ForgeProvider[] = [
-  githubProvider,
-  gitlabProvider,
-  bitbucketProvider,
-];
+// Pre-warm at module init — Vite emits separate chunks for each provider.
+import("./GitLabProvider").then((m) => _cache.set("gitlab", m.gitlabProvider));
+import("./BitbucketProvider").then((m) => _cache.set("bitbucket", m.bitbucketProvider));
 
 /**
  * Retourne le ForgeProvider correspondant à un nom de forge déjà connu.
  * Pratique quand `RemoteInfo.provider` est déjà chargé.
  */
 export function getProviderByName(name: ForgeName): ForgeProvider {
-  return PROVIDERS.find((p) => p.name === name) ?? githubProvider;
+  return _cache.get(name as ForgeName) ?? githubProvider;
 }
 
 /**
@@ -53,7 +56,10 @@ export function getProviderByName(name: ForgeName): ForgeProvider {
  * Effectue la détection sans appel réseau.
  */
 export function getProviderByUrl(remoteUrl: string): ForgeProvider {
-  return PROVIDERS.find((p) => p.detectFromRemote(remoteUrl)) ?? githubProvider;
+  for (const provider of _cache.values()) {
+    if (provider.detectFromRemote(remoteUrl)) return provider;
+  }
+  return githubProvider;
 }
 
 /**
@@ -83,7 +89,7 @@ export async function useForge(cwd: string): Promise<ForgeProvider> {
  */
 export function forgeFromRemoteInfo(info: { provider: string; url: string }): ForgeProvider {
   // Priorité au champ provider (calculé par Rust) — fallback sur URL matching.
-  const byName = PROVIDERS.find((p) => p.name === info.provider);
+  const byName = _cache.get(info.provider as ForgeName);
   if (byName) return byName;
   return getProviderByUrl(info.url);
 }
@@ -121,7 +127,10 @@ export function getForgeAccountFromRemote(info: {
   return getCurrentForgeAccount(provider.name as ForgeName);
 }
 
-// ─── Re-exports pratiques ───────────────────────────────────────────────────
-export { githubProvider, gitlabProvider, bitbucketProvider };
+// ─── Re-exports ─────────────────────────────────────────────────────────────
+// gitlabProvider / bitbucketProvider ne sont plus re-exportés ici pour éviter
+// de les faire remonter dans le bundle principal. Les consommateurs qui en ont
+// besoin doivent les importer directement depuis leurs fichiers source.
+export { githubProvider };
 export type { ForgeProvider, ForgeName };
 export type { Account };

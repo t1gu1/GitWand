@@ -20,6 +20,7 @@ Devenir le client Git de référence qui combine la puissance visuelle de **Kale
 | **GitHub Desktop** | Electron | Gratuit | Simple, bon workflow PR, cherry-pick/rebase | Diff basique, résolution rudimentaire, lourd |
 | **GitButler** | Tauri/Rust | Gratuit | Virtual branches, stacked PRs, IA intégrée | Nouveau paradigme déroutant, pas d'image/folder diff |
 | **GitKraken** | Electron | $5/mois | Graph visuel, merge editor 3-way, Jira/Trello intégrés, Launchpad (PRs+issues cross-repo), Workspaces multi-repo cloud-synced, Cloud Patches, AI partout (commit/PR/merge), Agent Sessions View (Claude Code) | Payant, Electron, lourd, nécessite compte cloud pour les features avancées |
+| **GitSquid** | Electron | €49/an | Conflict Predictor (rebase/cherry-pick + scratch worktree), Monorepo Scope (auto-détection pnpm/Cargo/Nx/Turbo), secrets scanner pré-commit, Branch Intent (git notes), 10 langues | Electron, payant, pas d'auto-resolve moteur |
 | **Fork** | Natif | $50 | Rapide, interface propre, gros repos | Pas d'auto-resolve, pas d'IA |
 | **Tower** | Natif | $69/an | Undo puissant, conflict advisor | Payant, pas d'auto-resolve |
 | **Sublime Merge** | Natif | $99 | Ultra-rapide, search puissant | Pas de PR workflow |
@@ -703,10 +704,67 @@ Rend l'écosystème MCP Registry directement navigable depuis GitWand — sans p
 - Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
 - Pagination lazy du log sur repos 100k+ commits
 - Background indexing pour la recherche dans les commits
+- **Fork Point visualization** — dans le DAG, griser les commits antérieurs au point de divergence de la branche sélectionnée pour ne mettre en valeur que ses commits propres. Implémentation : `git merge-base HEAD <base-branch>` au changement de branche active → colorier différemment les nodes antérieurs au fork point dans le canvas graph. Zéro nouveau backend, pure logique de rendu
+- **Clone progress en temps réel** — barre de progression live pendant `git clone` (phases Counting / Receiving / Resolving objects), nécessite un primitif async Tauri avec `window.emit("git-clone-progress", …)` + écouteur TS. Différé depuis v2.0.0, naturellement aligné ici avec le reste du chantier perf
+- **Transparent command log** — panel `Cmd+Shift+L` listant chaque commande git lancée par l'app : arguments complets, cwd, durée ms, exit code, stderr. Secrets redactés (tokens, mots de passe dans les URLs). Bouton "Copy for bug report". Implémentation : ring buffer Rust (cap 200 entrées, module-level dans `git/cmd.rs`) → événement Tauri `git-cmd-log` → `useCommandLog.ts` côté TS. Complément au log d'erreurs applicatives existant (`useLogs.ts`) — celui-ci est orienté debug git, pas erreurs UI
 
 ---
 
-### v2.12.0 — Voice Input (expérimental)
+### v2.12.0 — Branch Management & Identity
+
+Trois problèmes du quotidien résolus sans outil externe : branches qui s'accumulent, identités multiples, messages de commit répétitifs.
+
+**Archived Branches**
+
+- Archiver une branche (mergée ou stale) depuis son menu contextuel → déplacée dans une section "Archivées" repliable en bas de la sidebar
+- Archivage automatique opt-in : badge "Fully Merged" sur les branches déjà intégrées dans `main`/`master` avec proposition d'archivage groupé
+- Badge "Inactive" sur les branches sans activité depuis N jours (configurable dans Settings > Git)
+- Désarchiver en un clic ; les branches archivées restent dans le repo git (pas de suppression)
+
+**Pinned Branches**
+
+- Épingler n'importe quelle branche en haut de la sidebar via son menu contextuel ou une case "Pin" à la création
+- Section "Épinglées" fixe au-dessus de la liste des branches, avec drag & drop pour réordonner
+- Cohérent avec les repos et items Launchpad déjà pinables dans GitWand
+
+**Multiple Committer Identities**
+
+- Profils auteur nommés (nom, email, clé GPG optionnelle) dans Settings > Git > Identités
+- Profil par défaut global + override par repo (`.gitwandrc` ou setting local)
+- Sélecteur discret dans le panneau de commit pour switcher d'identité sans aller dans Settings — utile pour les devs avec comptes perso / pro / client
+- Implémentation : `-c user.name=… -c user.email=…` injectés dans `git_commit` (Rust) selon le profil actif
+
+**Commit Templates**
+
+- Templates nommés (sujet + body) dans Settings > Git > Templates
+- Insertion via un bouton picker dans la zone de commit, ou en tapant `/` dans le champ sujet (autocomplete)
+- Import depuis `.gitmessage` existant (lecture du `commit.template` git config au premier lancement)
+- Complémentaire aux chips Conventional Commits déjà présentes — les templates couvrent les formats longs (RFC, ADR, etc.)
+
+---
+
+### v2.13.0 — AI & Review
+
+Deux extensions du workflow de review déjà en place.
+
+**Custom AI prompt presets**
+
+- Presets nommés pour la génération de messages de commit IA : ex. "Concis", "Détaillé", "Conventional Commits", "Emoji", ou tout prompt custom
+- Picker dans le dropdown IA de la zone de commit (remplace le bouton unique actuel)
+- Presets sauvegardés dans Settings > IA, exportables dans `.gitwandrc` pour partage d'équipe
+- Le preset actif est mémorisé par repo
+
+**Code Suggestions dans les PR**
+
+- Dans `PrDetailView`, sur n'importe quelle ligne de diff, bouton "Suggérer une modification" (en plus du bouton "Commenter" existant)
+- Ouvre la ligne en mode édition inline directement dans GitWand — l'auteur édite le contenu proposé
+- Le delta est sérialisé en bloc GitHub suggestion (` ```suggestion ``` `) et posté via l'API GitHub PR review existante
+- Le développeur voit la suggestion dans GitHub et peut l'appliquer en un clic (mécanisme GitHub natif)
+- GitHub uniquement pour l'instant (GitLab a un mécanisme différent, Bitbucket pas de support natif)
+
+---
+
+### v2.14.0 — Voice Input (expérimental)
 
 Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
 
@@ -715,6 +773,92 @@ Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en 
 - **Modèles au choix** : `tiny` (rapide, léger) ou `base` (meilleure précision) téléchargés à la demande via Settings, stockés localement
 - **Multilingue** : Whisper détecte automatiquement la langue — utile pour les équipes mixtes FR/EN
 - **Fallback gracieux** : si l'accès micro est refusé par macOS TCC, message d'erreur clair avec lien vers Préférences système
+
+---
+
+---
+
+### v2.15.0 — Scratch worktree + Conflict Predictor étendu
+
+_Inspiré GitSquid. Extension naturelle du moteur GitWand et du Worktree first-class (v2.7)._
+
+**Scratch worktree pour résolution isolée**
+
+- Depuis le merge preview ou le Conflict Predictor, ouvrir un worktree temporaire isolé (`gitwand-scratch-<timestamp>`) sans toucher le checkout actif
+- Résoudre les conflits dans ce sandbox — appliquer les résolutions dans le worktree scratch, valider, puis rapatrier dans le checkout principal en un clic
+- Nettoyage automatique du worktree scratch après rapatriement ou abandon
+- Intégration dans le moteur MCP : `gitwand_resolve_conflicts` peut cibler le scratch worktree via `cwd`
+
+**Conflict Predictor étendu au rebase et cherry-pick**
+
+- `gitwand_preview_merge` étendu pour simuler un rebase (`git rebase --no-apply`) et un cherry-pick (`git cherry-pick --no-commit`) sans modifier le working tree
+- Preview hunk-by-hunk avant de lancer l'opération, avec risk level (low/medium/high)
+- Entrée "Preview conflicts…" dans le menu contextuel rebase + cherry-pick de la sidebar
+
+---
+
+### v2.16.0 — Monorepo Scope
+
+_Inspiré GitSquid. Rend GitWand ergonomique sur les gros monorepos (pnpm, Cargo, Nx…)._
+
+- **Workspace scope picker** : sélectionner un sous-workspace dans un monorepo — le graph, la recherche de commits, les stats (contributors, file history) se scoppent automatiquement à son arbre de fichiers
+- **Auto-détection** : lit `pnpm-workspace.yaml`, `Cargo.toml [workspace]`, `nx.json`, `turbo.json`, `lerna.json`, `go.work` — propose une liste de sous-workspaces au premier open
+- **Scope persisté par repo** dans `.gitwand-workspace.json` — retrouvé à la réouverture
+- **Clic droit sur n'importe quel dossier** dans le folder tree (commit diff) → "Scoper ici" — scope ad-hoc sans config
+
+---
+
+### v2.17.0 — Safety Bundle : secrets scanner pré-commit
+
+_Inspiré GitSquid. Feature "safety" sans aucune dépendance réseau — tout en local._
+
+- **Scanner intégré à la staging area** : avant chaque commit, analyse les fichiers staged à la recherche de secrets connus :
+  - Clés cloud : AWS (`AKIA…`), GCP service account JSON, Azure connection strings
+  - Tokens forge : GitHub (`ghp_…`, `github_pat_…`), GitLab (`glpat-…`), Bitbucket app passwords
+  - Tokens SaaS : Slack (`xoxb-…`, `xoxp-…`), Stripe (`sk_live_…`, `rk_live_…`), OpenAI (`sk-…`), Anthropic (`sk-ant-…`), SendGrid, Twilio
+  - Clés cryptographiques : RSA/OpenSSH/EC private keys (blocs PEM `-----BEGIN … PRIVATE KEY-----`), certificats avec clé privée embarquée
+  - Tokens génériques : JWTs (`eyJ…`), high-entropy literals (entropie Shannon > 4.5 sur strings > 20 chars dans des contextes `password =`, `secret =`, `token =`, `key =`)
+- **Patterns extensibles** via `.gitwandrc` : `secrets.patterns[]` (regex + label) + `secrets.ignore[]` (globs ou sha du secret déjà ignoré)
+- **UX non-bloquante** : badge d'alerte orange dans la zone de commit avec liste des détections (fichier, ligne, type) — l'utilisateur peut committer quand même avec confirmation explicite, ou ajouter le pattern à `.gitwandignore-secrets`
+- **Zero réseau** : matching purement local via Rust (`regex` crate), pas de service externe, pas de telemetry
+- **Hook pré-commit opt-in** : Settings > Hooks → activer le scanner comme pre-commit hook git — bloque le commit terminal aussi
+
+---
+
+### v2.18.0 — Stacked Branches (natif)
+
+_Feature différenciante : workflow stacked PRs sans CLI externe (Graphite, ghstack…). Scope important — jalon dédié._
+
+Le paradigme : au lieu d'un gros PR, on empile des branches courtes (`feat/step-1` → `feat/step-2` → `feat/step-3`), chacune ayant son propre PR ciblant la précédente. La stack est navigable, diffable, et rebâtissable en un clic quand la base change.
+
+**Visualisation**
+
+- Le DAG identifie automatiquement les stacks (séquences linéaires de branches dont chacune branch sur la précédente)
+- Bandeau "Stack" dans la sidebar regroupant les branches membres, avec numérotation et statut (PR ouvert / merged / conflit)
+- Vue dédiée dans le Launchpad : onglet "Stacks" listant toutes les stacks du workspace cross-repo
+
+**Création**
+
+- Bouton "Empiler une branche" dans le menu contextuel de n'importe quelle branche non-main — crée une nouvelle branche depuis la tête de la branche sélectionnée et l'enregistre dans la stack
+- Raccourci `⌘⇧S` dans la zone de commit pour créer la prochaine couche de la stack courante
+
+**Restack**
+
+- Détection automatique quand la base d'une stack a bougé (push sur `main`, merge d'une branche intermédiaire)
+- Bouton "Restack" en un clic : rebase l'ensemble de la stack en cascade (`git rebase --onto` layer par layer)
+- Preview du restack avec liste des conflits potentiels avant exécution (réutilise le Conflict Predictor de v2.15)
+
+**PRs**
+
+- "Soumettre la stack" : crée ou met à jour les PRs GitHub pour chaque layer, en ciblant automatiquement la branche précédente (pas `main`)
+- Résumé des PRs de la stack dans la sidebar avec statut CI agrégé
+- Quand une layer est mergée, proposition de retarget automatique de la suivante vers `main`
+
+**Implémentation**
+
+- Métadonnées de stack stockées dans `.gitwand-workspace.json` (pas de git notes pour rester léger)
+- Restack via `git rebase --onto <new-base> <old-base> <branch>` enchaîné layer par layer (Rust, avec rollback si conflit non résolvable)
+- Aucune dépendance CLI externe
 
 ---
 
@@ -755,3 +899,4 @@ Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en 
 - [GitKraken Workspaces](https://www.gitkraken.com/features/workspaces)
 - [GitKraken Conflict Prevention](https://help.gitkraken.com/gitkraken-desktop/conflict-prevention/)
 - [GitKraken Agent Sessions View — avril 2026](https://help.gitkraken.com/gitkraken-desktop/experimental-features/)
+- [GitSquid — A Powerful Git GUI Client](https://gitsquid.dev/)
