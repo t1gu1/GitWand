@@ -850,6 +850,8 @@ const zhCN: Locale = {
     tabEditor: "编辑器",
     tabAi: "AI",
     tabLogs: "日志",
+    checkForUpdates: "检查更新",
+    upToDate: "已是最新",
     logsTitle: "活动日志",
     logsEmpty: "暂无日志记录",
     logsClear: "清空",

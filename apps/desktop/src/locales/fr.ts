@@ -872,6 +872,8 @@ const fr: Locale = {
     tabEditor: "\u00c9diteur",
     tabAi: "IA",
     tabLogs: "Journaux",
+    checkForUpdates: "Vérifier les mises à jour",
+    upToDate: "À jour",
     logsTitle: "Journal d'activité",
     logsEmpty: "Aucune entrée de log",
     logsClear: "Effacer",

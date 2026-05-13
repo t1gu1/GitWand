@@ -20,10 +20,41 @@ import {
   type CodexCliInfo,
   readGitwandrc,
   writeGitwandrc,
+  checkForUpdates,
+  fetchBetaUpdate,
+  type UpdateInfo,
 } from "../utils/backend";
 
 const { t, locale, isAuto, setLocale } = useI18n();
 const { theme, setTheme } = useTheme();
+
+const appVersion = __APP_VERSION__;
+
+// ─── Update check ────────────────────────────────────────
+type UpdateCheckStatus = "idle" | "checking" | "upToDate";
+const updateCheckStatus = ref<UpdateCheckStatus>("idle");
+let _upToDateTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function runUpdateCheck() {
+  if (updateCheckStatus.value === "checking") return;
+  updateCheckStatus.value = "checking";
+  try {
+    const channel = settings.value.updateChannel ?? "stable";
+    const info = channel === "beta"
+      ? await fetchBetaUpdate(appVersion)
+      : await checkForUpdates();
+    if (info) {
+      updateCheckStatus.value = "idle";
+      emit("openUpdateModal", info);
+    } else {
+      updateCheckStatus.value = "upToDate";
+      if (_upToDateTimer) clearTimeout(_upToDateTimer);
+      _upToDateTimer = setTimeout(() => { updateCheckStatus.value = "idle"; }, 4000);
+    }
+  } catch {
+    updateCheckStatus.value = "idle";
+  }
+}
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
@@ -55,6 +86,7 @@ const emit = defineEmits<{
   "update:fontSize": [size: number];
   "update:tabSize": [size: number];
   clearLogs: [];
+  openUpdateModal: [info: UpdateInfo];
 }>();
 
 // ─── Settings state (persisted in localStorage) ────────
@@ -215,6 +247,28 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "hooks", icon: "hooks" },
   { id: "logs", icon: "logs" },
 ];
+
+// ─── Nav sidebar groups (OpenCode-style left nav) ────────
+const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = [
+  { label: "Application", tabs: ["general", "editor"] },
+  { label: "Dépôt",       tabs: ["git", "hooks", "accounts"] },
+  { label: "IA & Agents", tabs: ["ai", "mcp", "automations"] },
+  { label: "Système",     tabs: ["logs"] },
+];
+
+function tabLabel(id: SettingsTab): string {
+  switch (id) {
+    case "general":     return t("settings.tabGeneral");
+    case "git":         return t("settings.tabGit");
+    case "editor":      return t("settings.tabEditor");
+    case "ai":          return t("settings.tabAi");
+    case "accounts":    return t("settings.tabAccounts");
+    case "mcp":         return t("settings.tabMcp");
+    case "automations": return t("settings.tabAutomations");
+    case "hooks":       return t("settings.tabHooks");
+    case "logs":        return t("settings.tabLogs");
+  }
+}
 
 // ─── Language ──────────────────────────────────────────
 const selectedLocale = computed({
@@ -674,88 +728,108 @@ watch(
 
 <template>
   <BaseModal
-    size="md"
+    size="xl"
     :title="t('settings.title')"
+    :bodyFlush="true"
+    :scrollOwn="true"
     @close="emit('close')"
   >
-    <template #title-icon>
-      <span class="sp-title-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.6" />
-          <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </span>
-    </template>
 
-    <template #toolbar>
-      <div class="sp-tabs">
-        <button
-          v-for="tab in settingsTabs"
-          :key="tab.id"
-          class="sp-tab"
-          :class="{ 'sp-tab--active': activeSettingsTab === tab.id }"
-          @click="activeSettingsTab = tab.id"
-        >
-          <!-- General icon -->
-          <svg v-if="tab.icon === 'general'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <circle cx="8" cy="8" r="3" /><path d="M8 1v2m0 10v2m-7-7h2m10 0h2m-2.05-4.95-1.41 1.41m-7.08 7.08-1.41 1.41m0-9.9 1.41 1.41m7.08 7.08 1.41 1.41"/>
-          </svg>
-          <!-- Git icon -->
-          <svg v-else-if="tab.icon === 'git'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <circle cx="8" cy="3" r="2"/><circle cx="8" cy="13" r="2"/><path d="M8 5v6"/><circle cx="13" cy="8" r="2"/><path d="M11 8H9.5c-.83 0-1.5-.67-1.5-1.5V5"/>
-          </svg>
-          <!-- Editor icon -->
-          <svg v-else-if="tab.icon === 'editor'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 8.5h4M5 11h5"/>
-          </svg>
-          <!-- AI icon -->
-          <svg v-else-if="tab.icon === 'ai'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
-          </svg>
-          <!-- Hooks icon -->
-          <svg v-else-if="tab.icon === 'hooks'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <path d="M3 4l2 2-2 2M7 8h6" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M3 12h10" stroke-linecap="round"/>
-          </svg>
-          <!-- Automations icon -->
-          <svg v-else-if="tab.icon === 'automations'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/>
-            <path d="M5.5 5.5L4 4M11.5 11.5L10 10M10.5 5.5L12 4M4.5 11.5L3 13"/>
-            <circle cx="8" cy="8" r="2.5"/>
-          </svg>
-          <!-- Accounts icon -->
-          <svg v-else-if="tab.icon === 'accounts'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="6" cy="5" r="2.5"/>
-            <path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5"/>
-            <path d="M13 7v4m-2-2h4"/>
-          </svg>
-          <!-- MCP icon -->
-          <svg v-else-if="tab.icon === 'mcp'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="8" cy="3" r="1.5"/>
-            <circle cx="3" cy="11" r="1.5"/>
-            <circle cx="13" cy="11" r="1.5"/>
+    <!-- Two-column layout: left nav + right content -->
+    <div class="sp-layout">
+
+      <!-- ── Left nav sidebar ── -->
+      <nav class="sp-nav">
+        <template v-for="group in settingsNavGroups" :key="group.label ?? group.tabs[0]">
+          <div class="sp-nav-group">
+            <span v-if="group.label" class="sp-nav-group-label">{{ group.label }}</span>
+            <button
+              v-for="tab in settingsTabs.filter(t => (group.tabs as string[]).includes(t.id))"
+              :key="tab.id"
+              class="sp-nav-item"
+              :class="{ 'sp-nav-item--active': activeSettingsTab === tab.id }"
+              @click="activeSettingsTab = tab.id"
+            >
+              <svg v-if="tab.icon === 'general'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <circle cx="8" cy="8" r="3" /><path d="M8 1v2m0 10v2m-7-7h2m10 0h2m-2.05-4.95-1.41 1.41m-7.08 7.08-1.41 1.41m0-9.9 1.41 1.41m7.08 7.08 1.41 1.41"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'git'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <circle cx="8" cy="3" r="2"/><circle cx="8" cy="13" r="2"/><path d="M8 5v6"/><circle cx="13" cy="8" r="2"/><path d="M11 8H9.5c-.83 0-1.5-.67-1.5-1.5V5"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'editor'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 6h6M5 8.5h4M5 11h5"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'ai'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/><circle cx="8" cy="8" r="4"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'hooks'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 4l2 2-2 2M7 8h6"/><path d="M3 12h10"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'automations'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 1v2m0 10v2M1 8h2m10 0h2"/>
+                <path d="M5.5 5.5L4 4M11.5 11.5L10 10M10.5 5.5L12 4M4.5 11.5L3 13"/>
+                <circle cx="8" cy="8" r="2.5"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'accounts'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5"/><path d="M13 7v4m-2-2h4"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'mcp'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="8" cy="3" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="13" cy="11" r="1.5"/>
+                <path d="M8 4.5v3L3 9.6M8 7.5l5 2.1"/>
+              </svg>
+              <svg v-else-if="tab.icon === 'logs'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
+              </svg>
+              <span>{{ tabLabel(tab.id) }}</span>
+              <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-nav-badge">
+                {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
+              </span>
+            </button>
+          </div>
+        </template>
+
+        <!-- Check for updates — action, not a tab -->
+        <div class="sp-nav-group">
+          <button
+            class="sp-nav-item sp-nav-action"
+            :class="{ 'sp-nav-action--ok': updateCheckStatus === 'upToDate' }"
+            :disabled="updateCheckStatus === 'checking'"
+            @click="runUpdateCheck"
+          >
+            <!-- Spinner while checking -->
+            <svg v-if="updateCheckStatus === 'checking'" class="sp-nav-action-spin" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+              <path d="M8 1.5A6.5 6.5 0 1 1 1.5 8"/>
+            </svg>
+            <!-- Check mark when up to date -->
+            <svg v-else-if="updateCheckStatus === 'upToDate'" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 8.5l3.5 3.5 6.5-7"/>
+            </svg>
+            <!-- Refresh icon (idle) -->
+            <svg v-else width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5"/>
+              <path d="M11 1v4h4"/>
+            </svg>
+            <span>{{
+              updateCheckStatus === 'checking' ? t('common.loading') :
+              updateCheckStatus === 'upToDate' ? t('settings.upToDate') :
+              t('settings.checkForUpdates')
+            }}</span>
+          </button>
+        </div>
+
+        <div class="sp-nav-spacer" />
+        <div class="sp-nav-footer">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="8" cy="3" r="1.5"/><circle cx="3" cy="11" r="1.5"/><circle cx="13" cy="11" r="1.5"/>
             <path d="M8 4.5v3L3 9.6M8 7.5l5 2.1"/>
           </svg>
-          <!-- Logs icon -->
-          <svg v-else-if="tab.icon === 'logs'" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-            <path d="M2 4h12M2 8h8M2 12h6" stroke-linecap="round"/>
-          </svg>
-          <span>{{ tab.id === 'general' ? t('settings.tabGeneral') : tab.id === 'git' ? t('settings.tabGit') : tab.id === 'editor' ? t('settings.tabEditor') : tab.id === 'ai' ? t('settings.tabAi') : tab.id === 'accounts' ? t('settings.tabAccounts') : tab.id === 'mcp' ? t('settings.tabMcp') : tab.id === 'automations' ? t('settings.tabAutomations') : tab.id === 'hooks' ? t('settings.tabHooks') : t('settings.tabLogs') }}</span>
-          <!-- Error count badge on Logs tab -->
-          <span v-if="tab.id === 'logs' && (props.errorLog?.length ?? 0) > 0" class="sp-tab-badge">
-            {{ props.errorLog!.length > 99 ? '99+' : props.errorLog!.length }}
-          </span>
-        </button>
-      </div>
-    </template>
+          <span class="sp-nav-footer-name">GitWand</span>
+          <span class="sp-nav-footer-version">v{{ appVersion }}</span>
+        </div>
+      </nav>
 
-    <!-- Tab content -->
-    <div class="sp-body">
+      <!-- ── Right content area ── -->
+      <div class="sp-content">
 
       <!-- ═══ GÉNÉRAL ═══ -->
         <template v-if="activeSettingsTab === 'general'">
@@ -1544,75 +1618,167 @@ watch(
           </ul>
         </template>
 
-    </div>
+    </div><!-- sp-content -->
+    </div><!-- sp-layout -->
   </BaseModal>
 </template>
 
 <style scoped>
-.sp-title-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent-soft);
-  color: var(--color-accent);
+/* ─── Two-column layout ────────────────────────────────── */
+.sp-layout {
+  display: flex;
+  flex-direction: row;
+  height: 72vh;
+  overflow: hidden;
+}
+
+/* ─── Left nav sidebar ─────────────────────────────────── */
+.sp-nav {
+  width: 196px;
   flex-shrink: 0;
-}
-
-/* ─── Tab bar ──────────────────────────────────────────── */
-/* Sits inside BaseModal's #toolbar slot. Negative margin cancels the
- * toolbar's own padding so the active-tab underline hugs the toolbar's
- * bottom border, while we restore horizontal padding for the strip. */
-.sp-tabs {
   display: flex;
-  gap: 0;
-  margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-7));
-  padding: 0 var(--space-7);
-  /* Scrollable when tabs overflow (7+ tabs) */
-  overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
+  flex-direction: column;
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-4) 0 var(--space-3);
+  overflow-y: auto;
+  background: var(--color-bg-subtle, var(--color-bg));
 }
-.sp-tabs::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
-.sp-tab {
+.sp-nav-group {
+  padding: 0 var(--space-3) var(--space-5);
+}
+
+.sp-nav-group-label {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-subtle, var(--color-text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  user-select: none;
+}
+
+.sp-nav-item {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-4);
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
   cursor: pointer;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
-  white-space: nowrap;
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.sp-tab:hover {
+.sp-nav-item:hover {
+  background: var(--color-bg-elevated, var(--color-surface));
   color: var(--color-text);
 }
 
-.sp-tab--active {
+.sp-nav-item--active {
+  background: var(--color-bg-elevated, var(--color-surface));
   color: var(--color-text);
-  border-bottom-color: var(--color-accent);
 }
 
-.sp-tab svg {
+.sp-nav-item svg {
   flex-shrink: 0;
+  opacity: 0.75;
 }
 
-/* ─── Body ─────────────────────────────────────────────── */
-.sp-body {
-  padding: var(--space-6) var(--space-7);
+.sp-nav-item--active svg,
+.sp-nav-item:hover svg {
+  opacity: 1;
+}
+
+.sp-nav-action:hover {
+  color: var(--color-accent) !important;
+  background: var(--color-accent-soft) !important;
+}
+
+.sp-nav-action:hover svg {
+  opacity: 1;
+  stroke: var(--color-accent);
+}
+
+.sp-nav-action--ok,
+.sp-nav-action--ok:hover {
+  color: var(--color-success) !important;
+  background: var(--color-success-soft) !important;
+}
+
+.sp-nav-action--ok svg {
+  stroke: var(--color-success) !important;
+  opacity: 1 !important;
+}
+
+.sp-nav-action:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+@keyframes sp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sp-nav-action-spin {
+  animation: sp-spin 0.8s linear infinite;
+}
+
+.sp-nav-badge {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-error, #f38ba8);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.sp-nav-spacer {
+  flex: 1;
+}
+
+.sp-nav-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  font-size: 11px;
+  color: var(--color-text-subtle, var(--color-text-muted));
+  opacity: 0.7;
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+}
+
+.sp-nav-footer-name {
+  font-weight: var(--font-weight-semibold);
+}
+
+.sp-nav-footer-version {
+  opacity: 0.6;
+}
+
+/* ─── Right content area ───────────────────────────────── */
+.sp-content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-7) var(--space-8);
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
   overflow-y: auto;
-  min-height: 180px;
 }
 
 .sp-row {
@@ -1950,21 +2116,7 @@ watch(
   background: rgba(243, 139, 168, 0.15);
 }
 
-/* ─── Tab badge ────────────────────────────────────────── */
-.sp-tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-error, #f38ba8);
-  color: #fff;
-  font-size: 10px;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
-}
+/* .sp-tab-badge removed — replaced by .sp-nav-badge in sidebar */
 
 /* ─── Logs tab ─────────────────────────────────────────── */
 .sp-logs-header {

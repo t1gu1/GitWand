@@ -1883,7 +1883,8 @@ onUnmounted(() => {
     <SettingsPanel v-if="showSettings" :error-log="logEntries" :initial-tab="settingsInitialTab"
       :cwd="repoFolderPath ?? undefined" @close="onSettingsClose" @update:commit-signature="onCommitSignatureChange"
       @update:diff-mode="onDiffModeChange" @update:pull-mode="onPullModeChange" @update:font-size="onFontSizeChange"
-      @update:tab-size="onTabSizeChange" @clear-logs="clearErrorLog" />
+      @update:tab-size="onTabSizeChange" @clear-logs="clearErrorLog"
+      @open-update-modal="(info) => { pendingUpdate = info }" />
 
     <!-- Command palette (Cmd/Ctrl+K) — teleports to body, so position
          in the template tree is cosmetic. Mounted conditionally so the

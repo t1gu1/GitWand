@@ -878,6 +878,8 @@ const en = {
     tabEditor: "Editor",
     tabAi: "AI",
     tabLogs: "Logs",
+    checkForUpdates: "Check for updates",
+    upToDate: "Up to date",
     logsTitle: "Activity log",
     logsEmpty: "No log entries.",
     logsClear: "Clear",

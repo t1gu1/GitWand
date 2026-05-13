@@ -862,6 +862,8 @@ const ptBR: Locale = {
     tabEditor: "Editor",
     tabAi: "IA",
     tabLogs: "Registros",
+    checkForUpdates: "Verificar atualizações",
+    upToDate: "Atualizado",
     logsTitle: "Registro de atividade",
     logsEmpty: "Sem entradas de log",
     logsClear: "Limpar",

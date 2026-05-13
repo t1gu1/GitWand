@@ -861,6 +861,8 @@ const es: Locale = {
     tabEditor: "Editor",
     tabAi: "IA",
     tabLogs: "Registros",
+    checkForUpdates: "Buscar actualizaciones",
+    upToDate: "Actualizado",
     logsTitle: "Registro de actividad",
     logsEmpty: "Sin entradas de registro",
     logsClear: "Limpiar",
