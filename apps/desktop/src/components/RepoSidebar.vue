@@ -1773,9 +1773,6 @@ function formatActivityDate(dateStr: string): string {
   text-align: center;
 }
 
-.section-label {
-}
-
 .section-spacer {
   flex: 1;
 }
