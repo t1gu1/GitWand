@@ -639,9 +639,12 @@ function onViewModeChange(mode: ViewMode) {
   viewMode.value = mode;
 }
 
-async function onDiscardSection(paths: string[], untracked: boolean) {
+async function onDiscardSection(sectionKey: string, paths: string[]) {
   if (!window.confirm(t('sidebar.discardAllConfirm', paths.length))) return;
-  await discardFiles(paths, untracked);
+  if (sectionKey === 'staged') {
+    await unstageFiles(paths);
+  }
+  await discardFiles(paths, sectionKey === 'untracked');
 }
 
 // ─── File history viewer ────────────────────────────────

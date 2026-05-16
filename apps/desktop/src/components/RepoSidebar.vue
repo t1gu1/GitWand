@@ -85,8 +85,8 @@ const emit = defineEmits<{
   "select-dir-file": [path: string];
   /** Discard changes to a file (tracked: restore, untracked: delete) */
   discard: [path: string, section: string];
-  /** Discard all changes in a section (paths, whether all files are untracked) */
-  discardSection: [paths: string[], untracked: boolean];
+  /** Discard all changes in a section */
+  discardSection: [sectionKey: string, paths: string[]];
   /** Append file path to .gitignore */
   addToGitignore: [path: string];
   /** Request a full repo state refresh (after absorb, etc.) */
@@ -779,7 +779,7 @@ function formatActivityDate(dateStr: string): string {
             <button
               v-if="sectionKey === 'staged' || sectionKey === 'unstaged' || sectionKey === 'untracked'"
               class="section-action section-action--danger"
-              @click.stop="emit('discardSection', sections[sectionKey].map(f => f.path), sectionKey === 'untracked')"
+              @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
               :title="t('sidebar.discardAll')"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
