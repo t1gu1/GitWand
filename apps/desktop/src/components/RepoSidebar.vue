@@ -1973,7 +1973,7 @@ function formatActivityDate(dateStr: string): string {
   background: var(--color-ai-soft);
   color: var(--color-ai);
   border: 1px solid var(--color-ai);
-  border-radius: var(--radius-xs) 0 0 var(--radius-xs);
+  border-radius: calc(var(--radius-md) - 3px) 0 0 calc(var(--radius-md) - 3px);
   cursor: pointer;
   transition: background var(--transition-hover), border-color var(--transition-hover), color var(--transition-hover);
 }
@@ -1994,7 +1994,7 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-ai);
   border: 1px solid var(--color-ai);
   margin-left: -1px;
-  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  border-radius: 0 calc(var(--radius-md) - 3px) calc(var(--radius-md) - 3px) 0;
   cursor: pointer;
   transition: background var(--transition-hover), border-color var(--transition-hover);
 }

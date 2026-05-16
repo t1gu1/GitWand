@@ -310,13 +310,12 @@ export function useAIProvider() {
   const isAvailable = computed(() => {
     const s = settings.value;
     if (s.aiEnabled) {
-      if (s.aiProvider === "claude" && !s.aiApiKey) return false;
-      if (s.aiProvider === "openai-compat" && (!s.aiApiKey || !s.aiApiEndpoint)) return false;
-      if (s.aiProvider === "none") {
-        // Fall through to auto-detect below.
-      } else {
-        return true;
-      }
+      if (s.aiProvider === "claude" && s.aiApiKey) return true;
+      if (s.aiProvider === "openai-compat" && s.aiApiKey && s.aiApiEndpoint) return true;
+      if (s.aiProvider === "ollama") return true;
+      if (s.aiProvider === "claude-code-cli") return true;
+      if (s.aiProvider === "codex-cli") return true;
+      // misconfigured explicit provider — fall through to CLI auto-detect
     }
     // Auto-fallback: use Claude Code CLI if installed and logged in,
     // even when the user hasn't configured any explicit AI provider.
@@ -338,10 +337,14 @@ export function useAIProvider() {
 
       let rawResponse: string;
 
-      const provider =
-        (!s.aiEnabled || s.aiProvider === "none") && _claudeCliAvailable.value
-          ? "claude-code-cli"
-          : s.aiProvider;
+      const misconfigured =
+        !s.aiEnabled ||
+        s.aiProvider === "none" ||
+        (s.aiProvider === "claude" && !s.aiApiKey) ||
+        (s.aiProvider === "openai-compat" && (!s.aiApiKey || !s.aiApiEndpoint));
+      const provider = misconfigured && _claudeCliAvailable.value
+        ? "claude-code-cli"
+        : s.aiProvider;
 
       switch (provider) {
         case "claude":
@@ -384,10 +387,14 @@ export function useAIProvider() {
     userPrompt: string,
   ): Promise<string> {
     const s = loadAISettings();
-    const provider =
-      (!s.aiEnabled || s.aiProvider === "none") && _claudeCliAvailable.value
-        ? "claude-code-cli"
-        : s.aiProvider;
+    const misconfigured =
+      !s.aiEnabled ||
+      s.aiProvider === "none" ||
+      (s.aiProvider === "claude" && !s.aiApiKey) ||
+      (s.aiProvider === "openai-compat" && (!s.aiApiKey || !s.aiApiEndpoint));
+    const provider = misconfigured && _claudeCliAvailable.value
+      ? "claude-code-cli"
+      : s.aiProvider;
     switch (provider) {
       case "claude":
         return callClaude(s, systemPrompt, userPrompt);
