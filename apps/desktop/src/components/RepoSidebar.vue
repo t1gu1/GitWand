@@ -763,19 +763,8 @@ function formatActivityDate(dateStr: string): string {
             </span>
             <span class="section-label">{{ sectionMeta[sectionKey].label }}</span>
             <span class="section-count">{{ sections[sectionKey].length }}</span>
-            <!-- Stage all / Unstage all buttons -->
-            <button
-              v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
-              class="section-action"
-              @click="emit('stagePaths', sections[sectionKey].map(f => f.path))"
-              :title="t('sidebar.stageAll')"
-            >+</button>
-            <button
-              v-if="sectionKey === 'staged'"
-              class="section-action"
-              @click="emit('unstageAll')"
-              :title="t('sidebar.unstageAll')"
-            >-</button>
+            <span class="section-spacer"></span>
+            <!-- Discard all / Stage all / Unstage all buttons -->
             <button
               v-if="sectionKey === 'staged' || sectionKey === 'unstaged' || sectionKey === 'untracked'"
               class="section-action section-action--danger"
@@ -790,6 +779,18 @@ function formatActivityDate(dateStr: string): string {
                 <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
               </svg>
             </button>
+            <button
+              v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
+              class="section-action"
+              @click="emit('stagePaths', sections[sectionKey].map(f => f.path))"
+              :title="t('sidebar.stageAll')"
+            >+</button>
+            <button
+              v-if="sectionKey === 'staged'"
+              class="section-action"
+              @click="emit('unstageAll')"
+              :title="t('sidebar.unstageAll')"
+            >-</button>
           </div>
 
           <ul class="file-items" role="listbox">
@@ -1754,6 +1755,7 @@ function formatActivityDate(dateStr: string): string {
   padding: var(--space-4) var(--space-6);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-text-muted);
@@ -1772,14 +1774,20 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .section-label {
+}
+
+.section-spacer {
   flex: 1;
 }
 
 .section-count {
   font-variant-numeric: tabular-nums;
   background: var(--color-bg-tertiary);
-  padding: var(--space-1) var(--space-3);
+  padding: 0 var(--space-3);
   border-radius: var(--radius-pill);
+  height: 16px;
+  display: flex;
+  align-items: center;
 }
 
 .section-action {
@@ -1792,6 +1800,7 @@ function formatActivityDate(dateStr: string): string {
   font-family: var(--font-mono);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
+  line-height: 1;
   color: var(--color-text-muted);
   background: none;
   transition: background var(--transition-hover), color var(--transition-hover);
