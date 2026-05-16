@@ -169,6 +169,8 @@ const ptBR: Locale = {
     sectionUntracked: "Não rastreados",
     stageAll: "Stage em tudo",
     unstageAll: "Tirar tudo do stage",
+    discardAll: "Descartar tudo",
+    discardAllConfirm: "Descartar {0} arquivo(s)? Esta ação não pode ser desfeita.",
     stage: "Stage",
     unstage: "Tirar do stage",
     stageAllButton: "Stage em tudo ({0})",
