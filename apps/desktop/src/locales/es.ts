@@ -396,6 +396,7 @@ const es: Locale = {
     summaryPlaceholder: "Resumen (obligatorio)",
     description: "Descripción",
     descriptionPlaceholder: "Descripción (opcional)",
+    templatePicker: "Templates", // TODO: translate
     identityDefault: "Config global",
   },
 
