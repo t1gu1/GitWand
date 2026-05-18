@@ -334,7 +334,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       <button
         v-if="hasRepo"
         class="btn btn--icon"
-        :title="t('workspace.title')"
+        v-tooltip="t('workspace.title')"
         :aria-label="t('workspace.title')"
         @click="emit('openWorkspace')"
       >
@@ -348,7 +348,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       <button
         v-if="hasRepo"
         class="btn btn--icon"
-        :title="t('agents.sidebarTooltip')"
+        v-tooltip="t('agents.sidebarTooltip')"
         :aria-label="t('agents.title')"
         @click="emit('openAgents')"
       >
@@ -365,7 +365,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       <button
         class="btn btn--icon theme-toggle"
         :aria-label="theme === 'dark' ? t('header.themeLight') : t('header.themeDark')"
-        :title="theme === 'dark' ? t('header.themeLightLabel') : t('header.themeDarkLabel')"
+        v-tooltip="theme === 'dark' ? t('header.themeLightLabel') : t('header.themeDarkLabel')"
         @click="emit('toggleTheme')"
       >
         <svg v-if="theme === 'dark'" width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -381,7 +381,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       <button
         class="btn btn--icon"
         :aria-label="t('header.openHelp')"
-        :title="t('header.openHelp')"
+        v-tooltip="t('header.openHelp')"
         @click="emit('openHelp')"
       >
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -396,7 +396,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         <button
           class="btn btn--icon"
           :aria-label="t('settings.title')"
-          :title="t('settings.title')"
+          v-tooltip="t('settings.title')"
           @click="emit('openSettings')"
         >
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -410,7 +410,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           v-if="(props.errorCount ?? 0) > 0"
           type="button"
           class="settings-error-dot"
-          :title="t('statusBar.errorsTooltip', props.errorCount ?? 0)"
+          v-tooltip="t('statusBar.errorsTooltip', props.errorCount ?? 0)"
           :aria-label="t('statusBar.errorsTooltip', props.errorCount ?? 0)"
           @click.stop="emit('openLogs')"
         >{{ (props.errorCount ?? 0) > 99 ? '99+' : props.errorCount }}</button>

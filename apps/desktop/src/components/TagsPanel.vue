@@ -223,7 +223,7 @@ async function pushAllTags() {
           <button
             class="tp-action-btn"
             :disabled="busyTag === tag.name"
-            :title="t('tags.retagTitle')"
+            v-tooltip="t('tags.retagTitle')"
             @click="openRetagDialog(tag)"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -235,7 +235,7 @@ async function pushAllTags() {
             v-if="hasRemote"
             class="tp-action-btn"
             :disabled="busyTag === tag.name"
-            :title="t('tags.pushTag', remoteName)"
+            v-tooltip="t('tags.pushTag', remoteName)"
             @click="pushTag(tag.name)"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -246,7 +246,7 @@ async function pushAllTags() {
           <button
             class="tp-action-btn tp-action-btn--danger"
             :disabled="busyTag === tag.name"
-            :title="t('tags.deleteTag')"
+            v-tooltip="t('tags.deleteTag')"
             @click="askDelete(tag.name)"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">

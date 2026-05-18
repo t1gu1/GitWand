@@ -639,12 +639,8 @@ function onViewModeChange(mode: ViewMode) {
   viewMode.value = mode;
 }
 
-async function onDiscardSection(sectionKey: string, paths: string[]) {
-  if (!window.confirm(t('sidebar.discardAllConfirm', paths.length))) return;
-  if (sectionKey === 'staged') {
-    await unstageFiles(paths);
-  }
-  await discardFiles(paths, sectionKey === 'untracked');
+function onDiscardSection(sectionKey: string, paths: string[]) {
+  discardSectionConfirm.value = { sectionKey, paths };
 }
 
 // ─── File history viewer ────────────────────────────────
@@ -1135,6 +1131,19 @@ const pendingQuickCreate = ref(false);
 
 // ─── Submodule panel ─────────────────────────────────────
 const showSubmodules = ref(false);
+
+// ─── Discard-section confirmation modal ─────────────────
+const discardSectionConfirm = ref<{ sectionKey: string; paths: string[] } | null>(null);
+
+async function onDiscardSectionConfirmed() {
+  const ctx = discardSectionConfirm.value;
+  if (!ctx) return;
+  discardSectionConfirm.value = null;
+  if (ctx.sectionKey === 'staged') {
+    await unstageFiles(ctx.paths);
+  }
+  await discardFiles(ctx.paths, ctx.sectionKey === 'untracked');
+}
 
 // ─── Push + tags confirmation modal ─────────────────────
 const pushTagsConfirm = ref(false);
@@ -2066,6 +2075,21 @@ onUnmounted(() => {
           @click="confirmTagCommit">
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.tagConfirm') }}
         </button>
+      </template>
+    </BaseModal>
+
+    <!-- Discard section confirmation -->
+    <BaseModal
+      v-if="discardSectionConfirm"
+      :title="t('sidebar.discardAll')"
+      size="sm"
+      role="alertdialog"
+      @close="discardSectionConfirm = null"
+    >
+      <p class="ptc-desc">{{ t('sidebar.discardAllConfirm', discardSectionConfirm.paths.length) }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="discardSectionConfirm = null">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" @click="onDiscardSectionConfirmed">{{ t('sidebar.discardAll') }}</button>
       </template>
     </BaseModal>
   </div>

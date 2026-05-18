@@ -623,6 +623,28 @@ button:focus-visible,
 [data-theme="light"] .wd-del { background: rgba(239, 68, 68, 0.2); }
 [data-theme="light"] .wd-ins { background: rgba(34, 197, 94, 0.2); }
 
+/* ─── Tooltip (v-tooltip directive) ────────────────────────── */
+.gw-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--color-surface-inverse);
+  color: var(--color-surface-inverse-text);
+  padding: 4px 9px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s var(--ease-out);
+  box-shadow: var(--shadow-sm);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gw-tooltip--visible { opacity: 1; }
+
 /* ─── Highlight.js syntax tokens (dark theme) ──────────────── */
 .hljs-keyword,
 .hljs-selector-tag,
