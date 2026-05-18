@@ -512,6 +512,7 @@ export async function getGitLog(
   count?: number,
   all?: boolean,
   author?: string,
+  offset?: number,
 ): Promise<GitLogEntry[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
@@ -526,7 +527,7 @@ export async function getGitLog(
         parents: string[];
         refs: string;
       }>
-    >("git_log", { cwd, count: count ?? 50, all: all ?? false, author: author ?? null });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? false, author: author ?? null, offset: offset ?? 0 });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -541,7 +542,7 @@ export async function getGitLog(
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 50}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();
@@ -1858,6 +1859,54 @@ export async function checkRemoteReachable(
     // a best-effort signal; we'd rather flip into offline mode than throw.
     return false;
   }
+}
+
+// ─── Fork Point (v2.11) ──────────────────────────────────────────────────────
+
+/**
+ * Returns the SHA of the best common ancestor of `ref1` and `ref2`
+ * (`git merge-base ref1 ref2`). Returns "" when there is no common ancestor
+ * (unrelated histories) or the command fails.
+ *
+ * Used by CommitGraph to determine the fork point and dim shared-history
+ * commits, making branch-specific commits visually stand out.
+ */
+export async function gitMergeBase(
+  cwd: string,
+  ref1: string,
+  ref2: string,
+): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("git_merge_base", { cwd, ref1, ref2 });
+  }
+  try {
+    const res = await devFetch(
+      `${DEV_SERVER}/api/git-merge-base?cwd=${encodeURIComponent(cwd)}&ref1=${encodeURIComponent(ref1)}&ref2=${encodeURIComponent(ref2)}`,
+    );
+    if (!res.ok) return "";
+    const data = await res.json() as { sha?: string };
+    return data.sha ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// ─── Transparent command log ─────────────────────────────────────────────────
+
+export interface CmdLogEntry {
+  id:           number;
+  label:        string;
+  cwd:          string;
+  duration_ms:  number;
+  exit_code:    number;
+  timestamp_ms: number;
+}
+
+export async function getCommandLog(): Promise<CmdLogEntry[]> {
+  if (isTauri()) {
+    return tauriInvoke<CmdLogEntry[]>("get_command_log");
+  }
+  return [];
 }
 
 // ─── GitHub PR, GitLab, Bitbucket, AI → backend-pr.ts / backend-gitlab.ts /

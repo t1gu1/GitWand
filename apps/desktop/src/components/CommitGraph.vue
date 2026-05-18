@@ -11,6 +11,13 @@ const props = defineProps<{
   selectedHash?: string | null;
   /** Current branch name for highlighting */
   currentBranch?: string;
+  /**
+   * SHA of the fork-point commit (from `git merge-base HEAD <upstream>`).
+   * Commits at or "below" this SHA (older commits, shared history) are
+   * rendered with reduced opacity so branch-specific commits stand out.
+   * Optional — no dimming when absent or empty.
+   */
+  forkPointSha?: string;
 }>();
 
 const emit = defineEmits<{
@@ -33,6 +40,32 @@ const layout = computed<DagLayout>(() => {
   _cachedLayout = computeDagLayout(commits);
   return _cachedLayout;
 });
+
+// ─── Fork Point dimming (v2.11) ──────────────────────
+// Commits at or below the fork point (shared history) are displayed with
+// reduced opacity. This highlights the commits unique to the current branch.
+//
+// forkPointIndex is -1 when no fork point is set (no dimming).
+// A commit at index >= forkPointIndex is in shared history (dim it).
+// A commit at index <  forkPointIndex is branch-specific (full opacity).
+//
+// Logic: git log is newest-first, so lower index = newer. The fork point
+// is the last shared commit. Everything AFTER it in the list is shared.
+const forkPointIndex = computed<number>(() => {
+  if (!props.forkPointSha) return -1;
+  const sha = props.forkPointSha;
+  // Match against either full SHA or the 7-char short hash displayed in the UI
+  const idx = props.commits.findIndex(
+    (c) => c.hashFull === sha || c.hashFull.startsWith(sha) || sha.startsWith(c.hashFull),
+  );
+  return idx; // -1 when not found in current window (no dimming)
+});
+
+/** Returns true when the commit at `index` is shared history (should be dimmed). */
+function isSharedHistory(index: number): boolean {
+  const fp = forkPointIndex.value;
+  return fp !== -1 && index >= fp;
+}
 
 // ─── Rendering constants ─────────────────────────────
 const ROW_H = 32;       // height per commit row
@@ -208,12 +241,14 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :stroke-dasharray="edge.isMerge ? '3,3' : 'none'"
           fill="none"
           stroke-linecap="round"
+          :opacity="isSharedHistory(edge.fromIndex) ? 0.25 : 1"
         />
         <!-- Nodes (R6: visible only). -->
         <g
           v-for="node in visibleNodes"
           :key="'n' + node.index"
           class="cg-node"
+          :opacity="isSharedHistory(node.index) ? 0.25 : 1"
           @click="emit('select-commit', node.hash)"
         >
           <!-- Merge commit: bigger open circle -->
@@ -245,7 +280,10 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           v-for="vc in visibleCommits"
           :key="vc.entry.hashFull"
           class="cg-row"
-          :class="{ 'cg-row--selected': vc.entry.hashFull === selectedHash }"
+          :class="{
+            'cg-row--selected': vc.entry.hashFull === selectedHash,
+            'cg-row--shared': isSharedHistory(vc.index),
+          }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="emit('select-commit', vc.entry.hashFull)"
         >
@@ -330,6 +368,14 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .cg-row--selected {
   background: var(--color-accent-bg, rgba(56, 132, 255, 0.08));
+}
+
+/* Shared-history commits (pre-fork-point): dimmed to de-emphasise */
+.cg-row--shared {
+  opacity: 0.45;
+}
+.cg-row--shared.cg-row--selected {
+  opacity: 1; /* Always show selected commit at full opacity */
 }
 
 .cg-ref {

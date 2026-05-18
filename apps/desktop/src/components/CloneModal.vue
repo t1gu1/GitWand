@@ -11,10 +11,10 @@
  * is derived from the URL (last segment, `.git` stripped). Lets us keep
  * the form short while still being explicit about where files will land.
  *
- * Cloning runs synchronously on the backend (see backend.ts gitClone) —
- * we show a spinner while the promise settles, no real-time progress.
+ * v2.11: real-time progress bar via `clone-progress` Tauri events emitted
+ * by the Rust backend as it reads git's stderr line by line.
  */
-import { computed, onMounted, nextTick, ref } from "vue";
+import { computed, onMounted, onUnmounted, nextTick, ref } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { gitClone, pickFolder } from "../utils/backend";
 import { requireOnline } from "../utils/networkGuard";
@@ -32,6 +32,71 @@ const parentDir = ref("");
 const isCloning = ref(false);
 const error = ref<string | null>(null);
 const urlInputEl = ref<HTMLInputElement | null>(null);
+
+// ─── Clone progress (v2.11) ──────────────────────────────────
+interface CloneProgressEvent {
+  stage:   string;   // "init" | "counting" | "compressing" | "receiving" | "resolving" | "done"
+  percent: number;
+  message: string;
+}
+
+const cloneStage   = ref<string>("");
+const clonePercent = ref<number>(0);
+const cloneMessage = ref<string>("");
+
+// Stage → human-readable label
+function stageLabel(stage: string): string {
+  switch (stage) {
+    case "init":        return "Initialising…";
+    case "counting":    return "Counting objects…";
+    case "compressing": return "Compressing…";
+    case "receiving":   return "Receiving objects…";
+    case "resolving":   return "Resolving deltas…";
+    case "done":        return "Complete";
+    default:            return stage;
+  }
+}
+
+// Weighted progress across the 4 main stages so the bar moves smoothly:
+//   counting:     0 – 15%
+//   compressing:  15 – 25%
+//   receiving:    25 – 90%
+//   resolving:    90 – 100%
+const barPercent = computed<number>(() => {
+  const p = clonePercent.value / 100;
+  switch (cloneStage.value) {
+    case "init":        return 2;
+    case "counting":    return 2  + p * 13;
+    case "compressing": return 15 + p * 10;
+    case "receiving":   return 25 + p * 65;
+    case "resolving":   return 90 + p * 10;
+    case "done":        return 100;
+    default:            return clonePercent.value;
+  }
+});
+
+let _unlisten: (() => void) | null = null;
+
+async function startProgressListener() {
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    _unlisten = await listen<CloneProgressEvent>("clone-progress", (ev) => {
+      const { stage, percent, message } = ev.payload;
+      cloneStage.value   = stage;
+      clonePercent.value = percent;
+      cloneMessage.value = message;
+    });
+  } catch {
+    // Browser dev mode — no Tauri events available, progress bar hidden
+  }
+}
+
+function stopProgressListener() {
+  _unlisten?.();
+  _unlisten = null;
+}
+
+onUnmounted(() => stopProgressListener());
 
 /**
  * Derive the bare repo name from the URL — last segment, `.git` stripped.
@@ -67,6 +132,11 @@ async function onClone() {
   }
   error.value = null;
   isCloning.value = true;
+  cloneStage.value   = "init";
+  clonePercent.value = 0;
+  cloneMessage.value = "";
+
+  await startProgressListener();
   try {
     const finalPath = await gitClone(url.value.trim(), destination.value);
     emit("cloned", finalPath);
@@ -74,6 +144,7 @@ async function onClone() {
   } catch (err: unknown) {
     error.value = err instanceof Error ? err.message : String(err);
   } finally {
+    stopProgressListener();
     isCloning.value = false;
   }
 }
@@ -148,6 +219,18 @@ onMounted(() => {
         {{ t("clone.willCloneInto") }}
         <span class="mono cm-dest-path">{{ destination }}</span>
       </p>
+
+      <!-- Real-time clone progress bar (v2.11) -->
+      <div v-if="isCloning" class="cm-progress" aria-live="polite">
+        <div class="cm-progress-header">
+          <span class="cm-progress-stage">{{ stageLabel(cloneStage) }}</span>
+          <span class="cm-progress-pct muted">{{ Math.round(barPercent) }}%</span>
+        </div>
+        <div class="cm-progress-track" role="progressbar" :aria-valuenow="Math.round(barPercent)" aria-valuemin="0" aria-valuemax="100">
+          <div class="cm-progress-fill" :style="{ width: barPercent + '%' }"></div>
+        </div>
+        <p v-if="cloneMessage" class="cm-progress-msg muted mono">{{ cloneMessage }}</p>
+      </div>
 
       <p v-if="error" class="cm-error" role="alert">{{ error }}</p>
 
@@ -306,5 +389,52 @@ onMounted(() => {
   .cm-spinner {
     animation: none;
   }
+}
+
+/* ─── Clone progress bar (v2.11) ────────────────────────────── */
+.cm-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.cm-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-size-sm);
+}
+
+.cm-progress-stage {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.cm-progress-pct {
+  font-size: var(--font-size-xs, 11px);
+}
+
+.cm-progress-track {
+  height: 6px;
+  background: var(--color-bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cm-progress-fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  min-width: 4px;
+}
+
+.cm-progress-msg {
+  margin: 0;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 </style>

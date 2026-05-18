@@ -699,14 +699,40 @@ Rend l'écosystème MCP Registry directement navigable depuis GitWand — sans p
 
 ---
 
-### v2.11.0 — Performance à grande échelle
+### v2.11.0 — Performance à grande échelle ✅
 
-- Partial clone / sparse checkout pour monorepos massifs — hydratation à la demande via `git backfill <rev> <pathspec>` (scope par range de commits + pathspec wildcards, praticable depuis 2.54)
-- Pagination lazy du log sur repos 100k+ commits
-- Background indexing pour la recherche dans les commits
-- **Fork Point visualization** — dans le DAG, griser les commits antérieurs au point de divergence de la branche sélectionnée pour ne mettre en valeur que ses commits propres. Implémentation : `git merge-base HEAD <base-branch>` au changement de branche active → colorier différemment les nodes antérieurs au fork point dans le canvas graph. Zéro nouveau backend, pure logique de rendu
-- **Clone progress en temps réel** — barre de progression live pendant `git clone` (phases Counting / Receiving / Resolving objects), nécessite un primitif async Tauri avec `window.emit("git-clone-progress", …)` + écouteur TS. Différé depuis v2.0.0, naturellement aligné ici avec le reste du chantier perf
-- **Transparent command log** — panel `Cmd+Shift+L` listant chaque commande git lancée par l'app : arguments complets, cwd, durée ms, exit code, stderr. Secrets redactés (tokens, mots de passe dans les URLs). Bouton "Copy for bug report". Implémentation : ring buffer Rust (cap 200 entrées, module-level dans `git/cmd.rs`) → événement Tauri `git-cmd-log` → `useCommandLog.ts` côté TS. Complément au log d'erreurs applicatives existant (`useLogs.ts`) — celui-ci est orienté debug git, pas erreurs UI
+**Backend.ts domain split**
+
+- Fichier monolithique `backend.ts` (~4000 lignes) découpé en modules par domaine : `backend-core.ts` (IPC/infra), `backend-pr.ts` (GitHub PRs), `backend-gitlab.ts` (glab), `backend-bitbucket.ts` (Bitbucket REST), `backend-ai.ts` (Claude/Codex CLI). Re-exports via barrel pour compatibilité ascendante.
+- `export *` conserve la tree-shaking budget intacte (main < 1250 KB) ; gains réels attendus dès que les views forge/AI seront en lazy-load direct.
+
+**Fork Point visualization**
+
+- `git merge-base HEAD <upstream>` au changement de branche → SHA stocké dans `graphForkPointSha`
+- Commits en historique partagé (≥ fork point index) rendus en opacité réduite (SVG 0.25, rows CSS 0.45)
+- Commit sélectionné toujours à pleine opacité même s'il est en historique partagé
+- Nouveau `#[tauri::command] git_merge_base` en Rust + wrapper TS `gitMergeBase`
+
+**Transparent command log**
+
+- Ring buffer Rust dans `git/cmd.rs` (cap 200, `record_cmd` appelé sur commit/push/pull/fetch/merge/rebase/cherry-pick/stash/branches/clone)
+- `#[tauri::command] get_command_log` → `useCommandLog.ts` → `CommandLogPanel.vue`
+- Raccourci `⌘⇧L` / `Ctrl+Shift+L` pour ouvrir/fermer le panel (slide-in depuis la droite)
+- Colonnes : commande · répertoire · durée ms · exit code · horodatage relatif
+
+**Clone progress en temps réel**
+
+- `git clone --progress` + lecture du stderr ligne par ligne (séparateurs `\r`/`\n`)
+- Parsing des phases : init → counting → compressing → receiving → resolving → done
+- Émission d'événements Tauri `clone-progress` vers `CloneModal.vue`
+- Barre de progression pondérée par phase (counting 0-15%, compressing 15-25%, receiving 25-90%, resolving 90-100%)
+
+**CommitLog pagination (offset/limit)**
+
+- `git_log` Rust accepte désormais `offset: Option<i32>` → `--skip=N`
+- Page initiale : 100 commits (au lieu de 50) ; `loadMoreLog()` appende la page suivante sans rechargement
+- Détection de fin de scroll dans `CommitLog.vue` (200px avant le bas) → émet `load-more` → `loadMoreLog()`
+- Sentinel row "Scroll for more" + spinner pendant le chargement
 
 ---
 

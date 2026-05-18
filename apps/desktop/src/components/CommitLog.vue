@@ -20,6 +20,10 @@ const props = defineProps<{
    * origin does not know about this branch at all.
    */
   needsPublish?: boolean;
+  /** True when more commits exist beyond the current page. */
+  hasMore?: boolean;
+  /** True while the next page is being loaded. */
+  loadingMore?: boolean;
 }>();
 
 /**
@@ -139,6 +143,8 @@ const emit = defineEmits<{
   tagCommit: [entry: GitLogEntry];
   cherryPickCommit: [entry: GitLogEntry];
   viewOnForge: [entry: GitLogEntry];
+  /** User scrolled near the bottom — request more commits. */
+  loadMore: [];
 }>();
 
 // ─── Context menu on commit items ─────────────────────────
@@ -228,6 +234,27 @@ onUnmounted(() => {
 function onCtxKey(e: KeyboardEvent) {
   if (e.key === "Escape") closeCommitContextMenu();
 }
+
+// ─── Infinite scroll — load next page when user reaches the bottom ─
+// Uses a scroll listener on the virtualizer's scroll container.
+// Emits `load-more` once per page when scrolled within 200px of bottom.
+let _loadMorePending = false;
+
+function onLogScroll() {
+  if (!props.hasMore || props.loadingMore || _loadMorePending) return;
+  const el = scrollContainerRef.value;
+  if (!el) return;
+  const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+  if (remaining < 200) {
+    _loadMorePending = true;
+    emit("loadMore");
+    // Reset pending flag once entries grow (watch catches it)
+  }
+}
+
+watch(() => props.entries.length, () => {
+  _loadMorePending = false;
+});
 
 // ─── Search (Phase 1.3.4) ─────────────────────────────────
 const ai = useAIProvider();
@@ -416,7 +443,7 @@ function authorColor(name: string): string {
       <span class="muted">{{ t('common.loading') }}</span>
     </div>
 
-    <div ref="scrollContainerRef" class="log-list" v-else-if="displayedEntries.length > 0">
+    <div ref="scrollContainerRef" class="log-list" v-else-if="displayedEntries.length > 0" @scroll.passive="onLogScroll">
       <div :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative', width: '100%' }">
         <div v-for="vr in virtualizer.getVirtualItems()" :key="'' + vr.key" :style="vrStyle(vr)">
           <template v-if="isSectionRow(rows[vr.index])">
@@ -480,6 +507,11 @@ function authorColor(name: string): string {
             </div>
           </template>
         </div>
+      </div>
+      <!-- Load-more sentinel (v2.11): shown below virtual list when more pages exist -->
+      <div v-if="hasMore" class="log-load-more">
+        <span v-if="loadingMore" class="log-load-more__spinner" aria-label="Loading more commits"></span>
+        <span class="muted" style="font-size:11px">{{ loadingMore ? 'Loading more…' : 'Scroll for more' }}</span>
       </div>
     </div>
 
@@ -971,6 +1003,28 @@ function authorColor(name: string): string {
   align-items: flex-start;
   gap: 5px;
 }
+
+/* ─── Load-more sentinel (v2.11) ───────────────────────── */
+.log-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+}
+
+.log-load-more__spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ll-spin 0.7s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes ll-spin { to { transform: rotate(360deg); } }
 </style>
 
 <style>

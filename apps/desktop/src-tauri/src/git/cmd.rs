@@ -1,6 +1,51 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// ─── Transparent command log ──────────────────────────────────
+// A bounded ring buffer (cap = 200) records every git write-command
+// that GitWand runs on behalf of the user.  The frontend can fetch it
+// via the `get_command_log` Tauri command and display it in the
+// Command Log panel (⌘⇧L).
+
+/// One entry in the transparent command log.
+#[derive(serde::Serialize, Clone)]
+pub(crate) struct CmdLogEntry {
+    pub id:          u64,
+    pub label:       String,   // human-readable "git push origin HEAD"
+    pub cwd:         String,
+    pub duration_ms: u64,
+    pub exit_code:   i32,      // 0 = success, -1 = could not be determined
+    pub timestamp_ms: u64,     // Unix epoch in milliseconds
+}
+
+const CMD_LOG_CAP: usize = 200;
+static CMD_LOG: OnceLock<Mutex<VecDeque<CmdLogEntry>>> = OnceLock::new();
+static CMD_LOG_CTR: AtomicU64 = AtomicU64::new(0);
+
+/// Append one entry to the ring buffer (oldest entry evicted when full).
+pub(crate) fn record_cmd(label: &str, cwd: &str, duration_ms: u64, exit_code: i32) {
+    let log = CMD_LOG.get_or_init(|| Mutex::new(VecDeque::with_capacity(CMD_LOG_CAP + 1)));
+    let id = CMD_LOG_CTR.fetch_add(1, Ordering::Relaxed);
+    let timestamp_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    let mut buf = log.lock().unwrap();
+    if buf.len() >= CMD_LOG_CAP {
+        buf.pop_front();
+    }
+    buf.push_back(CmdLogEntry { id, label: label.to_string(), cwd: cwd.to_string(),
+                                duration_ms, exit_code, timestamp_ms });
+}
+
+/// Returns a snapshot (newest first) of the ring buffer.
+pub(crate) fn cmd_log_snapshot() -> Vec<CmdLogEntry> {
+    let log = CMD_LOG.get_or_init(|| Mutex::new(VecDeque::with_capacity(CMD_LOG_CAP + 1)));
+    log.lock().unwrap().iter().cloned().rev().collect()
+}
 
 // Windows-only: `creation_flags` is an inherent method added by the
 // `CommandExt` trait. Without this `use`, `cmd.creation_flags(...)` at

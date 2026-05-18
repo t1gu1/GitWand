@@ -32,6 +32,10 @@ const props = defineProps<{
   logScope: "current" | "all";
   /** Author filter: show all commits, or only those by the current git user. */
   logAuthorFilter: "all" | "mine";
+  /** True when more commits are available beyond the current page. */
+  logHasMore?: boolean;
+  /** True while the next page is being loaded. */
+  logLoadingMore?: boolean;
   /** Display name of the current branch (for the toggle label). */
   currentBranch: string;
   /** Files inside the currently-selected untracked directory */
@@ -84,6 +88,8 @@ const emit = defineEmits<{
   openWorkspace: [];
   openAgents: [];
   openLaunchpad: [];
+  /** Request the next page of commits (infinite scroll). */
+  loadMoreLog: [];
 }>();
 
 const { t, locale } = useI18n();
@@ -889,6 +895,8 @@ function formatActivityDate(dateStr: string): string {
         :selected-hash="selectedCommitHash"
         :ahead-count="aheadCount"
         :needs-publish="needsPublish"
+        :has-more="logHasMore"
+        :loading-more="logLoadingMore"
         @select-commit="(hash: string) => emit('selectCommit', hash)"
         @edit-commit="(entry) => emit('editCommit', entry)"
         @split-commit="(entry) => emit('splitCommit', entry)"
@@ -899,6 +907,7 @@ function formatActivityDate(dateStr: string): string {
         @tag-commit="(entry) => emit('tagCommit', entry)"
         @cherry-pick-commit="(entry) => emit('cherryPickCommit', entry)"
         @view-on-forge="(entry) => emit('viewOnForge', entry)"
+        @load-more="emit('loadMoreLog')"
       />
     </div>
 

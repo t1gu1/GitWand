@@ -3,6 +3,7 @@ use crate::types::*;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Instant;
 use rayon::prelude::*;
 
 // ─── Git stage / unstage ─────────────────────────────────────
@@ -79,11 +80,13 @@ pub(crate) fn git_unstage_patch(cwd: String, patch: String) -> Result<(), String
 
 #[tauri::command]
 pub(crate) fn git_commit(cwd: String, message: String) -> Result<String, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["commit", "-m", &message])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git commit: {}", e))?;
+    record_cmd(&format!("git commit -m {:?}", message), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -103,11 +106,13 @@ pub(crate) fn git_commit(cwd: String, message: String) -> Result<String, String>
 
 #[tauri::command]
 pub(crate) fn git_amend_commit(cwd: String, message: String) -> Result<String, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["commit", "--amend", "-m", &message])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git commit --amend: {}", e))?;
+    record_cmd(&format!("git commit --amend -m {:?}", message), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -333,11 +338,13 @@ pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>) -> Result<GitPus
     if set_upstream.unwrap_or(false) {
         args.extend(["--set-upstream", "origin", "HEAD"]);
     }
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(&args)
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git push: {}", e))?;
+    record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -360,11 +367,13 @@ pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>) -> Result<GitPus
 
 #[tauri::command]
 pub(crate) fn git_fetch(cwd: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["fetch", "--prune"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git fetch: {}", e))?;
+    record_cmd("git fetch --prune", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -382,11 +391,13 @@ pub(crate) fn git_fetch(cwd: String) -> Result<GitPushPullResult, String> {
 
 #[tauri::command]
 pub(crate) fn git_merge(cwd: String, branch: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["merge", &branch])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git merge: {}", e))?;
+    record_cmd(&format!("git merge {}", branch), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -408,11 +419,13 @@ pub(crate) fn git_merge(cwd: String, branch: String) -> Result<GitPushPullResult
 
 #[tauri::command]
 pub(crate) fn git_merge_abort(cwd: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["merge", "--abort"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git merge --abort: {}", e))?;
+    record_cmd("git merge --abort", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
@@ -429,6 +442,7 @@ pub(crate) fn git_merge_abort(cwd: String) -> Result<GitPushPullResult, String> 
 
 #[tauri::command]
 pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["-c", "core.editor=true", "merge", "--continue"])
         .current_dir(&cwd)
@@ -436,6 +450,7 @@ pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, Strin
         .env("GIT_EDITOR", "true")
         .output()
         .map_err(|e| format!("Failed to run git merge --continue: {}", e))?;
+    record_cmd("git merge --continue", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -453,11 +468,13 @@ pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, Strin
 
 #[tauri::command]
 pub(crate) fn git_pull(cwd: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["pull"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git pull: {}", e))?;
+    record_cmd("git pull", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -481,6 +498,7 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
         "continue" | "abort" | "skip" => action.as_str(),
         _ => return Err(format!("Unknown rebase action '{}'", action)),
     };
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["rebase", &format!("--{}", arg)])
         .env("GIT_EDITOR", "true")
@@ -488,6 +506,7 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git rebase --{}: {}", arg, e))?;
+    record_cmd(&format!("git rebase --{}", arg), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -588,11 +607,13 @@ pub(crate) fn git_create_branch(cwd: String, name: String, checkout: bool, start
     if checkout {
         let mut args = vec!["checkout", "-b", &name];
         if let Some(ref sp) = start_point { args.push(sp); }
+        let _t0 = Instant::now();
         let output = git_cmd()
             .args(&args)
             .current_dir(&cwd)
             .output()
             .map_err(|e| format!("Failed to create branch: {}", e))?;
+        record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("git checkout -b failed: {}", stderr));
@@ -600,11 +621,13 @@ pub(crate) fn git_create_branch(cwd: String, name: String, checkout: bool, start
     } else {
         let mut args = vec!["branch", &name];
         if let Some(ref sp) = start_point { args.push(sp); }
+        let _t0 = Instant::now();
         let output = git_cmd()
             .args(&args)
             .current_dir(&cwd)
             .output()
             .map_err(|e| format!("Failed to create branch: {}", e))?;
+        record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("git branch failed: {}", stderr));
@@ -615,11 +638,13 @@ pub(crate) fn git_create_branch(cwd: String, name: String, checkout: bool, start
 
 #[tauri::command]
 pub(crate) fn git_switch_branch(cwd: String, name: String) -> Result<(), String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["checkout", &name])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to switch branch: {}", e))?;
+    record_cmd(&format!("git checkout {}", name), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git checkout failed: {}", stderr));
@@ -630,11 +655,13 @@ pub(crate) fn git_switch_branch(cwd: String, name: String) -> Result<(), String>
 #[tauri::command]
 pub(crate) fn git_delete_branch(cwd: String, name: String, force: bool) -> Result<(), String> {
     let flag = if force { "-D" } else { "-d" };
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["branch", flag, &name])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to delete branch: {}", e))?;
+    record_cmd(&format!("git branch {} {}", flag, name), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git branch {} failed: {}", flag, stderr));
@@ -666,11 +693,13 @@ pub(crate) fn git_stash(cwd: String, message: Option<String>) -> Result<(), Stri
         args.push("-m");
         args.push(m);
     }
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(&args)
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git stash: {}", e))?;
+    record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git stash failed: {}", stderr));
@@ -680,11 +709,13 @@ pub(crate) fn git_stash(cwd: String, message: Option<String>) -> Result<(), Stri
 
 #[tauri::command]
 pub(crate) fn git_stash_pop(cwd: String) -> Result<(), String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["stash", "pop"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git stash pop: {}", e))?;
+    record_cmd("git stash pop", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("git stash pop failed: {}", stderr));
@@ -733,11 +764,13 @@ pub(crate) fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
 #[tauri::command]
 pub(crate) fn git_stash_apply(cwd: String, index: usize) -> Result<(), String> {
     let stash_ref = format!("stash@{{{}}}", index);
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["stash", "apply", &stash_ref])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to apply stash: {}", e))?;
+    record_cmd(&format!("git stash apply {}", stash_ref), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         return Err(format!(
             "git stash apply failed: {}",
@@ -789,11 +822,13 @@ pub(crate) fn git_cherry_pick(cwd: String, hashes: Vec<String>) -> Result<GitPus
     let mut args = vec!["cherry-pick".to_string()];
     args.extend(hashes);
 
+    let _t0 = Instant::now();
     let output = hidden_cmd(&git)
         .args(&args)
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git cherry-pick: {}", e))?;
+    record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -808,11 +843,13 @@ pub(crate) fn git_cherry_pick(cwd: String, hashes: Vec<String>) -> Result<GitPus
 
 #[tauri::command]
 pub(crate) fn git_cherry_pick_abort(cwd: String) -> Result<(), String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["cherry-pick", "--abort"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to abort cherry-pick: {}", e))?;
+    record_cmd("git cherry-pick --abort", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         return Err(format!(
             "cherry-pick --abort failed: {}",
@@ -824,12 +861,14 @@ pub(crate) fn git_cherry_pick_abort(cwd: String) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["cherry-pick", "--continue"])
         .current_dir(&cwd)
         .env("GIT_EDITOR", "true") // skip editor for commit message
         .output()
         .map_err(|e| format!("Failed to continue cherry-pick: {}", e))?;
+    record_cmd("git cherry-pick --continue", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -845,11 +884,13 @@ pub(crate) fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult,
 
 #[tauri::command]
 pub(crate) fn git_checkout_commit(cwd: String, sha: String) -> Result<(), String> {
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["checkout", &sha])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to checkout commit: {}", e))?;
+    record_cmd(&format!("git checkout {}", sha), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         return Err(format!(
             "git checkout failed: {}",
@@ -866,11 +907,13 @@ pub(crate) fn git_reset_to_commit(cwd: String, sha: String, mode: String) -> Res
         "hard" => "--hard",
         _ => "--mixed",
     };
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(["reset", flag, &sha])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to reset: {}", e))?;
+    record_cmd(&format!("git reset {} {}", flag, sha), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     if !output.status.success() {
         return Err(format!(
             "git reset {} failed: {}",
@@ -889,11 +932,13 @@ pub(crate) fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>)
         args.push(m.to_string());
     }
     args.push(sha);
+    let _t0 = Instant::now();
     let output = git_cmd()
         .args(&args)
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to revert commit: {}", e))?;
+    record_cmd(&format!("git {}", args.join(" ")), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let has_conflicts = stderr.contains("CONFLICT") || stdout.contains("CONFLICT");
@@ -1437,27 +1482,124 @@ pub(crate) fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoSt
 
 // ─── Git clone / fork ─────────────────────────────────────────
 
-#[tauri::command]
-pub(crate) fn git_clone(url: String, dest: String) -> Result<String, String> {
-    let url_trim = url.trim();
-    let dest_trim = dest.trim();
-    if url_trim.is_empty() {
-        return Err("Empty URL".to_string());
-    }
-    if dest_trim.is_empty() {
-        return Err("Empty destination".to_string());
-    }
+// ─── Clone progress helpers ──────────────────────────────────
+//
+// `git clone --progress` writes progress lines to stderr, mostly
+// terminated by \r (carriage return) for in-place updates, not \n.
+// We read stderr in raw chunks, split on both \r and \n, and emit a
+// `clone-progress` Tauri event for each meaningful line so the
+// CloneModal.vue can render a live progress bar.
 
-    let output = git_cmd()
-        .args(["clone", url_trim, dest_trim])
-        .output()
+/// One progress update emitted as a Tauri event.
+#[derive(serde::Serialize, Clone)]
+struct CloneProgress {
+    stage:   String,   // "init" | "counting" | "compressing" | "receiving" | "resolving" | "done"
+    percent: f32,      // 0 – 100
+    message: String,   // raw trimmed line
+}
+
+fn extract_percent(line: &str) -> f32 {
+    // "Receiving objects:  56% (456/812) ..."
+    if let Some(pct_pos) = line.find('%') {
+        let before = line[..pct_pos].trim_end();
+        if let Some(start) = before.rfind(|c: char| c.is_whitespace()) {
+            if let Ok(v) = before[start + 1..].parse::<f32>() {
+                return v.clamp(0.0, 100.0);
+            }
+        }
+    }
+    0.0
+}
+
+fn parse_clone_progress(line: &str) -> Option<CloneProgress> {
+    let l = line.trim();
+    if l.is_empty() { return None; }
+    if l.starts_with("Cloning into") {
+        return Some(CloneProgress { stage: "init".into(),        percent: 0.0,                 message: l.to_string() });
+    }
+    if l.starts_with("remote: Counting") || l.starts_with("remote: Enumerating") {
+        return Some(CloneProgress { stage: "counting".into(),    percent: extract_percent(l),   message: l.to_string() });
+    }
+    if l.starts_with("remote: Compressing") {
+        return Some(CloneProgress { stage: "compressing".into(), percent: extract_percent(l),   message: l.to_string() });
+    }
+    if l.starts_with("Receiving objects:") {
+        return Some(CloneProgress { stage: "receiving".into(),   percent: extract_percent(l),   message: l.to_string() });
+    }
+    if l.starts_with("Resolving deltas:") {
+        return Some(CloneProgress { stage: "resolving".into(),   percent: extract_percent(l),   message: l.to_string() });
+    }
+    if l.contains("done") || l.contains("complete") {
+        return Some(CloneProgress { stage: "done".into(),        percent: 100.0,                message: l.to_string() });
+    }
+    // Emit unknown lines too so the modal can show them
+    Some(CloneProgress { stage: "info".into(), percent: 0.0, message: l.to_string() })
+}
+
+#[tauri::command]
+pub(crate) fn git_clone(url: String, dest: String, app_handle: tauri::AppHandle) -> Result<String, String> {
+    use std::io::Read;
+    use tauri::Emitter;
+
+    let url_trim = url.trim().to_string();
+    let dest_trim = dest.trim().to_string();
+    if url_trim.is_empty() { return Err("Empty URL".to_string()); }
+    if dest_trim.is_empty() { return Err("Empty destination".to_string()); }
+
+    let _t0 = Instant::now();
+
+    // --progress forces git to emit progress even when stderr is not a tty.
+    let mut child = git_cmd()
+        .args(["clone", "--progress", &url_trim, &dest_trim])
+        .stderr(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .spawn()
         .map_err(|e| format!("Failed to spawn git clone: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(stderr.trim().to_string());
+    // Stream stderr → parse progress lines → emit Tauri events.
+    // Split on both \r and \n because git uses \r for in-place rewrites.
+    let mut all_stderr: Vec<u8> = Vec::new();
+    if let Some(mut stderr) = child.stderr.take() {
+        let mut buf = [0u8; 512];
+        let mut carry = String::new();
+        loop {
+            match stderr.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    all_stderr.extend_from_slice(&buf[..n]);
+                    let chunk = String::from_utf8_lossy(&buf[..n]);
+                    let combined = carry.clone() + &chunk;
+                    let parts: Vec<&str> = combined.split(|c| c == '\r' || c == '\n').collect();
+                    let carry_idx = parts.len().saturating_sub(1);
+                    carry = parts[carry_idx].to_string();
+                    for part in &parts[..carry_idx] {
+                        if let Some(prog) = parse_clone_progress(part) {
+                            let _ = app_handle.emit("clone-progress", prog);
+                        }
+                    }
+                }
+            }
+        }
+        // Flush carry
+        if let Some(prog) = parse_clone_progress(&carry) {
+            let _ = app_handle.emit("clone-progress", prog);
+        }
     }
-    Ok(dest_trim.to_string())
+
+    let status = child.wait().map_err(|e| format!("Failed to wait for git clone: {}", e))?;
+    record_cmd(&format!("git clone {}", url_trim), &dest_trim, _t0.elapsed().as_millis() as u64, status.code().unwrap_or(-1));
+
+    if !status.success() {
+        let stderr_text = String::from_utf8_lossy(&all_stderr).trim().to_string();
+        return Err(if stderr_text.is_empty() { "git clone failed".to_string() } else { stderr_text });
+    }
+
+    // Emit final "done" event
+    let _ = app_handle.emit("clone-progress", CloneProgress {
+        stage: "done".into(), percent: 100.0, message: "Clone complete".to_string(),
+    });
+
+    Ok(dest_trim)
 }
 
 #[tauri::command]
@@ -2183,6 +2325,30 @@ pub(crate) fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> 
         .map_err(|e| e.to_string())
 }
 
+// ─── Fork Point (v2.11) ──────────────────────────────────────
+//
+// `git merge-base ref1 ref2` returns the best common ancestor of two refs.
+// Used by CommitGraph.vue to determine which commits are "before the fork
+// point" (shared history) and dim them visually, making the branch's unique
+// commits stand out.
+//
+// Returns the full SHA of the merge-base commit, or "" when there is no
+// common ancestor (unrelated histories, empty repo).
+
+#[tauri::command]
+pub(crate) fn git_merge_base(cwd: String, ref1: String, ref2: String) -> Result<String, String> {
+    let output = git_cmd()
+        .args(["merge-base", &ref1, &ref2])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("git merge-base failed: {}", e))?;
+    if !output.status.success() {
+        // Exit code 1 means no common ancestor — not an error worth surfacing.
+        return Ok(String::new());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
 // ─── Open in external editor ─────────────────────────────────
 
 #[tauri::command]
@@ -2198,4 +2364,11 @@ pub(crate) fn open_in_editor(cwd: String, path: String, editor: String) -> Resul
         .spawn()
         .map_err(|e| format!("Failed to open editor '{}': {}", editor_cmd, e))?;
     Ok(())
+}
+
+// ─── Transparent command log ──────────────────────────────────
+
+#[tauri::command]
+pub(crate) fn get_command_log() -> Vec<crate::git::cmd::CmdLogEntry> {
+    crate::git::cmd::cmd_log_snapshot()
 }

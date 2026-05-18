@@ -48,6 +48,7 @@ const SubmodulePanel       = defineAsyncComponent(() => import("./components/Sub
 const WorkspacePanel       = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
 const LaunchpadView        = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
 const AgentSessionsPanel   = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
+const CommandLogPanel      = defineAsyncComponent(() => import("./components/CommandLogPanel.vue"));
 const SearchPalette        = defineAsyncComponent(() => import("./components/header/SearchPalette.vue"));
 const BranchRenameModal    = defineAsyncComponent(() => import("./components/header/BranchRenameModal.vue"));
 const BranchDeleteModal    = defineAsyncComponent(() => import("./components/header/BranchDeleteModal.vue"));
@@ -83,7 +84,7 @@ import {
   LOG_FOCUS_SEARCH_KEY,
   LAUNCHPAD_OPEN_REQUEST_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead } from "./utils/backend";
+import { gitStash, gitStashPop, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -135,6 +136,8 @@ const {
   log: repoLog,
   logScope,
   logAuthorFilter,
+  logHasMore,
+  logLoadingMore,
   setLogAuthorFilter,
   loading: repoLoading,
   error: repoError,
@@ -166,6 +169,7 @@ const {
   refresh: repoRefresh,
   selectFile: repoSelectFile,
   loadLog,
+  loadMoreLog,
   setLogScope,
   stageFiles,
   stageAll,
@@ -201,6 +205,31 @@ const {
   renameBranch: doRenameBranch,
   currentGitUser,
 } = useGitRepo();
+
+// ─── Fork Point (v2.11) — graph view ─────────────────────
+// SHA of the merge-base between HEAD and the upstream tracking branch.
+// Used by CommitGraph to dim shared-history commits.
+// Recomputed when branch changes. Empty string = no dimming (e.g. main branch).
+const graphForkPointSha = ref<string>("");
+watch(
+  [branchDisplay, repoFolderPath],
+  async ([branch, cwd]) => {
+    if (!cwd || !branch) { graphForkPointSha.value = ""; return; }
+    // Compare HEAD against the tracking remote branch; fall back to common names.
+    const upstream = repoStatus.value?.remote ?? null;
+    const candidates = upstream
+      ? [upstream]
+      : ["origin/main", "origin/master", "main", "master"];
+    for (const ref of candidates) {
+      try {
+        const sha = await gitMergeBase(cwd, "HEAD", ref);
+        if (sha) { graphForkPointSha.value = sha; return; }
+      } catch { /* ignore */ }
+    }
+    graphForkPointSha.value = "";
+  },
+  { immediate: false },
+);
 
 // ─── PR panel (shared state via provide/inject) ──────────
 const prCwd = computed(() => repoFolderPath.value ?? "");
@@ -1014,6 +1043,7 @@ const showStash = ref(false);
 const showTags = ref(false);
 const showWorkspace = ref(false);
 const showAgents = ref(false);
+const showCommandLog = ref(false);
 
 // ─── Launchpad panel ─────────────────────────────────────
 // showLaunchpad removed — Launchpad is now a first-class viewMode ("launchpad").
@@ -1184,7 +1214,18 @@ function cancelSwitchStash() {
  * manager (40).
  */
 function onGlobalKeydown(e: KeyboardEvent) {
+  // ⌘⇧L / Ctrl+Shift+L — toggle Command Log panel
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.shiftKey && (e.key === "L" || e.key === "l")) {
+    e.preventDefault();
+    showCommandLog.value = !showCommandLog.value;
+    return;
+  }
   if (e.key !== "Escape") return;
+  if (showCommandLog.value) {
+    showCommandLog.value = false;
+    return;
+  }
   if (showHelp.value) {
     showHelp.value = false;
     return;
@@ -1605,6 +1646,7 @@ onUnmounted(() => {
           :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
           :log-entries="repoLog" :log-loading="repoLoading" :log-scope="logScope" :log-author-filter="logAuthorFilter"
+          :log-has-more="logHasMore" :log-loading-more="logLoadingMore" @load-more-log="loadMoreLog"
           :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
           :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
           @select="onRepoFileSelect" @change-view="onViewModeChange"
@@ -1714,6 +1756,7 @@ onUnmounted(() => {
             <!-- Graph view: DAG visualization -->
             <CommitGraph v-else-if="viewMode === 'graph'" :commits="repoLog" :selected-hash="selectedCommitHash"
               :current-branch="branchDisplay"
+              :fork-point-sha="graphForkPointSha"
               @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
 
             <!-- PRs view: creation form takes over when showCreateForm is true -->
@@ -1792,6 +1835,9 @@ onUnmounted(() => {
     <!-- Agent Sessions panel -->
     <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"
       @open-tab="(path) => { openTab(path); showAgents = false; }" />
+
+    <!-- Command Log panel (⌘⇧L) — transparent git command audit trail (v2.11) -->
+    <CommandLogPanel :visible="showCommandLog" @close="showCommandLog = false" />
 
     <!-- Tags panel -->
     <TagsPanel v-if="showTags && repoFolderPath" :cwd="repoFolderPath" @close="showTags = false"

@@ -67,6 +67,10 @@ export function useGitRepo() {
   // Author filter: "all" → no filter, "mine" → only commits by the current git user
   const logAuthorFilter = ref<"all" | "mine">("all");
   const currentGitUser = ref<GitUser | null>(null);
+  /** True when the last page returned a full page of results — more may exist. */
+  const logHasMore = ref(false);
+  /** Set to true while loadMoreLog() is fetching. */
+  const logLoadingMore = ref(false);
   const loading = ref(false);
   const error = ref<string | null>(null);
   const successMessage = ref<string | null>(null);
@@ -367,23 +371,60 @@ export function useGitRepo() {
    * Load the commit log. Honors `logScope` (current branch vs all refs)
    * and `logAuthorFilter` (all authors vs current user only).
    */
+  // Page size used for both initial load and subsequent pages.
+  const LOG_PAGE = 100;
+
   async function loadLog(count?: number) {
     if (!folderPath.value) return;
     try {
       const authorEmail =
         logAuthorFilter.value === "mine" ? (currentGitUser.value?.email ?? "") : undefined;
-      log.value = await getGitLog(
+      const pageSize = count ?? LOG_PAGE;
+      const entries = await getGitLog(
         folderPath.value,
-        count,
+        pageSize,
         logScope.value === "all",
         authorEmail,
+        0,
       );
+      log.value = entries;
+      // When the result is exactly one full page, assume more exist.
+      logHasMore.value = entries.length >= pageSize;
       // If a commit was selected but its diffs were lost, reload them
       if (selectedCommitHash.value && commitDiffs.value.length === 0) {
         commitDiffs.value = await getGitShow(folderPath.value, selectedCommitHash.value);
       }
     } catch (err: any) {
       error.value = `git log: ${err.message}`;
+    }
+  }
+
+  /**
+   * Append the next page of commits to the log.
+   * Called when the CommitLog scroll list emits `load-more`.
+   */
+  async function loadMoreLog() {
+    if (!folderPath.value || !logHasMore.value || logLoadingMore.value) return;
+    logLoadingMore.value = true;
+    try {
+      const authorEmail =
+        logAuthorFilter.value === "mine" ? (currentGitUser.value?.email ?? "") : undefined;
+      const offset = log.value.length;
+      const next = await getGitLog(
+        folderPath.value,
+        LOG_PAGE,
+        logScope.value === "all",
+        authorEmail,
+        offset,
+      );
+      if (next.length > 0) {
+        log.value = [...log.value, ...next];
+      }
+      logHasMore.value = next.length >= LOG_PAGE;
+    } catch (err: any) {
+      error.value = `git log (page): ${err.message}`;
+    } finally {
+      logLoadingMore.value = false;
     }
   }
 
@@ -911,6 +952,8 @@ export function useGitRepo() {
     log,
     logScope,
     logAuthorFilter,
+    logHasMore,
+    logLoadingMore,
     currentGitUser,
     loading,
     error,
@@ -951,6 +994,7 @@ export function useGitRepo() {
     refresh,
     selectFile,
     loadLog,
+    loadMoreLog,
     setLogScope,
     setLogAuthorFilter,
     stageFiles,

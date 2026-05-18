@@ -200,7 +200,7 @@ pub fn git_log_parity(
     all: Option<bool>,
     author: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
-    commands::read::git_log(cwd, count, all, author)
+    commands::read::git_log(cwd, count, all, author, None)
 }
 
 pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String> {
@@ -347,6 +347,7 @@ pub fn run() {
             commands::ops::git_push_tags,
             commands::ops::git_unpushed_tags,
             commands::ops::git_delete_remote_tag,
+            commands::ops::git_merge_base,
             commands::ops::git_clone,
             commands::ops::gh_fork,
             commands::ops::git_shortlog,
@@ -399,6 +400,8 @@ pub fn run() {
             commands::mcp_catalog::mcp_read_config,
             commands::mcp_catalog::mcp_install_server,
             commands::mcp_catalog::mcp_uninstall_server,
+            // ── Transparent command log ──
+            commands::ops::get_command_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

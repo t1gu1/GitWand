@@ -576,8 +576,10 @@ pub(crate) fn git_log(
     count: Option<i32>,
     all: Option<bool>,
     author: Option<String>,
+    offset: Option<i32>,
 ) -> Result<Vec<GitLogEntry>, String> {
-    let limit = count.unwrap_or(50);
+    let limit = count.unwrap_or(100);
+    let skip  = offset.unwrap_or(0).max(0);
     // Default: current branch only (like `git log`). Pass `all: true` to include all refs.
     let include_all = all.unwrap_or(false);
 
@@ -592,6 +594,9 @@ pub(crate) fn git_log(
         if !author_filter.is_empty() {
             args.push(format!("--author={}", author_filter));
         }
+    }
+    if skip > 0 {
+        args.push(format!("--skip={}", skip));
     }
     args.push(format!("-n{}", limit));
     args.push(format!("--format={}", format));
