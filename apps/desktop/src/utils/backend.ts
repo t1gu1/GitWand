@@ -1846,14 +1846,10 @@ export async function checkRemoteReachable(
         Math.max(5_000, timeoutMs + 2_000),
       );
     }
-    const res = await devFetch(`${DEV_SERVER}/api/check-remote-reachable`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, timeoutMs }),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { reachable?: boolean };
-    return !!data.reachable;
+    // In browser / dev-web mode the raw TCP probe is unreliable (corporate
+    // proxies, VPNs, etc. route TCP differently from HTTP). Stay optimistic:
+    // the actual git operations will surface real connectivity errors.
+    return true;
   } catch {
     // Any IPC / fetch / parse failure → treat as unreachable. The probe is
     // a best-effort signal; we'd rather flip into offline mode than throw.

@@ -4139,6 +4139,51 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/git-merge-base?cwd=<path>&ref1=<ref>&ref2=<ref>
+    // Mirrors the Tauri `git_merge_base` command: returns the SHA of the
+    // best common ancestor between ref1 and ref2 (`git merge-base ref1 ref2`).
+    if (url.pathname === "/api/git-merge-base" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const ref1 = url.searchParams.get("ref1");
+      const ref2 = url.searchParams.get("ref2");
+      if (!cwd || !ref1 || !ref2) return jsonResponse(req, res, { error: "Missing cwd, ref1 or ref2" }, 400);
+      try {
+        const result = spawnSync(GIT, ["merge-base", ref1, ref2], { cwd: resolve(cwd), encoding: "utf-8" });
+        if (result.status !== 0) return jsonResponse(req, res, { sha: "" });
+        return jsonResponse(req, res, { sha: result.stdout.trim() });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-branch-merged  { cwd }
+    // Mirrors the Tauri `git_branch_merged` command: returns the list of
+    // local branches fully merged into the default branch, excluding the
+    // current branch and the default branch itself.
+    if (url.pathname === "/api/git-branch-merged" && req.method === "POST") {
+      const body = await readBody(req);
+      const cwd = String(body?.cwd ?? "").trim();
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      try {
+        // Determine default branch (main or master or first remote HEAD).
+        const headRef = spawnSync(GIT, ["symbolic-ref", "refs/remotes/origin/HEAD"], { cwd: resolve(cwd), encoding: "utf-8" });
+        const defaultBranch = headRef.status === 0
+          ? headRef.stdout.trim().replace("refs/remotes/origin/", "")
+          : "main";
+        const currentRef = spawnSync(GIT, ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: resolve(cwd), encoding: "utf-8" });
+        const current = currentRef.stdout.trim();
+        const result = spawnSync(GIT, ["branch", "--merged", defaultBranch], { cwd: resolve(cwd), encoding: "utf-8" });
+        if (result.status !== 0) return jsonResponse(req, res, []);
+        const merged = result.stdout
+          .split("\n")
+          .map((b) => b.replace(/^\*?\s+/, "").trim())
+          .filter((b) => b && b !== defaultBranch && b !== current);
+        return jsonResponse(req, res, merged);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     jsonResponse(req, res, { error: "Not found" }, 404);
   } catch (err) {
     jsonResponse(req, res, { error: err.message }, 500);
@@ -4173,5 +4218,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/pr-files?repo=<path>&pr=<n>`);
   console.log(`    GET  /api/git-remote-info?cwd=<path>`);
+  console.log(`    GET  /api/git-merge-base?cwd=<path>&ref1=<ref>&ref2=<ref>`);
+  console.log(`    POST /api/git-branch-merged  { cwd }`);
   console.log(`    POST /api/check-remote-reachable  { url, timeoutMs }\n`);
 });

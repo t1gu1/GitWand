@@ -317,6 +317,19 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
       <div class="app-header__tabs-spacer"></div>
 
+      <!-- Offline indicator pill (top-right, before Workspace) -->
+      <template v-if="isOffline">
+        <div class="header-separator header-separator--offline" aria-hidden="true"></div>
+        <div class="offline-pill" :title="t('offline.tooltip')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 2l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M9.5 4.5A6 6 0 0114 10M4.1 6.5A6 6 0 003 10M6.5 9.5A2 2 0 019.5 12M8 14v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('offline.label') }}</span>
+        </div>
+        <div class="header-separator header-separator--offline" aria-hidden="true"></div>
+      </template>
+
       <!-- Workspace button -->
       <button
         v-if="hasRepo"
@@ -436,15 +449,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-worktrees="(branch) => emit('openWorktrees', branch)"
             @load-branches="emit('loadBranches')"
           />
-
-          <!-- Offline indicator pill -->
-          <div v-if="isOffline" class="offline-pill" :title="t('offline.tooltip')">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M2 2l12 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M9.5 4.5A6 6 0 0114 10M4.1 6.5A6 6 0 003 10M6.5 9.5A2 2 0 019.5 12M8 14v.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-            </svg>
-            <span>{{ t('offline.label') }}</span>
-          </div>
 
           <!-- BranchMenu + its two piggy-backed popovers.
                The popovers anchor on their own wrappers so the click-outside
@@ -1036,19 +1040,28 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   transform: scale(1.1);
 }
 
-/* ─── Offline pill ───────────────────────────────────── */
+/* ─── Offline pill (in top-right tab bar) ────────────── */
 .offline-pill {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-4);
+  padding: 3px var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
+}
+
+.header-separator--offline {
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
+  flex-shrink: 0;
+  margin-inline: var(--space-1);
 }
 </style>
