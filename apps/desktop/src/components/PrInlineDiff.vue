@@ -164,6 +164,51 @@ interface ComposeLine {
 const composeLine = ref<ComposeLine | null>(null);
 const composeText = ref("");
 
+// ─── Code suggestion editor (v2.13) ──────────────────────
+/**
+ * Suggestion state — reuses ComposeLine to track position.
+ * `suggestText` is pre-filled with the current line content;
+ * the user edits the proposed replacement. On submit the text is
+ * wrapped in a GitHub ` ```suggestion ``` ` block and staged as a
+ * pending review comment (never a direct post).
+ */
+const suggestLine = ref<ComposeLine | null>(null);
+const suggestText = ref("");
+
+function openSuggest(hunkIdx: number, lineIdx: number, dl: DiffLine) {
+  // Suggestions only make sense on the new-file side.
+  if (dl.type === "delete") return;
+  const line = dl.newLineNo ?? 0;
+  suggestLine.value = { hunkIdx, lineIdx, line, side: "RIGHT" };
+  // Pre-fill with the existing line content (strip leading marker spaces).
+  suggestText.value = dl.content.replace(/^\+?/, "");
+  composeLine.value = null; // close regular compose if open
+  composeText.value = "";
+}
+
+function closeSuggest() {
+  suggestLine.value = null;
+  suggestText.value = "";
+}
+
+function submitSuggest() {
+  if (!suggestLine.value || !props.filePath) return;
+  const { line } = suggestLine.value;
+  const suggestionBlock = `\`\`\`suggestion\n${suggestText.value}\n\`\`\``;
+  emit("add-to-review", {
+    path: props.filePath,
+    line,
+    side: "RIGHT",
+    body: suggestionBlock,
+  });
+  closeSuggest();
+}
+
+function isSuggestAnchoredAt(dl: DiffLine): boolean {
+  if (!suggestLine.value) return false;
+  return suggestLine.value.line === dl.newLineNo && dl.type !== "delete";
+}
+
 // Multi-line selection
 const selectionStart = ref<{ line: number; side: "LEFT" | "RIGHT" } | null>(null);
 const selectionEnd = ref<{ line: number; side: "LEFT" | "RIGHT" } | null>(null);
@@ -337,6 +382,17 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
             </div>
             <!-- Content -->
             <div class="pid-content mono" v-html="safeHtml(hl(dl.content)) || '&nbsp;'" />
+            <!-- Suggest button (v2.13) — visible on hover for add/context lines -->
+            <button
+              v-if="dl.type !== 'delete'"
+              class="pid-suggest-btn"
+              :title="t('pr.inline.suggestTooltip')"
+              @click.stop="openSuggest(hunkIdx, lineIdx, dl)"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                <path d="M11 2.5l2.5 2.5L5 13.5H2.5V11L11 2.5z" stroke-linejoin="round"/>
+              </svg>
+            </button>
           </div>
 
           <!-- Comment threads anchored to this line -->
@@ -391,6 +447,48 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
                     :disabled="!composeText.trim()"
                     @click="submitCompose"
                   >{{ t('pr.inline.commentBtn') }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Suggestion editor (v2.13) -->
+          <div
+            v-if="isSuggestAnchoredAt(dl)"
+            class="pid-thread-row pid-suggest-row"
+          >
+            <div class="pid-thread-gutter" />
+            <div class="pid-thread-body">
+              <div class="pid-suggest">
+                <div class="pid-suggest-header">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">
+                    <path d="M11 2.5l2.5 2.5L5 13.5H2.5V11L11 2.5z" stroke-linejoin="round"/>
+                  </svg>
+                  {{ t('pr.inline.suggestTitle') }}
+                  <span class="pid-suggest-hint">{{ t('pr.inline.suggestHint') }}</span>
+                </div>
+                <div class="pid-suggest-preview">
+                  <span class="pid-suggest-fence">```suggestion</span>
+                  <textarea
+                    v-model="suggestText"
+                    class="pid-textarea pid-suggest-textarea mono"
+                    rows="3"
+                    autofocus
+                    @keydown.ctrl.enter.prevent="submitSuggest"
+                    @keydown.meta.enter.prevent="submitSuggest"
+                    @keydown.escape="closeSuggest"
+                  />
+                  <span class="pid-suggest-fence">```</span>
+                </div>
+                <div class="pid-compose-actions">
+                  <button class="pid-cancel-btn" @click="closeSuggest">{{ t('pr.inline.cancel') }}</button>
+                  <button
+                    class="pid-review-btn"
+                    @click="submitSuggest"
+                    :title="reviewDraftCount ? t('pr.inline.addToReviewPending', reviewDraftCount) : t('pr.inline.addToReview')"
+                  >
+                    {{ reviewDraftCount ? t('pr.inline.reviewBtnCount', reviewDraftCount) : t('pr.inline.suggestAddToReview') }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -661,4 +759,94 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
 }
 .pid-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .pid-submit-btn:not(:disabled):hover { filter: brightness(1.1); }
+
+/* ── Suggest button (v2.13) ────────────────────────────── */
+.pid-suggest-btn {
+  flex-shrink: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  margin: 0 4px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.pid-row:hover .pid-suggest-btn {
+  display: flex;
+}
+
+.pid-suggest-btn:hover {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+/* ── Suggestion editor row ──────────────────────────────── */
+.pid-suggest-row {
+  background: var(--color-bg-secondary);
+}
+
+.pid-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pid-suggest-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.pid-suggest-hint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.pid-suggest-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.pid-suggest-fence {
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--color-border);
+  display: block;
+}
+
+.pid-suggest-fence:last-child {
+  border-top: 1px solid var(--color-border);
+  border-bottom: none;
+}
+
+.pid-suggest-textarea {
+  border: none;
+  border-radius: 0;
+  background: var(--color-success-soft);
+}
+
+.pid-suggest-textarea:focus {
+  outline: none;
+  border-color: transparent;
+}
 </style>

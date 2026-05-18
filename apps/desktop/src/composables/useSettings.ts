@@ -46,6 +46,28 @@ export interface CommitTemplate {
   body: string;
 }
 
+/**
+ * Named AI prompt preset for commit message generation (v2.13).
+ *
+ * When a preset is active, its `systemPrompt` replaces the default
+ * Conventional Commits system prompt built by `buildSystemPrompt()`.
+ * The language substitution (`${lang}`) is still applied after injection.
+ */
+export interface AiPromptPreset {
+  /** UUID v4. */
+  id: string;
+  /** Display name shown in the picker, e.g. "Concis", "Emoji", "RFC". */
+  name: string;
+  /** Optional short description shown as a hint in the preset list. */
+  description?: string;
+  /**
+   * Full system prompt sent to the LLM.
+   * Use `${lang}` as a placeholder — it is replaced at generation time with
+   * the resolved language name (e.g. "French", "English").
+   */
+  systemPrompt: string;
+}
+
 export interface AppSettings {
   editor: string;
   gitPath: string;
@@ -136,6 +158,21 @@ export interface AppSettings {
 
   /** Saved commit message templates (v2.12). */
   commitTemplates: CommitTemplate[];
+
+  // ── v2.13 AI & Review ─────────────────────────────────────
+
+  /**
+   * User-defined AI prompt presets for commit message generation (v2.13).
+   * The default Conventional Commits prompt is always available implicitly;
+   * these extend it with named custom prompts.
+   */
+  aiPromptPresets: AiPromptPreset[];
+
+  /**
+   * ID of the active preset per repo (keyed by cwd). Null / absent means
+   * "use the default prompt". Special value "__builtin_*" for built-in presets.
+   */
+  activePresetIdByRepo: Record<string, string | null>;
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -177,6 +214,9 @@ export const defaultAppSettings: AppSettings = {
   activeIdentityId:       null,
   identityOverrideByRepo: {},
   commitTemplates:        [],
+  // v2.13
+  aiPromptPresets:        [],
+  activePresetIdByRepo:   {},
 };
 
 const SETTINGS_KEY = "gitwand-settings";

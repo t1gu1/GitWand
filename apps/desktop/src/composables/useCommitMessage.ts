@@ -19,6 +19,12 @@ export interface CommitMessageOptions {
   locale?: string;
   /** Max number of diff characters sent to the model (default 16k). */
   maxDiffChars?: number;
+  /**
+   * Override the entire system prompt (v2.13 preset system).
+   * The string may contain `${lang}` which is replaced with the resolved language
+   * name (e.g. "French") before being sent to the model.
+   */
+  systemPromptOverride?: string;
 }
 
 export type CommitMessageAction = "shorten" | "detail" | "changeLang";
@@ -118,7 +124,7 @@ export function useCommitMessage() {
     cwd: string,
     options: CommitMessageOptions = {},
   ): Promise<string> {
-    const { locale = "fr", maxDiffChars = 16_000 } = options;
+    const { locale = "fr", maxDiffChars = 16_000, systemPromptOverride } = options;
 
     isGenerating.value = true;
     lastError.value = null;
@@ -172,7 +178,12 @@ export function useCommitMessage() {
       // conflict — but that's ugly. Cleaner: expose a free-form `prompt`
       // call from useAIProvider. For now we go direct via the CLI / HTTP
       // layers by piggybacking on the existing provider config.
-      const systemPrompt = buildSystemPrompt(locale);
+      // Apply preset override if provided, otherwise use the default prompt.
+      // The ${lang} placeholder in preset prompts is substituted at this point.
+      const lang = localeToEnglishName(locale);
+      const systemPrompt = systemPromptOverride
+        ? systemPromptOverride.replace(/\$\{lang\}/g, lang)
+        : buildSystemPrompt(locale);
       const userPrompt = buildUserPrompt(diff, statusRes.stdout ?? "");
 
       // Use the provider's own free-form prompt entry point.

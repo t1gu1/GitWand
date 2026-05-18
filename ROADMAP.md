@@ -769,7 +769,7 @@ Trois problèmes du quotidien résolus sans outil externe : branches qui s'accum
 
 ---
 
-### v2.13.0 — AI & Review
+### ✅ v2.13.0 — AI & Review
 
 Deux extensions du workflow de review déjà en place.
 

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-05-18
+
+v2.13 extends the AI commit workflow with named system-prompt presets and adds inline code suggestions directly in PR diffs.
+
+### Added
+
+- **AI Prompt Presets** — named system-prompt presets for commit message generation; four built-in presets (Default, Concise, Detailed, Emoji/Gitmoji) plus unlimited user-defined presets with a custom `systemPrompt` field; `${lang}` placeholder is substituted with the resolved commit-message language at generation time.
+- **Preset CRUD in Settings → AI** — add, edit, and delete custom presets from a dedicated Presets section in the AI settings tab; built-in presets are read-only (displayed with a "built-in" badge).
+- **Per-repo preset picker** — preset submenu in the commit-zone AI dropdown; active preset is persisted per repo in `AppSettings.activePresetIdByRepo`; selecting "Default" resets to the built-in conventional-commits prompt.
+- **Inline Code Suggestions in PR diffs** — pencil "Suggest" button on every non-delete diff line in `PrInlineDiff`; clicking opens an inline editor pre-filled with the current line content; submitting serializes the change as a GitHub suggestion block (` ```suggestion ``` `) and stages it via the existing `add-to-review` mechanism.
+
+### Technical
+
+- New composable `useAiPromptPresets` — module-level CRUD (`addPreset`, `updatePreset`, `removePreset`, `setActivePreset`) + reactive composable wrapper; built-ins are immutable (id prefix `__builtin_`); stored in `AppSettings.aiPromptPresets`.
+- `CommitMessageOptions.systemPromptOverride` — new optional field on `useCommitMessage.generate()` to inject a custom system prompt (replaces the default conventional-commits prompt); `${lang}` substitution applied.
+- `useCommitMessage.transform()` unchanged — shorten/detail/changeLang transform actions remain independent of presets.
+- 10 new unit tests for `useAiPromptPresets` (all CRUD paths + builtin immutability + repo override).
+
 ## [2.12.0] - 2026-05-18
 
 v2.12 solves three daily workflow friction points: branches that pile up, multiple git identities, and repetitive commit messages.

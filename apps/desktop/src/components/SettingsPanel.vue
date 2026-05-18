@@ -65,7 +65,8 @@ import type { AIProvider } from "../composables/useAIProvider";
 import { useLogs, type LogEntry } from "../composables/useLogs";
 import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
-import type { IdentityProfile, CommitTemplate } from "../composables/useSettings";
+import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
+import type { IdentityProfile, CommitTemplate, AiPromptPreset } from "../composables/useSettings";
 import { gitCommitTemplatePath } from "../utils/backend";
 export type { AIProvider };
 
@@ -141,6 +142,9 @@ interface Settings {
   activeIdentityId: string | null;
   identityOverrideByRepo: Record<string, string>;
   commitTemplates: CommitTemplate[];
+  // v2.13 AI Prompt Presets
+  aiPromptPresets: AiPromptPreset[];
+  activePresetIdByRepo: Record<string, string | null>;
 }
 
 const defaultSettings: Settings = {
@@ -181,6 +185,9 @@ const defaultSettings: Settings = {
   activeIdentityId:       null,
   identityOverrideByRepo: {},
   commitTemplates:        [],
+  // v2.13
+  aiPromptPresets:        [],
+  activePresetIdByRepo:   {},
 };
 
 function loadSettings(): Settings {
@@ -825,6 +832,43 @@ async function doImportFromGitMessage() {
   } finally {
     importingTemplate.value = false;
   }
+}
+
+// ─── v2.13 AI Prompt Presets ─────────────────────────────
+
+const { userPresets, add: addPreset, update: updatePreset, remove: removePreset } = useAiPromptPresets();
+
+const presetForm = ref<{ name: string; description: string; systemPrompt: string }>({
+  name: "", description: "", systemPrompt: "",
+});
+const editingPresetId = ref<string | null>(null);
+const showPresetForm = ref(false);
+
+function openAddPreset() {
+  presetForm.value = { name: "", description: "", systemPrompt: "" };
+  editingPresetId.value = null;
+  showPresetForm.value = true;
+}
+
+function openEditPreset(preset: AiPromptPreset) {
+  presetForm.value = {
+    name: preset.name,
+    description: preset.description ?? "",
+    systemPrompt: preset.systemPrompt,
+  };
+  editingPresetId.value = preset.id;
+  showPresetForm.value = true;
+}
+
+function savePresetForm() {
+  const { name, description, systemPrompt } = presetForm.value;
+  if (!name.trim() || !systemPrompt.trim()) return;
+  if (editingPresetId.value) {
+    updatePreset(editingPresetId.value, { name, description: description || undefined, systemPrompt });
+  } else {
+    addPreset({ name, description: description || undefined, systemPrompt });
+  }
+  showPresetForm.value = false;
 }
 
 </script>
@@ -1625,6 +1669,69 @@ async function doImportFromGitMessage() {
                 />
               </div>
             </template>
+
+            <!-- ─── Prompt Presets (v2.13) ─────────────────── -->
+            <div class="sp-section-divider sp-section-divider--inner"></div>
+            <div class="sp-section-header">{{ t('settings.ai.presets.title') }}</div>
+            <span class="sp-hint">{{ t('settings.ai.presets.hint') }}</span>
+
+            <!-- Built-in presets (non-editable) -->
+            <div class="sp-preset-group-label">{{ t('settings.ai.presets.builtinLabel') }}</div>
+            <div v-for="preset in BUILTIN_PRESETS" :key="preset.id" class="sp-template-row sp-preset-row--builtin">
+              <div class="sp-template-info">
+                <span class="sp-template-name">{{ preset.name }}</span>
+                <span class="sp-template-subject">{{ preset.description }}</span>
+              </div>
+              <span class="sp-preset-builtin-badge">{{ t('settings.ai.presets.builtinBadge') }}</span>
+            </div>
+
+            <!-- User presets -->
+            <div class="sp-preset-group-label">{{ t('settings.ai.presets.customLabel') }}</div>
+            <div v-if="userPresets.length === 0" class="sp-empty-hint">{{ t('settings.ai.presets.empty') }}</div>
+            <div v-for="preset in userPresets" :key="preset.id" class="sp-template-row">
+              <div class="sp-template-info">
+                <span class="sp-template-name">{{ preset.name }}</span>
+                <span class="sp-template-subject">{{ preset.description || '—' }}</span>
+              </div>
+              <div class="sp-identity-actions">
+                <button class="sp-icon-btn" @click="openEditPreset(preset)" :title="t('settings.git.identityEdit')">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z"/></svg>
+                </button>
+                <button class="sp-icon-btn sp-icon-btn--danger" @click="removePreset(preset.id)" :title="t('settings.git.identityDelete')">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Preset add/edit form -->
+            <div v-if="showPresetForm" class="sp-sub-form">
+              <div class="sp-sub-form-row">
+                <input class="sp-input sp-input--sm" v-model="presetForm.name" :placeholder="t('settings.ai.presets.formName')" />
+              </div>
+              <div class="sp-sub-form-row">
+                <input class="sp-input sp-input--sm" v-model="presetForm.description" :placeholder="t('settings.ai.presets.formDescription')" />
+              </div>
+              <div class="sp-sub-form-row">
+                <textarea
+                  class="sp-textarea sp-input--sm mono"
+                  v-model="presetForm.systemPrompt"
+                  :placeholder="t('settings.ai.presets.formPromptPlaceholder')"
+                  rows="7"
+                />
+              </div>
+              <div class="sp-sub-form-hint">{{ t('settings.ai.presets.formLangHint') }}</div>
+              <div class="sp-sub-form-actions">
+                <button class="sp-btn sp-btn--primary sp-btn--sm" @click="savePresetForm" :disabled="!presetForm.name.trim() || !presetForm.systemPrompt.trim()">{{ t('common.save') }}</button>
+                <button class="sp-btn sp-btn--sm" @click="showPresetForm = false">{{ t('common.cancel') }}</button>
+              </div>
+            </div>
+
+            <div v-if="!showPresetForm" class="sp-template-actions">
+              <button class="sp-add-btn" @click="openAddPreset">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
+                {{ t('settings.ai.presets.add') }}
+              </button>
+            </div>
 
             <!-- AI info box -->
             <div class="sp-info-box">
@@ -2668,6 +2775,41 @@ async function doImportFromGitMessage() {
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+/* ── v2.13 Preset styles ──────────────────────────────── */
+.sp-section-divider--inner {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.sp-preset-group-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.sp-preset-row--builtin {
+  opacity: 0.75;
+}
+
+.sp-preset-builtin-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.sp-sub-form-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: calc(var(--space-1) * -1);
 }
 
 </style>

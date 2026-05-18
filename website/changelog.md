@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.13.0 — May 2026
+
+### AI Prompt Presets
+
+Named system-prompt presets let you craft the exact instructions sent to your AI provider when generating commit messages. Four built-in presets are always available — Default (Conventional Commits), Concise (subject line only), Detailed (with mandatory WHY/WHAT body), and Emoji (Gitmoji-style prefix) — and you can add as many custom presets as you like from **Settings → AI → Presets**. A preset picker in the commit-zone AI dropdown makes switching instant; your active preset is remembered per repository.
+
+### Code Suggestions in PR Diffs
+
+Every non-delete line in a PR diff now has a pencil **Suggest** button (visible on hover). Clicking it opens an inline editor pre-filled with the current line; edit the code, hit **Add to review**, and the change is serialized as a GitHub suggestion block (` ```suggestion ``` `). The suggestion lands in your review and the PR author can apply it to their branch in a single click — all without leaving GitWand. (GitHub only in 2.13; GitLab support planned.)
+
+---
+
 ## v2.12.0 — May 2026
 
 ### Archived Branches
