@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-05-18
+
+v2.11 focuses on performance at scale and developer transparency — pagination for large repos, real-time feedback during clones, and full visibility into every git command GitWand runs under the hood.
+
+### Added
+
+- **Transparent command log** — new `⌘⇧L` / `Ctrl+Shift+L` shortcut opens a slide-in panel listing the last 200 git commands executed by GitWand (write operations only: commit, push, pull, fetch, merge, rebase, stash, cherry-pick, branch ops, clone). Each entry shows the command label, working directory (last 2 segments), wall-clock timestamp, execution time in ms, and exit code (green 0 / red non-zero). Implemented as an in-process ring buffer (`VecDeque<CmdLogEntry>`, cap 200, `OnceLock<Mutex<…>>`) in Rust — zero overhead when the panel is closed. New Tauri command `get_command_log`; new composable `useCommandLog` (module-level singleton so panel state survives remounts); new component `CommandLogPanel.vue` (560 px slide-in from right, `slide-right` transition).
+
+- **Real-time clone progress bar** — the Clone modal now shows a live progress bar while `git clone` is running. Git's `--progress` flag writes carriage-return-delimited stage lines to stderr; the Rust `git_clone` command spawns the process, reads raw stderr bytes in 512-byte chunks, splits on `\r`/`\n`, and emits `clone-progress` Tauri events with `{ stage, percent, message }`. The Vue listener maps stages to weighted progress ranges: Counting objects 0–15 %, Compressing 15–25 %, Receiving objects 25–90 %, Resolving deltas 90–100 %. The event listener is cleaned up on unmount.
+
+- **CommitLog pagination with infinite scroll** — the commit log now loads 100 entries at a time instead of a fixed 50. When scrolling within 200 px of the bottom of the log, the next page is fetched via `--skip=N` (Rust side) and appended to the existing list. A sentinel row below the virtualizer shows a spinner while the next page is loading, and disappears once the last page is reached (heuristic: fewer than 100 entries returned). Props `has-more` and `loading-more` thread from `useGitRepo` → `RepoSidebar` → `CommitLog`; emit `load-more` bubbles back up. Debounced with a `_loadMorePending` flag to prevent duplicate fetches during fast scrolling.
+
+- **Fork Point visualization in CommitGraph** — divergence point between the current branch and its upstream is now marked with a distinct node style in the commit graph. The merge-base is detected server-side and surfaced via the existing `git_graph` data; the Vue renderer applies a `fork-point` CSS class to the corresponding node.
+
+### Changed
+
+- **`backend.ts` domain split** — the monolithic `src/utils/backend.ts` (900+ lines) is split into per-domain modules under `src/utils/commands/`: `branch.ts`, `commit.ts`, `diff.ts`, `forge.ts`, `graph.ts`, `index.ts`, `log.ts`, `repo.ts`, `stash.ts`, `tag.ts`, `workspace.ts`. `backend.ts` is now a thin re-export barrel; all existing imports continue to work without changes. This is a refactor only — no behaviour change.
+
+- **`git_log` default page size** — increased from 50 to 100 entries per page (Rust `git_log` command).
+
+### Technical
+
+- New Rust commands: `get_command_log`.
+- New composables: `useCommandLog`.
+- New components: `CommandLogPanel.vue`.
+- Rust `git_log` gains `offset: Option<i32>` parameter (`--skip=N`); parity shim in `lib.rs` passes `None`.
+- TypeScript: zero errors. Tests: 95/95 passing.
+
 ## [2.10.0] - 2026-05-13
 
 v2.10 opens GitWand to the broader forge ecosystem and brings the MCP ecosystem inside the app.

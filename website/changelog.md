@@ -5,6 +5,30 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.11.0 — May 2026
+
+### Transparent command log
+
+Every git command GitWand runs is now visible. Press `⌘⇧L` (macOS) or `Ctrl+Shift+L` to open a slide-in panel showing the last 200 write operations — commit, push, pull, fetch, merge, rebase, stash, cherry-pick, branch ops, clone — with the working directory, wall-clock timestamp, execution time in milliseconds, and exit code (green for success, red for failure). The log lives in a Rust ring buffer (`VecDeque`, cap 200) that accumulates passively while the app runs; opening the panel costs nothing when you don't need it, and gives you instant insight when you're debugging why something misbehaved. No external log file, no extra process.
+
+### Real-time clone progress bar
+
+Cloning a large repo used to mean staring at a spinner for however long it took. The Clone modal now shows a live progress bar backed by git's own `--progress` output. Git writes carriage-return-delimited stage lines to stderr as it works; GitWand reads them as raw bytes, parses the stage and percentage from each line, and emits Tauri events to Vue in real time. The bar advances through four weighted stages: Counting objects (0–15 %), Compressing (15–25 %), Receiving objects (25–90 %), Resolving deltas (90–100 %). The current stage label and raw git message are shown below the bar.
+
+### CommitLog pagination — infinite scroll for large repos
+
+The commit log now loads in pages of 100 rather than a fixed 50-entry snapshot. Scroll within 200 px of the bottom of the log and the next page loads automatically, appended below the existing entries. A small spinner appears in the sentinel row while the next page is fetching; it disappears once you've reached the last commit. On a repo with thousands of commits, the initial load is faster and you only pay for the pages you actually scroll to. Powered by `--skip=N` on the Rust side.
+
+### Fork Point visualization in CommitGraph
+
+The divergence point between the current branch and its upstream is now marked with a distinct node in the commit graph — the merge-base commit where your branch parted ways with the remote. Useful at a glance when you want to know how far you've diverged before a rebase or merge.
+
+### `backend.ts` domain split
+
+The internal TypeScript layer that bridges Vue and Rust has been refactored from a single 900-line file into per-domain modules (`branch`, `commit`, `diff`, `forge`, `graph`, `log`, `repo`, `stash`, `tag`, `workspace`). No behaviour change — `backend.ts` remains a re-export barrel for existing imports — but future additions go into focused, reviewable files instead of a sprawling utility module.
+
+---
+
 ## v2.10.0 — May 2026
 
 ### Forge integrations — GitLab, Bitbucket, multi-account
