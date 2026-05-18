@@ -396,6 +396,7 @@ const ptBR: Locale = {
     summaryPlaceholder: "Resumo (obrigatório)",
     description: "Descrição",
     descriptionPlaceholder: "Descrição (opcional)",
+    templatePicker: "Templates", // TODO: translate
     identityDefault: "Config global",
   },
 
