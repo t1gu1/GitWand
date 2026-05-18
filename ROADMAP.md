@@ -736,7 +736,7 @@ Rend l'écosystème MCP Registry directement navigable depuis GitWand — sans p
 
 ---
 
-### v2.12.0 — Branch Management & Identity
+### ✅ v2.12.0 — Branch Management & Identity
 
 Trois problèmes du quotidien résolus sans outil externe : branches qui s'accumulent, identités multiples, messages de commit répétitifs.
 

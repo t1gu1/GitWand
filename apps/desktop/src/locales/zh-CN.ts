@@ -209,6 +209,7 @@ const zhCN: Locale = {
     aiChangeLang: "切换语言",
     cleanTree: "工作树干净",
     pinnedBranches: "固定分支",
+    archivedBranches: "已归档分支",
     noBranches: "没有分支",
     recentActivity: "近期活动",
     quickActions: "快捷操作",
@@ -393,6 +394,18 @@ const zhCN: Locale = {
     summaryPlaceholder: "概要（必填）",
     description: "描述",
     descriptionPlaceholder: "描述（可选）",
+    identityDefault: "全局配置",
+  },
+
+  // ─── 分支徽章 + 右键菜单 (v2.12) ────────────────────────
+  branch: {
+    merged: "已合并",
+    inactive: "不活跃",
+    moreActions: "更多操作",
+    pin: "固定分支",
+    unpin: "取消固定",
+    archive: "归档分支",
+    unarchive: "取消归档",
   },
 
   date: {
@@ -1022,6 +1035,30 @@ const zhCN: Locale = {
     accountsCancelBtn: "\u53d6\u6d88",
     accountsSaved: "\u8d26\u53f7\u5df2\u4fdd\u5b58\u3002",
     accountsDeleteConfirm: "\u5220\u9664\u6b64\u8d26\u53f7\uff1f",
+    // v2.12
+    git: {
+      inactiveDays: "不活跃阈值（天）",
+      inactiveDaysOff: "关闭",
+      inactiveDaysHint: "超过此天数无提交的分支将显示「不活跃」标签。",
+      identities: "提交身份",
+      identitiesEmpty: "尚未配置身份。",
+      identityEdit: "编辑",
+      identityDelete: "删除",
+      identityLabel: "标签（如工作）",
+      identityName: "Git 名称",
+      identityEmail: "Git 邮箱",
+      identityGpg: "GPG 密钥指纹（可选）",
+      identityAdd: "添加身份",
+      identitySave: "保存",
+      identityCancel: "取消",
+      templates: "提交模板",
+      templatesEmpty: "暂无模板。",
+      templateName: "模板名称",
+      templateSubject: "主题行（${cursor} = 光标位置）",
+      templateBody: "正文（可选）",
+      templateAdd: "添加模板",
+      templateImport: "导入 .gitmessage",
+    },
   },
 
   hooks: {

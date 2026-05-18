@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-05-18
+
+v2.12 solves three daily workflow friction points: branches that pile up, multiple git identities, and repetitive commit messages.
+
+### Added
+
+- **Archived Branches** — archive any branch from its context menu; archived branches move to a collapsible "Archived" section in the dashboard sidebar and are never deleted from git.
+- **Pinned Branches** — user-chosen branch pins replace the former auto-computed top-5 heuristic; pin/unpin via context menu, ordered list persisted per repo.
+- **Branch badges** — "Merged" badge on branches already integrated into the default branch (`git branch --merged`); "Inactive" badge on branches silent for N days (configurable in Settings → Git).
+- **Multiple Committer Identities** — named profiles (label, git name, email, optional GPG key) in Settings → Git → Identities; global default + per-repo override; discrete selector in the commit panel.
+- **Commit Templates** — named templates (subject + body) in Settings → Git → Templates; apply via picker button or `/` autocomplete in the subject field; import from `.gitmessage` via `git config commit.template`.
+
+### Changed
+
+- `git_commit` Rust command accepts optional `identity_name` / `identity_email` params (non-breaking); injects `-c user.name=… -c user.email=…` when an identity is active.
+- Dashboard sidebar branch section now driven by `usePinnedBranches`; falls back to top-5 by activity when no pins are set.
+
+### Technical
+
+- New Rust commands: `git_branch_merged`, `git_config_identity`, `git_commit_template_path`.
+- New composables: `useArchivedBranches`, `usePinnedBranches`, `useIdentity`, `useCommitTemplates` — all state persisted in `AppSettings` via localStorage.
+- i18n: ~28 new keys across `branch.*`, `commit.identityDefault`, `settings.git.*` in all 5 locales.
+- 23 new unit tests (118 total, all green).
+
 ## [2.11.0] - 2026-05-18
 
 v2.11 focuses on performance at scale and developer transparency — pagination for large repos, real-time feedback during clones, and full visibility into every git command GitWand runs under the hood.

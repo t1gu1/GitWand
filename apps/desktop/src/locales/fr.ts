@@ -205,6 +205,7 @@ const fr: Locale = {
     cleanTree: "Espace de travail propre",
     // Dashboard-specific sidebar blocks
     pinnedBranches: "Branches épinglées",
+    archivedBranches: "Branches archivées",
     noBranches: "Aucune branche",
     recentActivity: "Activité récente",
     quickActions: "Actions rapides",
@@ -400,7 +401,20 @@ const fr: Locale = {
     summaryPlaceholder: "R\u00e9sum\u00e9 (requis)",
     description: "Description",
     descriptionPlaceholder: "Description (optionnel)",
+    identityDefault: "Config globale",
   },
+
+  // ─── Badges de branche + menu contextuel (v2.12) ────────
+  branch: {
+    merged: "Mergée",
+    inactive: "Inactive",
+    moreActions: "Plus d'actions",
+    pin: "Épingler la branche",
+    unpin: "Désépingler",
+    archive: "Archiver la branche",
+    unarchive: "Désarchiver la branche",
+  },
+
 
   // ─── Relative dates ─────────────────────────────────────
   date: {
@@ -1045,6 +1059,30 @@ const fr: Locale = {
     accountsCancelBtn: "Annuler",
     accountsSaved: "Compte enregistré.",
     accountsDeleteConfirm: "Supprimer ce compte ?",
+    // v2.12 Onglet Git
+    git: {
+      inactiveDays: "Seuil d'inactivité",
+      inactiveDaysOff: "Désactivé",
+      inactiveDaysHint: "Les branches sans commit depuis ce nombre de jours affichent un badge « Inactive ».",
+      identities: "Identités de commit",
+      identitiesEmpty: "Aucune identité configurée. Ajoutez-en une pour remplacer la config git globale.",
+      identityEdit: "Modifier",
+      identityDelete: "Supprimer",
+      identityLabel: "Libellé (ex. Pro)",
+      identityName: "Nom git",
+      identityEmail: "E-mail git",
+      identityGpg: "Empreinte clé GPG (optionnel)",
+      identityAdd: "Ajouter une identité",
+      identitySave: "Enregistrer",
+      identityCancel: "Annuler",
+      templates: "Templates de commit",
+      templatesEmpty: "Aucun template pour l'instant.",
+      templateName: "Nom du template",
+      templateSubject: "Sujet (${cursor} = position du curseur)",
+      templateBody: "Corps (optionnel)",
+      templateAdd: "Ajouter un template",
+      templateImport: "Importer .gitmessage",
+    },
   },
 
   hooks: {

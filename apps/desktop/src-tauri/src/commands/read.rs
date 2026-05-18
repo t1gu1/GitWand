@@ -1190,3 +1190,117 @@ fn merge_file_preview(
         },
     }
 }
+
+// ─── v2.12 Branch Management & Identity ──────────────────────────────────────
+
+/// Return the names of local branches fully merged into the repo's default branch.
+/// Excludes the current branch and the default branch itself.
+/// Equivalent to `git branch --merged <default_branch> --format="%(refname:short)"`.
+#[tauri::command]
+pub(crate) fn git_branch_merged(cwd: String) -> Result<Vec<String>, String> {
+    use crate::git::cmd::git_cmd;
+
+    // Resolve default branch (main / master / trunk / …)
+    let default_out = git_cmd()
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
+        .current_dir(&cwd)
+        .output();
+    let default_branch = match default_out {
+        Ok(out) if out.status.success() => {
+            // e.g. "origin/main" → "main"
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            s.splitn(2, '/').nth(1).unwrap_or("main").to_string()
+        }
+        _ => "main".to_string(),
+    };
+
+    // Current branch name (to exclude)
+    let cur_out = git_cmd()
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let current_branch = String::from_utf8_lossy(&cur_out.stdout).trim().to_string();
+
+    let output = git_cmd()
+        .args([
+            "branch",
+            "--merged",
+            &default_branch,
+            "--format=%(refname:short)",
+        ])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("git branch --merged failed: {}", e))?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let merged: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|name| !name.is_empty() && name != &default_branch && name != &current_branch)
+        .collect();
+
+    Ok(merged)
+}
+
+/// Return the effective git user.name and user.email for the given repo.
+#[tauri::command]
+pub(crate) fn git_config_identity(cwd: String) -> Result<(String, String), String> {
+    use crate::git::cmd::git_cmd;
+
+    let name_out = git_cmd()
+        .args(["config", "user.name"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| e.to_string())?;
+    let email_out = git_cmd()
+        .args(["config", "user.email"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let name = String::from_utf8_lossy(&name_out.stdout).trim().to_string();
+    let email = String::from_utf8_lossy(&email_out.stdout).trim().to_string();
+
+    if name.is_empty() || email.is_empty() {
+        return Err("git user.name or user.email is not configured".to_string());
+    }
+    Ok((name, email))
+}
+
+/// Return the absolute path of the commit.template configured for the repo,
+/// with ~ expanded to the home directory. Returns null (None) if not set.
+#[tauri::command]
+pub(crate) fn git_commit_template_path(cwd: String) -> Result<Option<String>, String> {
+    use crate::git::cmd::git_cmd;
+
+    let output = git_cmd()
+        .args(["config", "commit.template"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Ok(None); // Not configured — not an error
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+
+    // Expand leading ~
+    let expanded = if raw.starts_with('~') {
+        let home = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .unwrap_or_default();
+        format!("{}{}", home, &raw[1..])
+    } else {
+        raw
+    };
+
+    Ok(Some(expanded))
+}

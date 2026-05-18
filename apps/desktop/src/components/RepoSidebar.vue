@@ -9,6 +9,13 @@ import { useCommitMessage } from "../composables/useCommitMessage";
 import { useAIProvider } from "../composables/useAIProvider";
 import { supportedLocales, localeLabels } from "../locales";
 import { useAbsorb, type AbsorbCandidate } from "../composables/useAbsorb";
+import { useIdentity } from "../composables/useIdentity";
+import { useCommitTemplates } from "../composables/useCommitTemplates";
+import { useArchivedBranches } from "../composables/useArchivedBranches";
+import { usePinnedBranches } from "../composables/usePinnedBranches";
+import type { CommitTemplate } from "../composables/useSettings";
+import { gitBranchMerged } from "../utils/backend";
+import { loadSettings } from "../composables/useSettings";
 
 const props = defineProps<{
   /** Repo directory, used by AI commit message generation. */
@@ -276,6 +283,62 @@ const { isGenerating, lastError: aiError, generate: generateCommitMsg, transform
 const aiMenuOpen = ref(false);
 const aiLangMenuOpen = ref(false);
 
+// ─── v2.12 Identity selector ─────────────────────────────
+
+const { identities, activeIdentity, setActive: setActiveIdentity } = useIdentity(() => props.cwd);
+const identityMenuOpen = ref(false);
+
+function closeIdentityMenu() { identityMenuOpen.value = false; }
+
+function setIdentityFromMenu(id: string | null) {
+  setActiveIdentity(id);
+  identityMenuOpen.value = false;
+}
+
+// ─── v2.12 Template picker ───────────────────────────────
+
+const { templates } = useCommitTemplates();
+const templatePickerOpen = ref(false);
+const templateSlashQuery = ref("");
+const templateSlashOpen = ref(false);
+
+function applyTemplate(tmpl: CommitTemplate) {
+  templatePickerOpen.value = false;
+  templateSlashOpen.value = false;
+  // Strip ${cursor} for the subject; set description to body
+  const subject = tmpl.subject.replace("${cursor}", "");
+  emit("update:commitSummary", subject);
+  if (tmpl.body) emit("update:commitDescription", tmpl.body);
+}
+
+/** Called on every keydown inside the summary input — detects "/" trigger. */
+function onSummaryKeydownForTemplate(e: KeyboardEvent) {
+  const input = e.target as HTMLInputElement;
+  if (e.key === "/" && input.value === "") {
+    templateSlashOpen.value = true;
+    templateSlashQuery.value = "";
+    e.preventDefault();
+    return;
+  }
+  if (templateSlashOpen.value) {
+    if (e.key === "Escape") { templateSlashOpen.value = false; return; }
+    if (e.key === "Backspace" && templateSlashQuery.value === "") {
+      templateSlashOpen.value = false; return;
+    }
+  }
+}
+
+function onSummaryInputForTemplate(e: Event) {
+  if (!templateSlashOpen.value) return;
+  templateSlashQuery.value = (e.target as HTMLInputElement).value.replace(/^\//, "");
+}
+
+const filteredTemplates = computed(() =>
+  templates.value.filter((t) =>
+    t.name.toLowerCase().includes(templateSlashQuery.value.toLowerCase())
+  )
+);
+
 // ─── Trailers ────────────────────────────────────────────
 const trailerSob = ref(false);
 const trailerRbValue = ref("");
@@ -343,12 +406,21 @@ function setCommitMessageLang(lang: string) {
   } catch { /* ignore */ }
 }
 
-/** Close AI menu when clicking outside */
+/** Close AI menu and identity/template menus when clicking outside */
 function onDocClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (!target.closest(".commit-ai-wrapper")) {
     aiMenuOpen.value = false;
     aiLangMenuOpen.value = false;
+  }
+  if (!target.closest(".commit-identity")) {
+    identityMenuOpen.value = false;
+  }
+  if (!target.closest(".commit-template-wrapper")) {
+    templatePickerOpen.value = false;
+  }
+  if (!target.closest(".branch-ctx-menu") && !target.closest(".branch-ctx-trigger")) {
+    closeBranchCtx();
   }
 }
 onMounted(() => document.addEventListener("click", onDocClick));
@@ -465,6 +537,7 @@ function onUnstageClick(e: Event, path: string) {
 }
 
 function onSummaryInput(e: Event) {
+  onSummaryInputForTemplate(e);
   emit("update:commitSummary", (e.target as HTMLInputElement).value);
 }
 
@@ -495,21 +568,117 @@ function onCommitKeydown(e: KeyboardEvent) {
     e.preventDefault();
     if (props.canCommit) emit("commit", buildTrailers());
   }
+  onSummaryKeydownForTemplate(e);
 }
 
 // ─── Dashboard sidebar helpers ────────────────────────────────
-/** Local branches sorted with the current branch first, then by activity. */
+
+// ── v2.12 Pinned + Archived branches ──────────────────────────
+const _pinnedApi  = usePinnedBranches(() => props.cwd);
+const _archivedApi = useArchivedBranches(() => props.cwd);
+
+/** Pinned branches resolved against actual branch list.
+ *  Always shows the current branch first (even if not pinned). */
 const pinnedBranches = computed(() => {
-  const list = (props.branches ?? []).filter((b) => !b.isRemote);
-  return list
-    .slice()
-    .sort((a, b) => {
-      if (a.isCurrent) return -1;
-      if (b.isCurrent) return 1;
-      return (b.ahead + b.behind) - (a.ahead + a.behind);
-    })
-    .slice(0, 5);
+  const localBranches = (props.branches ?? []).filter((b) => !b.isRemote);
+  const pinnedNames   = _pinnedApi.pinned.value;
+  const archivedNames = _archivedApi.archived.value;
+
+  const result: typeof localBranches = [];
+  // Current branch first (always visible)
+  const cur = localBranches.find((b) => b.isCurrent);
+  if (cur) result.push(cur);
+
+  // Then user-pinned (in order), excluding current + archived
+  for (const name of pinnedNames) {
+    const b = localBranches.find((x) => x.name === name && !x.isCurrent && !archivedNames.includes(x.name));
+    if (b) result.push(b);
+  }
+
+  // If no pins at all, fall back to top-5 by activity (backwards-compat)
+  if (pinnedNames.length === 0) {
+    const others = localBranches
+      .filter((b) => !b.isCurrent && !archivedNames.includes(b.name))
+      .sort((a, b) => (b.ahead + b.behind) - (a.ahead + a.behind))
+      .slice(0, 4);
+    result.push(...others);
+  }
+
+  return result;
 });
+
+/** Archived branches resolved against actual branch list. */
+const archivedBranches = computed(() => {
+  const localBranches = (props.branches ?? []).filter((b) => !b.isRemote);
+  const archivedNames = _archivedApi.archived.value;
+  return localBranches.filter((b) => archivedNames.includes(b.name));
+});
+
+const archivedSectionOpen = ref(false);
+
+// ── v2.12 Merged + Inactive badges ────────────────────────────
+const mergedBranchNames = ref<Set<string>>(new Set());
+
+async function loadMergedBranches() {
+  if (!props.cwd) return;
+  try {
+    const names = await gitBranchMerged(props.cwd);
+    mergedBranchNames.value = new Set(names);
+  } catch {
+    mergedBranchNames.value = new Set();
+  }
+}
+
+watch(() => props.cwd, loadMergedBranches, { immediate: true });
+watch(() => props.branches, loadMergedBranches);
+
+function isMergedBranch(name: string): boolean {
+  return mergedBranchNames.value.has(name);
+}
+
+function isInactiveBranch(b: { lastCommitDate?: string }): boolean {
+  const days = loadSettings().inactiveBranchDays;
+  if (!days || !b.lastCommitDate) return false;
+  const ms = Date.now() - new Date(b.lastCommitDate).getTime();
+  return ms > days * 86_400_000;
+}
+
+// ── v2.12 Branch context menu ──────────────────────────────────
+interface BranchCtxMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  branchName: string;
+}
+const branchCtx = ref<BranchCtxMenu>({ visible: false, x: 0, y: 0, branchName: "" });
+
+function openBranchCtx(e: MouseEvent, name: string) {
+  e.preventDefault();
+  e.stopPropagation();
+  branchCtx.value = { visible: true, x: e.clientX, y: e.clientY, branchName: name };
+}
+
+function closeBranchCtx() { branchCtx.value.visible = false; }
+
+function onBranchCtxPin() {
+  _pinnedApi.pin(branchCtx.value.branchName);
+  closeBranchCtx();
+}
+
+function onBranchCtxUnpin() {
+  _pinnedApi.unpin(branchCtx.value.branchName);
+  closeBranchCtx();
+}
+
+function onBranchCtxArchive() {
+  _archivedApi.archive(branchCtx.value.branchName);
+  closeBranchCtx();
+}
+
+function onBranchCtxUnarchive() {
+  _archivedApi.unarchive(branchCtx.value.branchName);
+  closeBranchCtx();
+}
 
 /** Up to 3 most recent commits — shown as a mini-activity feed. */
 const recentActivity = computed(() => props.logEntries.slice(0, 3));
@@ -699,12 +868,25 @@ function formatActivityDate(dateStr: string): string {
         >{{ type }}</button>
       </div>
       <div class="commit-summary-row">
+        <!-- Template slash autocomplete dropdown -->
+        <div v-if="templateSlashOpen && filteredTemplates.length > 0" class="template-slash-dropdown">
+          <div
+            v-for="tmpl in filteredTemplates"
+            :key="tmpl.id"
+            class="template-slash-item"
+            @mousedown.prevent="applyTemplate(tmpl)"
+          >
+            <span class="template-slash-name">{{ tmpl.name }}</span>
+            <span v-if="tmpl.subject" class="template-slash-subject mono">{{ tmpl.subject }}</span>
+          </div>
+        </div>
         <input
           class="commit-summary mono"
           type="text"
           :value="commitSummary"
           @input="onSummaryInput"
           @keydown="onCommitKeydown"
+          @blur="templateSlashOpen = false"
           :placeholder="t('sidebar.summaryPlaceholder')"
         />
         <!-- AI commit message: split-button with dropdown -->
@@ -759,6 +941,30 @@ function formatActivityDate(dateStr: string): string {
               </ul>
             </li>
           </ul>
+        </div>
+        <!-- Template picker button -->
+        <div v-if="templates.length > 0" class="commit-template-wrapper">
+          <button
+            class="commit-template-btn"
+            :title="t('commit.templatePicker')"
+            @click.stop="templatePickerOpen = !templatePickerOpen"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+              <rect x="2" y="3" width="12" height="10" rx="1.5"/>
+              <path d="M5 6h6M5 9h4" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div v-if="templatePickerOpen" class="commit-template-menu" @click.stop>
+            <div
+              v-for="tmpl in templates"
+              :key="tmpl.id"
+              class="commit-template-item"
+              @click="applyTemplate(tmpl)"
+            >
+              <span class="commit-template-name">{{ tmpl.name }}</span>
+              <span v-if="tmpl.subject" class="commit-template-subject mono">{{ tmpl.subject }}</span>
+            </div>
+          </div>
         </div>
       </div>
       <!-- AI error feedback -->
@@ -815,6 +1021,43 @@ function formatActivityDate(dateStr: string): string {
           />
         </template>
       </div>
+      <!-- Identity selector (v2.12) — shown only when profiles exist -->
+      <div v-if="identities.length > 0" class="commit-identity">
+        <button class="commit-identity-btn" @click.stop="identityMenuOpen = !identityMenuOpen">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+            <circle cx="8" cy="6" r="3"/>
+            <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
+          </svg>
+          <span class="commit-identity-name">{{ activeIdentity ? activeIdentity.label : t('commit.identityDefault') }}</span>
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+            <path d="M1.5 3L4 5.5L6.5 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div v-if="identityMenuOpen" class="commit-identity-menu">
+          <div
+            class="commit-identity-item"
+            :class="{ 'commit-identity-item--active': !activeIdentity }"
+            @click="setIdentityFromMenu(null)"
+          >
+            <span>{{ t('commit.identityDefault') }}</span>
+            <svg v-if="!activeIdentity" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div
+            v-for="p in identities"
+            :key="p.id"
+            class="commit-identity-item"
+            :class="{ 'commit-identity-item--active': activeIdentity?.id === p.id }"
+            @click="setIdentityFromMenu(p.id)"
+          >
+            <div class="commit-identity-item-info">
+              <span class="commit-identity-item-label">{{ p.label }}</span>
+              <span class="commit-identity-item-meta mono">{{ p.gitName }} &lt;{{ p.gitEmail }}&gt;</span>
+            </div>
+            <svg v-if="activeIdentity?.id === p.id" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.5L5 9l4.5-6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+
       <div class="commit-actions">
         <button
           class="commit-stage-all"
@@ -928,25 +1171,97 @@ function formatActivityDate(dateStr: string): string {
           {{ t('sidebar.pinnedBranches') }}
         </div>
         <div class="branch-list">
-          <button
+          <div
             v-for="b in pinnedBranches"
             :key="b.name"
             class="branch-item"
             :class="{ 'branch-item--current': b.isCurrent }"
             @click="emit('changeView', 'graph')"
+            @contextmenu="openBranchCtx($event, b.name)"
             :title="b.name"
           >
             <span class="branch-name mono">{{ b.name }}</span>
+            <span class="branch-badges">
+              <span v-if="isMergedBranch(b.name) && !b.isCurrent" class="branch-badge branch-badge--merged">{{ t('branch.merged') }}</span>
+              <span v-else-if="isInactiveBranch(b)" class="branch-badge branch-badge--inactive">{{ t('branch.inactive') }}</span>
+            </span>
             <span class="branch-indicator" v-if="b.ahead > 0 || b.behind > 0">
               <span v-if="b.ahead > 0" class="branch-up">↑{{ b.ahead }}</span>
               <span v-if="b.behind > 0" class="branch-down">↓{{ b.behind }}</span>
             </span>
-          </button>
+            <button
+              class="branch-ctx-trigger"
+              @click.stop="openBranchCtx($event, b.name)"
+              :aria-label="t('branch.moreActions')"
+            >⋯</button>
+          </div>
           <div class="side-empty" v-if="pinnedBranches.length === 0">
             {{ t('sidebar.noBranches') }}
           </div>
         </div>
       </div>
+
+      <!-- Archived branches (collapsible) -->
+      <div class="side-block" v-if="archivedBranches.length > 0">
+        <button class="side-label side-label--toggle" @click="archivedSectionOpen = !archivedSectionOpen">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+          </svg>
+          {{ t('sidebar.archivedBranches') }}
+          <span class="side-label-count">{{ archivedBranches.length }}</span>
+          <svg class="side-label-chevron" :class="{ 'side-label-chevron--open': archivedSectionOpen }"
+            width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="branch-list" v-if="archivedSectionOpen">
+          <div
+            v-for="b in archivedBranches"
+            :key="b.name"
+            class="branch-item branch-item--archived"
+            @contextmenu="openBranchCtx($event, b.name)"
+            :title="b.name"
+          >
+            <span class="branch-name mono">{{ b.name }}</span>
+            <span class="branch-badges">
+              <span v-if="isMergedBranch(b.name)" class="branch-badge branch-badge--merged">{{ t('branch.merged') }}</span>
+              <span v-else-if="isInactiveBranch(b)" class="branch-badge branch-badge--inactive">{{ t('branch.inactive') }}</span>
+            </span>
+            <button
+              class="branch-ctx-trigger"
+              @click.stop="openBranchCtx($event, b.name)"
+              :aria-label="t('branch.moreActions')"
+            >⋯</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Branch context menu (Teleport) -->
+      <Teleport to="body">
+        <div
+          v-if="branchCtx.visible"
+          class="ctx-menu branch-ctx-menu"
+          :style="{ top: branchCtx.y + 'px', left: branchCtx.x + 'px' }"
+          @click.stop
+        >
+          <template v-if="!_archivedApi.isArchived(branchCtx.branchName)">
+            <button class="ctx-item" v-if="!_pinnedApi.isPinned(branchCtx.branchName)" @click="onBranchCtxPin">
+              📌 {{ t('branch.pin') }}
+            </button>
+            <button class="ctx-item" v-else @click="onBranchCtxUnpin">
+              {{ t('branch.unpin') }}
+            </button>
+            <button class="ctx-item" @click="onBranchCtxArchive">
+              {{ t('branch.archive') }}
+            </button>
+          </template>
+          <template v-else>
+            <button class="ctx-item" @click="onBranchCtxUnarchive">
+              {{ t('branch.unarchive') }}
+            </button>
+          </template>
+        </div>
+      </Teleport>
 
       <!-- Recent activity -->
       <div class="side-block" v-if="recentActivity.length > 0">
@@ -2096,9 +2411,9 @@ function formatActivityDate(dateStr: string): string {
 .branch-item {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-md);
   background: none;
@@ -2152,6 +2467,97 @@ function formatActivityDate(dateStr: string): string {
   font-size: var(--font-size-sm);
   color: var(--color-text-subtle);
   text-align: center;
+}
+
+/* ── side-label toggle variant (archived section header) ─ */
+.side-label--toggle {
+  width: 100%;
+  cursor: pointer;
+  background: none;
+  border: none;
+  justify-content: flex-start;
+}
+
+.side-label--toggle:hover {
+  color: var(--color-text);
+}
+
+.side-label-count {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-full, 999px);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-subtle);
+}
+
+.side-label-chevron {
+  margin-left: var(--space-2);
+  transition: transform 0.18s ease;
+}
+
+.side-label-chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ── branch badges ─────────────────────────────────────── */
+.branch-badges {
+  display: flex;
+  gap: 3px;
+}
+
+.branch-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: var(--radius-full, 999px);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.branch-badge--merged {
+  background: color-mix(in srgb, var(--color-success) 15%, transparent);
+  color: var(--color-success);
+}
+
+.branch-badge--inactive {
+  background: color-mix(in srgb, var(--color-warning, #f9e2af) 15%, transparent);
+  color: var(--color-warning, #f9e2af);
+}
+
+/* ── branch context trigger ────────────────────────────── */
+.branch-ctx-trigger {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: opacity var(--transition-hover), background var(--transition-hover);
+}
+
+.branch-item:hover .branch-ctx-trigger {
+  opacity: 1;
+}
+
+.branch-ctx-trigger:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+}
+
+/* ── archived branch style ─────────────────────────────── */
+.branch-item--archived {
+  opacity: 0.65;
+}
+
+.branch-item--archived:hover {
+  opacity: 1;
+  transform: none;
 }
 
 .activity-item {
@@ -2264,6 +2670,230 @@ function formatActivityDate(dateStr: string): string {
   grid-column: 1 / -1;
   justify-content: center;
   text-decoration: none;
+}
+
+/* ── Template slash autocomplete ─────────────────────────────────────────── */
+.template-slash-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 200;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.template-slash-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-hover);
+}
+
+.template-slash-item:hover,
+.template-slash-item:focus {
+  background: var(--color-bg-tertiary);
+  outline: none;
+}
+
+.template-slash-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.template-slash-subject {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Commit template picker ──────────────────────────────────────────────── */
+.commit-template-wrapper {
+  position: relative;
+}
+
+.commit-template-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-hover), color var(--transition-hover);
+  white-space: nowrap;
+}
+
+.commit-template-btn:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+}
+
+.commit-template-btn svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.commit-template-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  z-index: 200;
+  min-width: 220px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.commit-template-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-hover);
+}
+
+.commit-template-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-template-name {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.commit-template-subject {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Commit identity selector ────────────────────────────────────────────── */
+.commit-identity {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.commit-identity-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-3);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  max-width: 160px;
+  transition: background var(--transition-hover), color var(--transition-hover);
+}
+
+.commit-identity-btn:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+}
+
+.commit-identity-btn svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.commit-identity-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-identity-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  min-width: 240px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.commit-identity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-hover);
+}
+
+.commit-identity-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-identity-item--active {
+  background: var(--color-accent-soft);
+}
+
+.commit-identity-item--active:hover {
+  background: var(--color-accent-soft);
+}
+
+.commit-identity-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.commit-identity-item-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.commit-identity-item-meta {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
 

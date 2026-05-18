@@ -79,9 +79,22 @@ pub(crate) fn git_unstage_patch(cwd: String, patch: String) -> Result<(), String
 // ─── Git commit ──────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_commit(cwd: String, message: String) -> Result<String, String> {
+pub(crate) fn git_commit(
+    cwd: String,
+    message: String,
+    identity_name: Option<String>,
+    identity_email: Option<String>,
+) -> Result<String, String> {
     let _t0 = Instant::now();
-    let output = git_cmd()
+    let mut cmd = git_cmd();
+    // Inject identity overrides before the `commit` sub-command so git sees them.
+    if let (Some(ref name), Some(ref email)) = (&identity_name, &identity_email) {
+        if !name.is_empty() && !email.is_empty() {
+            cmd.arg("-c").arg(format!("user.name={}", name))
+               .arg("-c").arg(format!("user.email={}", email));
+        }
+    }
+    let output = cmd
         .args(["commit", "-m", &message])
         .current_dir(&cwd)
         .output()

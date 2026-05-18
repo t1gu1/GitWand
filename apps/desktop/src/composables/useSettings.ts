@@ -20,6 +20,32 @@ export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
 export type LaunchpadTab = "wip" | "prs" | "issues" | "team";
 
+/** Named committer identity — stored in AppSettings, selected per-commit or per-repo (v2.12). */
+export interface IdentityProfile {
+  /** UUID v4 — stable key across renames. */
+  id: string;
+  /** Human label shown in the selector, e.g. "Perso", "Pro", "Client Acme". */
+  label: string;
+  /** git user.name */
+  gitName: string;
+  /** git user.email */
+  gitEmail: string;
+  /** Optional GPG key ID (short, e.g. "A1B2C3D4"). */
+  gpgKey?: string;
+}
+
+/** Named commit message template (v2.12). */
+export interface CommitTemplate {
+  /** UUID v4. */
+  id: string;
+  /** Display name, e.g. "Fix one-liner", "RFC", "ADR". */
+  name: string;
+  /** Subject line. Use ${cursor} to mark caret position after insertion. */
+  subject: string;
+  /** Optional body text. */
+  body: string;
+}
+
 export interface AppSettings {
   editor: string;
   gitPath: string;
@@ -71,6 +97,45 @@ export interface AppSettings {
     /** Suggest an AI commit message when staged files are present at app close. */
     aiCommitBatch: { enabled: boolean };
   };
+
+  // ── v2.12 Branch Management & Identity ────────────────────
+
+  /**
+   * Branches archived by the user, keyed by normalised repo path (cwd).
+   * Archived branches are hidden from the main branch list and shown in a
+   * collapsed "Archivées" section. Never deleted from git — only hidden in GitWand.
+   */
+  archivedBranches: Record<string, string[]>;
+
+  /**
+   * User-chosen pinned branches, keyed by cwd, in display order.
+   * Replaces the former auto-computed top-5-by-activity heuristic.
+   */
+  pinnedBranchesByRepo: Record<string, string[]>;
+
+  /**
+   * Number of days without a commit after which a branch receives an "Inactif"
+   * badge in the sidebar. 0 = disabled. Default: 30.
+   */
+  inactiveBranchDays: number;
+
+  /** Named committer identity profiles (v2.12). */
+  identities: IdentityProfile[];
+
+  /**
+   * ID of the globally active identity profile, or null to use the git
+   * global config (user.name / user.email).
+   */
+  activeIdentityId: string | null;
+
+  /**
+   * Per-repo identity override. Keys are normalised cwd paths; values are
+   * IdentityProfile.id. Takes precedence over activeIdentityId.
+   */
+  identityOverrideByRepo: Record<string, string>;
+
+  /** Saved commit message templates (v2.12). */
+  commitTemplates: CommitTemplate[];
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -104,6 +169,14 @@ export const defaultAppSettings: AppSettings = {
     releaseNotes:   { enabled: false },
     aiCommitBatch:  { enabled: false },
   },
+  // v2.12
+  archivedBranches:       {},
+  pinnedBranchesByRepo:   {},
+  inactiveBranchDays:     30,
+  identities:             [],
+  activeIdentityId:       null,
+  identityOverrideByRepo: {},
+  commitTemplates:        [],
 };
 
 const SETTINGS_KEY = "gitwand-settings";

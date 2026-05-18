@@ -5,6 +5,24 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.12.0 — May 2026
+
+### Archived Branches
+
+Branches accumulate. After a sprint, you can have a dozen old `feat/` and `fix/` branches cluttering the sidebar without adding any signal. Right-click any branch and choose **Archive branch** — it moves to a collapsible "Archived" section at the bottom of the dashboard, out of the way but never deleted from git. A "Merged" badge appears automatically on branches already integrated into your default branch; an "Inactive" badge appears on branches quiet for longer than a configurable threshold (Settings → Git → Inactive branch threshold, off by default). One click to unarchive if you need it back.
+
+### Pinned Branches
+
+The dashboard sidebar used to show the top-5 branches by activity, computed automatically. That heuristic is replaced by explicit user pins. Right-click any branch → **Pin branch** to keep it permanently in the "Pinned branches" section, in the order you choose. Unpin the same way. If you haven't pinned anything yet, the sidebar falls back to the old top-5 behaviour so nothing changes for new users.
+
+### Multiple Committer Identities
+
+If you contribute to open-source projects, work across clients, or maintain a separate personal account, you've had to remember to set `user.name` and `user.email` for each repo. GitWand now lets you save named identity profiles — label, git name, email, and optional GPG key — in **Settings → Git → Identities**. Set one as global default, then override per repo from the same panel. A compact selector at the bottom of the commit panel shows which identity is active and lets you switch without leaving the commit flow.
+
+### Commit Templates
+
+Typing the same conventional commit prefix forty times a week gets old. Add named templates — a subject line and optional body — in **Settings → Git → Templates**. Apply a template from the picker button next to the subject field, or type `/` in an otherwise empty subject field to trigger autocomplete filtered by template name. You can also import your existing `.gitmessage` file with one click — GitWand reads the path from `git config commit.template`, fetches the file, and creates a template from it.
+
 ## v2.11.0 — May 2026
 
 ### Transparent command log

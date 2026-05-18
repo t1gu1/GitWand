@@ -205,6 +205,7 @@ const es: Locale = {
     aiChangeLang: "Cambiar idioma",
     cleanTree: "Árbol de trabajo limpio",
     pinnedBranches: "Ramas fijadas",
+    archivedBranches: "Ramas archivadas",
     noBranches: "Sin ramas",
     recentActivity: "Actividad reciente",
     quickActions: "Acciones rápidas",
@@ -393,7 +394,20 @@ const es: Locale = {
     summaryPlaceholder: "Resumen (obligatorio)",
     description: "Descripción",
     descriptionPlaceholder: "Descripción (opcional)",
+    identityDefault: "Config global",
   },
+
+  // ─── Branch badges + context menu (v2.12) ──────────────
+  branch: {
+    merged: "Fusionada",
+    inactive: "Inactiva",
+    moreActions: "Más acciones",
+    pin: "Fijar rama",
+    unpin: "Desfijar",
+    archive: "Archivar rama",
+    unarchive: "Desarchivar rama",
+  },
+
 
   // ─── Relative dates ─────────────────────────────────────
   date: {
@@ -1034,6 +1048,30 @@ const es: Locale = {
     accountsCancelBtn: "Cancelar",
     accountsSaved: "Cuenta guardada.",
     accountsDeleteConfirm: "¿Eliminar esta cuenta?",
+    // v2.12
+    git: {
+      inactiveDays: "Umbral de inactividad",
+      inactiveDaysOff: "Desactivado",
+      inactiveDaysHint: "Las ramas sin commits durante este número de días mostrarán la insignia “Inactiva”.",
+      identities: "Identidades de commit",
+      identitiesEmpty: "Sin identidades configuradas.",
+      identityEdit: "Editar",
+      identityDelete: "Eliminar",
+      identityLabel: "Etiqueta (ej. Trabajo)",
+      identityName: "Nombre git",
+      identityEmail: "Email git",
+      identityGpg: "Huella GPG (opcional)",
+      identityAdd: "Agregar identidad",
+      identitySave: "Guardar",
+      identityCancel: "Cancelar",
+      templates: "Plantillas de commit",
+      templatesEmpty: "Sin plantillas todavía.",
+      templateName: "Nombre de plantilla",
+      templateSubject: "Asunto ( = posición cursor)",
+      templateBody: "Cuerpo (opcional)",
+      templateAdd: "Agregar plantilla",
+      templateImport: "Importar .gitmessage",
+    },
   },
 
   hooks: {

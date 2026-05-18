@@ -402,6 +402,10 @@ pub fn run() {
             commands::mcp_catalog::mcp_uninstall_server,
             // ── Transparent command log ──
             commands::ops::get_command_log,
+            // ── v2.12 Branch Management & Identity ──
+            commands::read::git_branch_merged,
+            commands::read::git_config_identity,
+            commands::read::git_commit_template_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GitWand");

@@ -63,6 +63,10 @@ export type SwitchBehavior = "stash" | "ask" | "refuse";
 // lives in `useAIProvider`.
 import type { AIProvider } from "../composables/useAIProvider";
 import { useLogs, type LogEntry } from "../composables/useLogs";
+import { useIdentity } from "../composables/useIdentity";
+import { useCommitTemplates } from "../composables/useCommitTemplates";
+import type { IdentityProfile, CommitTemplate } from "../composables/useSettings";
+import { gitCommitTemplatePath } from "../utils/backend";
 export type { AIProvider };
 
 // Re-export for back-compat — earlier callers imported this shape from
@@ -129,6 +133,14 @@ interface Settings {
     releaseNotes: { enabled: boolean };
     aiCommitBatch: { enabled: boolean };
   };
+  // v2.12 Branch Management & Identity
+  archivedBranches: Record<string, string[]>;
+  pinnedBranchesByRepo: Record<string, string[]>;
+  inactiveBranchDays: number;
+  identities: IdentityProfile[];
+  activeIdentityId: string | null;
+  identityOverrideByRepo: Record<string, string>;
+  commitTemplates: CommitTemplate[];
 }
 
 const defaultSettings: Settings = {
@@ -161,6 +173,14 @@ const defaultSettings: Settings = {
     releaseNotes:  { enabled: false },
     aiCommitBatch: { enabled: false },
   },
+  // v2.12
+  archivedBranches:       {},
+  pinnedBranchesByRepo:   {},
+  inactiveBranchDays:     30,
+  identities:             [],
+  activeIdentityId:       null,
+  identityOverrideByRepo: {},
+  commitTemplates:        [],
 };
 
 function loadSettings(): Settings {
@@ -724,6 +744,89 @@ watch(
   { immediate: true },
 );
 
+// ─── v2.12 Identities ────────────────────────────────────
+
+const { identities, add: addIdentity, update: updateIdentity, remove: removeIdentity, setActive: setActiveIdentity } = useIdentity();
+
+const identityForm = ref<{ label: string; gitName: string; gitEmail: string; gpgKey: string }>({
+  label: "", gitName: "", gitEmail: "", gpgKey: "",
+});
+const editingIdentityId = ref<string | null>(null);
+const showIdentityForm = ref(false);
+
+function openAddIdentity() {
+  identityForm.value = { label: "", gitName: "", gitEmail: "", gpgKey: "" };
+  editingIdentityId.value = null;
+  showIdentityForm.value = true;
+}
+
+function openEditIdentity(p: IdentityProfile) {
+  identityForm.value = { label: p.label, gitName: p.gitName, gitEmail: p.gitEmail, gpgKey: p.gpgKey ?? "" };
+  editingIdentityId.value = p.id;
+  showIdentityForm.value = true;
+}
+
+function saveIdentityForm() {
+  const { label, gitName, gitEmail, gpgKey } = identityForm.value;
+  if (!label.trim() || !gitName.trim() || !gitEmail.trim()) return;
+  if (editingIdentityId.value) {
+    updateIdentity(editingIdentityId.value, { label, gitName, gitEmail, gpgKey: gpgKey || undefined });
+  } else {
+    addIdentity({ label, gitName, gitEmail, gpgKey: gpgKey || undefined });
+  }
+  showIdentityForm.value = false;
+}
+
+function deleteIdentity(id: string) {
+  removeIdentity(id);
+}
+
+// ─── v2.12 Commit Templates ──────────────────────────────
+
+const { templates, add: addTemplate, update: updateTemplate, remove: removeTemplate, importFromGit } = useCommitTemplates();
+
+const templateForm = ref<{ name: string; subject: string; body: string }>({
+  name: "", subject: "", body: "",
+});
+const editingTemplateId = ref<string | null>(null);
+const showTemplateForm = ref(false);
+const importingTemplate = ref(false);
+
+function openAddTemplate() {
+  templateForm.value = { name: "", subject: "", body: "" };
+  editingTemplateId.value = null;
+  showTemplateForm.value = true;
+}
+
+function openEditTemplate(tmpl: CommitTemplate) {
+  templateForm.value = { name: tmpl.name, subject: tmpl.subject, body: tmpl.body };
+  editingTemplateId.value = tmpl.id;
+  showTemplateForm.value = true;
+}
+
+function saveTemplateForm() {
+  const { name, subject, body } = templateForm.value;
+  if (!name.trim()) return;
+  if (editingTemplateId.value) {
+    updateTemplate(editingTemplateId.value, { name, subject, body });
+  } else {
+    addTemplate({ name, subject, body });
+  }
+  showTemplateForm.value = false;
+}
+
+async function doImportFromGitMessage() {
+  if (!props.cwd) return;
+  importingTemplate.value = true;
+  try {
+    await importFromGit(props.cwd);
+  } catch {
+    // silent — template path not configured
+  } finally {
+    importingTemplate.value = false;
+  }
+}
+
 </script>
 
 <template>
@@ -986,6 +1089,113 @@ watch(
               <option value="myers">myers</option>
             </select>
             <span class="sp-hint">{{ t('settings.blameAlgorithmHint') }}</span>
+          </div>
+
+          <!-- Inactive branch threshold -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-inactive-days">{{ t('settings.git.inactiveDays') }}</label>
+            <div class="sp-range-row">
+              <input
+                id="setting-inactive-days" class="sp-range" type="range"
+                min="0" max="180" step="7"
+                :value="settings.inactiveBranchDays"
+                @input="updateSetting('inactiveBranchDays', Number(($event.target as HTMLInputElement).value))"
+              />
+              <span class="sp-range-value mono">
+                {{ settings.inactiveBranchDays === 0 ? t('settings.git.inactiveDaysOff') : `${settings.inactiveBranchDays}j` }}
+              </span>
+            </div>
+            <span class="sp-hint">{{ t('settings.git.inactiveDaysHint') }}</span>
+          </div>
+
+          <!-- ── Identités ── -->
+          <div class="sp-section-header">{{ t('settings.git.identities') }}</div>
+
+          <div v-if="identities.length === 0" class="sp-empty-hint">{{ t('settings.git.identitiesEmpty') }}</div>
+          <div v-for="p in identities" :key="p.id" class="sp-identity-row">
+            <div class="sp-identity-info">
+              <span class="sp-identity-label">{{ p.label }}</span>
+              <span class="sp-identity-meta mono">{{ p.gitName }} &lt;{{ p.gitEmail }}&gt;</span>
+              <span v-if="p.gpgKey" class="sp-identity-gpg">GPG: {{ p.gpgKey }}</span>
+            </div>
+            <div class="sp-identity-actions">
+              <button class="sp-icon-btn" @click="openEditIdentity(p)" :title="t('settings.git.identityEdit')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z"/></svg>
+              </button>
+              <button class="sp-icon-btn sp-icon-btn--danger" @click="deleteIdentity(p.id)" :title="t('settings.git.identityDelete')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="showIdentityForm" class="sp-sub-form">
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm" v-model="identityForm.label" :placeholder="t('settings.git.identityLabel')" />
+            </div>
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm" v-model="identityForm.gitName" :placeholder="t('settings.git.identityName')" />
+            </div>
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm" v-model="identityForm.gitEmail" :placeholder="t('settings.git.identityEmail')" type="email" />
+            </div>
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm mono" v-model="identityForm.gpgKey" :placeholder="t('settings.git.identityGpg')" />
+            </div>
+            <div class="sp-sub-form-actions">
+              <button class="sp-btn sp-btn--primary sp-btn--sm" @click="saveIdentityForm">{{ t('common.save') }}</button>
+              <button class="sp-btn sp-btn--sm" @click="showIdentityForm = false">{{ t('common.cancel') }}</button>
+            </div>
+          </div>
+
+          <button v-if="!showIdentityForm" class="sp-add-btn" @click="openAddIdentity">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
+            {{ t('settings.git.identityAdd') }}
+          </button>
+
+          <!-- ── Templates de commit ── -->
+          <div class="sp-section-header">{{ t('settings.git.templates') }}</div>
+
+          <div v-if="templates.length === 0" class="sp-empty-hint">{{ t('settings.git.templatesEmpty') }}</div>
+          <div v-for="tmpl in templates" :key="tmpl.id" class="sp-template-row">
+            <div class="sp-template-info">
+              <span class="sp-template-name">{{ tmpl.name }}</span>
+              <span class="sp-template-subject mono">{{ tmpl.subject || '—' }}</span>
+            </div>
+            <div class="sp-identity-actions">
+              <button class="sp-icon-btn" @click="openEditTemplate(tmpl)" :title="t('settings.git.identityEdit')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z"/></svg>
+              </button>
+              <button class="sp-icon-btn sp-icon-btn--danger" @click="removeTemplate(tmpl.id)" :title="t('settings.git.identityDelete')">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="showTemplateForm" class="sp-sub-form">
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm" v-model="templateForm.name" :placeholder="t('settings.git.templateName')" />
+            </div>
+            <div class="sp-sub-form-row">
+              <input class="sp-input sp-input--sm mono" v-model="templateForm.subject" :placeholder="t('settings.git.templateSubject')" />
+            </div>
+            <div class="sp-sub-form-row">
+              <textarea class="sp-textarea sp-input--sm mono" v-model="templateForm.body" :placeholder="t('settings.git.templateBody')" rows="4" />
+            </div>
+            <div class="sp-sub-form-actions">
+              <button class="sp-btn sp-btn--primary sp-btn--sm" @click="saveTemplateForm">{{ t('common.save') }}</button>
+              <button class="sp-btn sp-btn--sm" @click="showTemplateForm = false">{{ t('common.cancel') }}</button>
+            </div>
+          </div>
+
+          <div v-if="!showTemplateForm" class="sp-template-actions">
+            <button class="sp-add-btn" @click="openAddTemplate">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
+              {{ t('settings.git.templateAdd') }}
+            </button>
+            <button v-if="props.cwd" class="sp-add-btn" @click="doImportFromGitMessage" :disabled="importingTemplate">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v9M4 7l4 4 4-4"/><path d="M2 14h12"/></svg>
+              {{ importingTemplate ? '…' : t('settings.git.templateImport') }}
+            </button>
           </div>
         </template>
 
@@ -2271,6 +2481,193 @@ watch(
 
 .sp-llm-save-btn {
   align-self: flex-start;
+}
+
+/* ── v2.12 section header ── */
+.sp-section-header {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sp-empty-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+  padding: var(--space-2) 0;
+}
+
+/* ── Identity rows ── */
+.sp-identity-row,
+.sp-template-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.sp-identity-info,
+.sp-template-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sp-identity-label,
+.sp-template-name {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.sp-identity-meta,
+.sp-template-subject {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-identity-gpg {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  font-family: monospace;
+}
+
+.sp-identity-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* ── Icon buttons ── */
+.sp-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.sp-icon-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.sp-icon-btn--danger:hover {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+/* ── Sub-form (identity / template creation) ── */
+.sp-sub-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.sp-sub-form-row {
+  display: flex;
+}
+
+.sp-sub-form-actions {
+  display: flex;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.sp-input--sm {
+  width: 100%;
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) var(--space-2);
+  height: 30px;
+}
+
+.sp-textarea {
+  width: 100%;
+  resize: vertical;
+  font-size: var(--font-size-sm);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  outline: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.sp-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-focus-ring);
+}
+
+.sp-textarea.mono {
+  font-family: monospace;
+}
+
+.sp-btn--sm {
+  height: 28px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-sm);
+}
+
+/* ── Add buttons ── */
+.sp-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  height: 28px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-base), color var(--transition-base), background var(--transition-base);
+  margin-top: var(--space-1);
+}
+
+.sp-add-btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.sp-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sp-template-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
 }
 
 </style>

@@ -2721,6 +2721,55 @@ export async function mcpUninstallServer(
   return tauriInvoke<void>("mcp_uninstall_server", { serverKey, configPaths });
 }
 
+// ─── v2.12 Branch Management & Identity ──────────────────────────────────────
+
+/**
+ * Return the names of local branches that are fully merged into the repo's
+ * default branch (equivalent to `git branch --merged <default>`), excluding
+ * the current branch and the default branch itself.
+ */
+export async function gitBranchMerged(cwd: string): Promise<string[]> {
+  if (isTauri()) return tauriInvoke<string[]>("git_branch_merged", { cwd });
+  const res = await devFetch(`${DEV_SERVER}/api/git-branch-merged`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) throw new Error("git_branch_merged failed");
+  return res.json();
+}
+
+/**
+ * Read the git user.name and user.email from the repo's effective git config.
+ * Returns [name, email]. Throws if either is not configured.
+ */
+export async function gitConfigIdentity(cwd: string): Promise<[string, string]> {
+  if (isTauri()) return tauriInvoke<[string, string]>("git_config_identity", { cwd });
+  const res = await devFetch(`${DEV_SERVER}/api/git-config-identity`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) throw new Error("git_config_identity failed");
+  return res.json();
+}
+
+/**
+ * Return the absolute path of the commit.template configured for the repo
+ * (from `git config commit.template`), with ~ expanded. Returns null if not set.
+ */
+export async function gitCommitTemplatePath(cwd: string): Promise<string | null> {
+  if (isTauri()) return tauriInvoke<string | null>("git_commit_template_path", { cwd });
+  const res = await devFetch(`${DEV_SERVER}/api/git-commit-template-path`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.path ?? null;
+}
+
 // ─── Re-exports from per-domain sub-modules (v2.11) ──────────────────────────
 // All 77 existing `import { ... } from './utils/backend'` continue to work.
 // Vite/Rollup tree-shakes these: functions not reachable from the main chunk

@@ -206,6 +206,7 @@ const ptBR: Locale = {
     aiChangeLang: "Mudar idioma",
     cleanTree: "Árvore de trabalho limpa",
     pinnedBranches: "Branches fixados",
+    archivedBranches: "Ramos arquivados",
     noBranches: "Sem branches",
     recentActivity: "Atividade recente",
     quickActions: "Ações rápidas",
@@ -394,7 +395,20 @@ const ptBR: Locale = {
     summaryPlaceholder: "Resumo (obrigatório)",
     description: "Descrição",
     descriptionPlaceholder: "Descrição (opcional)",
+    identityDefault: "Config global",
   },
+
+  // ─── Branch badges + context menu (v2.12) ──────────────
+  branch: {
+    merged: "Mesclada",
+    inactive: "Inativa",
+    moreActions: "Mais ações",
+    pin: "Fixar ramo",
+    unpin: "Desafixar",
+    archive: "Arquivar ramo",
+    unarchive: "Desarquivar ramo",
+  },
+
 
   // ─── Relative dates ─────────────────────────────────────
   date: {
@@ -1034,6 +1048,30 @@ const ptBR: Locale = {
     accountsCancelBtn: "Cancelar",
     accountsSaved: "Conta salva.",
     accountsDeleteConfirm: "Remover esta conta?",
+    // v2.12
+    git: {
+      inactiveDays: "Limite de inatividade",
+      inactiveDaysOff: "Desativado",
+      inactiveDaysHint: "Ramos sem commits por este número de dias exibem o selo “Inativa”.",
+      identities: "Identidades de commit",
+      identitiesEmpty: "Nenhuma identidade configurada.",
+      identityEdit: "Editar",
+      identityDelete: "Excluir",
+      identityLabel: "Rótulo (ex. Trabalho)",
+      identityName: "Nome git",
+      identityEmail: "E-mail git",
+      identityGpg: "Chave GPG (opcional)",
+      identityAdd: "Adicionar identidade",
+      identitySave: "Salvar",
+      identityCancel: "Cancelar",
+      templates: "Modelos de commit",
+      templatesEmpty: "Nenhum modelo ainda.",
+      templateName: "Nome do modelo",
+      templateSubject: "Assunto ( = posição cursor)",
+      templateBody: "Corpo (opcional)",
+      templateAdd: "Adicionar modelo",
+      templateImport: "Importar .gitmessage",
+    },
   },
 
   hooks: {

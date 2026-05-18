@@ -211,6 +211,7 @@ const en = {
     cleanTree: "Working tree clean",
     // Dashboard-specific sidebar blocks
     pinnedBranches: "Pinned branches",
+    archivedBranches: "Archived branches",
     noBranches: "No branches",
     recentActivity: "Recent activity",
     quickActions: "Quick actions",
@@ -406,6 +407,19 @@ const en = {
     summaryPlaceholder: "Summary (required)",
     description: "Description",
     descriptionPlaceholder: "Description (optional)",
+    // v2.12 identity selector
+    identityDefault: "Global config",
+  },
+
+  // ─── Branch badges + context menu (v2.12) ───────────────
+  branch: {
+    merged: "Merged",
+    inactive: "Inactive",
+    moreActions: "More actions",
+    pin: "Pin branch",
+    unpin: "Unpin branch",
+    archive: "Archive branch",
+    unarchive: "Unarchive branch",
   },
 
   // ─── Relative dates ─────────────────────────────────────
@@ -1060,6 +1074,30 @@ const en = {
     accountsCancelBtn: "Cancel",
     accountsSaved: "Account saved.",
     accountsDeleteConfirm: "Remove this account?",
+    // v2.12 Git tab — branch + identity + templates
+    git: {
+      inactiveDays: "Inactive branch threshold",
+      inactiveDaysOff: "Off",
+      inactiveDaysHint: "Branches without commits for this many days will show an “Inactive” badge.",
+      identities: "Committer identities",
+      identitiesEmpty: "No identities configured yet. Add one to override the git global config.",
+      identityEdit: "Edit",
+      identityDelete: "Delete",
+      identityLabel: "Label (e.g. Work)",
+      identityName: "Git name",
+      identityEmail: "Git email",
+      identityGpg: "GPG key fingerprint (optional)",
+      identityAdd: "Add identity",
+      identitySave: "Save",
+      identityCancel: "Cancel",
+      templates: "Commit templates",
+      templatesEmpty: "No templates yet. Add one to speed up your commit flow.",
+      templateName: "Template name",
+      templateSubject: "Subject line (${cursor} = caret position)",
+      templateBody: "Body (optional)",
+      templateAdd: "Add template",
+      templateImport: "Import .gitmessage",
+    },
   },
 
   // \u2500\u2500\u2500 Hooks \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
