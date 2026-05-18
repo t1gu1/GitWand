@@ -201,6 +201,7 @@ const zhCN: Locale = {
     trailerSobHelp: "向提交添加《Signed-off-by: 您的姓名》。证明您有权根将此代码按项目许可证提交（DCO）。部分开源项目要求。",
     trailerRbLabel: "由谁审查",
     trailerRbHelp: "向提交添加《Reviewed-by: 姓名》。记录谁审查并批准了此更改。在 git 历史中可见。",
+    aiLabel: "AI",
     aiGenerateTooltip: "使用 AI 生成提交信息",
     aiGeneratingTooltip: "生成中…",
     aiRegenerate: "重新生成",
@@ -394,6 +395,7 @@ const zhCN: Locale = {
     summaryPlaceholder: "概要（必填）",
     description: "描述",
     descriptionPlaceholder: "描述（可选）",
+    templatePicker: "Templates", // TODO: translate
     identityDefault: "全局配置",
   },
 

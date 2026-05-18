@@ -882,6 +882,7 @@ function formatActivityDate(dateStr: string): string {
         </div>
         <input
           class="commit-summary mono"
+          :class="{ 'commit-summary--ai': ai.isAvailable.value }"
           type="text"
           :value="commitSummary"
           @input="onSummaryInput"
@@ -889,7 +890,7 @@ function formatActivityDate(dateStr: string): string {
           @blur="templateSlashOpen = false"
           :placeholder="t('sidebar.summaryPlaceholder')"
         />
-        <!-- AI commit message: split-button with dropdown -->
+        <!-- AI commit message: overlaid split-button at top-right of summary input -->
         <div v-if="ai.isAvailable.value" class="commit-ai-wrapper">
           <button
             class="commit-ai-btn"
@@ -898,13 +899,11 @@ function formatActivityDate(dateStr: string): string {
             :title="isGenerating ? t('sidebar.aiGeneratingTooltip') : t('sidebar.aiGenerateTooltip')"
             @click="onGenerateCommitMessage"
           >
-            <svg v-if="isGenerating" class="commit-spinner" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <svg v-if="isGenerating" class="commit-spinner" width="12" height="12" viewBox="0 0 14 14" aria-hidden="true">
               <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3"/>
               <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
             </svg>
-            <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 2l1.5 3.5L13 7l-3.5 1.5L8 12l-1.5-3.5L3 7l3.5-1.5L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/>
-            </svg>
+            <span v-else class="commit-ai-label">{{ t('sidebar.aiLabel') }}</span>
           </button>
           <button
             class="commit-ai-chevron"
@@ -1931,6 +1930,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .commit-summary-row {
+  position: relative;
   display: flex;
   gap: var(--space-2);
   align-items: stretch;
@@ -1950,42 +1950,51 @@ function formatActivityDate(dateStr: string): string {
   transition: border-color var(--transition-hover);
 }
 
-.commit-ai-wrapper {
-  position: relative;
-  display: flex;
-  flex-shrink: 0;
+.commit-summary--ai {
+  padding-right: 52px;
 }
 
-/*
- * Split-button: main sparkle action + dropdown chevron for alternative AI
- * actions. We keep the split because the chevron opens a menu — the
- * global `.btn--ai` can't represent that affordance on its own. Color
- * comes from the shared `--color-ai` token so it still reads as "AI"
- * and not "brand accent".
- */
+.commit-ai-wrapper {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  bottom: 3px;
+  display: flex;
+  z-index: 1;
+  border-radius: var(--radius-xs);
+  overflow: visible;
+}
+
 .commit-ai-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  padding: 0 5px;
   background: var(--color-ai-soft);
   color: var(--color-ai);
   border: 1px solid var(--color-ai);
-  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  border-radius: calc(var(--radius-md) - 3px) 0 0 calc(var(--radius-md) - 3px);
   cursor: pointer;
   transition: background var(--transition-hover), border-color var(--transition-hover), color var(--transition-hover);
+}
+
+.commit-ai-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
 .commit-ai-chevron {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
+  width: 14px;
   background: var(--color-ai-soft);
   color: var(--color-ai);
   border: 1px solid var(--color-ai);
   margin-left: -1px;
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-radius: 0 calc(var(--radius-md) - 3px) calc(var(--radius-md) - 3px) 0;
   cursor: pointer;
   transition: background var(--transition-hover), border-color var(--transition-hover);
 }

@@ -197,6 +197,7 @@ const es: Locale = {
     trailerSobHelp: "Añade «Signed-off-by: tu nombre» al commit. Certifica que tienes derecho a enviar este código bajo la licencia del proyecto (DCO). Requerido por algunos proyectos de código abierto.",
     trailerRbLabel: "Revisado por",
     trailerRbHelp: "Añade «Reviewed-by: nombre» al commit. Registra quién revisó y aprobó este cambio. Visible en el historial git.",
+    aiLabel: "IA",
     aiGenerateTooltip: "Generar mensaje con IA",
     aiGeneratingTooltip: "Generando…",
     aiRegenerate: "Regenerar",
@@ -394,6 +395,7 @@ const es: Locale = {
     summaryPlaceholder: "Resumen (obligatorio)",
     description: "Descripción",
     descriptionPlaceholder: "Descripción (opcional)",
+    templatePicker: "Templates", // TODO: translate
     identityDefault: "Config global",
   },
 
