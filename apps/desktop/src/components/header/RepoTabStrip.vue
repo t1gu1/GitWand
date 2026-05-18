@@ -366,7 +366,7 @@ function onCloseClick(e: MouseEvent, tabId: number) {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-muted);

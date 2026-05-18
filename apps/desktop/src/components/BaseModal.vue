@@ -305,7 +305,7 @@ onUnmounted(() => {
   gap: var(--space-2);
   padding: var(--space-3) var(--space-6);
   border: 1px solid transparent;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   line-height: 1;
