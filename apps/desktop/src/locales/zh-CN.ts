@@ -1481,6 +1481,12 @@ const zhCN: Locale = {
     deleteConfirmTitle: "删除标签",
     deleteAlsoRemote: "同时从 {0} 删除",
     deleteConfirm: "删除",
+    retagTitle: "移动标签到…",
+    retagRefLabel: "目标引用（分支、SHA 或 HEAD）",
+    retagRefHint: "留空则移动到 HEAD。如需指定提交，请粘贴其 SHA。",
+    retagMessageLabel: "标签消息（注释标签）",
+    retagForcePush: "强制推送标签到 {0}",
+    retagConfirm: "移动标签",
   },
 
 

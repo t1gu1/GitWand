@@ -1532,6 +1532,12 @@ const en = {
     deleteConfirmTitle: "Delete tag",
     deleteAlsoRemote: "Also delete from {0}",
     deleteConfirm: "Delete",
+    retagTitle: "Move tag to…",
+    retagRefLabel: "Target ref (branch, SHA, or HEAD)",
+    retagRefHint: "Leave empty to move to HEAD. For a specific commit, paste its SHA.",
+    retagMessageLabel: "Tag message (annotated)",
+    retagForcePush: "Force-push tag to {0}",
+    retagConfirm: "Move tag",
   },
 
   // ─── Clone & Fork modals (v2.0) ─────────────────────────

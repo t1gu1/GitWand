@@ -1496,6 +1496,12 @@ const es: Locale = {
     deleteConfirmTitle: "Eliminar tag",
     deleteAlsoRemote: "Eliminar también en {0}",
     deleteConfirm: "Eliminar",
+    retagTitle: "Mover etiqueta a…",
+    retagRefLabel: "Ref destino (rama, SHA o HEAD)",
+    retagRefHint: "Dejar vacío para mover a HEAD. Para un commit específico, pegar su SHA.",
+    retagMessageLabel: "Mensaje de etiqueta (anotada)",
+    retagForcePush: "Forzar push de etiqueta a {0}",
+    retagConfirm: "Mover etiqueta",
   },
 
 

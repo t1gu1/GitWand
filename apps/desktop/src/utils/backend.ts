@@ -1492,6 +1492,31 @@ export async function gitCreateTag(cwd: string, name: string, sha: string, messa
   if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git tag failed: ${res.status}`);
 }
 
+/**
+ * Force-move an existing tag to a different ref.
+ *
+ * For annotated tags: pass the original (or new) `message` to recreate with
+ * `-a -m`. For lightweight tags: omit `message`.
+ * Thin wrapper around `gitExec` — no new Tauri command needed.
+ *
+ * To also update the remote, call `gitPushTags(cwd, remote, "single", name, true)`
+ * (force flag) after this.
+ */
+export async function gitRetagTo(
+  cwd: string,
+  name: string,
+  ref: string,
+  message?: string,
+): Promise<void> {
+  const args = message
+    ? ["tag", "-f", "-a", name, ref, "-m", message]
+    : ["tag", "-f", name, ref];
+  const result = await gitExec(cwd, args);
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr?.trim() || `git tag -f failed (exit ${result.exitCode})`);
+  }
+}
+
 // ─── Tags manager (v1.9) ───────────────────────────────────
 
 export interface GitTag {
@@ -1557,6 +1582,17 @@ export async function gitPushTags(
     body: JSON.stringify({ cwd, remote, mode, tagName }),
   });
   if (!res.ok) throw new Error(((await res.json()) as any).error ?? `git push-tags failed: ${res.status}`);
+}
+
+/**
+ * Force-push a single tag to the remote (`git push --force <remote> refs/tags/<name>`).
+ * Used after `gitRetagTo` to overwrite the remote tag pointer.
+ */
+export async function gitForcePushTag(cwd: string, remote: string, name: string): Promise<void> {
+  const result = await gitExec(cwd, ["push", "--force", remote, `refs/tags/${name}`]);
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr?.trim() || `git push --force tag failed (exit ${result.exitCode})`);
+  }
 }
 
 export async function gitDeleteRemoteTag(cwd: string, remote: string, name: string): Promise<void> {

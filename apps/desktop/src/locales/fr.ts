@@ -1508,6 +1508,12 @@ const fr: Locale = {
     deleteConfirmTitle: "Supprimer le tag",
     deleteAlsoRemote: "Supprimer aussi sur {0}",
     deleteConfirm: "Supprimer",
+    retagTitle: "Déplacer le tag vers…",
+    retagRefLabel: "Ref cible (branche, SHA ou HEAD)",
+    retagRefHint: "Laisser vide pour déplacer vers HEAD. Pour un commit précis, coller son SHA.",
+    retagMessageLabel: "Message du tag (annoté)",
+    retagForcePush: "Forcer le push du tag vers {0}",
+    retagConfirm: "Déplacer le tag",
   },
 
 

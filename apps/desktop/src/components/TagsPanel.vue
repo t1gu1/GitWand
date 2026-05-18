@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, type GitTag } from "../utils/backend";
+import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, type GitTag } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import BaseModal from "./BaseModal.vue";
 
@@ -23,6 +23,13 @@ const remoteName = ref("origin");
 const busyTag = ref<string | null>(null);   // name of tag currently being acted on
 const busyPushAll = ref(false);
 const confirmDelete = ref<{ name: string; withRemote: boolean } | null>(null);
+const retagDialog = ref<{
+  name: string;
+  isAnnotated: boolean;
+  ref: string;
+  message: string;
+  forcePush: boolean;
+} | null>(null);
 
 // ─── Load ────────────────────────────────────────────────
 async function load() {
@@ -91,6 +98,35 @@ async function pushTag(name: string) {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "single", name);
+  } catch (err: any) {
+    error.value = err?.message ?? String(err);
+  } finally {
+    busyTag.value = null;
+  }
+}
+
+function openRetagDialog(tag: GitTag) {
+  retagDialog.value = {
+    name: tag.name,
+    isAnnotated: tag.isAnnotated,
+    ref: "HEAD",
+    message: tag.message ?? "",
+    forcePush: hasRemote.value,
+  };
+}
+
+async function confirmRetag() {
+  if (!retagDialog.value) return;
+  const { name, isAnnotated, ref, message, forcePush } = retagDialog.value;
+  busyTag.value = name;
+  error.value = null;
+  try {
+    await gitRetagTo(props.cwd, name, ref.trim() || "HEAD", isAnnotated ? message : undefined);
+    if (forcePush && hasRemote.value) {
+      await gitForcePushTag(props.cwd, remoteName.value, name);
+    }
+    retagDialog.value = null;
+    await load();
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -183,6 +219,18 @@ async function pushAllTags() {
           </div>
         </div>
         <div class="tp-item-actions">
+          <!-- Retag: move tag to a different ref -->
+          <button
+            class="tp-action-btn"
+            :disabled="busyTag === tag.name"
+            :title="t('tags.retagTitle')"
+            @click="openRetagDialog(tag)"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 8h9M8 5l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="13" cy="8" r="1.5" fill="currentColor" stroke="none"/>
+            </svg>
+          </button>
           <button
             v-if="hasRemote"
             class="tp-action-btn"
@@ -208,6 +256,52 @@ async function pushAllTags() {
         </div>
       </li>
     </ul>
+
+    <!-- Retag dialog -->
+    <BaseModal
+      v-if="retagDialog"
+      :title="t('tags.retagTitle')"
+      :subtitle="retagDialog.name"
+      size="sm"
+      @close="retagDialog = null"
+    >
+      <div class="tp-form">
+        <label class="tp-form-label">{{ t('tags.retagRefLabel') }}</label>
+        <input
+          v-model="retagDialog.ref"
+          class="tp-form-input"
+          placeholder="HEAD"
+          autofocus
+          @keydown.enter="confirmRetag"
+          @keydown.escape="retagDialog = null"
+        />
+        <p class="tp-form-hint">{{ t('tags.retagRefHint') }}</p>
+
+        <template v-if="retagDialog.isAnnotated">
+          <label class="tp-form-label">{{ t('tags.retagMessageLabel') }}</label>
+          <textarea
+            v-model="retagDialog.message"
+            class="tp-form-textarea"
+            rows="3"
+          />
+        </template>
+
+        <label v-if="hasRemote" class="tp-check-label tp-check-label--warn">
+          <input type="checkbox" v-model="retagDialog.forcePush" />
+          <span>{{ t('tags.retagForcePush', remoteName) }}</span>
+        </label>
+      </div>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="retagDialog = null">{{ t('common.cancel') }}</button>
+        <button
+          class="bm-btn bm-btn--primary"
+          :disabled="busyTag === retagDialog.name"
+          @click="confirmRetag"
+        >
+          {{ busyTag === retagDialog.name ? t('common.loading') : t('tags.retagConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
 
     <!-- Delete confirmation sub-modal -->
     <BaseModal
@@ -421,12 +515,58 @@ async function pushAllTags() {
   border-left: 3px solid var(--color-danger, #ef4444);
 }
 
-/* ─── Delete confirm ────────────────────────────────────── */
+/* ─── Retag / Delete forms ──────────────────────────────── */
 .tp-check-label {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   font-size: var(--font-size-sm);
   cursor: pointer;
+}
+
+.tp-check-label--warn {
+  color: var(--color-warning, #f59e0b);
+  margin-top: var(--space-3);
+}
+
+.tp-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tp-form-label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  margin-top: var(--space-2);
+}
+
+.tp-form-input,
+.tp-form-textarea {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  resize: vertical;
+}
+
+.tp-form-input:focus,
+.tp-form-textarea:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.tp-form-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: 0;
 }
 </style>

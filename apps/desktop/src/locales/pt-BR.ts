@@ -1496,6 +1496,12 @@ const ptBR: Locale = {
     deleteConfirmTitle: "Excluir tag",
     deleteAlsoRemote: "Excluir também em {0}",
     deleteConfirm: "Excluir",
+    retagTitle: "Mover tag para…",
+    retagRefLabel: "Ref alvo (branch, SHA ou HEAD)",
+    retagRefHint: "Deixe vazio para mover para HEAD. Para um commit específico, cole seu SHA.",
+    retagMessageLabel: "Mensagem da tag (anotada)",
+    retagForcePush: "Forçar push da tag para {0}",
+    retagConfirm: "Mover tag",
   },
 
 
