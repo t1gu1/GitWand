@@ -46,7 +46,7 @@ type TabId = 'core' | 'power' | 'ai' | 'new'
 const activeTab = ref<TabId>('core')
 
 // Jump to "new" tab and smooth-scroll the features section into view —
-// used by the "New in v2.9" highlight banner CTA.
+// used by the "What's New" highlight banner CTA.
 function jumpToNewTab(): void {
   activeTab.value = 'new'
   // Defer to next tick so the panel content has rendered before scrolling
@@ -764,21 +764,23 @@ const i18n: Record<Locale, any> = {
     pillar3Stat: 'Claude · OpenAI · Ollama',
     pillar3StatLabel: '你的 LLM,你的密钥',
     pillar3Cta: 'AI fallback 指南 →',
-    // 5 new features (v2.5 → v2.9)
+    // 最新特性标签页 (v2.9 → v2.13)
     featLaunchpad: 'Launchpad — 跨仓库仪表盘',
     featLaunchpadDesc: '聚合 workspace 中所有仓库的 PR、issues、WIP 和团队动态。固定、暂缓、Team 懒加载。从任意位置按 ⌘L 唤起。',
     featLlmFallback: '复杂 hunk 的 LLM fallback',
     featLlmFallbackDesc: '通过 Claude / OpenAI / Ollama / MCP 进行可选解析。与确定性模式走同一条 parse-tree 校验管线。附带决策追踪与拒绝按钮。',
-    featWorkspaces: '多仓库工作区',
-    featWorkspacesDesc: '按项目、客户或小队对仓库分组。一键 fetch all、pull all、status all。Local-first — 无云,无账号。',
-    featOffline: '离线模式',
-    featOfflineDesc: '基于 probe 的连通性检测。网络操作优雅降级,本地操作持续可用。告别无限旋转的 spinner。',
-    featLogs: '应用内错误日志',
-    featLogsDesc: '错误不再霸占头部。在 Settings 中浏览 500 条带时间戳的日志,状态栏附带未读计数指示。',
-    // "New in v2.9" highlight banner
-    newReleaseBadge: 'v2.9 新特性',
-    newReleaseTitle: 'Launchpad — 一眼看尽你的 workspace',
-    newReleaseSub: '跨仓库 PR、issues、WIP 与团队动态汇聚在一个全屏视图。固定重要内容,暂缓其他,识别与队友的重叠工作。',
+    featForge: 'GitHub、GitLab 与 Bitbucket',
+    featForgeDesc: '三大 forge 的原生 PR 支持，自动检测远端并选择正确的提供商。账号在设置中统一管理，无需按仓库重复验证。',
+    featBranchMgmt: '分支管理：置顶、归档、身份',
+    featBranchMgmtDesc: '将最常用的分支置顶显示。按可配置阈值归档已合并或不活跃的分支。按仓库设置提交者身份 — 个人与工作仓库使用不同邮箱。',
+    featIdentities: '提交模板与约定式提交',
+    featIdentitiesDesc: '为每个仓库配置提交模板，打开时自动加载。通过内置选择器选择约定式提交前缀（feat、fix、docs…）。',
+    featAISuggest: '内联 AI 代码建议',
+    featAISuggestDesc: '在 Review 面板中选择任意 hunk，请求针对性重写，一键接受 AI 建议。提示词预设为所有 AI 功能即时注入上下文。',
+    // 最新特性横幅
+    newReleaseBadge: 'v2.13 新特性',
+    newReleaseTitle: '内联 AI 代码审查 — 直接在 PR diff 中',
+    newReleaseSub: '在 Review 面板中选择一个 hunk，请求针对性重写，一键接受。提示词预设为每项 AI 功能即时注入上下文。',
     newReleaseCta: '查看新特性',
     faqTitle: '常见问题',
     faqItems: [
@@ -1105,7 +1107,7 @@ function cellClass(v: CompareValue | undefined): string {
     </section>
 
     <!-- ══════════════════════════════════════
-         "NEW IN v2.9" HIGHLIGHT BANNER — drives traffic to the "new" tab
+         WHAT'S NEW HIGHLIGHT BANNER — drives traffic to the "new" tab
     ══════════════════════════════════════ -->
     <section class="hl-new-release">
       <div class="hl-new-release__inner">
@@ -1115,7 +1117,7 @@ function cellClass(v: CompareValue | undefined): string {
           <p class="hl-new-release__sub">{{ t.newReleaseSub }}</p>
         </div>
         <div class="hl-new-release__cta">
-          <a class="hl-new-release__link" href="/blog/v2-9-launchpad" @click.prevent="jumpToNewTab">
+          <a class="hl-new-release__link" href="/changelog" @click.prevent="jumpToNewTab">
             {{ t.newReleaseCta }} →
           </a>
         </div>
@@ -1223,55 +1225,43 @@ function cellClass(v: CompareValue | undefined): string {
             </div>
           </div>
 
-          <!-- New in v2.9 tab — 5 new features shipped since the homepage was last refreshed -->
+          <!-- What's New tab — 6 highlights from v2.9 → v2.13 -->
           <div v-else-if="activeTab === 'new'" key="new" class="features-grid" role="tabpanel">
+            <!-- AI inline code suggestions — v2.13 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.13</div>
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 9h4M7 12h6M15 12l2 2-2 2"/><path d="M8 21h8M12 17v4"/></svg></div>
+              <h3>{{ t.featAISuggest }}</h3><p>{{ t.featAISuggestDesc }}</p>
+            </div>
+            <!-- Forge integrations — v2.10 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.10</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v4M10.3 14.5L6.8 17M13.7 14.5l3.5 2.5M10 11h4"/></svg></div>
+              <h3>{{ t.featForge }}</h3><p>{{ t.featForgeDesc }}</p>
+            </div>
+            <!-- Branch management — v2.12 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.12</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M6 8v8M18 6a4 4 0 00-4 4v4a4 4 0 008 0v-1"/><path d="M15 3l3 3-3 3"/></svg></div>
+              <h3>{{ t.featBranchMgmt }}</h3><p>{{ t.featBranchMgmtDesc }}</p>
+            </div>
+            <!-- Commit templates & identities — v2.12 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.12</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M8 13h3M8 16h5M16 13l1.5 1.5L20 12"/></svg></div>
+              <h3>{{ t.featIdentities }}</h3><p>{{ t.featIdentitiesDesc }}</p>
+            </div>
             <!-- Launchpad — v2.9 -->
             <div class="feat-card feat-card--new">
               <div class="feat-badge">v2.9</div>
               <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
               <h3>{{ t.featLaunchpad }}</h3><p>{{ t.featLaunchpadDesc }}</p>
             </div>
-            <!-- LLM fallback — v2.5 / v2.8.3 -->
+            <!-- LLM fallback — v2.5 -->
             <div class="feat-card feat-card--new">
               <div class="feat-badge">v2.5</div>
-              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/><path d="M5 14l.6 1.8L7.4 16l-1.8.6L5 18.4 4.4 16.6 2.6 16l1.8-.6L5 14z"/></svg></div>
+              <div class="feat-icon feat-icon--ai"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5L12 2z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8L19 14z"/></svg></div>
               <h3>{{ t.featLlmFallback }}</h3><p>{{ t.featLlmFallbackDesc }}</p>
-            </div>
-            <!-- Workspaces — v2.7 -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v2.7</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6a1.5 1.5 0 011.5-1.5h3.6l1.5 2H14a1.5 1.5 0 011.5 1.5v2H3V6z"/><path d="M5 10h16l-1.5 9.5A1.5 1.5 0 0118 21H7a1.5 1.5 0 01-1.5-1.3L4 10z"/><path d="M9 14.5h6"/></svg></div>
-              <h3>{{ t.featWorkspaces }}</h3><p>{{ t.featWorkspacesDesc }}</p>
-            </div>
-            <!-- Offline mode — v2.8.4 -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v2.8</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M8.5 16.5a5 5 0 017 0"/><path d="M5 12.5a10 10 0 019-2.7"/><path d="M2 9a15 15 0 015-3"/><path d="M22 9a15 15 0 00-5.5-3.1"/><circle cx="12" cy="20" r="1"/></svg></div>
-              <h3>{{ t.featOffline }}</h3><p>{{ t.featOfflineDesc }}</p>
-            </div>
-            <!-- Logs panel — v2.8.4 -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v2.8</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg></div>
-              <h3>{{ t.featLogs }}</h3><p>{{ t.featLogsDesc }}</p>
-            </div>
-            <!-- Image diff — v1.6 (recent enough to live here) -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v1.6</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8"/><rect x="9" y="8" width="12" height="12" rx="1.5" stroke="#7C3AED" stroke-width="1.8" fill="rgba(124,58,237,0.08)"/><circle cx="7" cy="8" r="1.2" fill="#7C3AED"/></svg></div>
-              <h3>{{ t.featImgDiff }}</h3><p>{{ t.featImgDiffDesc }}</p>
-            </div>
-            <!-- Perf hardening — v2.8.2 -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v2.8</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-              <h3>{{ t.featPerf }}</h3><p>{{ t.featPerfDesc }}</p>
-            </div>
-            <!-- 3 interfaces — design refresh -->
-            <div class="feat-card feat-card--new">
-              <div class="feat-badge">v2.9</div>
-              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="#7C3AED" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-              <h3>{{ t.featUI }}</h3><p>{{ t.featUIDesc }}</p>
             </div>
           </div>
         </Transition>
