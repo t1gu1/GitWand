@@ -304,7 +304,7 @@ const hasBranch = computed(() => !!props.currentBranch);
 .branch-menu__panel {
   position: absolute;
   top: calc(100% + var(--space-3));
-  right: 0;
+  left: 0;
   min-width: 240px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
