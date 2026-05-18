@@ -85,6 +85,8 @@ const emit = defineEmits<{
   "select-dir-file": [path: string];
   /** Discard changes to a file (tracked: restore, untracked: delete) */
   discard: [path: string, section: string];
+  /** Discard all changes in a section */
+  discardSection: [sectionKey: string, paths: string[]];
   /** Append file path to .gitignore */
   addToGitignore: [path: string];
   /** Request a full repo state refresh (after absorb, etc.) */
@@ -761,7 +763,22 @@ function formatActivityDate(dateStr: string): string {
             </span>
             <span class="section-label">{{ sectionMeta[sectionKey].label }}</span>
             <span class="section-count">{{ sections[sectionKey].length }}</span>
-            <!-- Stage all / Unstage all buttons -->
+            <span class="section-spacer"></span>
+            <!-- Discard all / Stage all / Unstage all buttons -->
+            <button
+              v-if="sectionKey === 'staged' || sectionKey === 'unstaged' || sectionKey === 'untracked'"
+              class="section-action section-action--danger"
+              @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
+              :title="t('sidebar.discardAll')"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/>
+                <path d="M14 11v6"/>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
             <button
               v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
               class="section-action"
@@ -1737,6 +1754,7 @@ function formatActivityDate(dateStr: string): string {
   padding: var(--space-4) var(--space-6);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
+  line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-text-muted);
@@ -1754,15 +1772,18 @@ function formatActivityDate(dateStr: string): string {
   text-align: center;
 }
 
-.section-label {
+.section-spacer {
   flex: 1;
 }
 
 .section-count {
   font-variant-numeric: tabular-nums;
   background: var(--color-bg-tertiary);
-  padding: var(--space-1) var(--space-3);
+  padding: 0 var(--space-3);
   border-radius: var(--radius-pill);
+  height: 16px;
+  display: flex;
+  align-items: center;
 }
 
 .section-action {
@@ -1775,6 +1796,7 @@ function formatActivityDate(dateStr: string): string {
   font-family: var(--font-mono);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
+  line-height: 1;
   color: var(--color-text-muted);
   background: none;
   transition: background var(--transition-hover), color var(--transition-hover);
@@ -1783,6 +1805,11 @@ function formatActivityDate(dateStr: string): string {
 .section-action:hover {
   background: var(--color-bg-tertiary);
   color: var(--color-text);
+}
+
+.section-action--danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  color: var(--color-danger);
 }
 
 .file-items {

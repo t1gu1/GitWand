@@ -168,6 +168,8 @@ const es: Locale = {
     sectionUntracked: "Sin seguimiento",
     stageAll: "Preparar todo",
     unstageAll: "Quitar todo de preparados",
+    discardAll: "Descartar todo",
+    discardAllConfirm: "¿Descartar {0} archivo(s)? Esta acción no se puede deshacer.",
     stage: "Preparar",
     unstage: "Quitar de preparados",
     stageAllButton: "Preparar todo ({0})",

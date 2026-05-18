@@ -172,6 +172,8 @@ const zhCN: Locale = {
     sectionUntracked: "未跟踪",
     stageAll: "全部暂存",
     unstageAll: "全部取消暂存",
+    discardAll: "全部丢弃",
+    discardAllConfirm: "丢弃 {0} 个文件？此操作无法撤销。",
     stage: "暂存",
     unstage: "取消暂存",
     stageAllButton: "全部暂存 ({0})",

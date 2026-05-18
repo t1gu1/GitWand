@@ -165,6 +165,8 @@ const fr: Locale = {
     // Actions
     stageAll: "Tout indexer",
     unstageAll: "Tout désindexer",
+    discardAll: "Tout supprimer",
+    discardAllConfirm: "Supprimer {0} fichier(s) ? Cette action est irréversible.",
     stage: "Indexer",
     unstage: "Désindexer",
     // Commit panel

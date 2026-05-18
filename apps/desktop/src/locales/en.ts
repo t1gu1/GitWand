@@ -172,6 +172,8 @@ const en = {
     // Actions
     stageAll: "Stage all",
     unstageAll: "Unstage all",
+    discardAll: "Discard all",
+    discardAllConfirm: "Discard all {0} file(s)? This cannot be undone.",
     stage: "Stage",
     unstage: "Unstage",
     // Commit panel
