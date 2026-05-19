@@ -350,11 +350,20 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             stroke-dasharray="2,2"
           />
           <!-- Trunk commit (main/master): star icon (v2.13) -->
-          <path
-            v-else-if="nodeKind(node) === 'trunk'"
-            :d="starPath(cx(node.lane), cy(node.index))"
-            fill="url(#trunk-gradient-stroke)"
-          />
+          <template v-else-if="nodeKind(node) === 'trunk'">
+            <!-- The Shadow: slightly larger, offset, and semi-transparent with blur -->
+            <path
+              :d="starPath(cx(node.lane), cy(node.index) - 0.2)"
+              fill="rgba(0,0,0,0.5)"
+              style="transform: scale(1.5); transform-origin: center; transform-box: fill-box; filter: blur(1px);"
+            />
+
+            <!-- The Star -->
+            <path
+              :d="starPath(cx(node.lane), cy(node.index))"
+              fill="url(#trunk-gradient-stroke)"
+            />
+          </template>
           <!-- Merge commit: solid filled, slightly larger circle -->
           <circle
             v-else-if="nodeKind(node) === 'merge'"
