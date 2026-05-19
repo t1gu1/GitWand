@@ -70,8 +70,8 @@ export function computeDagLayout(
   const hashToLane = new Map<string, number>();
   const freeLanes: number[] = [];
   let lanesAllocated = 0;
-  // Reference-count per lane. A lane only enters freeLanes when its count
-  // drops to 0. freeLanes may contain stale entries (re-claimed lanes) —
+  // Reference-count per lane. A lane only enters the cooldown queue when its
+  // count drops to 0. freeLanes may contain stale entries (re-claimed lanes) —
   // allocLane skips them via the !lanePendingCount.has() guard.
   const lanePendingCount = new Map<number, number>();
   // Edge-duration reservations: when an edge is created from child (lane X)
@@ -79,6 +79,12 @@ export function computeDagLayout(
   // sibling branches from reusing the same column while a longer edge is
   // still visually traversing it.
   const parentReservations = new Map<string, number[]>();
+  // Cooldown: after a lane's last edge terminates, wait this many rows before
+  // allowing reuse. Prevents two unrelated branches from appearing on the same
+  // column with less than 3 commits of visual gap between them.
+  const LANE_REUSE_COOLDOWN = 3;
+  // cooldownMap[row] = list of lanes that become free at that row.
+  const cooldownMap = new Map<number, number[]>();
   let maxLane = 0;
 
   function allocLane(): number {
@@ -95,21 +101,26 @@ export function computeDagLayout(
     if (lane > maxLane) maxLane = lane;
   }
 
-  function releaseRef(lane: number): void {
+  function releaseRef(lane: number, row: number): void {
     const n = (lanePendingCount.get(lane) ?? 1) - 1;
     if (n <= 0) {
       lanePendingCount.delete(lane);
-      freeLanes.push(lane);
+      // Schedule reuse after cooldown rows so visually adjacent branches
+      // don't share a column with fewer than LANE_REUSE_COOLDOWN empty rows.
+      const freeAtRow = row + LANE_REUSE_COOLDOWN;
+      const list = cooldownMap.get(freeAtRow) ?? [];
+      list.push(lane);
+      cooldownMap.set(freeAtRow, list);
     } else {
       lanePendingCount.set(lane, n);
     }
   }
 
-  function releaseClaim(hash: string): void {
+  function releaseClaim(hash: string, row: number): void {
     const lane = hashToLane.get(hash);
     if (lane !== undefined) {
       hashToLane.delete(hash);
-      releaseRef(lane);
+      releaseRef(lane, row);
     }
   }
 
@@ -138,16 +149,23 @@ export function computeDagLayout(
     const commit = commits[i];
     const hash = commit.hashFull;
 
+    // Drain any lanes whose cooldown expires at this row.
+    const cooled = cooldownMap.get(i);
+    if (cooled) {
+      for (const lane of cooled) freeLanes.push(lane);
+      cooldownMap.delete(i);
+    }
+
     // Release edge-duration reservations that were waiting for this commit.
     const reserved = parentReservations.get(hash);
     if (reserved) {
-      for (const lane of reserved) releaseRef(lane);
+      for (const lane of reserved) releaseRef(lane, i);
       parentReservations.delete(hash);
     }
 
     const lane = getOrClaimLane(hash);
     nodes.push({ index: i, hash, parents: commit.parents, lane });
-    releaseClaim(hash);
+    releaseClaim(hash, i);
 
     for (let p = 0; p < commit.parents.length; p++) {
       const parentHash = commit.parents[p];
