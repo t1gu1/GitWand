@@ -273,6 +273,23 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         :height="totalHeight"
         :viewBox="`0 0 ${graphWidth} ${totalHeight}`"
       >
+        <defs>
+          <!-- Trunk lane multi-color gradient (vibrant for nodes/edges) -->
+          <linearGradient id="trunk-gradient-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color: #ff3e3e;" />
+            <stop offset="33%" style="stop-color: #3e88ff;" />
+            <stop offset="66%" style="stop-color: #3eff88;" />
+            <stop offset="100%" style="stop-color: #ff3e3e;" />
+          </linearGradient>
+          <!-- Trunk lane multi-color gradient (subtle for row tints) -->
+          <linearGradient id="trunk-gradient-tint" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color: hsla(0, 80%, 55%, 0.15);" />
+            <stop offset="33%" style="stop-color: hsla(210, 80%, 55%, 0.15);" />
+            <stop offset="66%" style="stop-color: hsla(140, 80%, 55%, 0.15);" />
+            <stop offset="100%" style="stop-color: hsla(0, 80%, 55%, 0.15);" />
+          </linearGradient>
+        </defs>
+
         <!-- Row tints: colored band from the commit node to the SVG right edge -->
         <rect
           v-for="node in visibleNodes"
@@ -281,7 +298,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :y="node.index * ROW_H + 1"
           :width="graphWidth - cx(node.lane) + 11 + 20"
           :height="ROW_H - 2"
-          :fill="laneColorTint(node.lane)"
+          :fill="nodeKind(node) === 'trunk' ? 'url(#trunk-gradient-tint)' : laneColorTint(node.lane)"
           rx="8"
         />
         <!-- Edges first (behind nodes). R6: only visible edges are emitted.
@@ -321,7 +338,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           <polygon
             v-else-if="nodeKind(node) === 'trunk'"
             :points="`${cx(node.lane)},${cy(node.index) - NODE_R - 1} ${cx(node.lane) - NODE_R - 1},${cy(node.index) + NODE_R} ${cx(node.lane) + NODE_R + 1},${cy(node.index) + NODE_R}`"
-            :fill="laneColor(node.lane)"
+            fill="url(#trunk-gradient-stroke)"
           />
           <!-- Merge commit: solid filled, slightly larger circle -->
           <circle
