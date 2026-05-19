@@ -113,6 +113,17 @@ function laneColor(lane: number): string {
   return `hsl(${hue}, 80%, 55%)`;
 }
 
+function laneColorTint(lane: number): string {
+  const hue = (lane * 45) % 360;
+  return `hsla(${hue}, 80%, 55%, 0.09)`;
+}
+
+const indexToLane = computed(() => {
+  const map = new Map<number, number>();
+  for (const node of layout.value.nodes) map.set(node.index, node.lane);
+  return map;
+});
+
 // ─── SVG path helpers ────────────────────────────────
 function cx(lane: number): number {
   return GRAPH_PAD + lane * LANE_W + LANE_W / 2;
@@ -262,6 +273,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         :height="totalHeight"
         :viewBox="`0 0 ${graphWidth} ${totalHeight}`"
       >
+        <!-- Row tints: colored band from the commit node to the SVG right edge -->
+        <rect
+          v-for="node in visibleNodes"
+          :key="'t' + node.index"
+          :x="cx(node.lane)"
+          :y="node.index * ROW_H + 7"
+          :width="graphWidth - cx(node.lane)"
+          :height="ROW_H - 14"
+          :fill="laneColorTint(node.lane)"
+        />
         <!-- Edges first (behind nodes). R6: only visible edges are emitted.
              Key uses content (lanes + indices) so Vue can re-use DOM nodes
              stably across scrolls without stale-key collisions. -->
