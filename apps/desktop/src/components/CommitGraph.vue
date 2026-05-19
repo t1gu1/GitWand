@@ -18,11 +18,40 @@ const props = defineProps<{
    * Optional — no dimming when absent or empty.
    */
   forkPointSha?: string;
+  repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number };
 }>();
 
 const emit = defineEmits<{
   "select-commit": [hash: string];
+  "change-view": [mode: "changes"];
 }>();
+
+// ─── WIP commit (v2.14) ──────────────────────────────
+// If there are uncommitted changes, we prepend a virtual "WIP" commit to
+// the top of the graph, connected to the current HEAD.
+const totalChanges = computed(() => {
+  if (!props.repoStats) return 0;
+  return props.repoStats.staged + props.repoStats.unstaged + props.repoStats.untracked + props.repoStats.conflicted;
+});
+const hasChanges = computed(() => totalChanges.value > 0);
+
+const displayCommits = computed(() => {
+  if (!hasChanges.value) return props.commits;
+  const headCommit = props.commits.find(isCurrent);
+  if (!headCommit) return props.commits;
+
+  const wip: GitLogEntry = {
+    hash: "WIP",
+    hashFull: "WIP",
+    message: "// WIP",
+    author: "",
+    date: new Date().toISOString(),
+    refs: "",
+    parents: [headCommit.hashFull],
+    body: "",
+  };
+  return [wip, ...props.commits];
+});
 
 // ─── DAG layout ──────────────────────────────────────
 // R6 — fingerprint cache: we compare first/last hash + length.
@@ -31,33 +60,39 @@ const emit = defineEmits<{
 // full O(N*L) layout.  Saves ~1-5 ms on every status poll tick.
 let _prevFingerprint = "";
 let _cachedLayout: DagLayout | null = null;
-const TRUNK_NAMES = new Set(['main', 'master']);
+const TRUNK_NAMES = new Set(["main", "master"]);
 const layout = computed<DagLayout>(() => {
-  const commits = props.commits;
+  const commits = displayCommits.value;
   const n = commits.length;
-  // Include currentBranch in fingerprint: branch change must recompute layout
-  // even when commit hashes are identical (trunk lane assignment differs).
-  const fp = n + ':' + (commits[0]?.hashFull ?? '') + ':' + (commits[n - 1]?.hashFull ?? '') + ':' + (props.currentBranch ?? '');
+  // Include currentBranch + hasChanges in fingerprint: branch change or WIP
+  // state change must recompute layout even when commit hashes are identical.
+  const fp =
+    n + ":" + (commits[0]?.hashFull ?? "") + ":" + (commits[n - 1]?.hashFull ?? "") + ":" +
+    (props.currentBranch ?? "") + ":" + hasChanges.value;
   if (fp === _prevFingerprint && _cachedLayout) return _cachedLayout;
   _prevFingerprint = fp;
 
   // Trunk = the lineage to pin on lane 0 (far left).
-  // Priority 1: current HEAD branch — its first-parent chain includes
-  //   all its ancestors (which may include main), keeping them all on lane 0.
-  // Priority 2: main / master as fallback when HEAD branch not found.
+  // Priority 1: WIP (if present) — it always sits on lane 0 of the current branch.
+  // Priority 2: current HEAD branch.
+  // Priority 3: main / master as fallback.
   let trunkHash: string | undefined;
-  for (const commit of commits) {
-    const refs = parseRefs(commit.refs);
-    if (props.currentBranch && refs.some(r => r.type === 'branch' && r.name === props.currentBranch)) {
-      trunkHash = commit.hashFull;
-      break;
-    }
-  }
-  if (!trunkHash) {
+  if (hasChanges.value) {
+    trunkHash = "WIP";
+  } else {
     for (const commit of commits) {
-      if (parseRefs(commit.refs).some(r => r.type === 'branch' && TRUNK_NAMES.has(r.name))) {
+      const refs = parseRefs(commit.refs);
+      if (props.currentBranch && refs.some((r) => r.type === "branch" && r.name === props.currentBranch)) {
         trunkHash = commit.hashFull;
         break;
+      }
+    }
+    if (!trunkHash) {
+      for (const commit of commits) {
+        if (parseRefs(commit.refs).some((r) => r.type === "branch" && TRUNK_NAMES.has(r.name))) {
+          trunkHash = commit.hashFull;
+          break;
+        }
       }
     }
   }
@@ -80,7 +115,7 @@ const forkPointIndex = computed<number>(() => {
   if (!props.forkPointSha) return -1;
   const sha = props.forkPointSha;
   // Match against either full SHA or the 7-char short hash displayed in the UI
-  const idx = props.commits.findIndex(
+  const idx = displayCommits.value.findIndex(
     (c) => c.hashFull === sha || c.hashFull.startsWith(sha) || sha.startsWith(c.hashFull),
   );
   return idx; // -1 when not found in current window (no dimming)
@@ -89,21 +124,24 @@ const forkPointIndex = computed<number>(() => {
 /** Returns true when the commit at `index` is shared history (should be dimmed). */
 function isSharedHistory(index: number): boolean {
   const fp = forkPointIndex.value;
-  return fp !== -1 && index >= fp;
+  if (fp === -1) return false;
+  // WIP is never shared history
+  if (hasChanges.value && index === 0) return false;
+  return index >= fp;
 }
 
 // ─── Rendering constants ─────────────────────────────
-const ROW_H = 32;       // height per commit row
-const LANE_W = 18;      // width per lane
-const NODE_R = 4;       // node circle radius
-const GRAPH_PAD = 12;   // left padding before first lane
-const SVG_MIN_W = 60;   // minimum graph column width
+const ROW_H = 32; // height per commit row
+const LANE_W = 18; // width per lane
+const NODE_R = 4; // node circle radius
+const GRAPH_PAD = 12; // left padding before first lane
+const SVG_MIN_W = 60; // minimum graph column width
 
 const graphWidth = computed(() => {
   return Math.max(SVG_MIN_W, GRAPH_PAD + (layout.value.maxLane + 1) * LANE_W + GRAPH_PAD);
 });
 
-const totalHeight = computed(() => props.commits.length * ROW_H);
+const totalHeight = computed(() => displayCommits.value.length * ROW_H);
 
 // ─── Lane colours — rainbow spectrum left-to-right ───────
 // 45° hue steps: red → orange → yellow-green → green → cyan → blue-cyan → indigo → violet
@@ -278,8 +316,9 @@ interface VisibleCommit { entry: GitLogEntry; index: number }
 const visibleCommits = computed<VisibleCommit[]>(() => {
   const { first, last } = visibleRange.value;
   const out: VisibleCommit[] = [];
+  const commits = displayCommits.value;
   for (let i = first; i <= last; i++) {
-    const entry = props.commits[i];
+    const entry = commits[i];
     if (entry) out.push({ entry, index: i });
   }
   return out;
@@ -287,7 +326,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 </script>
 
 <template>
-  <div class="cg" v-if="commits.length > 0">
+  <div class="cg" v-if="displayCommits.length > 0">
     <div class="cg-scroll" ref="scrollContainer" @scroll="onScroll">
       <!-- SVG graph column -->
       <svg
@@ -333,7 +372,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :d="edgePath(edge)"
           :stroke="laneColor(edge.fromLane)"
           :stroke-width="edge.isMerge ? 1.2 : 1.6"
-          :stroke-dasharray="edge.isMerge ? '3,3' : 'none'"
+          :stroke-dasharray="edge.isMerge || (hasChanges && edge.fromIndex === 0) ? '3,3' : 'none'"
           fill="none"
           stroke-linecap="round"
           :opacity="isSharedHistory(edge.fromIndex) ? 0.25 : 1"
@@ -343,11 +382,23 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           v-for="node in visibleNodes"
           :key="'n' + node.index"
           class="cg-node"
-          @click="emit('select-commit', node.hash)"
+          @click="node.hash === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', node.hash)"
         >
+          <!-- WIP Node: dashed circle -->
+          <circle
+            v-if="node.hash === 'WIP'"
+            :cx="cx(node.lane)"
+            :cy="cy(node.index)"
+            :r="NODE_R + 1.5"
+            fill="none"
+            :stroke="laneColor(node.lane)"
+            stroke-width="1.5"
+            stroke-dasharray="3,3"
+          />
+
           <!-- Current commit indicator: outer ring -->
           <circle
-            v-if="isCurrent(commits[node.index])"
+            v-else-if="isCurrent(displayCommits[node.index])"
             :cx="cx(node.lane)"
             :cy="cy(node.index)"
             :r="nodeKind(node) === 'trunk' ? NODE_R + 4 : (nodeKind(node) === 'merge' ? NODE_R + 3.5 : NODE_R + 2.5)"
@@ -369,7 +420,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             stroke-dasharray="2,2"
           />
           <!-- Trunk commit (main/master): star icon (v2.13) -->
-          <template v-else-if="nodeKind(node) === 'trunk'">
+          <template v-else-if="nodeKind(node) === 'trunk' && node.hash !== 'WIP'">
             <!-- The Shadow: slightly larger, offset, and semi-transparent with blur -->
             <path
               :d="starPath(cx(node.lane), cy(node.index) - 0.2)"
@@ -393,7 +444,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           />
           <!-- Normal commit: solid filled circle -->
           <circle
-            v-else
+            v-else-if="node.hash !== 'WIP'"
             :cx="cx(node.lane)"
             :cy="cy(node.index)"
             :r="NODE_R"
@@ -414,27 +465,39 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             'cg-row--selected': vc.entry.hashFull === selectedHash,
             'cg-row--shared': isSharedHistory(vc.index),
             'cg-row--current': isCurrent(vc.entry),
+            'cg-row--wip': vc.entry.hashFull === 'WIP',
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
-          @click="emit('select-commit', vc.entry.hashFull)"
+          @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
         >
-          <!-- Ref badges -->
-          <span
-            v-for="r in commitRefs(vc.entry)"
-            :key="r.name"
-            class="cg-ref"
-            :class="`cg-ref--${r.type}`"
-          >{{ r.name }}</span>
-          <!-- Message -->
-          <span class="cg-msg">{{ vc.entry.message }}</span>
-          <!-- Author + date -->
-          <span class="cg-meta muted">
-            <span>{{ vc.entry.author }}</span>
-            <span class="cg-sep">&middot;</span>
-            <span>{{ formatDate(vc.entry.date) }}</span>
-            <span class="cg-sep">&middot;</span>
-            <span class="mono cg-hash">{{ vc.entry.hash }}</span>
-          </span>
+          <template v-if="vc.entry.hashFull === 'WIP'">
+            <span class="cg-msg wip-msg">{{ vc.entry.message }}</span>
+            <span class="cg-meta wip-meta">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+              </svg>
+              <span>{{ totalChanges }}</span>
+            </span>
+          </template>
+          <template v-else>
+            <!-- Ref badges -->
+            <span
+              v-for="r in commitRefs(vc.entry)"
+              :key="r.name"
+              class="cg-ref"
+              :class="`cg-ref--${r.type}`"
+            >{{ r.name }}</span>
+            <!-- Message -->
+            <span class="cg-msg">{{ vc.entry.message }}</span>
+            <!-- Author + date -->
+            <span class="cg-meta muted">
+              <span>{{ vc.entry.author }}</span>
+              <span class="cg-sep">&middot;</span>
+              <span>{{ formatDate(vc.entry.date) }}</span>
+              <span class="cg-sep">&middot;</span>
+              <span class="mono cg-hash">{{ vc.entry.hash }}</span>
+            </span>
+          </template>
         </div>
       </div>
     </div>
@@ -505,6 +568,24 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   background: var(--color-accent-soft);
 }
 
+.cg-row--wip {
+  color: var(--color-text-muted);
+}
+
+.wip-msg {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.wip-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
 /* Shared-history commits (pre-fork-point): dimmed to de-emphasise */
 .cg-row--shared {
   opacity: 0.45;
@@ -572,3 +653,4 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   font-size: 13px;
 }
 </style>
+

@@ -1709,6 +1709,7 @@ onUnmounted(() => {
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
+      @change-view="onViewModeChange"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
@@ -1864,8 +1865,9 @@ onUnmounted(() => {
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="branchDisplay"
-            :fork-point-sha="graphForkPointSha"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats"
+            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+            @change-view="onViewModeChange" />
         </aside>
       </Transition>
     </div>
