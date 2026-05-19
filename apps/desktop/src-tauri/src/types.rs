@@ -114,6 +114,7 @@ pub struct GitLogEntry {
     pub body: String,
     pub parents: Vec<String>,
     pub refs: String,
+    pub is_boundary: bool,
 }
 
 // ─── File at revision ──────────────────────────────────────────────

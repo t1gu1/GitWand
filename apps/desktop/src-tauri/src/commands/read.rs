@@ -577,19 +577,71 @@ pub(crate) fn git_log(
     all: Option<bool>,
     author: Option<String>,
     offset: Option<i32>,
+    base: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
     let limit = count.unwrap_or(100);
     let skip  = offset.unwrap_or(0).max(0);
-    // Default: current branch only (like `git log`). Pass `all: true` to include all refs.
     let include_all = all.unwrap_or(false);
 
     // Use unit separator (ASCII 0x1f) to delimit fields
-    let format = "%h%x1f%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1f%P%x1f%D%x1e";
+    // %m is the mark (left <, right >, or boundary -)
+    let format = "%h%x1f%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1f%P%x1f%D%x1f%m%x1e";
 
     let mut args: Vec<String> = vec!["log".to_string()];
+    
     if include_all {
         args.push("--all".to_string());
+    } else if let Some(base_val) = base {
+        if !base_val.is_empty() {
+            let mut target_base = base_val.clone();
+            
+            // Auto-discovery logic: find the best (most recent) fork point
+            if target_base == "auto" {
+                let candidates = ["@{u}", "origin/main", "origin/master", "main", "master"];
+                let mut best_base: Option<(String, i64)> = None;
+                
+                for cand in candidates {
+                    let output = git_cmd()
+                        .args(["merge-base", "HEAD", cand])
+                        .current_dir(&cwd)
+                        .output();
+                    if let Ok(o) = output {
+                        if o.status.success() {
+                            let sha = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                            if !sha.is_empty() {
+                                // Get commit time to find the most recent one
+                                let time_output = git_cmd()
+                                    .args(["show", "-s", "--format=%ct", &sha])
+                                    .current_dir(&cwd)
+                                    .output();
+                                if let Ok(to) = time_output {
+                                    if let Ok(time_str) = String::from_utf8(to.stdout) {
+                                        if let Ok(time) = time_str.trim().parse::<i64>() {
+                                            if best_base.is_none() || time > best_base.as_ref().unwrap().1 {
+                                                best_base = Some((sha, time));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if let Some((sha, _)) = best_base {
+                    target_base = sha;
+                }
+            }
+
+            // Apply range filtering if we found a valid base that isn't empty.
+            // Note: if target_base == "HEAD", git log HEAD..HEAD --boundary 
+            // correctly returns just the HEAD commit marked as boundary.
+            if target_base != "auto" && !target_base.is_empty() {
+                args.push(format!("{}..HEAD", target_base));
+                args.push("--boundary".to_string());
+            }
+        }
     }
+
     if let Some(ref author_filter) = author {
         if !author_filter.is_empty() {
             args.push(format!("--author={}", author_filter));
@@ -608,20 +660,52 @@ pub(crate) fn git_log(
         .map_err(|e| format!("Failed to run git log: {}", e))?;
 
     if !output.status.success() {
+        // Fallback: if range failed, try normal log
+        args.retain(|a| !a.contains("..") && a != "--boundary");
+        let fallback = git_cmd()
+            .args(&args)
+            .current_dir(&cwd)
+            .output();
+        if let Ok(f) = fallback {
+            if f.status.success() {
+                return parse_log_output(&f.stdout);
+            }
+        }
         return Err("git log failed".to_string());
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut entries = parse_log_output(&output.stdout)?;
+
+    // If we are in focused mode (base was provided), strictly enforce ONE boundary commit.
+    // git log --boundary can return multiple boundary commits if there are complex merges.
+    if base.is_some() && !include_all {
+        let mut boundary_found = false;
+        entries.retain(|e| {
+            if e.is_boundary {
+                if boundary_found {
+                    return false; // Keep only the first (most recent) boundary
+                }
+                boundary_found = true;
+            }
+            true
+        });
+    }
+
+    Ok(entries)
+}
+
+fn parse_log_output(stdout: &[u8]) -> Result<Vec<GitLogEntry>, String> {
+    let stdout_str = String::from_utf8_lossy(stdout);
     let mut entries: Vec<GitLogEntry> = Vec::new();
 
-    // Split by record separator (0x1e)
-    for record in stdout.split('\x1e') {
+    for record in stdout_str.split('\x1e') {
         let record = record.trim();
         if record.is_empty() {
             continue;
         }
 
         let fields: Vec<&str> = record.split('\x1f').collect();
+        // At least 9 fields (%h to %D). %m might be missing on old git
         if fields.len() < 9 {
             continue;
         }
@@ -633,6 +717,12 @@ pub(crate) fn git_log(
             .map(|s| s.to_string())
             .collect();
 
+        let is_boundary = if fields.len() >= 10 {
+            fields[9].trim() == "-"
+        } else {
+            false
+        };
+
         entries.push(GitLogEntry {
             hash: fields[0].to_string(),
             hash_full: fields[1].to_string(),
@@ -643,6 +733,7 @@ pub(crate) fn git_log(
             body: fields[6].trim().to_string(),
             parents,
             refs: fields[8].trim().to_string(),
+            is_boundary,
         });
     }
 

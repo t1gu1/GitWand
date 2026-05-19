@@ -200,7 +200,7 @@ pub fn git_log_parity(
     all: Option<bool>,
     author: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
-    commands::read::git_log(cwd, count, all, author, None)
+    commands::read::git_log(cwd, count, all, author, None, None)
 }
 
 pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String> {

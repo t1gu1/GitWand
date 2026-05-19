@@ -496,6 +496,8 @@ export interface GitLogEntry {
   parents: string[];
   /** Ref decorations (branches, tags) */
   refs: string;
+  /** True when the commit is a boundary commit (marked with '-' in git log) */
+  isBoundary: boolean;
 }
 
 /**
@@ -513,6 +515,7 @@ export async function getGitLog(
   all?: boolean,
   author?: string,
   offset?: number,
+  base?: string,
 ): Promise<GitLogEntry[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
@@ -526,8 +529,9 @@ export async function getGitLog(
         body: string;
         parents: string[];
         refs: string;
+        is_boundary: boolean;
       }>
-    >("git_log", { cwd, count: count ?? 100, all: all ?? false, author: author ?? null, offset: offset ?? 0 });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? false, author: author ?? null, offset: offset ?? 0, base: base ?? null });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -539,10 +543,11 @@ export async function getGitLog(
       body: e.body,
       parents: e.parents,
       refs: e.refs,
+      isBoundary: e.is_boundary,
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}${base ? `&base=${encodeURIComponent(base)}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();

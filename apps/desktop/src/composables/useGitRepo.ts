@@ -29,6 +29,7 @@ import {
   gitStashList,
   gitStashApply,
   gitStashDrop,
+  gitMergeBase,
   type GitStatus,
   type GitDiff,
   type GitLogEntry,
@@ -64,6 +65,8 @@ export function useGitRepo() {
   //   "current" → only commits reachable from the current branch HEAD (default, like `git log`)
   //   "all"     → all refs (`git log --all`)
   const logScope = ref<"current" | "all">("current");
+  /** Optional branch from which the current one started. Used to focus 'current' log. */
+  const startingBranch = ref<string | null>(null);
   // Author filter: "all" → no filter, "mine" → only commits by the current git user
   const logAuthorFilter = ref<"all" | "mine">("all");
   const currentGitUser = ref<GitUser | null>(null);
@@ -380,12 +383,18 @@ export function useGitRepo() {
       const authorEmail =
         logAuthorFilter.value === "mine" ? (currentGitUser.value?.email ?? "") : undefined;
       const pageSize = count ?? LOG_PAGE;
+      const isAll = logScope.value === "all";
+      
+      // Use 'auto' to let the backend find the fork point for 'current' scope
+      const base = !isAll ? (startingBranch.value ?? "auto") : undefined;
+
       const entries = await getGitLog(
         folderPath.value,
         pageSize,
-        logScope.value === "all",
+        isAll,
         authorEmail,
         0,
+        base,
       );
       log.value = entries;
       // When the result is exactly one full page, assume more exist.
@@ -410,12 +419,17 @@ export function useGitRepo() {
       const authorEmail =
         logAuthorFilter.value === "mine" ? (currentGitUser.value?.email ?? "") : undefined;
       const offset = log.value.length;
+      const isAll = logScope.value === "all";
+
+      const base = !isAll ? (startingBranch.value ?? "auto") : undefined;
+
       const next = await getGitLog(
         folderPath.value,
         LOG_PAGE,
-        logScope.value === "all",
+        isAll,
         authorEmail,
         offset,
+        base,
       );
       if (next.length > 0) {
         log.value = [...log.value, ...next];
@@ -872,6 +886,7 @@ export function useGitRepo() {
   async function createBranch(name: string) {
     if (!folderPath.value) return;
     try {
+      startingBranch.value = status.value?.branch ?? null;
       await gitCreateBranch(folderPath.value, name, true);
       await refresh();
       await loadBranches();
@@ -884,6 +899,7 @@ export function useGitRepo() {
     if (!folderPath.value) return;
     isSwitchingBranch.value = true;
     try {
+      startingBranch.value = null;
       await gitSwitchBranch(folderPath.value, name);
       await refresh();
       await loadBranches();
@@ -1030,5 +1046,7 @@ export function useGitRepo() {
     loadStashes,
     applyStash,
     dropStash,
+    // Branch Focus
+    startingBranch,
   };
 }

@@ -920,21 +920,32 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>
+    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&base=<ref>
     if (url.pathname === "/api/git-log" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const count = parseInt(url.searchParams.get("count") || "50");
       // Default: current branch only (like `git log`). Pass `all=true` for all refs.
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
+      const base = url.searchParams.get("base") || "";
 
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
       try {
         const resolvedCwd = resolve(cwd);
-        const format = "%h%x1f%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1f%P%x1f%D%x1e";
+        const format = "%h%x1f%H%x1f%an%x1f%ae%x1f%aI%x1f%s%x1f%b%x1f%P%x1f%D%x1f%m%x1e";
         const args = ["log"];
-        if (all) args.push("--all");
+        if (all) {
+          args.push("--all");
+        } else if (base && base !== "HEAD") {
+          try {
+            const headSha = execSync("git rev-parse HEAD", { cwd: resolvedCwd, encoding: "utf8" }).trim();
+            const baseSha = execSync(`git rev-parse "${base}"`, { cwd: resolvedCwd, encoding: "utf8" }).trim();
+            if (baseSha && baseSha !== headSha) {
+              args.push(`${base}..HEAD`, "--boundary");
+            }
+          } catch { /* ignore */ }
+        }
         if (author) args.push(`--author=${author}`);
         args.push(`-n${count}`, `--format=${format}`);
         // Stream via spawn — execSync's default 1 MB cap can be exceeded with
@@ -947,7 +958,7 @@ async function handleRequest(req, res) {
           const trimmed = record.trim();
           if (!trimmed) continue;
           const fields = trimmed.split("\x1f");
-          if (fields.length < 9) continue;
+          if (fields.length < 10) continue;
 
           entries.push({
             hash: fields[0],
@@ -959,6 +970,7 @@ async function handleRequest(req, res) {
             body: fields[6].trim(),
             parents: fields[7].trim().split(/\s+/).filter(Boolean),
             refs: fields[8].trim(),
+            isBoundary: fields[9].trim() === "-",
           });
         }
 

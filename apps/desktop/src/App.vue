@@ -204,7 +204,47 @@ const {
   deleteBranch,
   renameBranch: doRenameBranch,
   currentGitUser,
+  startingBranch,
 } = useGitRepo();
+
+// ─── Git Tree panel ──────────────────────────────────────
+const showGitTree = ref(false);
+const gitTreeWidth = ref(720);
+const gitTreeResizing = ref(false);
+
+function onGitTreeMouseDown(e: MouseEvent) {
+  const startX = e.clientX;
+  const startWidth = gitTreeWidth.value;
+  let dragged = false;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    const delta = startX - ev.clientX;
+    if (!dragged && Math.abs(delta) >= 4) dragged = true;
+    if (dragged) {
+      gitTreeResizing.value = true;
+      gitTreeWidth.value = Math.max(200, Math.min(1400, startWidth + delta));
+    }
+  };
+
+  const onMouseUp = (ev: MouseEvent) => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    if (!dragged && Math.abs(ev.clientX - startX) < 4) {
+      showGitTree.value = !showGitTree.value;
+    }
+    gitTreeResizing.value = false;
+  };
+
+  if (showGitTree.value) {
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ew-resize';
+  }
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  e.preventDefault();
+}
 
 // ─── Fork Point (v2.11) — graph view ─────────────────────
 // SHA of the merge-base between HEAD and the upstream tracking branch.
@@ -294,7 +334,7 @@ watch(
     const tab = repoTabs.value.find((t) => t.id === id);
     if (tab && tab.path !== repoFolderPath.value) {
       await openRepo(tab.path);
-      if (viewMode.value === "history" || viewMode.value === "graph") {
+      if (viewMode.value === "history" || showGitTree.value) {
         await loadLog();
       }
     }
@@ -556,7 +596,7 @@ async function handleSplitCommitRequest(entry: GitLogEntry) {
  * via the composable's `confirm()` before emitting this event.
  */
 async function handleSplitCompleted(_hashes: { firstHash: string; secondHash: string }) {
-  if (viewMode.value === "history" || viewMode.value === "graph") {
+  if (viewMode.value === "history" || showGitTree.value) {
     await loadLog();
   }
   // Refresh branches too — if we split the HEAD commit on a branch tip,
@@ -595,7 +635,7 @@ async function handleOpenFolder() {
   if (path) {
     openTab(path);
     await openRepo(path);
-    if (viewMode.value === "history" || viewMode.value === "graph") {
+    if (viewMode.value === "history" || showGitTree.value) {
       await loadLog();
     }
   }
@@ -604,7 +644,7 @@ async function handleOpenFolder() {
 async function handleOpenPath(path: string) {
   openTab(path);
   await openRepo(path);
-  if (viewMode.value === "history" || viewMode.value === "graph") {
+  if (viewMode.value === "history" || showGitTree.value) {
     await loadLog();
   }
 }
@@ -636,6 +676,9 @@ function onRepoFileSelect(path: string, staged: boolean) {
 }
 
 function onViewModeChange(mode: ViewMode) {
+  if (mode === "graph" && logScope.value === "current") {
+    setLogScope("all");
+  }
   viewMode.value = mode;
 }
 
@@ -874,7 +917,10 @@ function onPaletteAction(id: string) {
     case "view-dashboard": viewMode.value = "dashboard"; break;
     case "view-changes": viewMode.value = "changes"; break;
     case "view-log": viewMode.value = "history"; break;
-    case "view-graph": viewMode.value = "graph"; break;
+    case "view-graph":
+      if (logScope.value === "current") setLogScope("all");
+      viewMode.value = "graph";
+      break;
     case "open-settings": showSettings.value = true; break;
     case "open-stash": showStash.value = true; break;
     case "open-worktrees": showWorktrees.value = true; break;
@@ -944,7 +990,7 @@ const showForkModal = ref(false);
 async function onCloned(path: string) {
   openTab(path);
   await openRepo(path);
-  if (viewMode.value === "history" || viewMode.value === "graph") {
+  if (viewMode.value === "history" || showGitTree.value) {
     await loadLog();
   }
 }
@@ -954,7 +1000,7 @@ async function onForked(path: string) {
   // `gh repo fork --remote-name=upstream` on the backend.
   openTab(path);
   await openRepo(path);
-  if (viewMode.value === "history" || viewMode.value === "graph") {
+  if (viewMode.value === "history" || showGitTree.value) {
     await loadLog();
   }
 }
@@ -1792,10 +1838,14 @@ onUnmounted(() => {
 
             <!-- Graph view: DAG visualization -->
             <CommitGraph v-else-if="viewMode === 'graph'" :commits="repoLog" :selected-hash="selectedCommitHash"
-              :current-branch="branchDisplay"
-              :fork-point-sha="graphForkPointSha"
-              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
-
+              :current-branch="branchDisplay" :log-scope="logScope" :fork-point-sha="graphForkPointSha"
+              @update:log-scope="setLogScope"
+              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+              @contextmenu-select="(hash) => { selectCommit(hash); }" @edit-commit="handleEditCommit"
+              @split-commit="handleSplitCommitRequest" @checkout-commit="handleCheckoutCommit"
+              @reset-to-commit="handleResetToCommit" @revert-commit="handleRevertCommit"
+              @create-branch-from-commit="handleCreateBranchFromCommit" @tag-commit="handleTagCommit"
+              @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge" />
             <!-- PRs view: creation form takes over when showCreateForm is true -->
             <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
               :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
@@ -1809,6 +1859,33 @@ onUnmounted(() => {
           </template>
         </template>
       </main>
+
+      <!-- Git Tree toggle button (vertical strip between main and panel) -->
+      <button
+        v-if="hasRepo"
+        class="git-tree-toggle"
+        :class="{ 'git-tree-toggle--active': showGitTree, 'git-tree-toggle--resizing': gitTreeResizing }"
+        :style="showGitTree ? { cursor: 'ew-resize' } : {}"
+        @mousedown="onGitTreeMouseDown"
+        :title="t('sidebar.gitTree')"
+      >
+        {{ t('sidebar.gitTree') }}
+      </button>
+
+      <!-- Git Tree side panel -->
+      <Transition name="git-tree-panel">
+        <aside v-if="showGitTree && hasRepo" class="git-tree-panel" :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
+          <CommitGraph
+            :commits="repoLog"
+            :selected-hash="selectedCommitHash"
+            :current-branch="branchDisplay"
+            :log-scope="logScope"
+            :fork-point-sha="graphForkPointSha"
+            @update:log-scope="setLogScope"
+            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+          />
+        </aside>
+      </Transition>
     </div>
 
     <!-- In-app update modal -->
@@ -2124,6 +2201,62 @@ onUnmounted(() => {
   position: relative;
 }
 
+.git-tree-toggle {
+  width: 24px;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  border: none;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.git-tree-toggle:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.git-tree-toggle--active {
+  color: var(--color-accent);
+  border-left-color: var(--color-accent);
+}
+
+.git-tree-panel {
+  border-left: 1px solid var(--color-border);
+  background: var(--color-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.git-tree-panel-enter-active,
+.git-tree-panel-leave-active {
+  transition: width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.git-tree-panel-enter-from,
+.git-tree-panel-leave-to {
+  width: 0 !important;
+  min-width: 0 !important;
+  opacity: 0;
+}
+
+.git-tree-toggle--resizing {
+  background: var(--color-bg-hover);
+}
+
 .loading-overlay {
   position: absolute;
   inset: 0;
@@ -2424,7 +2557,7 @@ onUnmounted(() => {
 }
 
 .switch-stash-modal {
-  width: min(520px, 100%);
+  width: min(720px, 100%);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

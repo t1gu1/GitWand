@@ -18,6 +18,8 @@ export interface DagNode {
   parents: string[];
   /** Assigned lane (0-based column) */
   lane: number;
+  /** Unique ID for this line of development (for distinct coloring) */
+  pathId: number;
 }
 
 export interface DagEdge {
@@ -29,6 +31,8 @@ export interface DagEdge {
   toLane: number;
   /** Is this a merge edge (second+ parent)? */
   isMerge: boolean;
+  /** Unique ID for this line of development (inherited from child) */
+  pathId: number;
 }
 
 export interface DagLayout {
@@ -43,45 +47,57 @@ export interface DagLayout {
  * Commits must be in reverse chronological order (newest first).
  */
 export function computeDagLayout(
-  commits: Array<{ hashFull: string; parents: string[] }>,
+  commits: Array<{ hashFull: string; parents: string[]; isBoundary?: boolean }>,
+  forceOffset = false,
 ): DagLayout {
   const nodes: DagNode[] = [];
   const edges: DagEdge[] = [];
 
-  // Map from hash to index in commits array
   const hashToIndex = new Map<string, number>();
   for (let i = 0; i < commits.length; i++) {
     hashToIndex.set(commits[i].hashFull, i);
   }
 
-  // Hash → lane lookup for O(1) findLane (instead of O(L) linear scan).
-  const hashToLane = new Map<string, number>();
-  // Reusable free lane slots (previously occupied but now freed).
-  const freeLanes: number[] = [];
-  // Active lanes: each slot holds the hash of the commit it's expecting next.
-  const lanes: (string | null)[] = [];
+  // Active tracks: each slot holds the hash of the commit it's expecting next.
+  const tracks: (string | null)[] = [];
+  const trackPathIds: number[] = [];
+  let nextPathId = 0;
   let maxLane = 0;
-
-  function findLane(hash: string): number {
-    const existing = hashToLane.get(hash);
-    if (existing !== undefined) return existing;
-
-    if (freeLanes.length > 0) {
-      const lane = freeLanes.pop()!;
-      hashToLane.set(hash, lane);
-      return lane;
-    }
-
-    const lane = lanes.length;
-    hashToLane.set(hash, lane);
-    lanes.push(hash);
-    return lane;
-  }
 
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
     const hash = commit.hashFull;
-    const lane = findLane(hash);
+
+    // Find the leftmost track waiting for this commit
+    let lane = tracks.indexOf(hash);
+    let pathId: number;
+
+    if (lane === -1) {
+      // New branch tip
+      let targetLane: number;
+      if (forceOffset && !commit.isBoundary) {
+        // Reserve lane 0 for trunk, start branch in lane 1
+        const emptyIdx = tracks.indexOf(null, 1);
+        targetLane = emptyIdx !== -1 ? emptyIdx : Math.max(1, tracks.length);
+      } else {
+        const emptyIdx = tracks.indexOf(null);
+        targetLane = emptyIdx !== -1 ? emptyIdx : tracks.length;
+      }
+
+      lane = targetLane;
+      pathId = nextPathId++;
+      
+      // Expand tracks array if needed
+      while (tracks.length <= lane) {
+        tracks.push(null);
+        trackPathIds.push(-1);
+      }
+      tracks[lane] = hash;
+      trackPathIds[lane] = pathId;
+    } else {
+      pathId = trackPathIds[lane];
+    }
+
     if (lane > maxLane) maxLane = lane;
 
     nodes.push({
@@ -89,37 +105,71 @@ export function computeDagLayout(
       hash,
       parents: commit.parents,
       lane,
+      pathId,
     });
 
-    // Free this lane for reuse
-    hashToLane.delete(hash);
-    freeLanes.push(lane);
+    // Clear ALL tracks waiting for this commit
+    for (let t = 0; t < tracks.length; t++) {
+      if (tracks[t] === hash) {
+        tracks[t] = null;
+      }
+    }
 
-    // Assign parents to lanes
+    // Assign parents to tracks
     for (let p = 0; p < commit.parents.length; p++) {
       const parentHash = commit.parents[p];
       const parentIndex = hashToIndex.get(parentHash);
 
       if (parentIndex !== undefined) {
-        let parentLane = hashToLane.get(parentHash);
-        if (parentLane === undefined) {
-          if (p === 0) {
-            hashToLane.set(parentHash, lane);
-            parentLane = lane;
+        const parentIsBoundary = commits[parentIndex]?.isBoundary;
+        let masterLane = tracks.indexOf(parentHash);
+        
+        if (masterLane === -1) {
+          let targetLane: number;
+          if (forceOffset && parentIsBoundary) {
+            // Boundary always goes to lane 0
+            targetLane = 0;
+          } else if (p === 0 && tracks[lane] === null) {
+            targetLane = lane;
           } else {
-            parentLane = findLane(parentHash);
+            const emptyIdx = tracks.indexOf(null);
+            targetLane = emptyIdx !== -1 ? emptyIdx : tracks.length;
           }
+
+          masterLane = targetLane;
+          // Ensure track exists
+          while (tracks.length <= masterLane) {
+            tracks.push(null);
+            trackPathIds.push(-1);
+          }
+          tracks[masterLane] = parentHash;
+          trackPathIds[masterLane] = p === 0 && masterLane === lane ? pathId : nextPathId++;
         }
-        if (parentLane > maxLane) maxLane = parentLane;
+
+        // If we aren't the master lane, keep vertical line until the parent row
+        if (masterLane !== lane && tracks[lane] === null) {
+          tracks[lane] = parentHash;
+          trackPathIds[lane] = pathId;
+        }
+
+        if (masterLane > maxLane) maxLane = masterLane;
+        if (lane > maxLane) maxLane = lane;
 
         edges.push({
           fromIndex: i,
           fromLane: lane,
           toIndex: parentIndex,
-          toLane: parentLane,
+          toLane: masterLane,
           isMerge: p > 0,
+          pathId: pathId,
         });
       }
+    }
+
+    // Compact trailing nulls
+    while (tracks.length > 0 && tracks[tracks.length - 1] === null) {
+      tracks.pop();
+      trackPathIds.pop();
     }
   }
 
