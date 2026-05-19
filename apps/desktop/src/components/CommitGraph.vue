@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import type { GitLogEntry } from "../utils/backend";
-import { computeDagLayout, parseRefs, type DagLayout } from "../utils/dagLayout";
+import { computeDagLayout, parseRefs, type DagLayout, type DagNode } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
@@ -31,6 +31,7 @@ const emit = defineEmits<{
 // full O(N*L) layout.  Saves ~1-5 ms on every status poll tick.
 let _prevFingerprint = "";
 let _cachedLayout: DagLayout | null = null;
+const TRUNK_NAMES = new Set(['main', 'master']);
 const layout = computed<DagLayout>(() => {
   const commits = props.commits;
   const n = commits.length;
@@ -44,7 +45,6 @@ const layout = computed<DagLayout>(() => {
   // Priority 1: current HEAD branch — its first-parent chain includes
   //   all its ancestors (which may include main), keeping them all on lane 0.
   // Priority 2: main / master as fallback when HEAD branch not found.
-  const TRUNK_NAMES = new Set(['main', 'master']);
   let trunkHash: string | undefined;
   for (const commit of commits) {
     const refs = parseRefs(commit.refs);
@@ -159,6 +159,21 @@ function commitRefs(entry: GitLogEntry) {
   return parseRefs(entry.refs);
 }
 
+type NodeKind = 'stash' | 'trunk' | 'merge' | 'normal';
+
+function nodeKind(node: DagNode): NodeKind {
+  const entry = props.commits[node.index];
+  if (!entry) return 'normal';
+  if (entry.refs.includes('refs/stash')) return 'stash';
+  const refs = parseRefs(entry.refs);
+  if (refs.some(r =>
+    (r.type === 'branch' && TRUNK_NAMES.has(r.name)) ||
+    (r.type === 'remote' && (r.name.endsWith('/main') || r.name.endsWith('/master')))
+  )) return 'trunk';
+  if (node.parents.length > 1) return 'merge';
+  return 'normal';
+}
+
 // ─── R6 viewport culling ─────────────────────────────
 // For repos with hundreds of commits, the SVG used to render every edge +
 // node + info row at once. We now track the scroll position and only
@@ -268,9 +283,27 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           class="cg-node"
           @click="emit('select-commit', node.hash)"
         >
-          <!-- Merge commit: solid filled, slightly larger to distinguish -->
+          <!-- Stash commit: dashed square outline, no fill -->
+          <rect
+            v-if="nodeKind(node) === 'stash'"
+            :x="cx(node.lane) - NODE_R"
+            :y="cy(node.index) - NODE_R"
+            :width="NODE_R * 2"
+            :height="NODE_R * 2"
+            fill="none"
+            :stroke="laneColor(node.lane)"
+            stroke-width="1.5"
+            stroke-dasharray="2,2"
+          />
+          <!-- Trunk commit (main/master): upward triangle -->
+          <polygon
+            v-else-if="nodeKind(node) === 'trunk'"
+            :points="`${cx(node.lane)},${cy(node.index) - NODE_R - 1} ${cx(node.lane) - NODE_R - 1},${cy(node.index) + NODE_R} ${cx(node.lane) + NODE_R + 1},${cy(node.index) + NODE_R}`"
+            :fill="laneColor(node.lane)"
+          />
+          <!-- Merge commit: solid filled, slightly larger circle -->
           <circle
-            v-if="node.parents.length > 1"
+            v-else-if="nodeKind(node) === 'merge'"
             :cx="cx(node.lane)"
             :cy="cy(node.index)"
             :r="NODE_R + 1"

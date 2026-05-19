@@ -646,6 +646,8 @@ pub(crate) fn git_log(
         });
     }
 
+    entries.retain(|e| !e.message.starts_with("index on "));
+
     Ok(entries)
 }
 
