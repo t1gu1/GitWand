@@ -34,19 +34,35 @@ let _cachedLayout: DagLayout | null = null;
 const layout = computed<DagLayout>(() => {
   const commits = props.commits;
   const n = commits.length;
-  const fp = n + ':' + (commits[0]?.hashFull ?? '') + ':' + (commits[n - 1]?.hashFull ?? '');
+  // Include currentBranch in fingerprint: branch change must recompute layout
+  // even when commit hashes are identical (trunk lane assignment differs).
+  const fp = n + ':' + (commits[0]?.hashFull ?? '') + ':' + (commits[n - 1]?.hashFull ?? '') + ':' + (props.currentBranch ?? '');
   if (fp === _prevFingerprint && _cachedLayout) return _cachedLayout;
   _prevFingerprint = fp;
-  // Find main/master branch head to pin to lane 0 (far left)
+
+  // Trunk = the lineage to pin on lane 0 (far left).
+  // Priority 1: current HEAD branch — its first-parent chain includes
+  //   all its ancestors (which may include main), keeping them all on lane 0.
+  // Priority 2: main / master as fallback when HEAD branch not found.
   const TRUNK_NAMES = new Set(['main', 'master']);
-  let mainBranchHash: string | undefined;
+  let trunkHash: string | undefined;
   for (const commit of commits) {
-    if (parseRefs(commit.refs).some(r => r.type === 'branch' && TRUNK_NAMES.has(r.name))) {
-      mainBranchHash = commit.hashFull;
+    const refs = parseRefs(commit.refs);
+    if (props.currentBranch && refs.some(r => r.type === 'branch' && r.name === props.currentBranch)) {
+      trunkHash = commit.hashFull;
       break;
     }
   }
-  _cachedLayout = computeDagLayout(commits, mainBranchHash);
+  if (!trunkHash) {
+    for (const commit of commits) {
+      if (parseRefs(commit.refs).some(r => r.type === 'branch' && TRUNK_NAMES.has(r.name))) {
+        trunkHash = commit.hashFull;
+        break;
+      }
+    }
+  }
+
+  _cachedLayout = computeDagLayout(commits, trunkHash);
   return _cachedLayout;
 });
 

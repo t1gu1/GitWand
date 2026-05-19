@@ -44,7 +44,7 @@ export interface DagLayout {
  */
 export function computeDagLayout(
   commits: Array<{ hashFull: string; parents: string[] }>,
-  mainBranchHash?: string,
+  trunkHash?: string,
 ): DagLayout {
   const nodes: DagNode[] = [];
   const edges: DagEdge[] = [];
@@ -54,13 +54,14 @@ export function computeDagLayout(
     hashToIndex.set(commits[i].hashFull, i);
   }
 
-  // Trace the main branch first-parent chain so every commit on it is
-  // forced to lane 0, regardless of processing order.
-  const mainChainSet = new Set<string>();
-  if (mainBranchHash && hashToIndex.has(mainBranchHash)) {
-    let h: string | undefined = mainBranchHash;
+  // Trace the trunk first-parent chain — every commit on it is forced to
+  // lane 0 regardless of processing order. "Trunk" is the current HEAD
+  // branch lineage (HEAD → ancestors through first-parent).
+  const trunkSet = new Set<string>();
+  if (trunkHash && hashToIndex.has(trunkHash)) {
+    let h: string | undefined = trunkHash;
     while (h && hashToIndex.has(h)) {
-      mainChainSet.add(h);
+      trunkSet.add(h);
       const idx = hashToIndex.get(h)!;
       h = commits[idx].parents[0];
     }
@@ -68,19 +69,22 @@ export function computeDagLayout(
 
   const hashToLane = new Map<string, number>();
   const freeLanes: number[] = [];
-  // lanes.length doubles as "next new lane index".
   let lanesAllocated = 0;
-  // Reference count: how many pending commits share a lane.
-  // A lane only enters freeLanes when its count reaches 0.
+  // Reference-count per lane. A lane only enters freeLanes when its count
+  // drops to 0. freeLanes may contain stale entries (re-claimed lanes) —
+  // allocLane skips them via the !lanePendingCount.has() guard.
   const lanePendingCount = new Map<number, number>();
+  // Edge-duration reservations: when an edge is created from child (lane X)
+  // to parent P, lane X stays reserved until P is processed. This prevents
+  // sibling branches from reusing the same column while a longer edge is
+  // still visually traversing it.
+  const parentReservations = new Map<string, number[]>();
   let maxLane = 0;
 
   function allocLane(): number {
-    // Skip any freeLane slot that was re-claimed after being freed
-    // (can happen when a main-chain parent grabs a just-released slot).
     while (freeLanes.length > 0) {
-      const candidate = freeLanes.pop()!;
-      if (!lanePendingCount.has(candidate)) return candidate;
+      const c = freeLanes.pop()!;
+      if (!lanePendingCount.has(c)) return c;
     }
     return lanesAllocated++;
   }
@@ -91,16 +95,21 @@ export function computeDagLayout(
     if (lane > maxLane) maxLane = lane;
   }
 
-  function releaseClaim(hash: string): void {
-    const lane = hashToLane.get(hash);
-    if (lane === undefined) return;
-    hashToLane.delete(hash);
+  function releaseRef(lane: number): void {
     const n = (lanePendingCount.get(lane) ?? 1) - 1;
     if (n <= 0) {
       lanePendingCount.delete(lane);
       freeLanes.push(lane);
     } else {
       lanePendingCount.set(lane, n);
+    }
+  }
+
+  function releaseClaim(hash: string): void {
+    const lane = hashToLane.get(hash);
+    if (lane !== undefined) {
+      hashToLane.delete(hash);
+      releaseRef(lane);
     }
   }
 
@@ -112,21 +121,32 @@ export function computeDagLayout(
     return lane;
   }
 
-  // Pre-seed: reserve lane 0 for the main branch head.
-  if (mainBranchHash && hashToIndex.has(mainBranchHash)) {
-    lanesAllocated = 1; // slot 0 is taken
-    claimLane(mainBranchHash, 0);
+  function reserveUntilParent(parentHash: string, lane: number): void {
+    lanePendingCount.set(lane, (lanePendingCount.get(lane) ?? 0) + 1);
+    const list = parentReservations.get(parentHash) ?? [];
+    list.push(lane);
+    parentReservations.set(parentHash, list);
+  }
+
+  // Pre-seed: trunk head starts on lane 0.
+  if (trunkHash && hashToIndex.has(trunkHash)) {
+    lanesAllocated = 1;
+    claimLane(trunkHash, 0);
   }
 
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
     const hash = commit.hashFull;
+
+    // Release edge-duration reservations that were waiting for this commit.
+    const reserved = parentReservations.get(hash);
+    if (reserved) {
+      for (const lane of reserved) releaseRef(lane);
+      parentReservations.delete(hash);
+    }
+
     const lane = getOrClaimLane(hash);
-
     nodes.push({ index: i, hash, parents: commit.parents, lane });
-
-    // Release this commit's own claim — its lane stays alive only as long
-    // as pending parent claims keep its reference count above zero.
     releaseClaim(hash);
 
     for (let p = 0; p < commit.parents.length; p++) {
@@ -136,20 +156,25 @@ export function computeDagLayout(
 
       let parentLane: number;
       if (hashToLane.has(parentHash)) {
-        // Parent already has a lane (assigned by an earlier sibling or pre-seeded).
         parentLane = hashToLane.get(parentHash)!;
-      } else if (mainChainSet.has(parentHash)) {
-        // Main-chain commits always live on lane 0.
+      } else if (trunkSet.has(parentHash)) {
+        // Trunk-chain parent always on lane 0.
         claimLane(parentHash, 0);
         parentLane = 0;
       } else if (p === 0) {
-        // First non-main parent inherits this commit's lane (straight continuation).
+        // First non-trunk parent inherits this lane (straight continuation).
         claimLane(parentHash, lane);
         parentLane = lane;
       } else {
-        // Merge parents (2nd+) get a fresh lane.
+        // Merge parents get a fresh lane.
         parentLane = getOrClaimLane(parentHash);
       }
+
+      // Keep this commit's lane reserved until the parent is processed so
+      // the visual column stays occupied for the full height of the edge.
+      // Without this, sibling branches sharing the same parent reuse the
+      // same column and appear falsely chained.
+      reserveUntilParent(parentHash, lane);
 
       edges.push({
         fromIndex: i,
