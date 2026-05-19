@@ -1876,7 +1876,7 @@ onUnmounted(() => {
       <Transition name="git-tree-panel">
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
-          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="branchDisplay"
+          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
             :fork-point-sha="graphForkPointSha" :repo-stats="repoStats"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange" />
@@ -1916,7 +1916,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Interactive rebase panel -->
-    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="branchDisplay"
+    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch"
       :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
@@ -2052,12 +2052,12 @@ onUnmounted(() => {
       @run-action="onPaletteAction" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
-         Both teleport to body and guard against `branchDisplay` going
+         Both teleport to body and guard against `repoStatus?.branch` going
          null between open + confirm (the :current-branch / :branch-name
          binding is non-null because we only mount when showing). -->
-    <BranchRenameModal v-if="showBranchRenameModal && branchDisplay" :current-branch="branchDisplay"
+    <BranchRenameModal v-if="showBranchRenameModal && repoStatus?.branch" :current-branch="repoStatus.branch"
       @close="showBranchRenameModal = false" @confirm="onBranchRenameConfirm" />
-    <BranchDeleteModal v-if="showBranchDeleteModal && branchDisplay" :branch-name="branchDisplay"
+    <BranchDeleteModal v-if="showBranchDeleteModal && repoStatus?.branch" :branch-name="repoStatus.branch"
       @close="showBranchDeleteModal = false" @confirm="onBranchDeleteConfirm" />
 
     <!-- ── Commit context-menu modals (v1.9) — using BaseModal for design consistency ── -->
