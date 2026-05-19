@@ -72,7 +72,7 @@ const emit = defineEmits<{
   splitCommit: [entry: GitLogEntry];
   // v1.9 — commit context menu actions
   checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   revertCommit: [entry: GitLogEntry];
   createBranchFromCommit: [entry: GitLogEntry];
   tagCommit: [entry: GitLogEntry];
@@ -1185,7 +1185,7 @@ function formatActivityDate(dateStr: string): string {
         @edit-commit="(entry) => emit('editCommit', entry)"
         @split-commit="(entry) => emit('splitCommit', entry)"
         @checkout-commit="(entry) => emit('checkoutCommit', entry)"
-        @reset-to-commit="(entry) => emit('resetToCommit', entry)"
+        @reset-to-commit="(entry, mode) => emit('resetToCommit', entry, mode)"
         @revert-commit="(entry) => emit('revertCommit', entry)"
         @create-branch-from-commit="(entry) => emit('createBranchFromCommit', entry)"
         @tag-commit="(entry) => emit('tagCommit', entry)"

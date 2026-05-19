@@ -4,6 +4,8 @@ import type { GitLogEntry } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
 
+import CommitContextMenu from "./CommitContextMenu.vue";
+
 const { t } = useI18n();
 
 const props = defineProps<{
@@ -22,7 +24,50 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "select-commit": [hash: string];
+  "contextmenu-select": [hash: string];
+  // v1.9 — commit context menu (added to graph too)
+  editCommit: [entry: GitLogEntry];
+  splitCommit: [entry: GitLogEntry];
+  checkoutCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
+  revertCommit: [entry: GitLogEntry];
+  createBranchFromCommit: [entry: GitLogEntry];
+  tagCommit: [entry: GitLogEntry];
+  cherryPickCommit: [entry: GitLogEntry];
+  viewOnForge: [entry: GitLogEntry];
 }>();
+
+// ─── Context menu ────────────────────────────────────
+interface CommitCtxMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  entry: GitLogEntry | null;
+  idx: number;
+}
+const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
+
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+  e.preventDefault();
+  e.stopPropagation();
+  // Select the commit for the right sidebar to update, but don't emit 'select-commit'
+  // which is wired in App.vue to change the view to 'history'.
+  // App.vue has selectCommit(hash) exposed, but since we are emitting, we need a separate event
+  // for "silent" selection if we wanted it, but let's just emit a new event or rely on the parent.
+  // Actually, App.vue wires `@select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"`
+  // Let's emit a new event just for selection without navigation.
+  emit("contextmenu-select", entry.hashFull);
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+}
+
+function closeCommitContextMenu() {
+  ctxMenu.value.visible = false;
+}
+
+onMounted(() => {
+  window.addEventListener("click", closeCommitContextMenu);
+  window.addEventListener("contextmenu", closeCommitContextMenu, { capture: false });
+});
 
 // ─── DAG layout ──────────────────────────────────────
 // R6 — fingerprint cache: we compare first/last hash + length.
@@ -250,6 +295,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           class="cg-node"
           :opacity="isSharedHistory(node.index) ? 0.25 : 1"
           @click="emit('select-commit', node.hash)"
+          @contextmenu="openCommitContextMenu($event, commits[node.index], node.index)"
         >
           <!-- Merge commit: bigger open circle -->
           <circle
@@ -286,6 +332,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="emit('select-commit', vc.entry.hashFull)"
+          @contextmenu="openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <!-- Ref badges -->
           <span
@@ -307,6 +354,25 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </div>
       </div>
     </div>
+
+    <!-- Context menu -->
+    <CommitContextMenu
+      v-if="ctxMenu.visible && ctxMenu.entry"
+      :entry="ctxMenu.entry"
+      :x="ctxMenu.x"
+      :y="ctxMenu.y"
+      :idx="ctxMenu.idx"
+      @close="closeCommitContextMenu"
+      @checkout="(entry) => emit('checkoutCommit', entry)"
+      @reset="(entry, mode) => emit('resetToCommit', entry, mode)"
+      @revert="(entry) => emit('revertCommit', entry)"
+      @create-branch="(entry) => emit('createBranchFromCommit', entry)"
+      @tag="(entry) => emit('tagCommit', entry)"
+      @cherry-pick="(entry) => emit('cherryPickCommit', entry)"
+      @view-on-forge="(entry) => emit('viewOnForge', entry)"
+      @edit-commit="(entry) => emit('editCommit', entry)"
+      @split-commit="(entry) => emit('splitCommit', entry)"
+    />
   </div>
   <div v-else class="cg-empty muted">
     {{ t('log.noCommit') }}

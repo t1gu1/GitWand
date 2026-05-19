@@ -98,8 +98,8 @@ export function useCommitActions(deps: Deps) {
 
   // ── Reset to commit ────────────────────────────────────
 
-  function handleResetToCommit(entry: GitLogEntry) {
-    modal.value = { ...modal.value, type: "reset", entry, resetMode: "mixed", error: "" };
+  function handleResetToCommit(entry: GitLogEntry, mode?: "soft" | "mixed" | "hard") {
+    modal.value = { ...modal.value, type: "reset", entry, resetMode: mode ?? "mixed", error: "" };
   }
 
   async function confirmResetToCommit() {

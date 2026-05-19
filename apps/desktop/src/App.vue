@@ -1792,9 +1792,13 @@ onUnmounted(() => {
 
             <!-- Graph view: DAG visualization -->
             <CommitGraph v-else-if="viewMode === 'graph'" :commits="repoLog" :selected-hash="selectedCommitHash"
-              :current-branch="branchDisplay"
-              :fork-point-sha="graphForkPointSha"
-              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+              :current-branch="branchDisplay" :fork-point-sha="graphForkPointSha"
+              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+              @contextmenu-select="(hash) => { selectCommit(hash); }" @edit-commit="handleEditCommit"
+              @split-commit="handleSplitCommitRequest" @checkout-commit="handleCheckoutCommit"
+              @reset-to-commit="handleResetToCommit" @revert-commit="handleRevertCommit"
+              @create-branch-from-commit="handleCreateBranchFromCommit" @tag-commit="handleTagCommit"
+              @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge" />
 
             <!-- PRs view: creation form takes over when showCreateForm is true -->
             <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
