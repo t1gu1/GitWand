@@ -49,104 +49,115 @@ export function computeDagLayout(
   const nodes: DagNode[] = [];
   const edges: DagEdge[] = [];
 
-  // Map from hash to index in commits array
   const hashToIndex = new Map<string, number>();
   for (let i = 0; i < commits.length; i++) {
     hashToIndex.set(commits[i].hashFull, i);
   }
 
-  // Hash → lane lookup for O(1) findLane (instead of O(L) linear scan).
+  // Trace the main branch first-parent chain so every commit on it is
+  // forced to lane 0, regardless of processing order.
+  const mainChainSet = new Set<string>();
+  if (mainBranchHash && hashToIndex.has(mainBranchHash)) {
+    let h: string | undefined = mainBranchHash;
+    while (h && hashToIndex.has(h)) {
+      mainChainSet.add(h);
+      const idx = hashToIndex.get(h)!;
+      h = commits[idx].parents[0];
+    }
+  }
+
   const hashToLane = new Map<string, number>();
-  // Reusable free lane slots (previously occupied but now freed).
   const freeLanes: number[] = [];
-  // Active lanes: each slot holds the hash of the commit it's expecting next.
-  const lanes: (string | null)[] = [];
+  // lanes.length doubles as "next new lane index".
+  let lanesAllocated = 0;
+  // Reference count: how many pending commits share a lane.
+  // A lane only enters freeLanes when its count reaches 0.
+  const lanePendingCount = new Map<number, number>();
   let maxLane = 0;
 
-  function findLane(hash: string): number {
+  function allocLane(): number {
+    // Skip any freeLane slot that was re-claimed after being freed
+    // (can happen when a main-chain parent grabs a just-released slot).
+    while (freeLanes.length > 0) {
+      const candidate = freeLanes.pop()!;
+      if (!lanePendingCount.has(candidate)) return candidate;
+    }
+    return lanesAllocated++;
+  }
+
+  function claimLane(hash: string, lane: number): void {
+    hashToLane.set(hash, lane);
+    lanePendingCount.set(lane, (lanePendingCount.get(lane) ?? 0) + 1);
+    if (lane > maxLane) maxLane = lane;
+  }
+
+  function releaseClaim(hash: string): void {
+    const lane = hashToLane.get(hash);
+    if (lane === undefined) return;
+    hashToLane.delete(hash);
+    const n = (lanePendingCount.get(lane) ?? 1) - 1;
+    if (n <= 0) {
+      lanePendingCount.delete(lane);
+      freeLanes.push(lane);
+    } else {
+      lanePendingCount.set(lane, n);
+    }
+  }
+
+  function getOrClaimLane(hash: string): number {
     const existing = hashToLane.get(hash);
     if (existing !== undefined) return existing;
-
-    if (freeLanes.length > 0) {
-      const lane = freeLanes.pop()!;
-      hashToLane.set(hash, lane);
-      return lane;
-    }
-
-    const lane = lanes.length;
-    hashToLane.set(hash, lane);
-    lanes.push(hash);
+    const lane = allocLane();
+    claimLane(hash, lane);
     return lane;
+  }
+
+  // Pre-seed: reserve lane 0 for the main branch head.
+  if (mainBranchHash && hashToIndex.has(mainBranchHash)) {
+    lanesAllocated = 1; // slot 0 is taken
+    claimLane(mainBranchHash, 0);
   }
 
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
     const hash = commit.hashFull;
-    const lane = findLane(hash);
-    if (lane > maxLane) maxLane = lane;
+    const lane = getOrClaimLane(hash);
 
-    nodes.push({
-      index: i,
-      hash,
-      parents: commit.parents,
-      lane,
-    });
+    nodes.push({ index: i, hash, parents: commit.parents, lane });
 
-    // Free this lane only when the first parent won't inherit it.
-    // If the first parent is in the window and has no lane yet, it will
-    // inherit this lane (p=0 case below) — so we must NOT add it to
-    // freeLanes or sibling branches will reuse the slot and overlap.
-    hashToLane.delete(hash);
-    const firstParentHash = commit.parents[0];
-    const firstParentNeedsThisLane =
-      firstParentHash !== undefined &&
-      hashToIndex.has(firstParentHash) &&
-      !hashToLane.has(firstParentHash);
-    if (!firstParentNeedsThisLane) {
-      freeLanes.push(lane);
-    }
+    // Release this commit's own claim — its lane stays alive only as long
+    // as pending parent claims keep its reference count above zero.
+    releaseClaim(hash);
 
-    // Assign parents to lanes
     for (let p = 0; p < commit.parents.length; p++) {
       const parentHash = commit.parents[p];
       const parentIndex = hashToIndex.get(parentHash);
+      if (parentIndex === undefined) continue;
 
-      if (parentIndex !== undefined) {
-        let parentLane = hashToLane.get(parentHash);
-        if (parentLane === undefined) {
-          if (p === 0) {
-            hashToLane.set(parentHash, lane);
-            parentLane = lane;
-          } else {
-            parentLane = findLane(parentHash);
-          }
-        }
-        if (parentLane > maxLane) maxLane = parentLane;
-
-        edges.push({
-          fromIndex: i,
-          fromLane: lane,
-          toIndex: parentIndex,
-          toLane: parentLane,
-          isMerge: p > 0,
-        });
+      let parentLane: number;
+      if (hashToLane.has(parentHash)) {
+        // Parent already has a lane (assigned by an earlier sibling or pre-seeded).
+        parentLane = hashToLane.get(parentHash)!;
+      } else if (mainChainSet.has(parentHash)) {
+        // Main-chain commits always live on lane 0.
+        claimLane(parentHash, 0);
+        parentLane = 0;
+      } else if (p === 0) {
+        // First non-main parent inherits this commit's lane (straight continuation).
+        claimLane(parentHash, lane);
+        parentLane = lane;
+      } else {
+        // Merge parents (2nd+) get a fresh lane.
+        parentLane = getOrClaimLane(parentHash);
       }
-    }
-  }
 
-  // Post-process: swap lanes so main/master is always on lane 0 (far left).
-  // Find which lane main's HEAD ended up on and swap all lane-0 assignments
-  // with that lane across both nodes and edges.
-  if (mainBranchHash) {
-    const mainNode = nodes.find(n => n.hash === mainBranchHash);
-    if (mainNode && mainNode.lane !== 0) {
-      const swap = mainNode.lane;
-      const swapLane = (l: number) => l === 0 ? swap : l === swap ? 0 : l;
-      for (const node of nodes) node.lane = swapLane(node.lane);
-      for (const edge of edges) {
-        edge.fromLane = swapLane(edge.fromLane);
-        edge.toLane   = swapLane(edge.toLane);
-      }
+      edges.push({
+        fromIndex: i,
+        fromLane: lane,
+        toIndex: parentIndex,
+        toLane: parentLane,
+        isMerge: p > 0,
+      });
     }
   }
 
