@@ -96,7 +96,7 @@ const en = {
     paletteViewDashboard: "View: Dashboard",
     paletteViewChanges: "View: Changes",
     paletteViewLog: "View: Log",
-    paletteViewGraph: "View: Graph",
+    paletteViewGraph: "View: Git Tree",
     // Tab strip + dropdown (v2.0)
     tabStripAddTitle: "Add a tab",
     tabStripOpenFolder: "Open folder",
@@ -152,6 +152,7 @@ const en = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graph",
+    gitTree: "Git Tree",
     tabDashboard: "Dashboard",
     stashTitle: "Stash manager",
     // Log scope toggle (current branch vs all refs)

@@ -733,13 +733,6 @@ function formatActivityDate(dateStr: string): string {
         {{ t('sidebar.tabLog') }}
       </button>
       <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'graph' }"
-        @click="emit('changeView', 'graph')"
-      >
-        {{ t('sidebar.tabGraph') }}
-      </button>
-      <button
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"

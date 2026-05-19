@@ -96,7 +96,7 @@ const es: Locale = {
     paletteViewDashboard: "Vista: Panel",
     paletteViewChanges: "Vista: Cambios",
     paletteViewLog: "Vista: Historial",
-    paletteViewGraph: "Vista: Gr\u00e1fico",
+    paletteViewGraph: "Vista: \u00c1rbol Git",
     // Tab strip + dropdown (v2.0)
     tabStripAddTitle: "Agregar pesta\u00f1a",
     tabStripOpenFolder: "Abrir carpeta",
@@ -152,6 +152,7 @@ const es: Locale = {
     tabBranches: "Ramas",
     tabLog: "Historial",
     tabGraph: "Gráfico",
+    gitTree: "Árbol Git",
     tabDashboard: "Panel",
     stashTitle: "Gestor de stash",
     logScopeLabel: "Ámbito del historial",

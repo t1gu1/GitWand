@@ -90,7 +90,7 @@ const fr: Locale = {
     paletteViewDashboard: "Vue\u00a0: Tableau de bord",
     paletteViewChanges: "Vue\u00a0: Modifications",
     paletteViewLog: "Vue\u00a0: Historique",
-    paletteViewGraph: "Vue\u00a0: Graphe",
+    paletteViewGraph: "Vue\u00a0: Arbre Git",
     // Tab strip + dropdown (v2.0)
     tabStripAddTitle: "Ajouter un onglet",
     tabStripOpenFolder: "Ouvrir un dossier",
@@ -146,6 +146,7 @@ const fr: Locale = {
     tabBranches: "Branches",
     tabLog: "Log",
     tabGraph: "Graphe",
+    gitTree: "Arbre Git",
     tabDashboard: "Tableau de bord",
     stashTitle: "Gestionnaire de stash",
     // Log scope toggle (current branch vs all refs)
