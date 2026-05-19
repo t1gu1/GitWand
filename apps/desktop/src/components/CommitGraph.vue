@@ -37,7 +37,16 @@ const layout = computed<DagLayout>(() => {
   const fp = n + ':' + (commits[0]?.hashFull ?? '') + ':' + (commits[n - 1]?.hashFull ?? '');
   if (fp === _prevFingerprint && _cachedLayout) return _cachedLayout;
   _prevFingerprint = fp;
-  _cachedLayout = computeDagLayout(commits);
+  // Find main/master branch head to pin to lane 0 (far left)
+  const TRUNK_NAMES = new Set(['main', 'master']);
+  let mainBranchHash: string | undefined;
+  for (const commit of commits) {
+    if (parseRefs(commit.refs).some(r => r.type === 'branch' && TRUNK_NAMES.has(r.name))) {
+      mainBranchHash = commit.hashFull;
+      break;
+    }
+  }
+  _cachedLayout = computeDagLayout(commits, mainBranchHash);
   return _cachedLayout;
 });
 
@@ -69,7 +78,7 @@ function isSharedHistory(index: number): boolean {
 
 // ─── Rendering constants ─────────────────────────────
 const ROW_H = 32;       // height per commit row
-const LANE_W = 16;      // width per lane
+const LANE_W = 18;      // width per lane
 const NODE_R = 4;       // node circle radius
 const GRAPH_PAD = 12;   // left padding before first lane
 const SVG_MIN_W = 60;   // minimum graph column width
@@ -80,20 +89,12 @@ const graphWidth = computed(() => {
 
 const totalHeight = computed(() => props.commits.length * ROW_H);
 
-// ─── Lane colours (use CSS tokens via computed) ────────
-const LANE_COLORS_TOKENS = [
-  "var(--color-info)",       // blue
-  "var(--color-success)",    // green
-  "var(--color-warning)",    // amber
-  "var(--color-danger)",     // red
-  "var(--color-accent)",     // purple
-  "var(--color-info)",       // cyan (reuse info)
-  "var(--color-accent)",     // pink (reuse accent)
-  "var(--color-success)",    // lime (reuse success)
-];
-
+// ─── Lane colours — rainbow spectrum left-to-right ───────
+// 45° hue steps: red → orange → yellow-green → green → cyan → blue-cyan → indigo → violet
+// Cycles every 8 lanes; each branch gets a visually distinct color.
 function laneColor(lane: number): string {
-  return LANE_COLORS_TOKENS[lane % LANE_COLORS_TOKENS.length];
+  const hue = (lane * 45) % 360;
+  return `hsl(${hue}, 80%, 55%)`;
 }
 
 // ─── SVG path helpers ────────────────────────────────
@@ -105,20 +106,21 @@ function cy(index: number): number {
   return index * ROW_H + ROW_H / 2;
 }
 
-/** Build an SVG path for an edge */
+/** Build an SVG path for an edge — elbow style.
+ * Straight down in child lane, then a rounded corner into the parent lane
+ * at the parent row level. Creates a visible horizontal segment exactly at
+ * the commit where branches connect. */
 function edgePath(e: { fromIndex: number; fromLane: number; toIndex: number; toLane: number }): string {
   const x1 = cx(e.fromLane);
   const y1 = cy(e.fromIndex);
   const x2 = cx(e.toLane);
   const y2 = cy(e.toIndex);
 
-  if (x1 === x2) {
-    // Straight vertical
-    return `M${x1},${y1} L${x2},${y2}`;
-  }
-  // Curved: use bezier for lane changes
-  const midY = (y1 + y2) / 2;
-  return `M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}`;
+  if (x1 === x2) return `M${x1},${y1} L${x2},${y2}`;
+
+  const r = Math.min(LANE_W * 0.6, (y2 - y1) * 0.35);
+  const xSign = x2 < x1 ? -1 : 1;
+  return `M${x1},${y1} L${x1},${y2 - r} Q${x1},${y2} ${x1 + xSign * r},${y2} L${x2},${y2}`;
 }
 
 // ─── Helpers ─────────────────────────────────────────
@@ -243,25 +245,22 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           stroke-linecap="round"
           :opacity="isSharedHistory(edge.fromIndex) ? 0.25 : 1"
         />
-        <!-- Nodes (R6: visible only). -->
+        <!-- Nodes (R6: visible only). Always fully opaque — dots never fade. -->
         <g
           v-for="node in visibleNodes"
           :key="'n' + node.index"
           class="cg-node"
-          :opacity="isSharedHistory(node.index) ? 0.25 : 1"
           @click="emit('select-commit', node.hash)"
         >
-          <!-- Merge commit: bigger open circle -->
+          <!-- Merge commit: solid filled, slightly larger to distinguish -->
           <circle
             v-if="node.parents.length > 1"
             :cx="cx(node.lane)"
             :cy="cy(node.index)"
             :r="NODE_R + 1"
-            :stroke="laneColor(node.lane)"
-            stroke-width="2"
-            fill="var(--color-bg)"
+            :fill="laneColor(node.lane)"
           />
-          <!-- Normal commit: filled circle -->
+          <!-- Normal commit: solid filled circle -->
           <circle
             v-else
             :cx="cx(node.lane)"

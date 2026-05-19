@@ -44,6 +44,7 @@ export interface DagLayout {
  */
 export function computeDagLayout(
   commits: Array<{ hashFull: string; parents: string[] }>,
+  mainBranchHash?: string,
 ): DagLayout {
   const nodes: DagNode[] = [];
   const edges: DagEdge[] = [];
@@ -91,9 +92,19 @@ export function computeDagLayout(
       lane,
     });
 
-    // Free this lane for reuse
+    // Free this lane only when the first parent won't inherit it.
+    // If the first parent is in the window and has no lane yet, it will
+    // inherit this lane (p=0 case below) — so we must NOT add it to
+    // freeLanes or sibling branches will reuse the slot and overlap.
     hashToLane.delete(hash);
-    freeLanes.push(lane);
+    const firstParentHash = commit.parents[0];
+    const firstParentNeedsThisLane =
+      firstParentHash !== undefined &&
+      hashToIndex.has(firstParentHash) &&
+      !hashToLane.has(firstParentHash);
+    if (!firstParentNeedsThisLane) {
+      freeLanes.push(lane);
+    }
 
     // Assign parents to lanes
     for (let p = 0; p < commit.parents.length; p++) {
@@ -119,6 +130,22 @@ export function computeDagLayout(
           toLane: parentLane,
           isMerge: p > 0,
         });
+      }
+    }
+  }
+
+  // Post-process: swap lanes so main/master is always on lane 0 (far left).
+  // Find which lane main's HEAD ended up on and swap all lane-0 assignments
+  // with that lane across both nodes and edges.
+  if (mainBranchHash) {
+    const mainNode = nodes.find(n => n.hash === mainBranchHash);
+    if (mainNode && mainNode.lane !== 0) {
+      const swap = mainNode.lane;
+      const swapLane = (l: number) => l === 0 ? swap : l === swap ? 0 : l;
+      for (const node of nodes) node.lane = swapLane(node.lane);
+      for (const edge of edges) {
+        edge.fromLane = swapLane(edge.fromLane);
+        edge.toLane   = swapLane(edge.toLane);
       }
     }
   }

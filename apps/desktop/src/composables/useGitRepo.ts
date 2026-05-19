@@ -63,7 +63,7 @@ export function useGitRepo() {
   // Scope of the commit log:
   //   "current" → only commits reachable from the current branch HEAD (default, like `git log`)
   //   "all"     → all refs (`git log --all`)
-  const logScope = ref<"current" | "all">("current");
+  const logScope = ref<"current" | "all">("all");
   // Author filter: "all" → no filter, "mine" → only commits by the current git user
   const logAuthorFilter = ref<"all" | "mine">("all");
   const currentGitUser = ref<GitUser | null>(null);
