@@ -72,7 +72,7 @@ for (const f of files) {
 }
 
 const total = files.reduce((acc, f) => acc + f.kb, 0);
-const main = files.find((f) => /^index-[a-z0-9]+\.js$/i.test(f.name)) || files[0];
+const main = files.find((f) => /^index-[a-z0-9-]+\.js$/i.test(f.name)) || files[0];
 const otherMax = files.filter((f) => f !== main).reduce((max, f) => Math.max(max, f.kb), 0);
 
 console.log(`\nTotal:    ${total} KB`);

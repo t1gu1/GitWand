@@ -101,7 +101,7 @@ const zhCN: Locale = {
     paletteViewDashboard: "\u89c6\u56fe\uff1a\u4eea\u8868\u76d8",
     paletteViewChanges: "\u89c6\u56fe\uff1a\u66f4\u6539",
     paletteViewLog: "\u89c6\u56fe\uff1a\u5386\u53f2",
-    paletteViewGraph: "\u89c6\u56fe\uff1a\u56fe\u8868",
+    paletteViewGraph: "\u89c6\u56fe\uff1aGit \u6811\u56fe",
     // 标签页 + 下拉菜单 (v2.0)
     tabStripAddTitle: "添加标签页",
     tabStripOpenFolder: "打开文件夹",
@@ -156,6 +156,7 @@ const zhCN: Locale = {
     tabBranches: "分支",
     tabLog: "日志",
     tabGraph: "图谱",
+    gitTree: "Git 树图",
     tabDashboard: "概览",
     stashTitle: "储藏管理",
     logScopeLabel: "日志范围",

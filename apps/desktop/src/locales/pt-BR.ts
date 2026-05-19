@@ -97,7 +97,7 @@ const ptBR: Locale = {
     paletteViewDashboard: "Vis\u00e3o: Painel",
     paletteViewChanges: "Vis\u00e3o: Altera\u00e7\u00f5es",
     paletteViewLog: "Vis\u00e3o: Hist\u00f3rico",
-    paletteViewGraph: "Vis\u00e3o: Gr\u00e1fico",
+    paletteViewGraph: "Vis\u00e3o: \u00c1rvore Git",
     // Tab strip + dropdown (v2.0)
     tabStripAddTitle: "Adicionar aba",
     tabStripOpenFolder: "Abrir pasta",
@@ -153,6 +153,7 @@ const ptBR: Locale = {
     tabBranches: "Branches",
     tabLog: "Histórico",
     tabGraph: "Grafo",
+    gitTree: "Árvore Git",
     tabDashboard: "Painel",
     stashTitle: "Gerenciador de stash",
     logScopeLabel: "Escopo do histórico",
