@@ -88,9 +88,20 @@ export function computeDagLayout(
   let maxLane = 0;
 
   function allocLane(): number {
-    while (freeLanes.length > 0) {
-      const c = freeLanes.pop()!;
-      if (!lanePendingCount.has(c)) return c;
+    // Pick the lowest-numbered available free lane so the graph stays
+    // compact and left-aligned (new branches fill leftward gaps first).
+    let bestIdx = -1;
+    let bestLane = Infinity;
+    for (let j = 0; j < freeLanes.length; j++) {
+      const c = freeLanes[j];
+      if (!lanePendingCount.has(c) && c < bestLane) {
+        bestLane = c;
+        bestIdx = j;
+      }
+    }
+    if (bestIdx !== -1) {
+      freeLanes.splice(bestIdx, 1);
+      return bestLane;
     }
     return lanesAllocated++;
   }
