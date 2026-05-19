@@ -277,11 +277,12 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <rect
           v-for="node in visibleNodes"
           :key="'t' + node.index"
-          :x="cx(node.lane)"
-          :y="node.index * ROW_H + 7"
-          :width="graphWidth - cx(node.lane)"
-          :height="ROW_H - 14"
+          :x="cx(node.lane) - 11"
+          :y="node.index * ROW_H + 1"
+          :width="graphWidth - cx(node.lane) + 11 + 20"
+          :height="ROW_H - 2"
           :fill="laneColorTint(node.lane)"
+          rx="8"
         />
         <!-- Edges first (behind nodes). R6: only visible edges are emitted.
              Key uses content (lanes + indices) so Vue can re-use DOM nodes
