@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
-import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser } from "../utils/backend";
+import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser, type GitDiff } from "../utils/backend";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCommitMessage } from "../composables/useCommitMessage";
@@ -43,6 +43,10 @@ const props = defineProps<{
   aheadCount?: number;
   /** True when the current branch has no upstream (no origin/<branch>). */
   needsPublish?: boolean;
+  /** Files for history view */
+  commitDiffs?: GitDiff[];
+  /** Currently visible file index in CommitDiffViewer */
+  visibleFileIdx?: number;
 }>();
 
 const emit = defineEmits<{
@@ -74,9 +78,20 @@ const emit = defineEmits<{
   openWorkspace: [];
   openAgents: [];
   openLaunchpad: [];
+  /** Scroll to a specific file in the history view */
+  scrollToFile: [index: number];
 }>();
 
 const { t, locale } = useI18n();
+
+function getFileStatus(diff: GitDiff): { label: string; color: string; icon: string } {
+  const adds = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'add').length, 0);
+  const dels = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'delete').length, 0);
+
+  if (adds > 0 && dels === 0) return { label: 'Added', color: 'var(--color-success)', icon: 'A' };
+  if (dels > 0 && adds === 0) return { label: 'Deleted', color: 'var(--color-danger)', icon: 'D' };
+  return { label: 'Modified', color: 'var(--color-warning)', icon: 'M' };
+}
 
 // ─── Context menu ─────────────────────────────────────────────
 interface CtxMenu {
@@ -747,12 +762,61 @@ function formatActivityDate(dateStr: string): string {
         <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
       </button>
       <button
+        v-if="viewMode === 'history'"
+        class="view-tab"
+        :class="{ 'view-tab--active': viewMode === 'history' }"
+      >
+        {{ t('sidebar.tabLog') }}
+      </button>
+      <button
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"
       >
         PRs
       </button>
+    </div>
+
+    <!-- History file list -->
+    <div class="sections" v-if="viewMode === 'history'">
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon" style="color: var(--color-accent)">H</span>
+          <span class="section-label">{{ t('header.files') }}</span>
+          <span class="section-count" v-if="commitDiffs">{{ commitDiffs.length }}</span>
+        </div>
+        <ul class="file-items" role="listbox" v-if="commitDiffs">
+          <li
+            v-for="(diff, idx) in commitDiffs"
+            :key="idx"
+            class="file-item"
+            :class="{ 'file-item--selected': idx === visibleFileIdx }"
+            role="option"
+            :aria-selected="idx === visibleFileIdx"
+            tabindex="0"
+            @click="emit('scrollToFile', idx)"
+            @keydown.enter="emit('scrollToFile', idx)"
+            @keydown.space.prevent="emit('scrollToFile', idx)"
+          >
+            <span
+              class="file-status-badge mono"
+              :style="{ color: getFileStatus(diff).color }"
+            >
+              {{ getFileStatus(diff).icon }}
+            </span>
+            <div class="file-info">
+              <span class="file-name mono">{{ fileName(diff.path) }}</span>
+              <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
+            </div>
+          </li>
+        </ul>
+        <div v-else-if="selectedCommitHash" class="empty-section">
+          <span class="empty-text">{{ t('log.noDiffForCommit') }}</span>
+        </div>
+        <div v-else class="empty-section">
+          <span class="empty-text">{{ t('log.selectCommit') }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- File sections -->
@@ -1572,7 +1636,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .file-item--selected {
-  background: var(--color-bg-tertiary);
+  background: var(--color-accent-soft);
   border-left-color: var(--color-accent);
 }
 
@@ -1604,7 +1668,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .file-item--sub.file-item--selected {
-  background: var(--color-bg-tertiary);
+  background: var(--color-accent-soft);
   border-left-color: var(--color-accent);
 }
 

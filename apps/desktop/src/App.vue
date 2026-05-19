@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent, nextTick } from "vue";
 
 // ─── Eager imports — main views & shared building blocks ─────────────────────
 // These are part of the always-rendered UI (header, sidebar, main content
@@ -1691,6 +1691,23 @@ useAppMenu(
   { hasRepo },
 );
 
+const historyVisibleFileIdx = ref(0);
+const scrollToFileIdx = ref<number | null>(null);
+
+function onHistoryScrollToFile(idx: number) {
+  historyVisibleFileIdx.value = idx;
+  scrollToFileIdx.value = idx;
+  // Reset so that clicking the same file again triggers the scroll
+  nextTick(() => {
+    scrollToFileIdx.value = null;
+  });
+}
+
+watch(selectedCommitHash, () => {
+  historyVisibleFileIdx.value = 0;
+  scrollToFileIdx.value = null;
+});
+
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   applyGitConfig();
@@ -1735,6 +1752,7 @@ onUnmounted(() => {
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
           :log-entries="repoLog" :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
           :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
+          :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
           @select="onRepoFileSelect" @change-view="onViewModeChange"
           @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
           @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
@@ -1745,7 +1763,7 @@ onUnmounted(() => {
           @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
           @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
-          @open-launchpad="handleLaunchpadShortcut" />
+          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile" />
       </aside>
 
       <main class="main">
@@ -1832,7 +1850,8 @@ onUnmounted(() => {
             <!-- History view: commit diff (log is in sidebar) -->
             <CommitDiffViewer v-else-if="viewMode === 'history'" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
               :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
-              @update:diff-mode="onDiffModeChange" />
+              :scroll-to-file-idx="scrollToFileIdx" @update:diff-mode="onDiffModeChange"
+              @update:visible-file-idx="historyVisibleFileIdx = $event" />
 
             <!-- PRs view: creation form takes over when showCreateForm is true -->
             <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
@@ -1907,7 +1926,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Interactive rebase panel -->
-    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch"
+    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
       :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
