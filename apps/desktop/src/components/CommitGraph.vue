@@ -150,6 +150,21 @@ function edgePath(e: { fromIndex: number; fromLane: number; toIndex: number; toL
   return `M${x1},${y1} L${x1},${y2 - r} Q${x1},${y2} ${x1 + xSign * r},${y2} L${x2},${y2}`;
 }
 
+/** Build an SVG path for a 5-pointed star centered at (cx, cy) */
+function starPath(x: number, y: number): string {
+  const R = NODE_R + 1.8; // outer radius
+  const r = NODE_R / 2.2; // inner radius
+  let d = "";
+  for (let i = 0; i < 10; i++) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const rad = i % 2 === 0 ? R : r;
+    const px = x + rad * Math.cos(angle);
+    const py = y + rad * Math.sin(angle);
+    d += (i === 0 ? "M" : "L") + px.toFixed(1) + "," + py.toFixed(1);
+  }
+  return d + "Z";
+}
+
 // ─── Helpers ─────────────────────────────────────────
 function formatDate(raw: string): string {
   try {
@@ -334,10 +349,10 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             stroke-width="1.5"
             stroke-dasharray="2,2"
           />
-          <!-- Trunk commit (main/master): upward triangle -->
-          <polygon
+          <!-- Trunk commit (main/master): star icon (v2.13) -->
+          <path
             v-else-if="nodeKind(node) === 'trunk'"
-            :points="`${cx(node.lane)},${cy(node.index) - NODE_R - 1} ${cx(node.lane) - NODE_R - 1},${cy(node.index) + NODE_R} ${cx(node.lane) + NODE_R + 1},${cy(node.index) + NODE_R}`"
+            :d="starPath(cx(node.lane), cy(node.index))"
             fill="url(#trunk-gradient-stroke)"
           />
           <!-- Merge commit: solid filled, slightly larger circle -->
