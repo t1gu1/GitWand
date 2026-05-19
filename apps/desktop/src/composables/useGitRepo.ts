@@ -264,15 +264,12 @@ export function useGitRepo() {
     if (!requireOnline("fetch")) return;
     isFetching.value = true;
     try {
-      const result = await gitFetch(folderPath.value);
-      console.log("[GitWand] fetch result:", result);
+      await gitFetch(folderPath.value);
       // Always refresh status after fetch attempt to get updated ahead/behind
       await loadStatus(folderPath.value);
-      console.log("[GitWand] status after fetch:", {
-        ahead: status.value?.ahead,
-        behind: status.value?.behind,
-        remote: status.value?.remote,
-      });
+      // v2.14 — Refresh log so clicking "Up to date" or periodic fetch
+      // updates the Git Tree / History view with new remote commits.
+      await loadLog();
     } catch (err) {
       console.warn("[GitWand] fetch failed:", err);
     } finally {
@@ -875,6 +872,7 @@ export function useGitRepo() {
       await gitCreateBranch(folderPath.value, name, true);
       await refresh();
       await loadBranches();
+      await loadLog();
     } catch (err: any) {
       error.value = `create branch: ${err.message}`;
     }
@@ -887,6 +885,7 @@ export function useGitRepo() {
       await gitSwitchBranch(folderPath.value, name);
       await refresh();
       await loadBranches();
+      await loadLog();
     } catch (err: any) {
       error.value = `switch branch: ${err.message}`;
     } finally {
@@ -915,6 +914,7 @@ export function useGitRepo() {
       if (status.value?.branch === oldName) {
         await loadStatus(folderPath.value);
       }
+      await loadLog();
     } catch (err: any) {
       error.value = `rename branch: ${err.message}`;
     }

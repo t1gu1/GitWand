@@ -1526,6 +1526,11 @@ const { triggerReleaseNotesIfEnabled } = scheduler;
 const poller = useRepoPoller({
   onStatusChange: async (cwd) => {
     await repoRefresh();
+    // v2.14 — Refresh log if the history view or the Git Tree side panel is
+    // active, so terminal actions (commit/push/pull) update the graph.
+    if (viewMode.value === 'history' || showGitTree.value) {
+      await loadLog();
+    }
   },
   onConflictDetected: async (_cwd) => {
     // scheduler.onConflictDetected reads cwd from its callback ref
@@ -1545,6 +1550,13 @@ const poller = useRepoPoller({
   },
 });
 watch(repoFolderPath, (p) => poller.setFolderPath(p), { immediate: true });
+
+// v2.14 — Ensure the log is loaded when the Git Tree is toggled on.
+watch(showGitTree, (show) => {
+  if (show && hasRepo.value) {
+    void loadLog();
+  }
+});
 
 // ─── Global shortcut listener (Cmd+Shift+G from anywhere) ─
 let unlistenGlobalShortcut: (() => void) | null = null;
