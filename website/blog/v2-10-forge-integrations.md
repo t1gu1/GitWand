@@ -167,7 +167,7 @@ Every string in the PR panel that names the PR concept uses `prLabel` — no har
 
 **What works on GitLab in v2.10:** MR list, MR detail, diff, pipeline status (CI), create MR, merge MR, checkout MR, draft→ready conversion, MR notes (general comments), approvals, reviewer candidates.
 
-**Stubs deferred to v2.11:** `updateComment` and `deleteComment` — both require the MR IID alongside the note ID, and the `ForgeProvider` interface's comment methods only take a `commentId`. The interface will gain an optional `prNumber` parameter in v2.11. Diff-line anchoring via GitLab's Discussions API (as opposed to general notes) is also v2.11.
+**Stubs deferred to v2.14:** `updateComment` and `deleteComment` — both require the MR IID alongside the note ID, and the `ForgeProvider` interface's comment methods only take a `commentId`. The interface will gain an optional `prNumber` parameter in v2.14. Diff-line anchoring via GitLab's Discussions API (as opposed to general notes) is also v2.14.
 
 ---
 
@@ -183,7 +183,7 @@ Bitbucket's API quirks that required adaptation:
 
 - **PR state casing.** Bitbucket uses `"OPEN"`, `"MERGED"`, `"DECLINED"` (uppercase). The provider upcases the `state` argument at its boundary.
 - **No native draft.** Bitbucket has no `isDraft` concept. The `convertDraftToReady` method in `BitbucketProvider` is a stub in v2.10 — Bitbucket workarounds (title prefix `"Draft:"`) are not yet implemented.
-- **CI Checks.** Bitbucket Pipelines are accessible via a separate REST endpoint (`/2.0/repositories/{workspace}/{repo_slug}/commit/{commit}/statuses`). That endpoint is wired in v2.11; `getCIChecks` throws `ForgeNotImplementedError` in v2.10.
+- **CI Checks.** Bitbucket Pipelines are accessible via a separate REST endpoint (`/2.0/repositories/{workspace}/{repo_slug}/commit/{commit}/statuses`). That endpoint is wired in v2.14; `getCIChecks` throws `ForgeNotImplementedError` in v2.10.
 - **Approvals only, no "request changes".** Bitbucket's review model has approve / unapprove, but no "request changes" equivalent. `submitReview` with `event: "REQUEST_CHANGES"` silently downgrades to `event: "COMMENT"` on Bitbucket — the review is posted but no blocking flag is set on the PR.
 
 **What works on Bitbucket in v2.10:** PR list, PR detail, diff, create PR, merge PR, checkout PR, PR comments (general + inline via Bitbucket inline anchors), approvals, reviewer candidates (repo members with write access).
@@ -217,7 +217,7 @@ function activeAccount(forge: ForgeName): Account | null {
 }
 ```
 
-In v2.10, multi-account awareness is informational: the active account badge shows "Connected as alice" in the PR panel header, but all API calls still go through a single per-forge provider instance. Per-account provider instantiation — so you can switch between `alice` and `bob@corp.com` on GitHub without leaving the app — is deferred to v2.11, where the `ForgeProvider` methods will receive an optional `Account` context.
+In v2.10, multi-account awareness is informational: the active account badge shows "Connected as alice" in the PR panel header, but all API calls still go through a single per-forge provider instance. Per-account provider instantiation — so you can switch between `alice` and `bob@corp.com` on GitHub without leaving the app — is deferred to v2.14, where the `ForgeProvider` methods will receive an optional `Account` context.
 
 The **Settings → Accounts** tab renders each forge section with its list of accounts, an "Add account" form, and an active-account radio selector. GitHub accounts are displayed with a note that auth is managed by `gh auth login` (GitWand reads the active `gh` account but doesn't store a token); GitLab accounts similarly defer to `glab auth login`; Bitbucket accounts go through the App Password form.
 
@@ -227,11 +227,11 @@ The **Settings → Accounts** tab renders each forge section with its list of ac
 
 Three methods on the `ForgeProvider` interface throw `ForgeNotImplementedError` on GitLab and Bitbucket:
 
-**`getConflictPreview`** uses `git merge-tree` to simulate a merge and return which files conflict and which hunks can be auto-resolved before the merge is executed. This requires local git analysis, not a forge API call — it works by running `git merge-tree MERGE_BASE HEAD PR_HEAD` and parsing the output. There's no reason it can't work on GitLab or Bitbucket (the local git history is available regardless of the forge). It's listed as a stub because the `PrConflictPreview` data structure was designed around the GitHub PR model, and the implementation that feeds it needs review before being declared forge-agnostic. v2.11.
+**`getConflictPreview`** uses `git merge-tree` to simulate a merge and return which files conflict and which hunks can be auto-resolved before the merge is executed. This requires local git analysis, not a forge API call — it works by running `git merge-tree MERGE_BASE HEAD PR_HEAD` and parsing the output. There's no reason it can't work on GitLab or Bitbucket (the local git history is available regardless of the forge). It's listed as a stub because the `PrConflictPreview` data structure was designed around the GitHub PR model, and the implementation that feeds it needs review before being declared forge-agnostic. v2.14.
 
-**`getHotspots`** identifies files in a PR that have been frequently modified together in recent commit history — a heuristic for "this change might require looking at file B if you're editing file A". It's implemented via a commit graph walk in Rust, not a forge API call. Same situation as conflict preview: forge-agnostic in principle, blocked by implementation review. v2.11.
+**`getHotspots`** identifies files in a PR that have been frequently modified together in recent commit history — a heuristic for "this change might require looking at file B if you're editing file A". It's implemented via a commit graph walk in Rust, not a forge API call. Same situation as conflict preview: forge-agnostic in principle, blocked by implementation review. v2.14.
 
-**`getFileHistory`** fetches recent review comments for a set of file paths across the PR's history — used to show "this file has been reviewed three times in the last two weeks" context chips in the diff view. This one does require a forge API call (GitHub's GraphQL `pullRequest { reviews { files } }` query), and the equivalent query path for GitLab and Bitbucket needs separate work. v2.11 for GitLab; v2.12 for Bitbucket.
+**`getFileHistory`** fetches recent review comments for a set of file paths across the PR's history — used to show "this file has been reviewed three times in the last two weeks" context chips in the diff view. This one does require a forge API call (GitHub's GraphQL `pullRequest { reviews { files } }` query), and the equivalent query path for GitLab and Bitbucket needs separate work. v2.14 for GitLab; v2.14 for Bitbucket.
 
 The `PrDetailView.vue` component gates all three widgets behind `forge.name === "github"` checks, so GitLab and Bitbucket users see the diff, comments, and CI status without the intelligence features — a clean partial experience rather than a broken full one.
 
@@ -256,13 +256,13 @@ SSH URLs (`git@gitlab.com:user/repo.git`) and HTTPS URLs (`https://gitlab.com/us
 
 ## What's next
 
-The v2.11 scope is:
+The v2.14 scope is:
 
 **GitLab stubs:** `updateComment` / `deleteComment` (need the `prNumber` in the interface), diff-line comment anchoring via Discussions API, CI Checks (`gl pipeline list`).
 
 **Bitbucket stubs:** `getCIChecks` (Bitbucket Pipelines REST endpoint), `convertDraftToReady` (via title prefix), `updateComment` / `deleteComment` (same interface gap as GitLab).
 
-**Multi-account provider instantiation:** Pass the active `Account` context into `ForgeProvider` methods so a user with two GitHub accounts can toggle which one is used for API calls without leaving the app. The `useAccounts` composable and `Account` interface are already in place; v2.11 connects the account to the provider's credential resolution.
+**Multi-account provider instantiation:** Pass the active `Account` context into `ForgeProvider` methods so a user with two GitHub accounts can toggle which one is used for API calls without leaving the app. The `useAccounts` composable and `Account` interface are already in place; v2.14 connects the account to the provider's credential resolution.
 
 **`getConflictPreview` + `getHotspots` forge-agnostic audit:** Both are implemented on local git data; the audit is about whether the `PrConflictPreview` and `PrHotspot` types need a GitLab/Bitbucket variant or can be populated identically.
 

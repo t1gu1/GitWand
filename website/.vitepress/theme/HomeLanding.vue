@@ -1528,10 +1528,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/agent-sessions-automations-v2-8" class="blog-teaser-card">
-          <div class="blog-teaser-meta">May 2, 2026 · 18 min read</div>
-          <h3 class="blog-teaser-title">Hooks, workspaces, agent sessions, and automations: what went into GitWand v2.7 and v2.8</h3>
-          <p class="blog-teaser-excerpt">Git hooks manager, multi-repo workspaces, worktree quick-create, cross-platform AI agent detection with lsof and /proc/cwd, a daemonless scheduler, and conflict resolution memory.</p>
+        <a href="/blog/v2-13-ai-inline-suggestions" class="blog-teaser-card">
+          <div class="blog-teaser-meta">May 18, 2026 · 14 min read</div>
+          <h3 class="blog-teaser-title">AI code review in your PR diff: how GitWand v2.13 works</h3>
+          <p class="blog-teaser-excerpt">Per-hunk AI critique with a four-tier verdict (ok / nit / suggestion / risk), an inline suggestion editor that stages GitHub suggestion blocks without leaving the diff, and named AI prompt presets for commit messages.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

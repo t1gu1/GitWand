@@ -146,6 +146,8 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'AI code review in your PR diff (v2.13)', link: '/blog/v2-13-ai-inline-suggestions' },
+            { text: 'GitHub, GitLab & Bitbucket support (v2.10)', link: '/blog/v2-10-forge-integrations' },
             { text: "Launchpad: cross-repo dashboard (v2.9)", link: '/blog/v2-9-launchpad' },
             { text: 'Why we made LLM resolution opt-in (v2.5)', link: '/blog/v2-5-llm-fallback' },
             { text: 'Hooks, workspaces & agent sessions (v2.7–v2.8)', link: '/blog/agent-sessions-automations-v2-8' },

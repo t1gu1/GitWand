@@ -790,7 +790,36 @@ Deux extensions du workflow de review déjà en place.
 
 ---
 
-### v2.14.0 — Voice Input (expérimental)
+### v2.14.0 — Forge completeness
+
+_Suite de v2.10 : combler les stubs `ForgeNotImplementedError` sur GitLab et Bitbucket, et ouvrir les trois méthodes d'intelligence forge-agnostiques._
+
+**GitLab — stubs restants**
+
+- `updateComment` / `deleteComment` : ajout d'un paramètre `prNumber` optionnel dans l'interface `ForgeProvider` (MR IID requis par l'API GitLab Notes) ; mise à jour de `GitLabProvider` et `GitHubProvider` (rétrocompatible)
+- Ancrage diff-line via Discussions API GitLab : remplace les notes générales par des `POST /projects/:id/merge_requests/:iid/discussions` avec `position` (base_sha, start_sha, head_sha, old_line / new_line) — parité avec le behaviour GitHub
+- `getCIChecks` via `gl pipeline list --json` : listing des jobs pipeline, mapping vers `CICheck` commun (status, url, name)
+
+**Bitbucket — stubs restants**
+
+- `getCIChecks` via REST v2 `/commit/{commit}/statuses` : wiring du endpoint déjà connu, mapping vers `CICheck`
+- `convertDraftToReady` : workaround via renommage du titre (`Draft: …` → titre propre) — Bitbucket n'a pas de notion native de draft, mais la convention titre est largement utilisée
+- `updateComment` / `deleteComment` : `DELETE /2.0/repositories/{workspace}/{repo}/pullrequests/{id}/comments/{comment_id}` + `PUT` update — mêmes guards que GitLab sur `prNumber`
+
+**Intelligence forge-agnostique**
+
+- `getConflictPreview` + `getHotspots` : audit des types `PrConflictPreview` et `PrHotspot` — les deux méthodes sont implémentées sur données git locales (Rust, pas d'API forge) ; vérifier si les types peuvent être populés identiquement sur GitLab/Bitbucket ou s'il faut des variants ; supprimer le guard `forge.name === "github"` si l'audit confirme la compatibilité
+- `getFileHistory` (GitLab) : équivalent de la query GraphQL GitHub `pullRequest { reviews { files } }` via l'API REST GitLab MR notes — chips "ce fichier a été reviewé N fois" dans la diff view
+- `getFileHistory` (Bitbucket) : via REST v2 `/pullrequests/{id}/comments?q=…` avec filtrage par path
+
+**Multi-compte provider**
+
+- Passer le contexte `Account` actif dans les méthodes `ForgeProvider` (paramètre optionnel de contexte) — permet de switcher entre `alice` et `bob@corp.com` sur GitHub sans quitter l'app
+- `useAccounts` et `Account` sont déjà en place (v2.10) ; v2.14 connecte le compte à la résolution de credentials dans le provider
+
+---
+
+### v2.15.0 — Voice Input (expérimental)
 
 Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
 
@@ -804,7 +833,7 @@ Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en 
 
 ---
 
-### v2.15.0 — Scratch worktree + Conflict Predictor étendu
+### v2.16.0 — Scratch worktree + Conflict Predictor étendu
 
 _Inspiré GitSquid. Extension naturelle du moteur GitWand et du Worktree first-class (v2.7)._
 
@@ -823,7 +852,7 @@ _Inspiré GitSquid. Extension naturelle du moteur GitWand et du Worktree first-c
 
 ---
 
-### v2.16.0 — Monorepo Scope
+### v2.17.0 — Monorepo Scope
 
 _Inspiré GitSquid. Rend GitWand ergonomique sur les gros monorepos (pnpm, Cargo, Nx…)._
 
@@ -834,7 +863,7 @@ _Inspiré GitSquid. Rend GitWand ergonomique sur les gros monorepos (pnpm, Cargo
 
 ---
 
-### v2.17.0 — Safety Bundle : secrets scanner pré-commit
+### v2.18.0 — Safety Bundle : secrets scanner pré-commit
 
 _Inspiré GitSquid. Feature "safety" sans aucune dépendance réseau — tout en local._
 
@@ -851,7 +880,7 @@ _Inspiré GitSquid. Feature "safety" sans aucune dépendance réseau — tout en
 
 ---
 
-### v2.18.0 — Stacked Branches (natif)
+### v2.19.0 — Stacked Branches (natif)
 
 _Feature différenciante : workflow stacked PRs sans CLI externe (Graphite, ghstack…). Scope important — jalon dédié._
 
@@ -872,7 +901,7 @@ Le paradigme : au lieu d'un gros PR, on empile des branches courtes (`feat/step-
 
 - Détection automatique quand la base d'une stack a bougé (push sur `main`, merge d'une branche intermédiaire)
 - Bouton "Restack" en un clic : rebase l'ensemble de la stack en cascade (`git rebase --onto` layer par layer)
-- Preview du restack avec liste des conflits potentiels avant exécution (réutilise le Conflict Predictor de v2.15)
+- Preview du restack avec liste des conflits potentiels avant exécution (réutilise le Conflict Predictor de v2.16)
 
 **PRs**
 
