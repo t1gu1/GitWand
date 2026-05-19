@@ -2,7 +2,6 @@
 import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
 import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser } from "../utils/backend";
-import CommitLog from "./CommitLog.vue";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCommitMessage } from "../composables/useCommitMessage";
@@ -29,19 +28,7 @@ const props = defineProps<{
   commitDescription: string;
   canCommit: boolean;
   isCommitting: boolean;
-  // History mode props
   logEntries: GitLogEntry[];
-  logLoading: boolean;
-  selectedCommitHash: string | null;
-  aheadCount: number;
-  /** True when the current branch has no upstream (no origin/<branch>). */
-  needsPublish?: boolean;
-  /** Author filter: show all commits, or only those by the current git user. */
-  logAuthorFilter: "all" | "mine";
-  /** True when more commits are available beyond the current page. */
-  logHasMore?: boolean;
-  /** True while the next page is being loaded. */
-  logLoadingMore?: boolean;
   /** Display name of the current branch (for the toggle label). */
   currentBranch: string;
   /** Files inside the currently-selected untracked directory */
@@ -50,6 +37,12 @@ const props = defineProps<{
   branches?: GitBranch[];
   /** Current git user — used to auto-fill Signed-off-by trailer. */
   gitUser?: GitUser | null;
+  /** The currently selected commit hash (if any) */
+  selectedCommitHash?: string | null;
+  /** How many commits ahead / behind the remote tracking branch. */
+  aheadCount?: number;
+  /** True when the current branch has no upstream (no origin/<branch>). */
+  needsPublish?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -65,19 +58,6 @@ const emit = defineEmits<{
   commit: [trailers: string];
   "update:commitSummary": [value: string];
   "update:commitDescription": [value: string];
-  selectCommit: [hash: string];
-  editCommit: [entry: GitLogEntry];
-  splitCommit: [entry: GitLogEntry];
-  // v1.9 — commit context menu actions
-  checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
-  revertCommit: [entry: GitLogEntry];
-  createBranchFromCommit: [entry: GitLogEntry];
-  tagCommit: [entry: GitLogEntry];
-  cherryPickCommit: [entry: GitLogEntry];
-  viewOnForge: [entry: GitLogEntry];
-  /** Toggle the author filter (all commits vs mine only). */
-  "update:logAuthorFilter": [filter: "all" | "mine"];
   /** Select a specific file inside an expanded untracked directory */
   "select-dir-file": [path: string];
   /** Discard changes to a file (tracked: restore, untracked: delete) */
@@ -94,8 +74,6 @@ const emit = defineEmits<{
   openWorkspace: [];
   openAgents: [];
   openLaunchpad: [];
-  /** Request the next page of commits (infinite scroll). */
-  loadMoreLog: [];
 }>();
 
 const { t, locale } = useI18n();
@@ -1171,45 +1149,6 @@ function formatActivityDate(dateStr: string): string {
       <span class="commit-hint muted">{{ t('sidebar.commitHint') }}</span>
     </div>
 
-    <!-- History view: commit log in sidebar -->
-    <div class="sidebar-log" v-if="viewMode === 'history'">
-      <!-- Author filter: all commits vs mine only -->
-      <div class="log-author-filter">
-        <button
-          class="log-author-btn"
-          :class="{ 'log-author-btn--active': logAuthorFilter === 'mine' }"
-          :aria-pressed="logAuthorFilter === 'mine'"
-          :title="logAuthorFilter === 'mine' ? t('sidebar.logAuthorMineTitle') : t('sidebar.logAuthorAllTitle')"
-          @click="emit('update:logAuthorFilter', logAuthorFilter === 'mine' ? 'all' : 'mine')"
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true" style="flex-shrink:0">
-            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-          </svg>
-          {{ t('sidebar.logAuthorMine') }}
-        </button>
-      </div>
-      <CommitLog
-        :entries="logEntries"
-        :loading="logLoading"
-        :selected-hash="selectedCommitHash"
-        :ahead-count="aheadCount"
-        :needs-publish="needsPublish"
-        :has-more="logHasMore"
-        :loading-more="logLoadingMore"
-        @select-commit="(hash: string) => emit('selectCommit', hash)"
-        @edit-commit="(entry) => emit('editCommit', entry)"
-        @split-commit="(entry) => emit('splitCommit', entry)"
-        @checkout-commit="(entry) => emit('checkoutCommit', entry)"
-        @reset-to-commit="(entry) => emit('resetToCommit', entry)"
-        @revert-commit="(entry) => emit('revertCommit', entry)"
-        @create-branch-from-commit="(entry) => emit('createBranchFromCommit', entry)"
-        @tag-commit="(entry) => emit('tagCommit', entry)"
-        @cherry-pick-commit="(entry) => emit('cherryPickCommit', entry)"
-        @view-on-forge="(entry) => emit('viewOnForge', entry)"
-        @load-more="emit('loadMoreLog')"
-      />
-    </div>
-
     <!-- PRs view: compact PR list in sidebar -->
     <div class="sidebar-prs" v-if="viewMode === 'prs'">
       <PrListSidebar />
@@ -1520,93 +1459,6 @@ function formatActivityDate(dateStr: string): string {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-}
-
-.sidebar-log {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Log scope toggle (current branch vs all refs) */
-.log-scope-toggle {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.log-scope-btn {
-  flex: 1;
-  padding: var(--space-2) var(--space-4);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 50%;
-}
-
-.log-scope-btn:hover {
-  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
-  color: var(--color-text);
-}
-
-.log-scope-btn--active {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-  border-color: var(--color-accent, #3b82f6);
-}
-
-.log-scope-btn--active:hover {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-}
-
-/* Author filter row */
-.log-author-filter {
-  display: flex;
-  padding: var(--space-2) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.log-author-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
-  white-space: nowrap;
-}
-
-.log-author-btn:hover {
-  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
-  color: var(--color-text);
-}
-
-.log-author-btn--active {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-  border-color: var(--color-accent, #3b82f6);
-}
-
-.log-author-btn--active:hover {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
 }
 
 .sidebar-prs {
