@@ -27,35 +27,35 @@ import type UpdateModalType from "./components/UpdateModal.vue";
 // cold-start parse/eval cost. Vite handles the chunk separation automatically.
 // ─── Main content views (lazy — rendered only when the matching viewMode/flag
 // is active; never part of the initial paint) ─────────────────────────────────
-const MergeEditor          = defineAsyncComponent(() => import("./components/MergeEditor.vue"));
-const ImageDiffViewer      = defineAsyncComponent(() => import("./components/ImageDiffViewer.vue"));
-const CommitDiffViewer     = defineAsyncComponent(() => import("./components/CommitDiffViewer.vue"));
-const FileHistoryViewer    = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
-const CommitGraph          = defineAsyncComponent(() => import("./components/CommitGraph.vue"));
-const PrDetailView         = defineAsyncComponent(() => import("./components/PrDetailView.vue"));
-const PrCreateView         = defineAsyncComponent(() => import("./components/PrCreateView.vue"));
-const DashboardView        = defineAsyncComponent(() => import("./components/DashboardView.vue"));
-const SettingsPanel        = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
-const HelpView             = defineAsyncComponent(() => import("./components/HelpView.vue"));
-const FolderPicker         = defineAsyncComponent(() => import("./components/FolderPicker.vue"));
-const MergeSuccessModal    = defineAsyncComponent(() => import("./components/MergeSuccessModal.vue"));
-const RebaseEditor         = defineAsyncComponent(() => import("./components/RebaseEditor.vue"));
-const RebaseProgressModal  = defineAsyncComponent(() => import("./components/RebaseProgressBanner.vue"));
-const StashManager         = defineAsyncComponent(() => import("./components/StashManager.vue"));
-const TagsPanel            = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
-const WorktreeManager      = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
-const SubmodulePanel       = defineAsyncComponent(() => import("./components/SubmodulePanel.vue"));
-const WorkspacePanel       = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
-const LaunchpadView        = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
-const AgentSessionsPanel   = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
-const CommandLogPanel      = defineAsyncComponent(() => import("./components/CommandLogPanel.vue"));
-const SearchPalette        = defineAsyncComponent(() => import("./components/header/SearchPalette.vue"));
-const BranchRenameModal    = defineAsyncComponent(() => import("./components/header/BranchRenameModal.vue"));
-const BranchDeleteModal    = defineAsyncComponent(() => import("./components/header/BranchDeleteModal.vue"));
-const CloneModal           = defineAsyncComponent(() => import("./components/CloneModal.vue"));
-const ForkModal            = defineAsyncComponent(() => import("./components/ForkModal.vue"));
-const GitTerminal          = defineAsyncComponent(() => import("./components/GitTerminal.vue"));
-const UpdateModal          = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
+const MergeEditor = defineAsyncComponent(() => import("./components/MergeEditor.vue"));
+const ImageDiffViewer = defineAsyncComponent(() => import("./components/ImageDiffViewer.vue"));
+const CommitDiffViewer = defineAsyncComponent(() => import("./components/CommitDiffViewer.vue"));
+const FileHistoryViewer = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
+const CommitGraph = defineAsyncComponent(() => import("./components/CommitGraph.vue"));
+const PrDetailView = defineAsyncComponent(() => import("./components/PrDetailView.vue"));
+const PrCreateView = defineAsyncComponent(() => import("./components/PrCreateView.vue"));
+const DashboardView = defineAsyncComponent(() => import("./components/DashboardView.vue"));
+const SettingsPanel = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
+const HelpView = defineAsyncComponent(() => import("./components/HelpView.vue"));
+const FolderPicker = defineAsyncComponent(() => import("./components/FolderPicker.vue"));
+const MergeSuccessModal = defineAsyncComponent(() => import("./components/MergeSuccessModal.vue"));
+const RebaseEditor = defineAsyncComponent(() => import("./components/RebaseEditor.vue"));
+const RebaseProgressModal = defineAsyncComponent(() => import("./components/RebaseProgressBanner.vue"));
+const StashManager = defineAsyncComponent(() => import("./components/StashManager.vue"));
+const TagsPanel = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
+const WorktreeManager = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
+const SubmodulePanel = defineAsyncComponent(() => import("./components/SubmodulePanel.vue"));
+const WorkspacePanel = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
+const LaunchpadView = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
+const AgentSessionsPanel = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
+const CommandLogPanel = defineAsyncComponent(() => import("./components/CommandLogPanel.vue"));
+const SearchPalette = defineAsyncComponent(() => import("./components/header/SearchPalette.vue"));
+const BranchRenameModal = defineAsyncComponent(() => import("./components/header/BranchRenameModal.vue"));
+const BranchDeleteModal = defineAsyncComponent(() => import("./components/header/BranchDeleteModal.vue"));
+const CloneModal = defineAsyncComponent(() => import("./components/CloneModal.vue"));
+const ForkModal = defineAsyncComponent(() => import("./components/ForkModal.vue"));
+const GitTerminal = defineAsyncComponent(() => import("./components/GitTerminal.vue"));
+const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -1708,15 +1708,13 @@ onUnmounted(() => {
       @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
-      :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch"
-      @open-logs="openLogsTab"
+      :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true"
-      :stash-count="stashCount"
-      @open-stash="showStash = true" @open-tags="showTags = true"
+      :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
       @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
 
     <div class="app-body">
@@ -1740,9 +1738,9 @@ onUnmounted(() => {
           @tag-commit="handleTagCommit" @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge"
           @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
-          @discard-section="onDiscardSection"
-          @add-to-gitignore="(path) => addToGitignore(path)" @refresh="repoRefresh()" @open-stash="showStash = true"
-          @open-tags="showTags = true" @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
+          @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
+          @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
+          @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
           @open-launchpad="handleLaunchpadShortcut" />
       </aside>
 
@@ -1766,8 +1764,7 @@ onUnmounted(() => {
                   <circle cx="7" cy="9.5" r="0.75" fill="currentColor" />
                 </svg>
                 <span class="error-toast-text">{{ repoError }}</span>
-                <button class="error-toast-logs" @click="openLogsTab"
-                  :title="t('error.viewLogs')">
+                <button class="error-toast-logs" @click="openLogsTab" :title="t('error.viewLogs')">
                   {{ t('error.viewLogs') }}
                 </button>
                 <button class="error-toast-close" @click="repoError = null" :aria-label="t('common.close')">
@@ -1848,27 +1845,27 @@ onUnmounted(() => {
       </main>
 
       <!-- Git Tree toggle button (vertical strip between main and panel) -->
-      <button
-        v-if="hasRepo"
-        class="git-tree-toggle"
+      <button v-if="hasRepo" class="git-tree-toggle"
         :class="{ 'git-tree-toggle--active': showGitTree, 'git-tree-toggle--resizing': gitTreeResizing }"
-        :style="showGitTree ? { cursor: 'ew-resize' } : {}"
-        @mousedown="onGitTreeMouseDown"
-        :title="t('sidebar.gitTree')"
-      >
-        {{ t('sidebar.gitTree') }}
+        :style="showGitTree ? { cursor: 'ew-resize' } : {}" @mousedown="onGitTreeMouseDown"
+        :title="t('sidebar.gitTree')" :aria-pressed="showGitTree ? 'true' : 'false'">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" class="git-tree-toggle__icon">
+          <circle cx="4" cy="3" r="1.8" stroke="currentColor" stroke-width="1.3" />
+          <circle cx="4" cy="13" r="1.8" stroke="currentColor" stroke-width="1.3" />
+          <circle cx="12" cy="8" r="1.8" stroke="currentColor" stroke-width="1.3" />
+          <path d="M4 4.8v6.4M10.2 8H7c-1.2 0-3-1-3-3" stroke="currentColor" stroke-width="1.3"
+            stroke-linecap="round" />
+        </svg>
+        <span class="git-tree-toggle__label">{{ t('sidebar.gitTree') }}</span>
       </button>
 
       <!-- Git Tree side panel -->
       <Transition name="git-tree-panel">
-        <aside v-if="showGitTree && hasRepo" class="git-tree-panel" :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
-          <CommitGraph
-            :commits="repoLog"
-            :selected-hash="selectedCommitHash"
-            :current-branch="branchDisplay"
+        <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
+          :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
+          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="branchDisplay"
             :fork-point-sha="graphForkPointSha"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-          />
+            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
         </aside>
       </Transition>
     </div>
@@ -2141,13 +2138,8 @@ onUnmounted(() => {
     </BaseModal>
 
     <!-- Discard section confirmation -->
-    <BaseModal
-      v-if="discardSectionConfirm"
-      :title="t('sidebar.discardAll')"
-      size="sm"
-      role="alertdialog"
-      @close="discardSectionConfirm = null"
-    >
+    <BaseModal v-if="discardSectionConfirm" :title="t('sidebar.discardAll')" size="sm" role="alertdialog"
+      @close="discardSectionConfirm = null">
       <p class="ptc-desc">{{ t('sidebar.discardAllConfirm', discardSectionConfirm.paths.length) }}</p>
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="discardSectionConfirm = null">{{ t('common.cancel') }}</button>
@@ -2190,31 +2182,49 @@ onUnmounted(() => {
   width: 24px;
   min-width: 24px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
+  gap: var(--space-2, 4px);
   border: none;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  border-left: 2px solid var(--color-accent);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-  letter-spacing: 0.08em;
-  padding: 0;
-  transition: background 0.15s, color 0.15s;
+  color: var(--color-accent);
+  padding: var(--space-3, 6px) 0;
+  transition: background 0.15s, border-left-color 0.15s, color 0.15s;
   user-select: none;
 }
 
+.git-tree-toggle__icon {
+  flex-shrink: 0;
+}
+
+.git-tree-toggle__label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+}
+
 .git-tree-toggle:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
+  background: var(--color-accent-soft, rgba(139, 92, 246, 0.14));
+  filter: brightness(1.05);
+}
+
+.git-tree-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
 }
 
 .git-tree-toggle--active {
-  color: var(--color-accent);
   border-left-color: var(--color-accent);
+  background: var(--color-accent-soft, rgba(139, 92, 246, 0.12));
+}
+
+.git-tree-toggle--resizing {
+  cursor: ew-resize;
+  filter: brightness(1.08);
 }
 
 .git-tree-panel {
@@ -2238,9 +2248,6 @@ onUnmounted(() => {
   opacity: 0;
 }
 
-.git-tree-toggle--resizing {
-  background: var(--color-bg-hover);
-}
 
 .loading-overlay {
   position: absolute;
