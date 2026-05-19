@@ -762,13 +762,6 @@ function formatActivityDate(dateStr: string): string {
         <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
       </button>
       <button
-        v-if="viewMode === 'history'"
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'history' }"
-      >
-        {{ t('sidebar.tabLog') }}
-      </button>
-      <button
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"
