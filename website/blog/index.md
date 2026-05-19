@@ -6,6 +6,18 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-13-ai-inline-suggestions" class="blog-card">
+    <div class="blog-meta">May 18, 2026 · 14 min read</div>
+    <h2 class="blog-title">AI code review in your PR diff: how GitWand v2.13 works</h2>
+    <p class="blog-excerpt">Per-hunk AI critique with a four-tier verdict (ok / nit / suggestion / risk), an inline suggestion editor that stages GitHub suggestion blocks without leaving the diff, and named AI prompt presets for commit messages. The architecture, UX decisions, and prompt engineering behind all three.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
+  <a href="/blog/v2-10-forge-integrations" class="blog-card">
+    <div class="blog-meta">May 14, 2026 · 13 min read</div>
+    <h2 class="blog-title">GitWand now works with GitHub, GitLab & Bitbucket</h2>
+    <p class="blog-excerpt">v2.10 breaks out of the GitHub silo. A <code>ForgeProvider</code> abstraction routes the entire PR panel to the right backend with zero config — GitLab via the <code>glab</code> CLI, Bitbucket via REST v2 and OS keychain App Passwords, and a multi-account registry for personal + work accounts. Plus auto-detection from the remote URL, lazy-loaded provider chunks, and an honest account of what's still GitHub-only.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-9-launchpad" class="blog-card">
     <div class="blog-meta">May 12, 2026 · 12 min read</div>
     <h2 class="blog-title">Launchpad: GitWand's cross-repo dashboard</h2>
