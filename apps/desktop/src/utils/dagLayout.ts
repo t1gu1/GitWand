@@ -62,7 +62,7 @@ export function computeDagLayout(
     let h: string | undefined = trunkHash;
     while (h && hashToIndex.has(h)) {
       trunkSet.add(h);
-      const idx = hashToIndex.get(h)!;
+      const idx: number = hashToIndex.get(h)!;
       h = commits[idx].parents[0];
     }
   }

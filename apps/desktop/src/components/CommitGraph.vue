@@ -45,6 +45,7 @@ const displayCommits = computed(() => {
     hashFull: "WIP",
     message: "// WIP",
     author: "",
+    email: "",
     date: new Date().toISOString(),
     refs: "",
     parents: [headCommit.hashFull],
@@ -234,7 +235,7 @@ function isCurrent(entry: GitLogEntry): boolean {
 type NodeKind = 'stash' | 'trunk' | 'merge' | 'normal';
 
 function nodeKind(node: DagNode): NodeKind {
-  const entry = props.commits[node.index];
+  const entry = displayCommits.value[node.index];
   if (!entry) return 'normal';
   if (entry.refs.includes('refs/stash')) return 'stash';
   const refs = parseRefs(entry.refs);
@@ -283,7 +284,7 @@ onUnmounted(() => {
 });
 
 const visibleRange = computed(() => {
-  const total = props.commits.length;
+  const total = displayCommits.value.length;
   if (total === 0) return { first: 0, last: -1 };
   // Before mount or during a 0-height layout, clientHeight is 0 and we'd
   // render only the overscan. Fall back to a safe minimum so first paint
