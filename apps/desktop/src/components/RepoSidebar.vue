@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, watch } from "vue";
+import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
 import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser } from "../utils/backend";
 import CommitLog from "./CommitLog.vue";
@@ -538,6 +538,29 @@ function onSummaryInput(e: Event) {
 const CC_TYPES = ["feat", "fix", "docs", "chore", "refactor", "test", "style", "perf", "ci"] as const;
 const CC_PREFIX_RE = /^([a-z]+)(\([^)]*\))?!?:\s*/;
 
+const ccTypesEl = ref<HTMLElement | null>(null);
+const ccCanScrollLeft = ref(false);
+const ccCanScrollRight = ref(false);
+
+function updateCcScroll() {
+  const el = ccTypesEl.value;
+  if (!el) return;
+  ccCanScrollLeft.value = el.scrollLeft > 0;
+  ccCanScrollRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+}
+
+function scrollCcTypes(dir: -1 | 1) {
+  const el = ccTypesEl.value;
+  if (!el) return;
+  el.scrollLeft = dir === 1 ? el.scrollWidth : 0;
+  ccCanScrollLeft.value = dir === 1;
+  ccCanScrollRight.value = dir === -1;
+}
+
+watch(ccTypesEl, (el) => {
+  if (el) nextTick(updateCcScroll);
+});
+
 /** The active type prefix extracted from the current summary, or "" if none. */
 const activePrefix = computed(() => {
   const m = props.commitSummary.match(CC_PREFIX_RE);
@@ -872,15 +895,20 @@ function formatActivityDate(dateStr: string): string {
     <!-- Commit panel — fixed at bottom, always visible in changes view -->
     <div class="commit-panel" v-if="viewMode === 'changes'">
       <!-- Conventional Commits type picker -->
-      <div class="cc-types" :title="t('sidebar.ccTypesTitle')">
-        <button
-          v-for="type in CC_TYPES"
-          :key="type"
-          class="cc-chip"
-          :class="{ 'cc-chip--active': activePrefix === type }"
-          @click="setCommitType(type)"
-          :title="t(`sidebar.ccType_${type}`)"
-        >{{ type }}</button>
+      <div class="cc-types-wrapper">
+        <button v-show="ccCanScrollLeft" class="cc-scroll-btn cc-scroll-btn--left" @click="scrollCcTypes(-1)" tabindex="-1">‹</button>
+        <div class="cc-types" ref="ccTypesEl" :title="t('sidebar.ccTypesTitle')"
+          :class="{ 'cc-types--fade-left': ccCanScrollLeft, 'cc-types--fade-right': ccCanScrollRight }">
+          <button
+            v-for="type in CC_TYPES"
+            :key="type"
+            class="cc-chip"
+            :class="{ 'cc-chip--active': activePrefix === type }"
+            @click="setCommitType(type)"
+            :title="t(`sidebar.ccType_${type}`)"
+          >{{ type }}</button>
+        </div>
+        <button v-show="ccCanScrollRight" class="cc-scroll-btn cc-scroll-btn--right" @click="scrollCcTypes(1)" tabindex="-1">›</button>
       </div>
       <div class="commit-summary-row">
         <!-- Template slash autocomplete dropdown -->
@@ -2083,6 +2111,12 @@ function formatActivityDate(dateStr: string): string {
 }
 
 /* ─── Conventional Commits type chips ───────────────────── */
+.cc-types-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
 .cc-types {
   display: flex;
   flex-wrap: nowrap;
@@ -2090,8 +2124,48 @@ function formatActivityDate(dateStr: string): string {
   padding: 4px var(--space-3) 2px;
   overflow-x: auto;
   scrollbar-width: none;
+  scroll-behavior: smooth;
+  flex: 1;
+  min-width: 0;
 }
 .cc-types::-webkit-scrollbar { display: none; }
+
+.cc-types--fade-left {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 20px);
+  mask-image: linear-gradient(to right, transparent, black 20px);
+}
+.cc-types--fade-right {
+  -webkit-mask-image: linear-gradient(to left, transparent, black 20px);
+  mask-image: linear-gradient(to left, transparent, black 20px);
+}
+.cc-types--fade-left.cc-types--fade-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+}
+
+.cc-scroll-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.cc-scroll-btn:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.cc-scroll-btn--left { margin-right: 2px; }
+.cc-scroll-btn--right { margin-left: 2px; }
 
 .cc-chip {
   font-size: 10px;
