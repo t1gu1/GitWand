@@ -504,7 +504,7 @@ export interface GitLogEntry {
  * @param cwd  Repository path.
  * @param count  Max number of commits to return (default 50).
  * @param all  When `true`, include commits from all refs (`git log --all`).
- *             Default `false` → only commits reachable from the current branch HEAD.
+ *             Default `true` → show commits from all branches.
  * @param author  When set, only show commits matching this author (passed as `--author`).
  */
 export async function getGitLog(
@@ -527,7 +527,7 @@ export async function getGitLog(
         parents: string[];
         refs: string;
       }>
-    >("git_log", { cwd, count: count ?? 100, all: all ?? false, author: author ?? null, offset: offset ?? 0 });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0 });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -542,7 +542,7 @@ export async function getGitLog(
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${all ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();

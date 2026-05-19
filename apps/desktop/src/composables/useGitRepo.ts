@@ -60,10 +60,6 @@ export function useGitRepo() {
   const selectedFileStaged = ref(false);
   const diff = ref<GitDiff | null>(null);
   const log = ref<GitLogEntry[]>([]);
-  // Scope of the commit log:
-  //   "current" → only commits reachable from the current branch HEAD (default, like `git log`)
-  //   "all"     → all refs (`git log --all`)
-  const logScope = ref<"current" | "all">("all");
   // Author filter: "all" → no filter, "mine" → only commits by the current git user
   const logAuthorFilter = ref<"all" | "mine">("all");
   const currentGitUser = ref<GitUser | null>(null);
@@ -385,7 +381,7 @@ export function useGitRepo() {
       const entries = await getGitLog(
         folderPath.value,
         pageSize,
-        logScope.value === "all",
+        true, // all refs
         authorEmail,
         0,
       );
@@ -415,7 +411,7 @@ export function useGitRepo() {
       const next = await getGitLog(
         folderPath.value,
         LOG_PAGE,
-        logScope.value === "all",
+        true, // all refs
         authorEmail,
         offset,
       );
@@ -428,15 +424,6 @@ export function useGitRepo() {
     } finally {
       logLoadingMore.value = false;
     }
-  }
-
-  /**
-   * Switch the log scope (current branch vs all refs) and reload the log.
-   */
-  async function setLogScope(scope: "current" | "all") {
-    if (logScope.value === scope) return;
-    logScope.value = scope;
-    await loadLog();
   }
 
   /**
@@ -941,7 +928,6 @@ export function useGitRepo() {
     selectedFileStaged,
     diff,
     log,
-    logScope,
     logAuthorFilter,
     logHasMore,
     logLoadingMore,
@@ -986,7 +972,6 @@ export function useGitRepo() {
     selectFile,
     loadLog,
     loadMoreLog,
-    setLogScope,
     setLogAuthorFilter,
     stageFiles,
     stageAll,

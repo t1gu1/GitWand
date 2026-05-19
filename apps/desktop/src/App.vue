@@ -134,7 +134,6 @@ const {
   selectedFileStaged: repoSelectedFileStaged,
   diff: repoDiff,
   log: repoLog,
-  logScope,
   logAuthorFilter,
   logHasMore,
   logLoadingMore,
@@ -170,7 +169,6 @@ const {
   selectFile: repoSelectFile,
   loadLog,
   loadMoreLog,
-  setLogScope,
   stageFiles,
   stageAll,
   unstageFiles,
@@ -1735,7 +1733,7 @@ onUnmounted(() => {
         <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
           :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
-          :log-entries="repoLog" :log-loading="repoLoading" :log-scope="logScope" :log-author-filter="logAuthorFilter"
+          :log-entries="repoLog" :log-loading="repoLoading" :log-author-filter="logAuthorFilter"
           :log-has-more="logHasMore" :log-loading-more="logLoadingMore" @load-more-log="loadMoreLog"
           :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
           :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
@@ -1749,7 +1747,7 @@ onUnmounted(() => {
           @checkout-commit="handleCheckoutCommit" @reset-to-commit="handleResetToCommit"
           @revert-commit="handleRevertCommit" @create-branch-from-commit="handleCreateBranchFromCommit"
           @tag-commit="handleTagCommit" @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge"
-          @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
+          @update:log-author-filter="setLogAuthorFilter"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
           @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"

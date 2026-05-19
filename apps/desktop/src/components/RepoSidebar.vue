@@ -36,8 +36,6 @@ const props = defineProps<{
   aheadCount: number;
   /** True when the current branch has no upstream (no origin/<branch>). */
   needsPublish?: boolean;
-  /** Scope of the commit log: only the current branch, or all refs. */
-  logScope: "current" | "all";
   /** Author filter: show all commits, or only those by the current git user. */
   logAuthorFilter: "all" | "mine";
   /** True when more commits are available beyond the current page. */
@@ -78,8 +76,6 @@ const emit = defineEmits<{
   tagCommit: [entry: GitLogEntry];
   cherryPickCommit: [entry: GitLogEntry];
   viewOnForge: [entry: GitLogEntry];
-  /** Change the log scope toggle (current branch vs all refs). */
-  "update:logScope": [scope: "current" | "all"];
   /** Toggle the author filter (all commits vs mine only). */
   "update:logAuthorFilter": [filter: "all" | "mine"];
   /** Select a specific file inside an expanded untracked directory */
@@ -773,13 +769,6 @@ function formatActivityDate(dateStr: string): string {
         <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
       </button>
       <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'history' }"
-        @click="emit('changeView', 'history')"
-      >
-        {{ t('sidebar.tabLog') }}
-      </button>
-      <button
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"
@@ -1184,33 +1173,6 @@ function formatActivityDate(dateStr: string): string {
 
     <!-- History view: commit log in sidebar -->
     <div class="sidebar-log" v-if="viewMode === 'history'">
-      <!-- Scope toggle: current branch vs all refs -->
-      <div
-        class="log-scope-toggle"
-        role="tablist"
-        :aria-label="t('sidebar.logScopeLabel')"
-      >
-        <button
-          class="log-scope-btn"
-          :class="{ 'log-scope-btn--active': logScope === 'current' }"
-          role="tab"
-          :aria-selected="logScope === 'current'"
-          :title="currentBranch ? t('sidebar.logScopeCurrentTitle', currentBranch) : t('sidebar.logScopeCurrent')"
-          @click="emit('update:logScope', 'current')"
-        >
-          {{ t('sidebar.logScopeCurrent') }}
-        </button>
-        <button
-          class="log-scope-btn"
-          :class="{ 'log-scope-btn--active': logScope === 'all' }"
-          role="tab"
-          :aria-selected="logScope === 'all'"
-          :title="t('sidebar.logScopeAllTitle')"
-          @click="emit('update:logScope', 'all')"
-        >
-          {{ t('sidebar.logScopeAll') }}
-        </button>
-      </div>
       <!-- Author filter: all commits vs mine only -->
       <div class="log-author-filter">
         <button
