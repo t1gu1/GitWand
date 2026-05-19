@@ -68,11 +68,12 @@ const rows = computed<Row[]>(() => {
   return items;
 });
 
-// Row heights — must match the CSS values (.log-section-label padding
-// + font + border = ~24px, .log-commit-row = 72px). The estimate is
-// per-index so section labels don't inherit the commit-row height
-// (visible regression: legends "unpushed" / "pushed" rendered at 72px).
-const COMMIT_ROW_H = 72;
+// Estimated row heights used as initial guess before DOM measurement.
+// The virtualizer measures actual rendered heights via measureElement, so
+// these values only affect the initial scroll-height estimate and the
+// position of items before they are painted for the first time.
+// Keeping them close to reality avoids visible layout jumps on first render.
+const COMMIT_ROW_H = 56; // ~2 text lines + meta row + padding, no refs
 const SECTION_ROW_H = 24;
 
 const virtualizer = useVirtualizer({
@@ -82,7 +83,11 @@ const virtualizer = useVirtualizer({
     const row = rows.value[index];
     return row && row.type !== "commit" ? SECTION_ROW_H : COMMIT_ROW_H;
   },
-  overscan: 5,
+  // Measure each item's actual DOM height after paint so rows with
+  // ref badges, AI reason lines, or wrapped messages display at their
+  // real height instead of the fixed 72px estimate.
+  measureElement: (el) => (el as HTMLElement).offsetHeight,
+  overscan: 8,
 });
 
 // NOTE: the watcher that syncs `rows.value.length` into the virtualizer
@@ -111,12 +116,20 @@ function sectionLabelText(row: Row): string {
 }
 
 function vrStyle(vr: { start: number; size: number }) {
+  // height: vr.size keeps items from overlapping during the estimate phase.
+  // measureElement is attached to the INNER content elements (commit-item /
+  // log-section-label), not this wrapper — so offsetHeight reads the true
+  // content height, not the explicitly-set wrapper height. On the next render
+  // vr.size is corrected to the measured value and the wrapper matches the
+  // content exactly. overflow: visible lets content show even if it briefly
+  // exceeds the estimate before the first measurement lands.
   return {
     position: "absolute" as const,
     top: 0,
     left: 0,
     width: "100%",
     height: vr.size + "px",
+    overflow: "visible" as const,
     transform: "translateY(" + vr.start + "px)",
   };
 }
@@ -445,9 +458,18 @@ function authorColor(name: string): string {
 
     <div ref="scrollContainerRef" class="log-list" v-else-if="displayedEntries.length > 0" @scroll.passive="onLogScroll">
       <div :style="{ height: virtualizer.getTotalSize() + 'px', position: 'relative', width: '100%' }">
-        <div v-for="vr in virtualizer.getVirtualItems()" :key="'' + vr.key" :style="vrStyle(vr)">
+        <div
+          v-for="vr in virtualizer.getVirtualItems()"
+          :key="'' + vr.key"
+          :style="vrStyle(vr)"
+        >
           <template v-if="isSectionRow(rows[vr.index])">
-            <div class="log-section-label" :class="sectionLabelClass(rows[vr.index])">
+            <div
+              class="log-section-label"
+              :class="sectionLabelClass(rows[vr.index])"
+              :data-index="vr.index"
+              :ref="(el) => { if (el) virtualizer.measureElement(el as Element); }"
+            >
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M8 13V3M5 6l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -457,6 +479,8 @@ function authorColor(name: string): string {
           <template v-else>
             <div
               class="commit-item"
+              :data-index="vr.index"
+              :ref="(el) => { if (el) virtualizer.measureElement(el as Element); }"
               :class="{
                 'commit-item--selected': selectedHash === c(vr.index).hashFull,
                 'commit-item--unpushed': isUnpushed(c(vr.index)),
