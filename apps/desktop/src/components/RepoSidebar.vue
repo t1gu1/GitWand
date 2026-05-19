@@ -2284,7 +2284,7 @@ function formatActivityDate(dateStr: string): string {
   font-weight: var(--font-weight-semibold);
   background: var(--color-accent);
   color: var(--color-accent-text);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   transition: background var(--transition-hover), opacity var(--transition-hover);
 }
 
