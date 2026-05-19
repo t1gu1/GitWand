@@ -185,6 +185,14 @@ function commitRefs(entry: GitLogEntry) {
   return parseRefs(entry.refs);
 }
 
+function isCurrent(entry: GitLogEntry): boolean {
+  if (!entry.refs) return false;
+  return entry.refs.split(",").some((r) => {
+    const trimmed = r.trim();
+    return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
+  });
+}
+
 type NodeKind = 'stash' | 'trunk' | 'merge' | 'normal';
 
 function nodeKind(node: DagNode): NodeKind {
@@ -337,6 +345,17 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           class="cg-node"
           @click="emit('select-commit', node.hash)"
         >
+          <!-- Current commit indicator: outer ring -->
+          <circle
+            v-if="isCurrent(commits[node.index])"
+            :cx="cx(node.lane)"
+            :cy="cy(node.index)"
+            :r="nodeKind(node) === 'trunk' ? NODE_R + 4 : (nodeKind(node) === 'merge' ? NODE_R + 3.5 : NODE_R + 2.5)"
+            fill="none"
+            :stroke="nodeKind(node) === 'trunk' ? 'url(#trunk-gradient-stroke)' : laneColor(node.lane)"
+            stroke-width="1.2"
+          />
+
           <!-- Stash commit: dashed square outline, no fill -->
           <rect
             v-if="nodeKind(node) === 'stash'"
@@ -394,6 +413,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :class="{
             'cg-row--selected': vc.entry.hashFull === selectedHash,
             'cg-row--shared': isSharedHistory(vc.index),
+            'cg-row--current': isCurrent(vc.entry),
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="emit('select-commit', vc.entry.hashFull)"
@@ -479,6 +499,10 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .cg-row--selected {
   background: var(--color-accent-bg, rgba(56, 132, 255, 0.08));
+}
+
+.cg-row--current {
+  background: var(--color-accent-soft);
 }
 
 /* Shared-history commits (pre-fork-point): dimmed to de-emphasise */

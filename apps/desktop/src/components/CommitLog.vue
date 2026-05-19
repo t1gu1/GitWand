@@ -398,6 +398,14 @@ function authorInitials(name: string): string {
     .toUpperCase();
 }
 
+function isCurrent(entry: GitLogEntry): boolean {
+  if (!entry.refs) return false;
+  return entry.refs.split(",").some((r) => {
+    const trimmed = r.trim();
+    return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
+  });
+}
+
 function authorColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
@@ -484,6 +492,7 @@ function authorColor(name: string): string {
               :class="{
                 'commit-item--selected': selectedHash === c(vr.index).hashFull,
                 'commit-item--unpushed': isUnpushed(c(vr.index)),
+                'commit-item--current': isCurrent(c(vr.index)),
               }"
               @click="emit('selectCommit', c(vr.index).hashFull)"
               @contextmenu="openCommitContextMenu($event, c(vr.index), oi(vr.index))"
@@ -816,6 +825,15 @@ function authorColor(name: string): string {
 .commit-item--selected {
   background: var(--color-bg-tertiary);
   border-left-color: var(--color-accent);
+}
+
+.commit-item--current {
+  background: var(--color-accent-soft);
+}
+
+.commit-item--current:hover {
+  background: var(--color-accent-soft);
+  opacity: 0.9;
 }
 
 .commit-item:focus-visible {
