@@ -894,9 +894,9 @@ pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, S
             };
             CICheck {
                 name: js(s, "name"),
-                status,
+                state: status,
                 conclusion,
-                url: {
+                details_url: {
                     let u = jnested(s, "url", "href");
                     if u.is_empty() { js(s, "url") } else { u }
                 },
