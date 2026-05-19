@@ -194,6 +194,7 @@ export function useCommitActions(deps: Deps) {
     try {
       await gitCreateTag(cwd, name, entry.hashFull, modal.value.tagMessage || undefined);
       closeModal();
+      await loadLog();
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {

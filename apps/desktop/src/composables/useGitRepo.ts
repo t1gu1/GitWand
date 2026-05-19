@@ -332,10 +332,15 @@ export function useGitRepo() {
 
   /**
    * Refresh status (e.g. after a commit or stage operation).
+   * v2.14 — Now also refreshes the commit log so the Git Tree and History
+   * views stay in sync with the repository state.
    */
   async function refresh() {
     if (!folderPath.value) return;
-    await loadStatus(folderPath.value);
+    await Promise.all([
+      loadStatus(folderPath.value),
+      loadLog(),
+    ]);
     // Also refresh diff if a file is selected
     if (selectedFilePath.value) {
       await loadDiff(selectedFilePath.value, selectedFileStaged.value);
@@ -565,7 +570,6 @@ export function useGitRepo() {
       selectedFileStaged.value = false;
       diff.value = null;
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `commit: ${err.message}`;
     } finally {
@@ -589,7 +593,6 @@ export function useGitRepo() {
       selectedFileStaged.value = false;
       diff.value = null;
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `amend: ${err.message}`;
     }
@@ -611,7 +614,6 @@ export function useGitRepo() {
         successMessage.value = "push-done";
       }
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `push: ${err.message}`;
     } finally {
@@ -639,7 +641,6 @@ export function useGitRepo() {
         }
       }
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `pull: ${err.message}`;
     } finally {
@@ -682,10 +683,6 @@ export function useGitRepo() {
       } else {
         successMessage.value = "merge-done";
       }
-
-      if (viewMode.value === "history") {
-        await loadLog();
-      }
     } catch (err: any) {
       error.value = `merge: ${err?.message || String(err) || "unknown error"}`;
     } finally {
@@ -716,9 +713,6 @@ export function useGitRepo() {
         successMessage.value = "merge-done";
       } else {
         error.value = `merge --continue: ${result.message || "unknown error"}`;
-      }
-      if (viewMode.value === "history") {
-        await loadLog();
       }
     } catch (err: any) {
       error.value = `merge --continue: ${err?.message || String(err)}`;
@@ -761,7 +755,6 @@ export function useGitRepo() {
       } else {
         successMessage.value = "cherry-pick-done";
       }
-      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick: ${err.message}`;
     } finally {
@@ -777,7 +770,6 @@ export function useGitRepo() {
       await gitCherryPickAbort(folderPath.value);
       successMessage.value = "cherry-pick-aborted";
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick abort: ${err.message}`;
     } finally {
@@ -793,7 +785,6 @@ export function useGitRepo() {
       await refresh();
       if (result.success) {
         successMessage.value = "cherry-pick-done";
-        await loadLog();
       } else if (result.conflicts) {
         // More conflicts remain — stay in cherry-pick mode
         if (status.value && status.value.conflicted.length > 0) {
@@ -845,6 +836,7 @@ export function useGitRepo() {
     try {
       await gitStashDrop(folderPath.value, index);
       await loadStashes();
+      await loadLog();
     } catch (err: any) {
       error.value = `stash drop: ${err.message}`;
     }
@@ -872,7 +864,6 @@ export function useGitRepo() {
       await gitCreateBranch(folderPath.value, name, true);
       await refresh();
       await loadBranches();
-      await loadLog();
     } catch (err: any) {
       error.value = `create branch: ${err.message}`;
     }
@@ -885,7 +876,6 @@ export function useGitRepo() {
       await gitSwitchBranch(folderPath.value, name);
       await refresh();
       await loadBranches();
-      await loadLog();
     } catch (err: any) {
       error.value = `switch branch: ${err.message}`;
     } finally {
@@ -898,6 +888,7 @@ export function useGitRepo() {
     try {
       await gitDeleteBranch(folderPath.value, name, false);
       await loadBranches();
+      await loadLog();
     } catch (err: any) {
       error.value = `delete branch: ${err.message}`;
     }
