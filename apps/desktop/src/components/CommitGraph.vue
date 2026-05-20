@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import type { GitLogEntry } from "../utils/backend";
+import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout, type DagNode } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
 
@@ -19,6 +19,7 @@ const props = defineProps<{
    */
   forkPointSha?: string;
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  branches?: GitBranch[];
 }>();
 
 type CommitEvent =
@@ -46,6 +47,7 @@ const emit = defineEmits<{
   "tag-commit": [entry: GitLogEntry];
   "cherry-pick-commit": [entry: GitLogEntry];
   "view-on-forge": [entry: GitLogEntry];
+  "delete-branch": [name: string, mode: "local" | "remote" | "both", remoteName?: string];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -58,16 +60,18 @@ interface CommitCtxMenu {
   idx: number;
   /** The specific branch name that was right-clicked (if any). */
   clickedBranch?: string;
+  /** The type of ref that was right-clicked (if any). */
+  clickedBranchType?: "head" | "branch" | "remote" | "tag" | "stash";
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
-function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string) {
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string, branchType?: any) {
   if (entry.hashFull === "WIP") return;
   e.preventDefault();
   e.stopPropagation();
   // Select the commit first
   emit("select-commit", entry.hashFull);
-  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx, clickedBranch: branchName };
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx, clickedBranch: branchName, clickedBranchType: branchType };
 }
 
 function closeCommitContextMenu() {
@@ -107,6 +111,43 @@ async function onCtxCopySummary() {
 async function onCtxCopyDescription() {
   const entry = ctxMenu.value.entry;
   if (entry?.body) await navigator.clipboard.writeText(entry.body);
+  closeCommitContextMenu();
+}
+
+const branchToDelete = computed(() => {
+  if (!ctxMenu.value.clickedBranch || !props.branches) return null;
+  const name = ctxMenu.value.clickedBranch;
+  const type = ctxMenu.value.clickedBranchType;
+
+  if (type === "branch") {
+    const local = props.branches.find((b) => b.name === name && !b.isRemote);
+    if (!local) return null;
+    const remote = props.branches.find(
+      (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
+    );
+    return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+  } else if (type === "remote") {
+    const remote = props.branches.find((b) => b.name === name && b.isRemote);
+    if (!remote) return null;
+    // Extract base name from remote name (e.g. origin/main -> main)
+    const slashIdx = name.indexOf("/");
+    const baseName = slashIdx !== -1 ? name.slice(slashIdx + 1) : name;
+    const local = props.branches.find((b) => !b.isRemote && (b.name === baseName || b.upstream === name));
+    return {
+      name: baseName,
+      localName: local?.name,
+      remoteName: name,
+      hasLocal: !!local,
+      hasRemote: true,
+    };
+  }
+  return null;
+});
+
+function onCtxDeleteBranch(mode: "local" | "remote" | "both") {
+  const b = branchToDelete.value;
+  if (!b) return;
+  emit("delete-branch", b.localName || b.name, mode, b.remoteName);
   closeCommitContextMenu();
 }
 
@@ -600,7 +641,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               :key="r.name"
               class="cg-ref"
               :class="`cg-ref--${r.type}`"
-              @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name)"
+              @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
             >{{ r.name }}</span>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>
@@ -699,6 +740,44 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
         <span>{{ t('commitCtx.cherryPick') }}</span>
       </li>
+
+      <!-- Branch Deletion (v2.12) -->
+      <template v-if="branchToDelete">
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+        <li
+          v-if="branchToDelete.hasLocal"
+          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+          role="menuitem"
+          @click="onCtxDeleteBranch('local')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('branch.deleteLocal').replace('{0}', branchToDelete.localName) }}</span>
+        </li>
+        <li
+          v-if="branchToDelete.hasRemote"
+          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+          role="menuitem"
+          @click="onCtxDeleteBranch('remote')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('branch.deleteRemote').replace('{0}', branchToDelete.remoteName) }}</span>
+        </li>
+        <li
+          v-if="branchToDelete.hasLocal && branchToDelete.hasRemote"
+          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+          role="menuitem"
+          @click="onCtxDeleteBranch('both')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('branch.deleteBoth').replace('{0}', branchToDelete.name) }}</span>
+        </li>
+      </template>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
 
@@ -817,6 +896,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 .commit-ctx-menu-item svg {
   color: var(--color-text-muted);
   flex-shrink: 0;
+}
+
+.commit-ctx-menu-item--danger:hover {
+  background: var(--color-danger-soft, rgba(220, 38, 38, 0.12));
+  color: var(--color-danger, #dc2626);
+}
+
+.commit-ctx-menu-item--danger:hover svg {
+  color: var(--color-danger, #dc2626);
 }
 
 .commit-ctx-menu-item--disabled {

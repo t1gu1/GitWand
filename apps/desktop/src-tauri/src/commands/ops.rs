@@ -683,6 +683,22 @@ pub(crate) fn git_delete_branch(cwd: String, name: String, force: bool) -> Resul
 }
 
 #[tauri::command]
+pub(crate) fn git_delete_remote_branch(cwd: String, remote: String, name: String) -> Result<(), String> {
+    let _t0 = Instant::now();
+    let output = git_cmd()
+        .args(["push", &remote, "--delete", &name])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to delete remote branch: {}", e))?;
+    record_cmd(&format!("git push {} --delete {}", remote, name), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git push --delete failed: {}", stderr));
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) fn git_rename_branch(cwd: String, old_name: String, new_name: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["branch", "-m", &old_name, &new_name])

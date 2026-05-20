@@ -427,6 +427,9 @@ const en = {
     unpin: "Unpin branch",
     archive: "Archive branch",
     unarchive: "Unarchive branch",
+    deleteLocal: "Delete local {0}",
+    deleteRemote: "Delete Origin {0}",
+    deleteBoth: "Delete local & origin {0}",
   },
 
   // ─── Relative dates ─────────────────────────────────────

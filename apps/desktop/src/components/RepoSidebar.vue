@@ -709,6 +709,24 @@ function onBranchCtxUnarchive() {
   closeBranchCtx();
 }
 
+const branchToDelete = computed(() => {
+  if (!branchCtx.value.branchName || !props.branches) return null;
+  const name = branchCtx.value.branchName;
+  const local = props.branches.find((b) => b.name === name && !b.isRemote);
+  if (!local) return null;
+  const remote = props.branches.find(
+    (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
+  );
+  return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+});
+
+function onBranchCtxDelete(mode: "local" | "remote" | "both") {
+  const b = branchToDelete.value;
+  if (!b) return;
+  emit("deleteBranch", b.localName || b.name, mode, b.remoteName);
+  closeBranchCtx();
+}
+
 /** Up to 3 most recent commits — shown as a mini-activity feed. */
 const recentActivity = computed(() => props.logEntries.slice(0, 3));
 
@@ -1310,6 +1328,41 @@ function formatActivityDate(dateStr: string): string {
           <template v-else>
             <button class="ctx-item" @click="onBranchCtxUnarchive">
               {{ t('branch.unarchive') }}
+            </button>
+          </template>
+
+          <!-- Branch Deletion (v2.12) -->
+          <template v-if="branchToDelete">
+            <div class="ctx-separator"></div>
+            <button
+              v-if="branchToDelete.hasLocal"
+              class="ctx-item ctx-item--danger"
+              @click="onBranchCtxDelete('local')"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ t('branch.deleteLocal').replace('{0}', branchToDelete.localName) }}</span>
+            </button>
+            <button
+              v-if="branchToDelete.hasRemote"
+              class="ctx-item ctx-item--danger"
+              @click="onBranchCtxDelete('remote')"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ t('branch.deleteRemote').replace('{0}', branchToDelete.remoteName) }}</span>
+            </button>
+            <button
+              v-if="branchToDelete.hasLocal && branchToDelete.hasRemote"
+              class="ctx-item ctx-item--danger"
+              @click="onBranchCtxDelete('both')"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ t('branch.deleteBoth').replace('{0}', branchToDelete.name) }}</span>
             </button>
           </template>
         </div>

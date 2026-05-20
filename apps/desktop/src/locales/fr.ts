@@ -420,6 +420,9 @@ const fr: Locale = {
     unpin: "Désépingler",
     archive: "Archiver la branche",
     unarchive: "Désarchiver la branche",
+    deleteLocal: "Supprimer localement {0}",
+    deleteRemote: "Supprimer sur le remote {0}",
+    deleteBoth: "Supprimer localement & sur le remote {0}",
   },
 
 

@@ -200,9 +200,29 @@ const {
   createBranch,
   switchBranch,
   deleteBranch,
+  deleteRemoteBranch,
   renameBranch: doRenameBranch,
   currentGitUser,
 } = useGitRepo();
+
+async function handleDeleteBranch(name: string, mode: "local" | "remote" | "both", remoteName?: string) {
+  if (!repoFolderPath.value) return;
+  try {
+    if (mode === "local" || mode === "both") {
+      await deleteBranch(name);
+    }
+    if (mode === "remote" || mode === "both") {
+      const rName = remoteName || `origin/${name}`;
+      const slashIdx = rName.indexOf("/");
+      if (slashIdx === -1) throw new Error(`Invalid remote branch name: ${rName}`);
+      const remote = rName.slice(0, slashIdx);
+      const branch = rName.slice(slashIdx + 1);
+      await deleteRemoteBranch(remote, branch);
+    }
+  } catch (e: any) {
+    repoError.value = e.message || String(e);
+  }
+}
 
 // ─── Git Tree panel ──────────────────────────────────────
 const showGitTree = ref(false);
@@ -1763,7 +1783,9 @@ onUnmounted(() => {
           @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
           @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
-          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile" />
+          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile"
+          @delete-branch="handleDeleteBranch" />
+
       </aside>
 
       <main class="main">
@@ -1887,7 +1909,7 @@ onUnmounted(() => {
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange"
             @edit-commit="handleEditCommit"
@@ -1898,7 +1920,8 @@ onUnmounted(() => {
             @create-branch-from-commit="handleCreateBranchFromCommit"
             @tag-commit="handleTagCommit"
             @cherry-pick-commit="handleCherryPickCommit"
-            @view-on-forge="handleViewOnForge" />
+            @view-on-forge="handleViewOnForge"
+            @delete-branch="handleDeleteBranch" />
         </aside>
       </Transition>
     </div>

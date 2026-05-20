@@ -1329,6 +1329,17 @@ export async function gitDeleteBranch(cwd: string, name: string, force: boolean 
 }
 
 /**
+ * Delete a remote branch (git push <remote> --delete <name>).
+ */
+export async function gitDeleteRemoteBranch(cwd: string, remote: string, name: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_delete_remote_branch", { cwd, remote, name });
+    return;
+  }
+  throw new Error("gitDeleteRemoteBranch only supported in Tauri mode");
+}
+
+/**
  * Rename a branch (git branch -m oldName newName).
  * Works whether oldName is the current branch or another local branch.
  */

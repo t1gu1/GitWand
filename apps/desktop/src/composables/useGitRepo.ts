@@ -22,6 +22,7 @@ import {
   gitCreateBranch,
   gitSwitchBranch,
   gitDeleteBranch,
+  gitDeleteRemoteBranch,
   gitRenameBranch,
   gitCherryPick,
   gitCherryPickAbort,
@@ -881,6 +882,17 @@ export function useGitRepo() {
     }
   }
 
+  async function deleteRemoteBranch(remote: string, name: string) {
+    if (!folderPath.value) return;
+    try {
+      await gitDeleteRemoteBranch(folderPath.value, remote, name);
+      await loadBranches();
+      await loadLog();
+    } catch (err: any) {
+      error.value = `delete remote branch: ${err.message}`;
+    }
+  }
+
   async function renameBranch(oldName: string, newName: string) {
     if (!folderPath.value) return;
     const trimmed = newName.trim();
@@ -994,6 +1006,7 @@ export function useGitRepo() {
     createBranch,
     switchBranch,
     deleteBranch,
+    deleteRemoteBranch,
     renameBranch,
     // Cherry-pick (Phase 8.2)
     isCherryPicking,

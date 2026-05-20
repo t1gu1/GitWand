@@ -277,7 +277,9 @@ pub fn run() {
             commands::ops::git_create_branch,
             commands::ops::git_switch_branch,
             commands::ops::git_delete_branch,
+            commands::ops::git_delete_remote_branch,
             commands::ops::git_rename_branch,
+
             commands::ops::git_stash,
             commands::ops::git_stash_pop,
             commands::ops::open_in_editor,
