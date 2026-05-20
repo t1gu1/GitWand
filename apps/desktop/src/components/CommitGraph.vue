@@ -733,8 +733,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               <span>{{ vc.entry.author }}</span>
               <span class="cg-sep">&middot;</span>
               <span>{{ formatDate(vc.entry.date) }}</span>
-              <span class="cg-sep">&middot;</span>
-              <span class="mono cg-hash">{{ vc.entry.hash }}</span>
             </span>
           </template>
         </div>
@@ -1174,11 +1172,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .cg-sep {
   opacity: 0.4;
-}
-
-.cg-hash {
-  font-size: 10px;
-  color: var(--color-accent);
 }
 
 .cg-empty {
