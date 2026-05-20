@@ -767,9 +767,25 @@ pub(crate) fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
         let parts: Vec<&str> = line.split('\0').collect();
         if parts.len() >= 4 {
             let subject = parts[2];
+            // Skip internal untracked-files commits created by --include-untracked.
+            if subject.starts_with("untracked files on ") {
+                continue;
+            }
             let (branch, message) = if subject.starts_with("On ") {
+                // "On <branch>: <custom-message>"
                 if let Some(colon_pos) = subject.find(": ") {
                     (subject[3..colon_pos].to_string(), subject[colon_pos + 2..].to_string())
+                } else {
+                    (String::new(), subject.to_string())
+                }
+            } else if subject.starts_with("WIP on ") {
+                // "WIP on <branch>: <sha> <commit-msg>"
+                if let Some(colon_pos) = subject.find(": ") {
+                    let branch = subject[7..colon_pos].to_string();
+                    // drop the leading "<sha> " from the commit message portion
+                    let rest = &subject[colon_pos + 2..];
+                    let msg = rest.splitn(2, ' ').nth(1).unwrap_or(rest).to_string();
+                    (branch, msg)
                 } else {
                     (String::new(), subject.to_string())
                 }
