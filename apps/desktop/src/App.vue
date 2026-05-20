@@ -201,28 +201,11 @@ const {
   switchBranch,
   deleteBranch,
   deleteRemoteBranch,
+  deleteTag,
+  deleteRemoteTag,
   renameBranch: doRenameBranch,
   currentGitUser,
 } = useGitRepo();
-
-async function handleDeleteBranch(name: string, mode: "local" | "remote" | "both", remoteName?: string) {
-  if (!repoFolderPath.value) return;
-  try {
-    if (mode === "local" || mode === "both") {
-      await deleteBranch(name);
-    }
-    if (mode === "remote" || mode === "both") {
-      const rName = remoteName || `origin/${name}`;
-      const slashIdx = rName.indexOf("/");
-      if (slashIdx === -1) throw new Error(`Invalid remote branch name: ${rName}`);
-      const remote = rName.slice(0, slashIdx);
-      const branch = rName.slice(slashIdx + 1);
-      await deleteRemoteBranch(remote, branch);
-    }
-  } catch (e: any) {
-    repoError.value = e.message || String(e);
-  }
-}
 
 // ─── Git Tree panel ──────────────────────────────────────
 const showGitTree = ref(false);
@@ -638,11 +621,13 @@ const {
   handleCherryPickCommit,
   handleViewOnForge,
   handleDeleteBranchRequest,
+  handleDeleteTagRequest,
   confirmCheckoutCommit,
   confirmResetToCommit,
   confirmCreateBranchFromCommit,
   confirmTagCommit,
   confirmDeleteBranch,
+  confirmDeleteTag,
   suggestTagWithAI,
   isTagAISuggesting,
   isAIAvailable,
@@ -655,6 +640,8 @@ const {
   cherryPick: doCherryPick,
   deleteBranch,
   deleteRemoteBranch,
+  deleteTag,
+  deleteRemoteTag,
 });
 
 // ─── Folder opening ─────────────────────────────────────
@@ -1931,7 +1918,9 @@ onUnmounted(() => {
             @tag-commit="handleTagCommit"
             @cherry-pick-commit="handleCherryPickCommit"
             @view-on-forge="handleViewOnForge"
-            @delete-branch="handleDeleteBranchRequest" />
+            @delete-branch="handleDeleteBranchRequest"
+            @delete-tag="handleDeleteTagRequest" />
+
         </aside>
       </Transition>
     </div>
@@ -2153,10 +2142,10 @@ onUnmounted(() => {
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.resetConfirm') }}
         </button>
       </template>
-      </BaseModal>
+    </BaseModal>
 
-      <!-- Delete branch options (v2.12) -->
-      <BaseModal v-if="commitActionModal.type === 'deleteBranch'" :title="t('branchMenu.deleteModalTitle')"
+    <!-- Delete branch options (v2.12) -->
+    <BaseModal v-if="commitActionModal.type === 'deleteBranch'" :title="t('branchMenu.deleteModalTitle')"
       :subtitle="t('branchMenu.deleteOptionsDesc', commitActionModal.deleteBranchName)" size="sm" role="alertdialog"
       @close="closeCommitActionModal">
       <div class="cam-radio-group">
@@ -2191,7 +2180,45 @@ onUnmounted(() => {
           {{ commitActionModal.busy ? t('common.loading') : t('branchMenu.deleteModalConfirm') }}
         </button>
       </template>
-      </BaseModal>
+    </BaseModal>
+
+    <!-- Delete tag options (v2.12) -->
+    <BaseModal v-if="commitActionModal.type === 'deleteTag'" :title="t('tags.delete')"
+      :subtitle="t('tags.deleteOptionsDesc', commitActionModal.deleteTagName)" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
+      <div class="cam-radio-group">
+        <label v-if="commitActionModal.deleteTagHasLocal" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="local" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteLocalOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteLocalOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteTagHasRemote" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="remote" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteRemoteOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteRemoteOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteTagHasLocal && commitActionModal.deleteTagHasRemote" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="both" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteBothOption') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteBothOptionHint') }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="commitActionModal.error" class="cam-error" style="margin-top: var(--space-3)">{{ commitActionModal.error
+        }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteTag">
+          {{ commitActionModal.busy ? t('common.loading') : t('tags.deleteConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
+
     <!-- Create branch from commit -->
     <BaseModal v-if="commitActionModal.type === 'createBranch'" :title="t('commitCtx.createBranch')"
       :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')" size="sm"

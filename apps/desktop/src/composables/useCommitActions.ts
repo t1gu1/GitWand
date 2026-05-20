@@ -28,7 +28,7 @@ import { useAIProvider } from "./useAIProvider";
 // ─── Types ───────────────────────────────────────────────
 
 export interface CommitActionModal {
-  type: "checkout" | "reset" | "createBranch" | "tag" | "deleteBranch" | null;
+  type: "checkout" | "reset" | "createBranch" | "tag" | "deleteBranch" | "deleteTag" | null;
   entry: GitLogEntry | null;
   resetMode: "soft" | "mixed" | "hard";
   branchName: string;
@@ -42,6 +42,11 @@ export interface CommitActionModal {
   deleteBranchRemoteName: string;
   deleteBranchHasLocal: boolean;
   deleteBranchHasRemote: boolean;
+  // Tag deletion options (v2.12)
+  deleteTagMode: "local" | "remote" | "both";
+  deleteTagName: string;
+  deleteTagHasLocal: boolean;
+  deleteTagHasRemote: boolean;
 }
 
 interface Deps {
@@ -55,6 +60,9 @@ interface Deps {
   /** Branch deletion actions (owned by useGitRepo) */
   deleteBranch: (name: string) => Promise<void>;
   deleteRemoteBranch: (remote: string, name: string) => Promise<void>;
+  /** Tag deletion actions (owned by useGitRepo) */
+  deleteTag: (name: string) => Promise<void>;
+  deleteRemoteTag: (remote: string, name: string) => Promise<void>;
 }
 
 // ─── Composable ──────────────────────────────────────────
@@ -70,6 +78,8 @@ export function useCommitActions(deps: Deps) {
     cherryPick,
     deleteBranch,
     deleteRemoteBranch,
+    deleteTag,
+    deleteRemoteTag,
   } = deps;
   const tagAI = useTagSuggestion();
   const ai = useAIProvider();
@@ -90,6 +100,10 @@ export function useCommitActions(deps: Deps) {
     deleteBranchRemoteName: "",
     deleteBranchHasLocal: false,
     deleteBranchHasRemote: false,
+    deleteTagMode: "local",
+    deleteTagName: "",
+    deleteTagHasLocal: false,
+    deleteTagHasRemote: false,
   });
 
   function closeModal() {
@@ -127,6 +141,40 @@ export function useCommitActions(deps: Deps) {
         const remote = fullRemoteName.slice(0, slashIdx);
         const branch = fullRemoteName.slice(slashIdx + 1);
         await deleteRemoteBranch(remote, branch);
+      }
+      closeModal();
+    } catch (err: any) {
+      modal.value.error = err?.message ?? String(err);
+    } finally {
+      modal.value.busy = false;
+    }
+  }
+
+  // ── Tag deletion ───────────────────────────────────────
+
+  function handleDeleteTagRequest(name: string, hasLocal: boolean, hasRemote: boolean) {
+    modal.value = {
+      ...modal.value,
+      type: "deleteTag",
+      deleteTagName: name,
+      deleteTagHasLocal: hasLocal,
+      deleteTagHasRemote: hasRemote,
+      deleteTagMode: hasLocal && hasRemote ? "both" : hasLocal ? "local" : "remote",
+      error: "",
+    };
+  }
+
+  async function confirmDeleteTag() {
+    const { deleteTagName: name, deleteTagMode: mode } = modal.value;
+    const cwd = repoFolderPath.value;
+    if (!cwd) return;
+    modal.value.busy = true;
+    try {
+      if (mode === "local" || mode === "both") {
+        await deleteTag(name);
+      }
+      if (mode === "remote" || mode === "both") {
+        await deleteRemoteTag("origin", name);
       }
       closeModal();
     } catch (err: any) {
@@ -311,12 +359,14 @@ export function useCommitActions(deps: Deps) {
     handleCherryPickCommit,
     handleViewOnForge,
     handleDeleteBranchRequest,
+    handleDeleteTagRequest,
     // Confirm callbacks called from modal footers
     confirmCheckoutCommit,
     confirmResetToCommit,
     confirmCreateBranchFromCommit,
     confirmTagCommit,
     confirmDeleteBranch,
+    confirmDeleteTag,
     // AI
     suggestTagWithAI,
     isTagAISuggesting: tagAI.isGenerating,
