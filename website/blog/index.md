@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-14-forge-completeness" class="blog-card">
+    <div class="blog-meta">May 20, 2026 · 11 min read</div>
+    <h2 class="blog-title">Inline GitLab discussions, Bitbucket CI checks, and forge-agnostic intelligence: GitWand v2.14</h2>
+    <p class="blog-excerpt">v2.14 closes the <code>ForgeNotImplementedError</code> stubs from v2.10. GitLab gets diff-line comment anchoring via the Discussions API, Bitbucket gets CI status checks and draft-to-ready conversion, all three forges get <code>updateComment</code> and <code>deleteComment</code>, and the conflict preview and hotspot analysis become forge-agnostic. Plus a side-by-side with Linear Diffs, which launched the same week.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-13-ai-inline-suggestions" class="blog-card">
     <div class="blog-meta">May 18, 2026 · 14 min read</div>
     <h2 class="blog-title">AI code review in your PR diff: how GitWand v2.13 works</h2>

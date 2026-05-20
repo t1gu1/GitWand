@@ -17,15 +17,18 @@ Devenir le client Git de référence qui combine la puissance visuelle de **Kale
 | Client | Stack | Prix | Forces | Faiblesses |
 |--------|-------|------|--------|------------|
 | **Kaleidoscope** | macOS natif | ~150€/an | Image diff, folder diff, 3-way merge visuel | macOS-only, pas de workflow Git, pas d'auto-resolve |
-| **GitHub Desktop** | Electron | Gratuit | Simple, bon workflow PR, cherry-pick/rebase | Diff basique, résolution rudimentaire, lourd |
-| **GitButler** | Tauri/Rust | Gratuit | Virtual branches, stacked PRs, IA intégrée | Nouveau paradigme déroutant, pas d'image/folder diff |
-| **GitKraken** | Electron | $5/mois | Graph visuel, merge editor 3-way, Jira/Trello intégrés, Launchpad (PRs+issues cross-repo), Workspaces multi-repo cloud-synced, Cloud Patches, AI partout (commit/PR/merge), Agent Sessions View (Claude Code) | Payant, Electron, lourd, nécessite compte cloud pour les features avancées |
-| **GitSquid** | Electron | €49/an | Conflict Predictor (rebase/cherry-pick + scratch worktree), Monorepo Scope (auto-détection pnpm/Cargo/Nx/Turbo), secrets scanner pré-commit, Branch Intent (git notes), 10 langues | Electron, payant, pas d'auto-resolve moteur |
-| **Fork** | Natif | $50 | Rapide, interface propre, gros repos | Pas d'auto-resolve, pas d'IA |
-| **Tower** | Natif | $69/an | Undo puissant, conflict advisor | Payant, pas d'auto-resolve |
-| **Sublime Merge** | Natif | $99 | Ultra-rapide, search puissant | Pas de PR workflow |
+| **GitHub Desktop** | Electron | Gratuit | Simple, workflow PR GitHub, cherry-pick/rebase ; git hooks opt-in (v3.5.5, fév 2026) | GitHub uniquement, diff basique, pas d'IA, pas d'auto-resolve |
+| **GitButler** | Tauri/Rust | Gratuit | Virtual branches, stacked PRs, Agents Tab (Claude Code par branche) ; CLI `but` + TUI (v0.19 fév 2026), MCP server, OpenRouter/LM Studio ; Series A avr 2026 | Nouveau paradigme déroutant, pas d'auto-resolve algorithmique, pas d'image/folder diff |
+| **GitKraken** | Electron | $8/mois | Agent Mode v12.0 (avr 2026) : worktree + agent (Claude Code/Codex/Gemini CLI) en un clic, live status, "Review on GitKraken.dev" ; multi-forge GitHub/GitLab/Bitbucket/Azure DevOps, Launchpad, Workspaces cloud, AI commit/PR/merge | Payant, Electron, lourd, compte cloud obligatoire pour les features avancées |
+| **GitSquid** | Tauri/Rust | €49/an | Rewrite Tauri/Rust (avr 2026, ~7200 lignes Rust) ; Conflict Predictor scratch worktree, Monorepo Scope, secrets scanner, AI multi-provider, GitHub/GitLab/Bitbucket PRs | Payant, pas d'auto-resolve algorithmique, pas d'image diff |
+| **Fork** | Natif | $50 | Rapide, interface propre, gros repos ; `--update-refs` rebase, conflict preview cherry-pick/revert (mai 2026), AI code review SHA ranges | Pas de PR review inline, pas d'auto-resolve, pas de multi-forge avancé |
+| **Tower** | Natif | $69/an | AI commits (Claude Code + Codex, v16 mai 2026), commit templates, multi-forge GitHub/GitLab/Bitbucket/Azure DevOps | Payant, pas d'auto-resolve moteur |
+| **Sublime Merge** | Natif | $99 | Ultra-rapide, `diff_algorithm` configurable, LFS lock/unlock (avr 2026), patch create/apply | Pas de PR workflow, pas d'IA, pas d'auto-resolve |
+| **Linear Diffs** | Web / SaaS | Inclus Linear | Reviews inline dans le tracker (diffs, commentaires, CI, merge), tabs "For me / Created", notifications PR granulaires | GitHub uniquement, pas de client Git (staging/commits/rebase absents), setup org admin requis, cloud obligatoire |
 
 **GitWand vs GitButler** : GitButler réinvente le workflow (virtual branches), GitWand améliore le workflow existant avec de l'intelligence (auto-resolve, MCP, suggestions). Même stack Tauri/Rust, audiences complémentaires.
+
+**GitWand vs Linear Diffs** : Linear est un issue tracker qui empiète sur l'espace "review sans quitter son outil" — GitHub uniquement, pas de résolution de conflits, setup admin requis. GitWand couvre GitHub + GitLab + Bitbucket avec un moteur de résolution, un diff viewer (word-level LCS, minimap, image diff) et un workflow Git complet (staging, rebase, worktrees). Les deux ne s'adressent pas au même besoin primaire, mais Linear valide le Launchpad et les reviews inline comme direction produit.
 
 ---
 
@@ -819,21 +822,53 @@ _Suite de v2.10 : combler les stubs `ForgeNotImplementedError` sur GitLab et Bit
 
 ---
 
-### v2.15.0 — Voice Input (expérimental)
+### v2.15.0 — PR Activity Notifications
 
-Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
+Notifications OS natives pour les événements PR — review request, nouveau commentaire, CI flip, mention — sans quitter GitWand. L'infrastructure est quasi-prête (useRepoPoller, useLaunchpadPrs, useConnectivity) ; il manque uniquement la couche de diff-snapshot et l'émission vers l'OS.
 
-- **Dictée locale** : bouton microphone dans le panneau de commit, capture audio → transcription via un modèle Whisper embarqué (whisper-rs côté Rust) — zéro cloud, zéro réseau
-- **Enrichissement IA optionnel** : après transcription, proposer de passer le texte dicté dans `useAIProvider` pour correction grammaticale / conventional commit formatting — GitWand fait mieux que Gitux sur ce point
-- **Modèles au choix** : `tiny` (rapide, léger) ou `base` (meilleure précision) téléchargés à la demande via Settings, stockés localement
-- **Multilingue** : Whisper détecte automatiquement la langue — utile pour les équipes mixtes FR/EN
-- **Fallback gracieux** : si l'accès micro est refusé par macOS TCC, message d'erreur clair avec lien vers Préférences système
+**Diff-snapshot du Launchpad**
+
+- Entre deux ticks du poller, comparer le snapshot précédent et le nouveau : nouveaux commentaires, changements de statut CI (pass/fail flip), review request entrante, merge/close d'une PR
+- `useLaunchpadNotifications.ts` : singleton module-level, compare par `updatedAt` / `commentCount` / `ciStatus` — zéro requête réseau supplémentaire (réutilise le poll Launchpad existant)
+
+**Notifications natives via `tauri-plugin-notification`**
+
+- Notification OS (macOS Notification Center, Linux libnotify, Windows toast) avec titre, body et badge action (ouvrir le Launchpad sur la PR concernée)
+- Granularité configurable dans Settings > Notifications : All activity · Reviews & comments · CI failures only · None
+- Mode "by people" : filtrer les events identifiés comme bot (GitHub Actions, Dependabot, Renovate) — miroir du mode Linear Diffs
+- Gating : notifications uniquement si la fenêtre GitWand est en arrière-plan (`visibilitychange` — déjà trackée dans `useRepoPoller`)
+
+**Implémentation**
+
+- `tauri-plugin-notification` est déjà dans l'écosystème Tauri 2, zéro nouvelle dépendance lourde
+- Permissions macOS TCC déclarées dans `tauri.conf.json` (`allow-notification` capability)
+- Les notifications push dans `useLogs` (v2.5 Quick Fix) — traçabilité complète dans l'onglet Logs
+- i18n : ~12 clés × 5 locales (`notifications.*`)
 
 ---
 
+### v2.16.0 — CI Check Annotations inline
+
+Superposition des annotations de check-run dans le diff — la ligne précise qui a fait échouer le linter ou le typecheck, directement au bon endroit dans la review.
+
+**Backend**
+
+- GitHub : `GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations` → liste d'annotations `{ path, start_line, end_line, annotation_level, message, title }`
+- GitLab : pipeline job trace + annotations via GitLab CI `artifacts:reports:codequality` (format JSON commun)
+- Bitbucket : `GET /2.0/repositories/{workspace}/{repo}/commit/{commit}/statuses` enrichi avec les annotations Pipelines
+- Nouveau type `CIAnnotation { path, line, level: "failure"|"warning"|"notice", title, message }` dans `forge/types.ts`
+- `getCIAnnotations(cwd, checkRunId)` ajouté à `ForgeProvider`
+
+**UI — DiffViewer**
+
+- Les annotations sont injectées dans le `DiffViewer` comme une couche de gutter icons (❌ failure, ⚠ warning, ℹ notice) sur les lignes concernées
+- Au hover : tooltip avec `title` + `message` du check-run — même pattern que les commentaires inline
+- Dans le tab CI : les check-runs qui ont des annotations ont un badge "N annotations" cliquable qui scrolle vers la première annotation dans le diff
+- Compatible avec les 3 forges ; stub gracieux si `getCIAnnotations` non implémenté (pas de gutter icons, CI tab inchangé)
+
 ---
 
-### v2.16.0 — Scratch worktree + Conflict Predictor étendu
+### v2.17.0 — Scratch worktree + Conflict Predictor étendu
 
 _Inspiré GitSquid. Extension naturelle du moteur GitWand et du Worktree first-class (v2.7)._
 
@@ -852,7 +887,7 @@ _Inspiré GitSquid. Extension naturelle du moteur GitWand et du Worktree first-c
 
 ---
 
-### v2.17.0 — Monorepo Scope
+### v2.18.0 — Monorepo Scope
 
 _Inspiré GitSquid. Rend GitWand ergonomique sur les gros monorepos (pnpm, Cargo, Nx…)._
 
@@ -863,7 +898,7 @@ _Inspiré GitSquid. Rend GitWand ergonomique sur les gros monorepos (pnpm, Cargo
 
 ---
 
-### v2.18.0 — Safety Bundle : secrets scanner pré-commit
+### v2.19.0 — Safety Bundle : secrets scanner pré-commit
 
 _Inspiré GitSquid. Feature "safety" sans aucune dépendance réseau — tout en local._
 
@@ -880,7 +915,7 @@ _Inspiré GitSquid. Feature "safety" sans aucune dépendance réseau — tout en
 
 ---
 
-### v2.19.0 — Stacked Branches (natif)
+### v2.20.0 — Stacked Branches (natif)
 
 _Feature différenciante : workflow stacked PRs sans CLI externe (Graphite, ghstack…). Scope important — jalon dédié._
 
@@ -901,7 +936,7 @@ Le paradigme : au lieu d'un gros PR, on empile des branches courtes (`feat/step-
 
 - Détection automatique quand la base d'une stack a bougé (push sur `main`, merge d'une branche intermédiaire)
 - Bouton "Restack" en un clic : rebase l'ensemble de la stack en cascade (`git rebase --onto` layer par layer)
-- Preview du restack avec liste des conflits potentiels avant exécution (réutilise le Conflict Predictor de v2.16)
+- Preview du restack avec liste des conflits potentiels avant exécution (réutilise le Conflict Predictor de v2.17)
 
 **PRs**
 
@@ -914,6 +949,18 @@ Le paradigme : au lieu d'un gros PR, on empile des branches courtes (`feat/step-
 - Métadonnées de stack stockées dans `.gitwand-workspace.json` (pas de git notes pour rester léger)
 - Restack via `git rebase --onto <new-base> <old-base> <branch>` enchaîné layer par layer (Rust, avec rollback si conflit non résolvable)
 - Aucune dépendance CLI externe
+
+---
+
+### v2.21.0 — Voice Input (expérimental)
+
+Inspiré de Gitux, mais intégré au pipeline IA GitWand existant plutôt qu'en silo.
+
+- **Dictée locale** : bouton microphone dans le panneau de commit, capture audio → transcription via un modèle Whisper embarqué (whisper-rs côté Rust) — zéro cloud, zéro réseau
+- **Enrichissement IA optionnel** : après transcription, proposer de passer le texte dicté dans `useAIProvider` pour correction grammaticale / conventional commit formatting — GitWand fait mieux que Gitux sur ce point
+- **Modèles au choix** : `tiny` (rapide, léger) ou `base` (meilleure précision) téléchargés à la demande via Settings, stockés localement
+- **Multilingue** : Whisper détecte automatiquement la langue — utile pour les équipes mixtes FR/EN
+- **Fallback gracieux** : si l'accès micro est refusé par macOS TCC, message d'erreur clair avec lien vers Préférences système
 
 ---
 

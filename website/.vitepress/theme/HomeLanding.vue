@@ -836,7 +836,7 @@ const COMPARE_ROWS: CompareRow[] = [
   { label: 'Confidence scoring per hunk',   gw: true, ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
   { label: '3-way merge editor',            gw: true, ghd: false, gk: true,      fork: true,  tower: true,  sm: true  },
   { label: 'Zero-impact merge preview',     gw: true, ghd: false, gk: false,     fork: false, tower: false, sm: false, highlight: true },
-  { label: 'Proactive conflict prevention', gw: true, ghd: false, gk: 'partial', fork: false, tower: 'partial', sm: false },
+  { label: 'Proactive conflict prevention', gw: true, ghd: false, gk: 'partial', fork: 'partial', tower: 'partial', sm: false },
 
   { category: true, label: 'Power Git' },
   { label: 'Interactive rebase',            gw: true, ghd: 'partial', gk: true, fork: true, tower: true, sm: true  },
@@ -850,9 +850,9 @@ const COMPARE_ROWS: CompareRow[] = [
 
   { category: true, label: 'Forge integrations' },
   { label: 'GitHub PRs',                    gw: true,   ghd: true,  gk: true,  fork: 'partial', tower: 'partial', sm: false },
-  { label: 'GitLab MRs',                    gw: 'soon', ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
-  { label: 'Bitbucket PRs',                 gw: 'soon', ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
-  { label: 'Git hooks manager',             gw: true,   ghd: false, gk: false, fork: false,     tower: false,     sm: false },
+  { label: 'GitLab MRs',                    gw: true,   ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
+  { label: 'Bitbucket PRs',                 gw: true,   ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
+  { label: 'Git hooks manager',             gw: true,   ghd: 'partial', gk: false, fork: false,     tower: false,     sm: false },
 
   { category: true, label: 'AI & Agents', note: 'GitWand connects to your own LLM — Claude, OpenAI-compatible, or Ollama. No built-in model.' },
   { label: 'AI commit messages',            gw: true,   ghd: true,      gk: true,      fork: 'partial', tower: true,  sm: false },
@@ -860,6 +860,7 @@ const COMPARE_ROWS: CompareRow[] = [
   { label: 'AI PR description',             gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'MCP server for AI agents',      gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'Agent Sessions panel',          gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
+  { label: 'PR activity notifications',     gw: 'soon', ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'Voice input (offline Whisper)', gw: 'soon', ghd: false,     gk: false,     fork: false,     tower: false, sm: false },
 ]
 
@@ -1516,7 +1517,7 @@ function cellClass(v: CompareValue | undefined): string {
             </tbody>
           </table>
         </div>
-        <p class="compare-note">~ partial &nbsp;·&nbsp; SOON on the roadmap &nbsp;·&nbsp; data accurate as of April 2026</p>
+        <p class="compare-note">~ partial &nbsp;·&nbsp; SOON on the roadmap &nbsp;·&nbsp; data accurate as of May 2026</p>
       </div>
     </section>
 
@@ -1528,10 +1529,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/v2-13-ai-inline-suggestions" class="blog-teaser-card">
-          <div class="blog-teaser-meta">May 18, 2026 · 14 min read</div>
-          <h3 class="blog-teaser-title">AI code review in your PR diff: how GitWand v2.13 works</h3>
-          <p class="blog-teaser-excerpt">Per-hunk AI critique with a four-tier verdict (ok / nit / suggestion / risk), an inline suggestion editor that stages GitHub suggestion blocks without leaving the diff, and named AI prompt presets for commit messages.</p>
+        <a href="/blog/v2-14-forge-completeness" class="blog-teaser-card">
+          <div class="blog-teaser-meta">May 20, 2026 · 11 min read</div>
+          <h3 class="blog-teaser-title">Forge completeness: inline GitLab discussions, Bitbucket CI checks, and forge-agnostic intelligence</h3>
+          <p class="blog-teaser-excerpt">v2.14 closes the last ForgeNotImplementedError stubs from v2.10 — diff-line anchoring on GitLab, CI checks and draft conversion on Bitbucket, and conflict preview now works on all three forges. Plus a head-to-head with Linear Diffs.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>
