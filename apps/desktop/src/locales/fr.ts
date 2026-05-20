@@ -138,6 +138,13 @@ const fr: Locale = {
     deleteModalGuardLabel: "Tapez le nom de la branche pour confirmer",
     deleteModalGuardPlaceholder: "Tapez \u00ab {0} \u00bb",
     deleteModalConfirm: "Supprimer la branche",
+    deleteOptionsDesc: "Supprimer la branche \u00ab {0} \u00bb. Choisissez les copies \u00e0 retirer.",
+    deleteLocalOnly: "Supprimer localement",
+    deleteLocalOnlyHint: "Retire la branche locale. Les commits non push\u00e9s seront perdus.",
+    deleteRemoteOnly: "Supprimer sur le remote",
+    deleteRemoteOnlyHint: "Retire la branche du serveur distant.",
+    deleteBothOption: "Supprimer localement & remote",
+    deleteBothOptionHint: "Retire les deux copies (locale et distante).",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────

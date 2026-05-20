@@ -80,6 +80,7 @@ const emit = defineEmits<{
   openLaunchpad: [];
   /** Scroll to a specific file in the history view */
   scrollToFile: [index: number];
+  deleteBranch: [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
 }>();
 
 const { t, locale } = useI18n();
@@ -720,10 +721,10 @@ const branchToDelete = computed(() => {
   return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
 });
 
-function onBranchCtxDelete(mode: "local" | "remote" | "both") {
+function onBranchCtxDelete() {
   const b = branchToDelete.value;
   if (!b) return;
-  emit("deleteBranch", b.localName || b.name, mode, b.remoteName);
+  emit("deleteBranch", b.name, b.hasLocal, b.hasRemote, b.remoteName);
   closeBranchCtx();
 }
 
@@ -1335,34 +1336,13 @@ function formatActivityDate(dateStr: string): string {
           <template v-if="branchToDelete">
             <div class="ctx-separator"></div>
             <button
-              v-if="branchToDelete.hasLocal"
               class="ctx-item ctx-item--danger"
-              @click="onBranchCtxDelete('local')"
+              @click="onBranchCtxDelete"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>{{ t('branch.deleteLocal').replace('{0}', branchToDelete.localName) }}</span>
-            </button>
-            <button
-              v-if="branchToDelete.hasRemote"
-              class="ctx-item ctx-item--danger"
-              @click="onBranchCtxDelete('remote')"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>{{ t('branch.deleteRemote').replace('{0}', branchToDelete.remoteName) }}</span>
-            </button>
-            <button
-              v-if="branchToDelete.hasLocal && branchToDelete.hasRemote"
-              class="ctx-item ctx-item--danger"
-              @click="onBranchCtxDelete('both')"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>{{ t('branch.deleteBoth').replace('{0}', branchToDelete.name) }}</span>
+              <span>{{ t('branchMenu.deleteLabel') }}</span>
             </button>
           </template>
         </div>

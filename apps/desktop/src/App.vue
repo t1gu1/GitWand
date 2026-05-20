@@ -637,14 +637,25 @@ const {
   handleTagCommit,
   handleCherryPickCommit,
   handleViewOnForge,
+  handleDeleteBranchRequest,
   confirmCheckoutCommit,
   confirmResetToCommit,
   confirmCreateBranchFromCommit,
   confirmTagCommit,
+  confirmDeleteBranch,
   suggestTagWithAI,
   isTagAISuggesting,
   isAIAvailable,
-} = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh, cherryPick: doCherryPick });
+} = useCommitActions({
+  repoFolderPath,
+  repoError,
+  loadLog,
+  loadBranches,
+  repoRefresh,
+  cherryPick: doCherryPick,
+  deleteBranch,
+  deleteRemoteBranch,
+});
 
 // ─── Folder opening ─────────────────────────────────────
 async function handleOpenFolder() {
@@ -1784,8 +1795,7 @@ onUnmounted(() => {
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
           @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
           @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile"
-          @delete-branch="handleDeleteBranch" />
-
+          @delete-branch="handleDeleteBranchRequest" />
       </aside>
 
       <main class="main">
@@ -1921,7 +1931,7 @@ onUnmounted(() => {
             @tag-commit="handleTagCommit"
             @cherry-pick-commit="handleCherryPickCommit"
             @view-on-forge="handleViewOnForge"
-            @delete-branch="handleDeleteBranch" />
+            @delete-branch="handleDeleteBranchRequest" />
         </aside>
       </Transition>
     </div>
@@ -2143,8 +2153,45 @@ onUnmounted(() => {
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.resetConfirm') }}
         </button>
       </template>
-    </BaseModal>
+      </BaseModal>
 
+      <!-- Delete branch options (v2.12) -->
+      <BaseModal v-if="commitActionModal.type === 'deleteBranch'" :title="t('branchMenu.deleteModalTitle')"
+      :subtitle="t('branchMenu.deleteOptionsDesc', commitActionModal.deleteBranchName)" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
+      <div class="cam-radio-group">
+        <label v-if="commitActionModal.deleteBranchHasLocal" class="cam-radio">
+          <input type="radio" name="deleteMode" value="local" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteLocalOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteLocalOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteBranchHasRemote" class="cam-radio">
+          <input type="radio" name="deleteMode" value="remote" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteRemoteOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteRemoteOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteBranchHasLocal && commitActionModal.deleteBranchHasRemote"
+          class="cam-radio">
+          <input type="radio" name="deleteMode" value="both" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteBothOption') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteBothOptionHint') }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="commitActionModal.error" class="cam-error" style="margin-top: var(--space-3)">{{ commitActionModal.error
+        }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteBranch">
+          {{ commitActionModal.busy ? t('common.loading') : t('branchMenu.deleteModalConfirm') }}
+        </button>
+      </template>
+      </BaseModal>
     <!-- Create branch from commit -->
     <BaseModal v-if="commitActionModal.type === 'createBranch'" :title="t('commitCtx.createBranch')"
       :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')" size="sm"

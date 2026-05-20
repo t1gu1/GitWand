@@ -144,6 +144,13 @@ const en = {
     deleteModalGuardLabel: "Type the branch name to confirm",
     deleteModalGuardPlaceholder: "Type \u00ab {0} \u00bb",
     deleteModalConfirm: "Delete branch",
+    deleteOptionsDesc: "Delete branch \u00ab {0} \u00bb. Choose which copies to remove.",
+    deleteLocalOnly: "Delete local branch",
+    deleteLocalOnlyHint: "Removes the local tracking branch. Commits not pushed will be lost.",
+    deleteRemoteOnly: "Delete Origin branch",
+    deleteRemoteOnlyHint: "Removes the branch from the remote server.",
+    deleteBothOption: "Delete local & Origin",
+    deleteBothOptionHint: "Removes both local and remote copies.",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────

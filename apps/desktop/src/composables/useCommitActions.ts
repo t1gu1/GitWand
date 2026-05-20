@@ -28,7 +28,7 @@ import { useAIProvider } from "./useAIProvider";
 // ─── Types ───────────────────────────────────────────────
 
 export interface CommitActionModal {
-  type: "checkout" | "reset" | "createBranch" | "tag" | null;
+  type: "checkout" | "reset" | "createBranch" | "tag" | "deleteBranch" | null;
   entry: GitLogEntry | null;
   resetMode: "soft" | "mixed" | "hard";
   branchName: string;
@@ -36,6 +36,12 @@ export interface CommitActionModal {
   tagMessage: string;
   busy: boolean;
   error: string;
+  // Branch deletion options (v2.12)
+  deleteBranchMode: "local" | "remote" | "both";
+  deleteBranchName: string;
+  deleteBranchRemoteName: string;
+  deleteBranchHasLocal: boolean;
+  deleteBranchHasRemote: boolean;
 }
 
 interface Deps {
@@ -46,13 +52,25 @@ interface Deps {
   repoRefresh: () => Promise<void>;
   /** cherry-pick one or more commits (owned by useGitRepo — handles conflict flow). */
   cherryPick: (hashes: string[]) => Promise<void>;
+  /** Branch deletion actions (owned by useGitRepo) */
+  deleteBranch: (name: string) => Promise<void>;
+  deleteRemoteBranch: (remote: string, name: string) => Promise<void>;
 }
 
 // ─── Composable ──────────────────────────────────────────
 
 export function useCommitActions(deps: Deps) {
   const { t } = useI18n();
-  const { repoFolderPath, repoError, loadLog, loadBranches, repoRefresh, cherryPick } = deps;
+  const {
+    repoFolderPath,
+    repoError,
+    loadLog,
+    loadBranches,
+    repoRefresh,
+    cherryPick,
+    deleteBranch,
+    deleteRemoteBranch,
+  } = deps;
   const tagAI = useTagSuggestion();
   const ai = useAIProvider();
 
@@ -67,10 +85,55 @@ export function useCommitActions(deps: Deps) {
     tagMessage: "",
     busy: false,
     error: "",
+    deleteBranchMode: "local",
+    deleteBranchName: "",
+    deleteBranchRemoteName: "",
+    deleteBranchHasLocal: false,
+    deleteBranchHasRemote: false,
   });
 
   function closeModal() {
     modal.value = { ...modal.value, type: null, entry: null, busy: false, error: "" };
+  }
+
+  // ── Branch deletion ────────────────────────────────────
+
+  function handleDeleteBranchRequest(name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string) {
+    modal.value = {
+      ...modal.value,
+      type: "deleteBranch",
+      deleteBranchName: name,
+      deleteBranchHasLocal: hasLocal,
+      deleteBranchHasRemote: hasRemote,
+      deleteBranchRemoteName: remoteName || "",
+      deleteBranchMode: hasLocal && hasRemote ? "both" : hasLocal ? "local" : "remote",
+      error: "",
+    };
+  }
+
+  async function confirmDeleteBranch() {
+    const { deleteBranchName: name, deleteBranchMode: mode, deleteBranchRemoteName: rName } = modal.value;
+    const cwd = repoFolderPath.value;
+    if (!cwd) return;
+    modal.value.busy = true;
+    try {
+      if (mode === "local" || mode === "both") {
+        await deleteBranch(name);
+      }
+      if (mode === "remote" || mode === "both") {
+        const fullRemoteName = rName || `origin/${name}`;
+        const slashIdx = fullRemoteName.indexOf("/");
+        if (slashIdx === -1) throw new Error(`Invalid remote branch name: ${fullRemoteName}`);
+        const remote = fullRemoteName.slice(0, slashIdx);
+        const branch = fullRemoteName.slice(slashIdx + 1);
+        await deleteRemoteBranch(remote, branch);
+      }
+      closeModal();
+    } catch (err: any) {
+      modal.value.error = err?.message ?? String(err);
+    } finally {
+      modal.value.busy = false;
+    }
   }
 
   // ── Checkout commit ────────────────────────────────────
@@ -247,11 +310,13 @@ export function useCommitActions(deps: Deps) {
     handleTagCommit,
     handleCherryPickCommit,
     handleViewOnForge,
+    handleDeleteBranchRequest,
     // Confirm callbacks called from modal footers
     confirmCheckoutCommit,
     confirmResetToCommit,
     confirmCreateBranchFromCommit,
     confirmTagCommit,
+    confirmDeleteBranch,
     // AI
     suggestTagWithAI,
     isTagAISuggesting: tagAI.isGenerating,

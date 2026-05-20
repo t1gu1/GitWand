@@ -47,7 +47,7 @@ const emit = defineEmits<{
   "tag-commit": [entry: GitLogEntry];
   "cherry-pick-commit": [entry: GitLogEntry];
   "view-on-forge": [entry: GitLogEntry];
-  "delete-branch": [name: string, mode: "local" | "remote" | "both", remoteName?: string];
+  "delete-branch": [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -144,10 +144,10 @@ const branchToDelete = computed(() => {
   return null;
 });
 
-function onCtxDeleteBranch(mode: "local" | "remote" | "both") {
+function onCtxDeleteBranch() {
   const b = branchToDelete.value;
   if (!b) return;
-  emit("delete-branch", b.localName || b.name, mode, b.remoteName);
+  emit("delete-branch", b.name, b.hasLocal, b.hasRemote, b.remoteName);
   closeCommitContextMenu();
 }
 
@@ -745,37 +745,14 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
       <template v-if="branchToDelete">
         <li class="commit-ctx-menu-sep" role="separator"></li>
         <li
-          v-if="branchToDelete.hasLocal"
           class="commit-ctx-menu-item commit-ctx-menu-item--danger"
           role="menuitem"
-          @click="onCtxDeleteBranch('local')"
+          @click="onCtxDeleteBranch"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ t('branch.deleteLocal').replace('{0}', branchToDelete.localName) }}</span>
-        </li>
-        <li
-          v-if="branchToDelete.hasRemote"
-          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
-          role="menuitem"
-          @click="onCtxDeleteBranch('remote')"
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{{ t('branch.deleteRemote').replace('{0}', branchToDelete.remoteName) }}</span>
-        </li>
-        <li
-          v-if="branchToDelete.hasLocal && branchToDelete.hasRemote"
-          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
-          role="menuitem"
-          @click="onCtxDeleteBranch('both')"
-        >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{{ t('branch.deleteBoth').replace('{0}', branchToDelete.name) }}</span>
+          <span>{{ t('branchMenu.deleteLabel') }}</span>
         </li>
       </template>
 
