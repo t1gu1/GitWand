@@ -150,7 +150,7 @@ const emit = defineEmits<{
   splitCommit: [entry: GitLogEntry];
   // v1.9 — commit context menu
   checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   revertCommit: [entry: GitLogEntry];
   createBranchFromCommit: [entry: GitLogEntry];
   tagCommit: [entry: GitLogEntry];
@@ -210,6 +210,28 @@ function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | 
 async function onCtxCopySha(full: boolean) {
   const sha = full ? ctxMenu.value.entry?.hashFull : ctxMenu.value.entry?.hash;
   if (sha) await navigator.clipboard.writeText(sha);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyBranchName() {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  const refs = parseRefBadges(entry.refs).filter(r => r.type === "branch" || r.type === "head").map(r => r.label);
+  if (refs.length > 0) {
+    await navigator.clipboard.writeText(refs.join(", "));
+  }
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySummary() {
+  const entry = ctxMenu.value.entry;
+  if (entry) await navigator.clipboard.writeText(entry.message);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyDescription() {
+  const entry = ctxMenu.value.entry;
+  if (entry?.body) await navigator.clipboard.writeText(entry.body);
   closeCommitContextMenu();
 }
 
@@ -586,6 +608,24 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.reset') }}</span>
         </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'soft'), closeCommitContextMenu()">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.resetSoft') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'mixed'), closeCommitContextMenu()">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.resetMixed') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'hard'), closeCommitContextMenu()">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span style="color: var(--color-danger)">{{ t('commitCtx.resetHard') }}</span>
+        </li>
 
         <li class="commit-ctx-menu-sep" role="separator"></li>
 
@@ -683,6 +723,26 @@ function authorColor(name: string): string {
             <path d="M8 8h3M8 11h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
           <span>{{ t('commitCtx.copyFullSha') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyBranchName">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyBranchName') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copySummary') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyDescription">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyDescription') }}</span>
         </li>
         <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyMessage">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">

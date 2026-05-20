@@ -1889,7 +1889,16 @@ onUnmounted(() => {
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
             :fork-point-sha="graphForkPointSha" :repo-stats="repoStats"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-            @change-view="onViewModeChange" />
+            @change-view="onViewModeChange"
+            @edit-commit="handleEditCommit"
+            @split-commit="handleSplitCommitRequest"
+            @checkout-commit="handleCheckoutCommit"
+            @reset-to-commit="handleResetToCommit"
+            @revert-commit="handleRevertCommit"
+            @create-branch-from-commit="handleCreateBranchFromCommit"
+            @tag-commit="handleTagCommit"
+            @cherry-pick-commit="handleCherryPickCommit"
+            @view-on-forge="handleViewOnForge" />
         </aside>
       </Transition>
     </div>

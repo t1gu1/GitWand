@@ -23,8 +23,108 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "select-commit": [hash: string];
-  "change-view": [mode: "changes"];
+  "change-view": [mode: "changes" | "history"];
+  "edit-commit": [entry: GitLogEntry];
+  "split-commit": [entry: GitLogEntry];
+  "checkout-commit": [entry: GitLogEntry];
+  "reset-to-commit": [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
+  "revert-commit": [entry: GitLogEntry];
+  "create-branch-from-commit": [entry: GitLogEntry];
+  "tag-commit": [entry: GitLogEntry];
+  "cherry-pick-commit": [entry: GitLogEntry];
+  "view-on-forge": [entry: GitLogEntry];
 }>();
+
+// ─── Context menu (v1.9) ─────────────────────────────
+interface CommitCtxMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  entry: GitLogEntry | null;
+  /** Index in the displayed list — used to restrict some actions to HEAD. */
+  idx: number;
+}
+const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
+
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+  if (entry.hashFull === "WIP") return;
+  e.preventDefault();
+  e.stopPropagation();
+  // Select the commit first
+  emit("select-commit", entry.hashFull);
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+}
+
+function closeCommitContextMenu() {
+  ctxMenu.value.visible = false;
+}
+
+function onCtxEmit(event: keyof typeof emit, mode?: "soft" | "mixed" | "hard") {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  if (event === "reset-to-commit") {
+    (emit as any)(event, entry, mode);
+  } else {
+    (emit as any)(event, entry);
+  }
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySha(full: boolean) {
+  const sha = full ? ctxMenu.value.entry?.hashFull : ctxMenu.value.entry?.hash;
+  if (sha) await navigator.clipboard.writeText(sha);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyBranchName() {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return;
+  const refs = parseRefs(entry.refs);
+  const branches = refs.filter(r => r.type === "branch").map(r => r.name);
+  if (branches.length > 0) {
+    await navigator.clipboard.writeText(branches.join(", "));
+  }
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySummary() {
+  const entry = ctxMenu.value.entry;
+  if (entry) await navigator.clipboard.writeText(entry.message);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyDescription() {
+  const entry = ctxMenu.value.entry;
+  if (entry?.body) await navigator.clipboard.writeText(entry.body);
+  closeCommitContextMenu();
+}
+
+/** True when the commit under the context menu is a merge (>1 parent). */
+const isCtxEntryMerge = computed(
+  () => (ctxMenu.value.entry?.parents?.length ?? 0) > 1,
+);
+
+/** True when the commit under the context menu is the topmost commit (HEAD). */
+const isCtxEntryHead = computed(() => {
+  const entry = ctxMenu.value.entry;
+  if (!entry) return false;
+  return isCurrent(entry);
+});
+
+onMounted(() => {
+  window.addEventListener("click", closeCommitContextMenu);
+  window.addEventListener("contextmenu", closeCommitContextMenu, { capture: false });
+  window.addEventListener("keydown", onCtxKey);
+});
+onUnmounted(() => {
+  window.removeEventListener("click", closeCommitContextMenu);
+  window.removeEventListener("contextmenu", closeCommitContextMenu, { capture: false } as EventListenerOptions);
+  window.removeEventListener("keydown", onCtxKey);
+});
+
+function onCtxKey(e: KeyboardEvent) {
+  if (e.key === "Escape") closeCommitContextMenu();
+}
 
 // ─── WIP commit (v2.14) ──────────────────────────────
 // If there are uncommitted changes, we prepend a virtual "WIP" commit to
@@ -384,6 +484,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :key="'n' + node.index"
           class="cg-node"
           @click="node.hash === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', node.hash)"
+          @contextmenu="openCommitContextMenu($event, displayCommits[node.index], node.index)"
         >
           <!-- WIP Node: dashed circle -->
           <circle
@@ -470,6 +571,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
+          @contextmenu="openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
             <span class="cg-msg wip-msg">{{ vc.entry.message }}</span>
@@ -506,9 +608,219 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   <div v-else class="cg-empty muted">
     {{ t('log.noCommit') }}
   </div>
+
+  <!-- Context menu for commit items (right-click) -->
+  <Teleport to="body">
+    <ul
+      v-if="ctxMenu.visible"
+      class="commit-ctx-menu"
+      :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      role="menu"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <!-- Navigation -->
+      <li
+        class="commit-ctx-menu-item"
+        :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+        role="menuitem"
+        :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+        @click="!isCtxEntryHead && onCtxEmit('checkout-commit')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.checkout') }}</span>
+      </li>
+
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+
+      <!-- Reset options -->
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'soft')">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('commitCtx.resetSoft') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'mixed')">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('commitCtx.resetMixed') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'hard')">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span style="color: var(--color-danger)">{{ t('commitCtx.resetHard') }}</span>
+      </li>
+
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+
+      <!-- Branching -->
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="onCtxEmit('create-branch-from-commit')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4zm0 0v2a2 2 0 0 1-2 2H6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('commitCtx.createBranch') }}</span>
+      </li>
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="onCtxEmit('tag-commit')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <circle cx="5.5" cy="5.5" r="1" fill="currentColor"/>
+        </svg>
+        <span>{{ t('commitCtx.tag') }}</span>
+      </li>
+      <li
+        class="commit-ctx-menu-item"
+        :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+        role="menuitem"
+        :title="isCtxEntryHead ? t('commitCtx.cherryPickHeadDisabled') : undefined"
+        @click="!isCtxEntryHead && onCtxEmit('cherry-pick-commit')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="5" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+          <circle cx="11" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M5 11V7a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M8 4V1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.cherryPick') }}</span>
+      </li>
+
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+
+      <!-- History operations -->
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="onCtxEmit('revert-commit')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 4h10a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M5 1L2 4l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('commitCtx.revert') }}</span>
+      </li>
+
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+
+      <!-- Clipboard -->
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(false)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.copyShortSha') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(true)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M8 8h3M8 11h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.copyFullSha') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyBranchName">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('commitCtx.copyBranchName') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.copySummary') }}</span>
+      </li>
+      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyDescription">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.copyDescription') }}</span>
+      </li>
+
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+
+      <!-- Forge -->
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="onCtxEmit('view-on-forge')"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M10 2h4v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M14 2L8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('commitCtx.viewOnForge') }}</span>
+      </li>
+    </ul>
+  </Teleport>
 </template>
 
 <style scoped>
+/* Teleported menu — unscoped so the styles apply after mounting to <body>. */
+.commit-ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 180px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, 0 8px 20px rgba(0, 0, 0, 0.18));
+  font-size: var(--font-size-sm);
+}
+
+.commit-ctx-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.commit-ctx-menu-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.commit-ctx-menu-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.commit-ctx-menu-item--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.commit-ctx-menu-item--disabled:hover {
+  background: transparent;
+}
+
+.commit-ctx-menu-sep {
+  height: 1px;
+  background: var(--color-border);
+  margin: 3px 6px;
+  list-style: none;
+}
+
 .cg {
   display: flex;
   flex-direction: column;
