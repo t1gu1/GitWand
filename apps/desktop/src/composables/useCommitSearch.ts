@@ -59,6 +59,7 @@ export function filterCommitsLocal(
       || normalize(e.author).includes(needle)
       || e.hash.startsWith(q)
       || e.hashFull.startsWith(q)
+      || (e.refs && normalize(e.refs).includes(needle))
     );
   });
 }

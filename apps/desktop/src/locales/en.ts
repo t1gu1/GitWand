@@ -414,7 +414,7 @@ const en = {
     searchPlaceholder: "Filter (subject, author, hash\u2026) \u2014 Enter for AI search",
     searchAiHint: "AI search: type a plain-language question then Enter or ✨",
     aiSearchResults: "AI search: {0} matching commit(s).",
-    graphSearchPlaceholder: "Search commits…",
+    graphSearchPlaceholder: "Search by commit id, author, branch name, summary or description…",
     graphSearchPrev: "Previous match",
     graphSearchNext: "Next match",
     graphSearchCount: "{0} / {1}",

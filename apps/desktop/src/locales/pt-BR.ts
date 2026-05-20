@@ -402,7 +402,7 @@ const ptBR: Locale = {
     searchPlaceholder: "Filtrar (assunto, autor, hash…) — Enter para busca IA",
     searchAiHint: "Busca IA: digite uma pergunta em linguagem natural e tecle Enter ou ✨",
     aiSearchResults: "Busca IA: {0} commit(s) correspondentes.",
-    graphSearchPlaceholder: "Buscar commits…",
+    graphSearchPlaceholder: "Buscar por id de commit, autor, branch, resumo ou descrição…",
     graphSearchPrev: "Correspondência anterior",
     graphSearchNext: "Próxima correspondência",
     graphSearchCount: "{0} / {1}",

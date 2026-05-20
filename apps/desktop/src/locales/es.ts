@@ -401,7 +401,7 @@ const es: Locale = {
     searchPlaceholder: "Filtrar (asunto, autor, hash…) — Intro para búsqueda IA",
     searchAiHint: "Búsqueda IA: escribe una pregunta en lenguaje natural, luego Intro o ✨",
     aiSearchResults: "Búsqueda IA: {0} commit(s) coincidentes.",
-    graphSearchPlaceholder: "Buscar commits…",
+    graphSearchPlaceholder: "Buscar por id de commit, autor, rama, resumen o descripción…",
     graphSearchPrev: "Coincidencia anterior",
     graphSearchNext: "Siguiente coincidencia",
     graphSearchCount: "{0} / {1}",
