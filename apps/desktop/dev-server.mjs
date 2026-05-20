@@ -1743,6 +1743,19 @@ async function handleRequest(req, res) {
       }
     }
 
+    // POST /api/git-delete-remote-branch  { cwd, remote, name }
+    if (url.pathname === "/api/git-delete-remote-branch" && req.method === "POST") {
+      const { cwd, remote, name } = await readBody(req);
+      if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execSync(`git push "${remote}" --delete "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // POST /api/git-rename-branch  { cwd, oldName, newName }
     if (url.pathname === "/api/git-rename-branch" && req.method === "POST") {
       const { cwd, oldName, newName } = await readBody(req);

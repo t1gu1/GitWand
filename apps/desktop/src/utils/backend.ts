@@ -1336,7 +1336,12 @@ export async function gitDeleteRemoteBranch(cwd: string, remote: string, name: s
     await tauriInvoke("git_delete_remote_branch", { cwd, remote, name });
     return;
   }
-  throw new Error("gitDeleteRemoteBranch only supported in Tauri mode");
+  const res = await devFetch(`${DEV_SERVER}/api/git-delete-remote-branch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, remote, name }),
+  });
+  if (!res.ok) throw new Error(`Failed to delete remote branch: ${res.status}`);
 }
 
 /**
