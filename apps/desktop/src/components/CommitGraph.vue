@@ -243,15 +243,15 @@ const graphWidth = computed(() => {
 const totalHeight = computed(() => displayCommits.value.length * ROW_H);
 
 // ─── Lane colours — rainbow spectrum left-to-right ───────
-// 45° hue steps: red → orange → yellow-green → green → cyan → blue-cyan → indigo → violet
+// 45° hue steps: purple → pink → red → orange → yellow → green → cyan → blue
 // Cycles every 8 lanes; each branch gets a visually distinct color.
 function laneColor(lane: number): string {
-  const hue = (lane * 45) % 360;
+  const hue = (280 + lane * 45) % 360;
   return `hsl(${hue}, 80%, 55%)`;
 }
 
 function laneColorTint(lane: number): string {
-  const hue = (lane * 45) % 360;
+  const hue = (280 + lane * 45) % 360;
   return `hsla(${hue}, 80%, 55%, 0.09)`;
 }
 
@@ -437,17 +437,17 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <defs>
           <!-- Trunk lane multi-color gradient (vibrant for nodes/edges) -->
           <linearGradient id="trunk-gradient-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color: #ff3e3e;" />
-            <stop offset="33%" style="stop-color: #3e88ff;" />
+            <stop offset="0%" style="stop-color: #c33eff;" />
+            <stop offset="33%" style="stop-color: #ffaa3e;" />
             <stop offset="66%" style="stop-color: #3eff88;" />
-            <stop offset="100%" style="stop-color: #ff3e3e;" />
+            <stop offset="100%" style="stop-color: #c33eff;" />
           </linearGradient>
           <!-- Trunk lane multi-color gradient (subtle for row tints) -->
           <linearGradient id="trunk-gradient-tint" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color: hsla(0, 80%, 55%, 0.15);" />
-            <stop offset="33%" style="stop-color: hsla(210, 80%, 55%, 0.15);" />
+            <stop offset="0%" style="stop-color: hsla(280, 80%, 55%, 0.15);" />
+            <stop offset="33%" style="stop-color: hsla(35, 80%, 55%, 0.15);" />
             <stop offset="66%" style="stop-color: hsla(140, 80%, 55%, 0.15);" />
-            <stop offset="100%" style="stop-color: hsla(0, 80%, 55%, 0.15);" />
+            <stop offset="100%" style="stop-color: hsla(280, 80%, 55%, 0.15);" />
           </linearGradient>
         </defs>
 
