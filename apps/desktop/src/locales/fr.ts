@@ -412,6 +412,7 @@ const fr: Locale = {
     graphSearchPrev: "Correspondance précédente",
     graphSearchNext: "Correspondance suivante",
     graphSearchCount: "{0} / {1}",
+    graphSearchClear: "Effacer la recherche",
   },
   commit: {
     summary: "R\u00e9sum\u00e9",

@@ -406,6 +406,7 @@ const ptBR: Locale = {
     graphSearchPrev: "Correspondência anterior",
     graphSearchNext: "Próxima correspondência",
     graphSearchCount: "{0} / {1}",
+    graphSearchClear: "Limpar pesquisa",
   },
   commit: {
     summary: "Resumo",

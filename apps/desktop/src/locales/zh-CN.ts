@@ -405,6 +405,7 @@ const zhCN: Locale = {
     graphSearchPrev: "上一个匹配",
     graphSearchNext: "下一个匹配",
     graphSearchCount: "{0} / {1}",
+    graphSearchClear: "清除搜索",
   },
   commit: {
     summary: "概要",

@@ -405,6 +405,7 @@ const es: Locale = {
     graphSearchPrev: "Coincidencia anterior",
     graphSearchNext: "Siguiente coincidencia",
     graphSearchCount: "{0} / {1}",
+    graphSearchClear: "Borrar búsqueda",
   },
   commit: {
     summary: "Resumen",

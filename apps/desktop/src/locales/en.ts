@@ -418,6 +418,7 @@ const en = {
     graphSearchPrev: "Previous match",
     graphSearchNext: "Next match",
     graphSearchCount: "{0} / {1}",
+    graphSearchClear: "Clear search",
   },
   commit: {
     summary: "Summary",
