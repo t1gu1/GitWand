@@ -589,12 +589,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <rect
           v-for="node in visibleNodes"
           :key="'t' + node.index"
+          class="cg-row-tint"
           :x="cx(node.lane) - 11"
           :y="node.index * ROW_H + 1"
           :width="graphWidth - cx(node.lane) + 11 + 20"
           :height="ROW_H - 2"
           :fill="nodeKind(node) === 'trunk' ? 'url(#trunk-gradient-tint)' : laneColorTint(node.lane)"
           rx="8"
+          @click="node.hash === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', node.hash)"
+          @contextmenu="openCommitContextMenu($event, displayCommits[node.index], node.index)"
         />
         <!-- Edges first (behind nodes). R6: only visible edges are emitted.
              Key uses content (lanes + indices) so Vue can re-use DOM nodes
@@ -1056,7 +1059,8 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   background: var(--color-bg);
 }
 
-.cg-node {
+.cg-node,
+.cg-row-tint {
   cursor: pointer;
 }
 
