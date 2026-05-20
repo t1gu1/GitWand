@@ -103,14 +103,29 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
   // we could potentially pick one, but it's ambiguous.
   // For now, we only show tag deletion if a specific tag badge was right-clicked.
 
+  // If no branchName provided, pick a candidate branch from the commit refs if any
+  let finalBranchName = branchName;
+  let finalBranchType = branchType;
+
+  if (!finalBranchName && !tag && stashIdx === undefined) {
+    const branchesAtCommit = refs.filter(r => r.type === 'branch' || r.type === 'remote');
+    if (branchesAtCommit.length > 0) {
+      // Prioritize local branches
+      const local = branchesAtCommit.find(r => r.type === 'branch');
+      const candidate = local || branchesAtCommit[0];
+      finalBranchName = candidate.name;
+      finalBranchType = candidate.type;
+    }
+  }
+
   ctxMenu.value = {
     visible: true,
     x: e.clientX,
     y: e.clientY,
     entry,
     idx,
-    clickedBranch: branchName,
-    clickedBranchType: branchType || (stashIdx !== undefined ? "stash" : undefined),
+    clickedBranch: finalBranchName,
+    clickedBranchType: finalBranchType || (stashIdx !== undefined ? "stash" : undefined),
     clickedTag: tag,
     clickedStashIndex: stashIdx,
   };
