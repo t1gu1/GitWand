@@ -821,6 +821,19 @@ export function useGitRepo() {
     }
   }
 
+  async function popStash(index: number) {
+    if (!folderPath.value) return;
+    try {
+      await gitStashApply(folderPath.value, index);
+      await gitStashDrop(folderPath.value, index);
+      await refresh();
+      await loadStashes();
+      await loadLog();
+    } catch (err: any) {
+      error.value = `stash pop: ${err.message}`;
+    }
+  }
+
   async function dropStash(index: number) {
     if (!folderPath.value) return;
     try {
@@ -1042,6 +1055,7 @@ export function useGitRepo() {
     stashesLoading,
     loadStashes,
     applyStash,
+    popStash,
     dropStash,
   };
 }

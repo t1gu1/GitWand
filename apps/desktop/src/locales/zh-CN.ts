@@ -149,6 +149,13 @@ const zhCN: Locale = {
     deleteModalGuardLabel: "\u8bf7\u8f93\u5165\u5206\u652f\u540d\u79f0\u4ee5\u786e\u8ba4",
     deleteModalGuardPlaceholder: "\u8f93\u5165 \u00ab {0} \u00bb",
     deleteModalConfirm: "\u5220\u9664\u5206\u652f",
+    deleteOptionsDesc: "\u5220\u9664\u5206\u652f \u00ab {0} \u00bb\u3002\u9009\u62e9\u8981\u79fb\u9664\u7684\u526f\u672c\u3002",
+    deleteLocalOnly: "\u5220\u9664\u672c\u5730\u5206\u652f",
+    deleteLocalOnlyHint: "\u79fb\u9664\u672c\u5730\u8ddf\u8e2a\u5206\u652f\u3002\u672a\u63a8\u9001\u7684\u63d0\u4ea4\u5c06\u4e22\u5931\u3002",
+    deleteRemoteOnly: "\u5220\u9664 Origin \u5206\u652f",
+    deleteRemoteOnlyHint: "\u4ece\u8fdc\u7a0b\u670d\u52a1\u5668\u79fb\u9664\u8be5\u5206\u652f\u3002",
+    deleteBothOption: "\u5220\u9664\u672c\u5730\u548c Origin \u5206\u652f",
+    deleteBothOptionHint: "\u540c\u65f6\u79fb\u9664\u672c\u5730\u548c\u8fdc\u7a0b\u526f\u672c\u3002",
   },
 
   sidebar: {
@@ -413,6 +420,9 @@ const zhCN: Locale = {
     unpin: "取消固定",
     archive: "归档分支",
     unarchive: "取消归档",
+    deleteLocal: "删除本地分支 {0}",
+    deleteRemote: "删除远程分支 {0}",
+    deleteBoth: "同时删除本地和远程分支 {0}",
   },
 
   date: {
@@ -1340,6 +1350,9 @@ const zhCN: Locale = {
     empty: "暂无储藏。使用",
     emptyAction: "+ 储藏",
     emptySuffix: "保存当前修改。",
+    applyStash: "应用暂存 (Apply Stash)",
+    popStash: "弹出暂存 (Pop Stash)",
+    dropStash: "删除暂存 (Drop Stash)",
   },
 
   // ─── File history + blame AI ────────────────────────────
@@ -1529,6 +1542,14 @@ const zhCN: Locale = {
     retagMessageLabel: "标签消息（注释标签）",
     retagForcePush: "强制推送标签到 {0}",
     retagConfirm: "移动标签",
+    delete: "删除",
+    deleteOptionsDesc: "选择删除选项",
+    deleteLocalOnly: "仅本地",
+    deleteLocalOnlyHint: "仅删除本地副本",
+    deleteRemoteOnly: "仅远程",
+    deleteRemoteOnlyHint: "仅从远程删除",
+    deleteBothOption: "同时删除",
+    deleteBothOptionHint: "同时删除本地和远程副本",
   },
 
 

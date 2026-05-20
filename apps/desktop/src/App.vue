@@ -205,6 +205,13 @@ const {
   deleteRemoteTag,
   renameBranch: doRenameBranch,
   currentGitUser,
+  // Stash Manager (Phase 8.2)
+  stashes,
+  stashesLoading,
+  loadStashes,
+  applyStash,
+  popStash,
+  dropStash,
 } = useGitRepo();
 
 // ─── Git Tree panel ──────────────────────────────────────
@@ -1108,20 +1115,15 @@ const showWorkspace = ref(false);
 const showAgents = ref(false);
 const showCommandLog = ref(false);
 
-const stashCount = ref(0);
-async function loadStashCount() {
-  if (!repoFolderPath.value) { stashCount.value = 0; return; }
-  try {
-    const list = await gitStashList(repoFolderPath.value);
-    stashCount.value = Array.isArray(list) ? list.length : 0;
-  } catch {
-    stashCount.value = 0;
-  }
-}
-watch(repoFolderPath, loadStashCount, { immediate: true });
+const stashCount = computed(() => stashes.value.length);
+watch(repoFolderPath, () => {
+  if (repoFolderPath.value) loadStashes();
+}, { immediate: true });
 watch(
   () => repoStats.value.staged + repoStats.value.unstaged + repoStats.value.untracked + repoStats.value.conflicted,
-  loadStashCount,
+  () => {
+    if (repoFolderPath.value) loadStashes();
+  },
 );
 
 // ─── Launchpad panel ─────────────────────────────────────
@@ -1906,7 +1908,7 @@ onUnmounted(() => {
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange"
             @edit-commit="handleEditCommit"
@@ -1919,7 +1921,10 @@ onUnmounted(() => {
             @cherry-pick-commit="handleCherryPickCommit"
             @view-on-forge="handleViewOnForge"
             @delete-branch="handleDeleteBranchRequest"
-            @delete-tag="handleDeleteTagRequest" />
+            @delete-tag="handleDeleteTagRequest"
+            @apply-stash="applyStash"
+            @pop-stash="popStash"
+            @drop-stash="dropStash" />
 
         </aside>
       </Transition>

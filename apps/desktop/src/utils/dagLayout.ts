@@ -225,7 +225,7 @@ export function parseRefs(refs: string): Array<{ type: "head" | "branch" | "remo
     if (r === "HEAD") return { type: "head" as const, name: "HEAD" };
     if (r.startsWith("HEAD -> ")) return { type: "branch" as const, name: r.slice(8) };
     if (r.startsWith("tag: ")) return { type: "tag" as const, name: r.slice(5) };
-    if (r === "refs/stash") return { type: "stash" as const, name: "stash" };
+    if (r === "refs/stash" || r === "stash") return { type: "stash" as const, name: "stash" };
     if (r.includes("/")) return { type: "remote" as const, name: r };
     return { type: "branch" as const, name: r };
   });

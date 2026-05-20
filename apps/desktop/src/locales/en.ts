@@ -1398,6 +1398,9 @@ const en = {
     empty: "No stashes. Use",
     emptyAction: "+ Stash",
     emptySuffix: "to save your current changes.",
+    applyStash: "Apply Stash",
+    popStash: "Pop Stash",
+    dropStash: "Drop Stash",
   },
 
   // ─── File history + blame AI ────────────────────────────

@@ -1809,7 +1809,7 @@ async function handleRequest(req, res) {
         const resolvedCwd = resolve(cwd);
         const out = execFileSync(
           "git",
-          ["stash", "list", "--format=%gd%x09%gs%x09%ct"],
+          ["stash", "list", "--format=%H%x09%gd%x09%gs%x09%ct"],
           { cwd: resolvedCwd, encoding: "utf-8" },
         );
         const entries = out
@@ -1817,7 +1817,7 @@ async function handleRequest(req, res) {
           .map((line) => line.trim())
           .filter(Boolean)
           .map((line) => {
-            const [ref, message, ts] = line.split("\t");
+            const [hash, ref, message, ts] = line.split("\t");
             const indexMatch = /stash@\{(\d+)\}/.exec(ref ?? "");
             const date = ts ? new Date(parseInt(ts, 10) * 1000).toISOString() : "";
             // `message` looks like "WIP on <branch>: <subject>" or
@@ -1827,6 +1827,7 @@ async function handleRequest(req, res) {
             const subject = onMatch ? onMatch[2] : (message ?? "");
             return {
               index: indexMatch ? parseInt(indexMatch[1], 10) : 0,
+              hash,
               message: subject,
               branch,
               date,

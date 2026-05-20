@@ -713,12 +713,36 @@ function onBranchCtxUnarchive() {
 const branchToDelete = computed(() => {
   if (!branchCtx.value.branchName || !props.branches) return null;
   const name = branchCtx.value.branchName;
-  const local = props.branches.find((b) => b.name === name && !b.isRemote);
-  if (!local) return null;
-  const remote = props.branches.find(
-    (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
-  );
-  return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+  // In sidebar, we don't have an explicit 'type', but we can check if it starts with origin/
+  const isRemote = name.startsWith("origin/") || name.startsWith("remotes/");
+
+  if (!isRemote) {
+    const local = props.branches.find((b) => b.name === name && !b.isRemote);
+    if (!local) {
+      return { name, localName: name, hasLocal: true, hasRemote: false };
+    }
+    const remote = props.branches.find(
+      (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
+    );
+    return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+  } else {
+    const remote = props.branches.find((b) => b.name === name && b.isRemote);
+    const slashIdx = name.indexOf("/");
+    const baseName = slashIdx !== -1 ? name.slice(slashIdx + 1) : name;
+
+    if (!remote) {
+      return { name: baseName, remoteName: name, hasLocal: false, hasRemote: true };
+    }
+
+    const local = props.branches.find((b) => !b.isRemote && (b.name === baseName || b.upstream === name));
+    return {
+      name: baseName,
+      localName: local?.name,
+      remoteName: name,
+      hasLocal: !!local,
+      hasRemote: true,
+    };
+  }
 });
 
 function onBranchCtxDelete() {

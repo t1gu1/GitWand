@@ -144,6 +144,13 @@ const es: Locale = {
     deleteModalGuardLabel: "Escribe el nombre de la rama para confirmar",
     deleteModalGuardPlaceholder: "Escribe \u00ab {0} \u00bb",
     deleteModalConfirm: "Eliminar rama",
+    deleteOptionsDesc: "Eliminar rama \u00ab {0} \u00bb. Elige qu\u00e9 copias eliminar.",
+    deleteLocalOnly: "Eliminar rama local",
+    deleteLocalOnlyHint: "Elimina la rama de seguimiento local. Los commits no enviados se perder\u00e1n.",
+    deleteRemoteOnly: "Eliminar rama en Origin",
+    deleteRemoteOnlyHint: "Elimina la rama del servidor remoto.",
+    deleteBothOption: "Eliminar local y Origin",
+    deleteBothOptionHint: "Elimina tanto la copia local como la remota.",
   },
 
   // ─── Sidebar / RepoSidebar ──────────────────────────────
@@ -413,6 +420,9 @@ const es: Locale = {
     unpin: "Desfijar",
     archive: "Archivar rama",
     unarchive: "Desarchivar rama",
+    deleteLocal: "Eliminar {0} local",
+    deleteRemote: "Eliminar {0} en Origin",
+    deleteBoth: "Eliminar {0} local y en origin",
   },
 
 
@@ -1355,6 +1365,9 @@ const es: Locale = {
     empty: "No hay stashes. Usa",
     emptyAction: "+ Stash",
     emptySuffix: "para guardar tus cambios actuales.",
+    applyStash: "Aplicar Stash",
+    popStash: "Pop Stash",
+    dropStash: "Eliminar Stash",
   },
 
   // ─── File history + blame AI ────────────────────────────
@@ -1536,9 +1549,17 @@ const es: Locale = {
     lightweight: "ligero",
     empty: "Sin tags. Crea uno desde un commit en el Log.",
     deleteConfirmTitle: "Eliminar tag",
-    deleteAlsoRemote: "Eliminar también en {0}",
+    deleteAlsoRemote: "Eliminar tambi\u00e9n en {0}",
     deleteConfirm: "Eliminar",
-    retagTitle: "Mover etiqueta a…",
+    delete: "Eliminar tag",
+    deleteOptionsDesc: "Eliminar etiqueta \u00ab {0} \u00bb. Elige qu\u00e9 copias eliminar.",
+    deleteLocalOnly: "Eliminar etiqueta local",
+    deleteLocalOnlyHint: "Elimina la etiqueta de tu equipo local.",
+    deleteRemoteOnly: "Eliminar etiqueta en Origin",
+    deleteRemoteOnlyHint: "Elimina la etiqueta del servidor remoto.",
+    deleteBothOption: "Eliminar local y Origin",
+    deleteBothOptionHint: "Elimina tanto la copia local como la remota.",
+    retagTitle: "Mover etiqueta a\u2026",
     retagRefLabel: "Ref destino (rama, SHA o HEAD)",
     retagRefHint: "Dejar vacío para mover a HEAD. Para un commit específico, pegar su SHA.",
     retagMessageLabel: "Mensaje de etiqueta (anotada)",

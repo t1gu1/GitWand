@@ -93,6 +93,10 @@ export function normalize(command, value) {
       // ahead/behind/isRemote) est le cœur de ce qu'on valide.
       return blankVolatile(camel, ["lastCommit", "lastCommitDate"]);
 
+    case "git-stash-list":
+      // `date` peut varier subtilement en format ISO selon les implémentations.
+      return blankVolatile(camel, ["date"]);
+
     default:
       return camel;
   }

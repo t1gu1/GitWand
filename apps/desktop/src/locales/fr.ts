@@ -1377,6 +1377,9 @@ const fr: Locale = {
     empty: "Aucun stash. Utilisez",
     emptyAction: "+ Stash",
     emptySuffix: "pour enregistrer tes changements actuels.",
+    applyStash: "Appliquer le stash",
+    popStash: "Pop le stash",
+    dropStash: "Supprimer le stash",
   },
 
   // ─── File history + blame AI ────────────────────────────

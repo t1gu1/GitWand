@@ -20,6 +20,7 @@ const props = defineProps<{
   forkPointSha?: string;
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number };
   branches?: GitBranch[];
+  stashes?: any[];
 }>();
 
 type CommitEvent =
@@ -34,7 +35,10 @@ type CommitEvent =
   | "tag-commit"
   | "cherry-pick-commit"
   | "view-on-forge"
-  | "delete-tag";
+  | "delete-tag"
+  | "apply-stash"
+  | "pop-stash"
+  | "drop-stash";
 
 const emit = defineEmits<{
   "select-commit": [hash: string];
@@ -50,6 +54,9 @@ const emit = defineEmits<{
   "view-on-forge": [entry: GitLogEntry];
   "delete-branch": [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
   "delete-tag": [name: string, hasLocal: boolean, hasRemote: boolean];
+  "apply-stash": [index: number];
+  "pop-stash": [index: number];
+  "drop-stash": [index: number];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -66,6 +73,8 @@ interface CommitCtxMenu {
   clickedBranchType?: "head" | "branch" | "remote" | "tag" | "stash";
   /** The specific tag name that was right-clicked (if any). */
   clickedTag?: string;
+  /** The specific stash index that was right-clicked (if any). */
+  clickedStashIndex?: number;
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
@@ -76,6 +85,24 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
   // Select the commit first
   emit("select-commit", entry.hashFull);
   const tag = branchType === "tag" ? branchName : undefined;
+
+  // Identify if this is a stash commit
+  const refs = commitRefs(entry);
+  let stashIdx: number | undefined;
+  if (branchType === "stash" || refs.some(r => r.type === "stash")) {
+    const stash = props.stashes?.find((s) => s.hash === entry.hashFull);
+    if (stash) {
+      stashIdx = stash.index;
+    } else if (entry.refs.includes("refs/stash") || entry.refs.includes("(stash)")) {
+      // Fallback: if it has the tip-of-stash ref, it's stash@{0}
+      stashIdx = 0;
+    }
+  }
+
+  // If we right-clicked the row (no branchName) but there are tags,
+  // we could potentially pick one, but it's ambiguous.
+  // For now, we only show tag deletion if a specific tag badge was right-clicked.
+
   ctxMenu.value = {
     visible: true,
     x: e.clientX,
@@ -83,8 +110,9 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
     entry,
     idx,
     clickedBranch: branchName,
-    clickedBranchType: branchType,
+    clickedBranchType: branchType || (stashIdx !== undefined ? "stash" : undefined),
     clickedTag: tag,
+    clickedStashIndex: stashIdx,
   };
 }
 
@@ -133,19 +161,30 @@ const branchToDelete = computed(() => {
   const name = ctxMenu.value.clickedBranch;
   const type = ctxMenu.value.clickedBranchType;
 
-  if (type === "branch") {
+  if (type === "branch" || type === "head") {
+    // Standard local branch (or current branch HEAD -> ...)
     const local = props.branches.find((b) => b.name === name && !b.isRemote);
-    if (!local) return null;
+    if (!local) {
+      // Fallback: if we can't find it in props.branches, but the graph says it's a branch,
+      // it's likely a local branch we just created or haven't loaded yet.
+      return { name, localName: name, hasLocal: true, hasRemote: false };
+    }
     const remote = props.branches.find(
       (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
     );
     return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
   } else if (type === "remote") {
+    // Remote tracking branch (e.g. origin/main)
     const remote = props.branches.find((b) => b.name === name && b.isRemote);
-    if (!remote) return null;
     // Extract base name from remote name (e.g. origin/main -> main)
     const slashIdx = name.indexOf("/");
     const baseName = slashIdx !== -1 ? name.slice(slashIdx + 1) : name;
+
+    if (!remote) {
+      // Fallback: assume it's a remote branch even if not in props.branches
+      return { name: baseName, remoteName: name, hasLocal: false, hasRemote: true };
+    }
+
     const local = props.branches.find((b) => !b.isRemote && (b.name === baseName || b.upstream === name));
     return {
       name: baseName,
@@ -166,9 +205,7 @@ function onCtxDeleteBranch() {
 }
 
 const tagToDelete = computed(() => {
-  if (ctxMenu.value.clickedBranchType !== "tag" || !ctxMenu.value.clickedTag) return null;
-  // TODO: Check if tag is remote? For now we assume we only see local tags in the graph refs
-  // or that we handle both local and remote if it exists on the commit.
+  if (!ctxMenu.value.clickedTag) return null;
   return { name: ctxMenu.value.clickedTag, hasLocal: true, hasRemote: true };
 });
 
@@ -417,8 +454,8 @@ type NodeKind = 'stash' | 'trunk' | 'merge' | 'normal';
 function nodeKind(node: DagNode): NodeKind {
   const entry = displayCommits.value[node.index];
   if (!entry) return 'normal';
-  if (entry.refs.includes('refs/stash')) return 'stash';
   const refs = parseRefs(entry.refs);
+  if (refs.some(r => r.type === 'stash')) return 'stash';
   if (refs.some(r =>
     (r.type === 'branch' && TRUNK_NAMES.has(r.name)) ||
     (r.type === 'remote' && (r.name.endsWith('/main') || r.name.endsWith('/master')))
@@ -700,14 +737,52 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
       @click.stop
       @contextmenu.prevent
     >
-      <!-- Navigation -->
-      <li
-        class="commit-ctx-menu-item"
-        :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
-        role="menuitem"
-        :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-        @click="!isCtxEntryHead && onCtxEmit('checkout-commit')"
-      >
+      <!-- Stash actions (v2.12) — shown ONLY for stash commits -->
+      <template v-if="ctxMenu.clickedBranchType === 'stash' && ctxMenu.clickedStashIndex !== undefined">
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="emit('apply-stash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 11 12 14 22 4"></polyline>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          <span>{{ t('stash.applyStash') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="emit('pop-stash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          <span>{{ t('stash.popStash') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+          role="menuitem"
+          @click="emit('drop-stash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('stash.dropStash') }}</span>
+        </li>
+      </template>
+
+      <!-- Standard git actions — hidden for stashes -->
+      <template v-else>
+        <!-- Navigation -->
+        <li
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+          role="menuitem"
+          :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+          @click="!isCtxEntryHead && onCtxEmit('checkout-commit')"
+        >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
           <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -878,6 +953,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
         <span>{{ t('commitCtx.viewOnForge') }}</span>
       </li>
+      </template>
     </ul>
   </Teleport>
 </template>
