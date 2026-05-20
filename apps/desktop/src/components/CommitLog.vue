@@ -171,16 +171,18 @@ interface CommitCtxMenu {
   entry: GitLogEntry | null;
   /** Index in the displayed list — used to restrict some actions to HEAD. */
   idx: number;
+  /** The specific branch name that was right-clicked (if any). */
+  clickedBranch?: string;
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
-function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string) {
   e.preventDefault();
   e.stopPropagation();
   // Select the commit first — the user expects the diff view to reflect what
   // they right-clicked on.
   emit("selectCommit", entry.hashFull);
-  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx, clickedBranch: branchName };
 }
 
 function closeCommitContextMenu() {
@@ -214,11 +216,8 @@ async function onCtxCopySha(full: boolean) {
 }
 
 async function onCtxCopyBranchName() {
-  const entry = ctxMenu.value.entry;
-  if (!entry) return;
-  const refs = parseRefBadges(entry.refs).filter(r => r.type === "branch" || r.type === "head").map(r => r.label);
-  if (refs.length > 0) {
-    await navigator.clipboard.writeText(refs.join(", "));
+  if (ctxMenu.value.clickedBranch) {
+    await navigator.clipboard.writeText(ctxMenu.value.clickedBranch);
   }
   closeCommitContextMenu();
 }
@@ -546,6 +545,7 @@ function authorColor(name: string): string {
                     :key="badge.label"
                     class="commit-ref-badge"
                     :class="`commit-ref-badge--${badge.type}`"
+                    @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label)"
                   >{{ badge.label }}</span>
                 </div>
               </div>
@@ -706,7 +706,12 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.copyFullSha') }}</span>
         </li>
-        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyBranchName">
+        <li
+          v-if="ctxMenu.clickedBranch"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyBranchName"
+        >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -719,7 +724,12 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.copySummary') }}</span>
         </li>
-        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyDescription">
+        <li
+          v-if="ctxMenu.entry?.body"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyDescription"
+        >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
             <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
