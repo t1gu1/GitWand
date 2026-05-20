@@ -608,24 +608,6 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.reset') }}</span>
         </li>
-        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'soft'), closeCommitContextMenu()">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{{ t('commitCtx.resetSoft') }}</span>
-        </li>
-        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'mixed'), closeCommitContextMenu()">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{{ t('commitCtx.resetMixed') }}</span>
-        </li>
-        <li class="commit-ctx-menu-item" role="menuitem" @click="emit('resetToCommit', ctxMenu.entry!, 'hard'), closeCommitContextMenu()">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span style="color: var(--color-danger)">{{ t('commitCtx.resetHard') }}</span>
-        </li>
 
         <li class="commit-ctx-menu-sep" role="separator"></li>
 
