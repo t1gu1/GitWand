@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout, type DagNode } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
+import { filterCommitsLocal } from "../composables/useCommitSearch";
 
 const { t } = useI18n();
 
@@ -363,6 +364,64 @@ function isSharedHistory(index: number): boolean {
   return index >= fp;
 }
 
+// ─── Commit search / highlight ───────────────────────
+const searchQuery = ref("");
+const currentMatchIdx = ref(-1);
+
+const matchedIndices = computed<number[]>(() => {
+  const q = searchQuery.value.trim();
+  if (!q) return [];
+  const matched = filterCommitsLocal(displayCommits.value, q);
+  const matchSet = new Set(matched.map((e) => e.hashFull));
+  const indices: number[] = [];
+  displayCommits.value.forEach((e, i) => { if (matchSet.has(e.hashFull)) indices.push(i); });
+  return indices;
+});
+
+watch(matchedIndices, (indices) => {
+  if (indices.length === 0) {
+    currentMatchIdx.value = -1;
+  } else if (currentMatchIdx.value < 0 || currentMatchIdx.value >= indices.length) {
+    currentMatchIdx.value = 0;
+    scrollToIndex(indices[0]);
+  }
+});
+
+watch(searchQuery, (q) => {
+  if (!q.trim()) currentMatchIdx.value = -1;
+});
+
+function scrollToIndex(index: number) {
+  const el = scrollContainer.value;
+  if (!el) return;
+  const top = index * ROW_H;
+  const bottom = top + ROW_H;
+  if (top < el.scrollTop) {
+    el.scrollTop = top - ROW_H;
+  } else if (bottom > el.scrollTop + el.clientHeight) {
+    el.scrollTop = bottom - el.clientHeight + ROW_H;
+  }
+}
+
+function navigateSearch(dir: 1 | -1) {
+  const count = matchedIndices.value.length;
+  if (count === 0) return;
+  let next = currentMatchIdx.value + dir;
+  if (next < 0) next = count - 1;
+  if (next >= count) next = 0;
+  currentMatchIdx.value = next;
+  scrollToIndex(matchedIndices.value[next]);
+}
+
+const matchedHashSet = computed<Set<string>>(() => {
+  return new Set(matchedIndices.value.map((i) => displayCommits.value[i]?.hashFull ?? ""));
+});
+
+const activeMatchHash = computed<string | null>(() => {
+  const idx = matchedIndices.value[currentMatchIdx.value];
+  return idx !== undefined ? (displayCommits.value[idx]?.hashFull ?? null) : null;
+});
+
 // ─── Rendering constants ─────────────────────────────
 const ROW_H = 32; // height per commit row
 const LANE_W = 18; // width per lane
@@ -560,6 +619,41 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 <template>
   <div class="cg" v-if="displayCommits.length > 0">
+    <div class="cg-search-bar">
+      <input
+        v-model="searchQuery"
+        class="cg-search-input"
+        type="search"
+        :placeholder="t('log.graphSearchPlaceholder')"
+        @keydown.enter="navigateSearch(1)"
+        @keydown.escape="searchQuery = ''"
+      />
+      <span v-if="matchedIndices.length > 0" class="cg-search-count">
+        {{ t('log.graphSearchCount', currentMatchIdx + 1, matchedIndices.length) }}
+      </span>
+      <button
+        class="cg-search-nav"
+        :disabled="matchedIndices.length === 0"
+        :title="t('log.graphSearchPrev')"
+        :aria-label="t('log.graphSearchPrev')"
+        @click="navigateSearch(-1)"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="18 15 12 9 6 15"/>
+        </svg>
+      </button>
+      <button
+        class="cg-search-nav"
+        :disabled="matchedIndices.length === 0"
+        :title="t('log.graphSearchNext')"
+        :aria-label="t('log.graphSearchNext')"
+        @click="navigateSearch(1)"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
     <div class="cg-scroll" ref="scrollContainer" @scroll="onScroll">
       <!-- SVG graph column -->
       <svg
@@ -703,6 +797,8 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             'cg-row--shared': isSharedHistory(vc.index),
             'cg-row--current': isCurrent(vc.entry),
             'cg-row--wip': vc.entry.hashFull === 'WIP',
+            'cg-row--match': matchedHashSet.has(vc.entry.hashFull),
+            'cg-row--match-active': vc.entry.hashFull === activeMatchHash,
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
@@ -1035,6 +1131,70 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   list-style: none;
 }
 
+.cg-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.cg-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 11px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text);
+  outline: none;
+}
+
+.cg-search-input:focus {
+  border-color: var(--color-accent);
+}
+
+.cg-search-input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.cg-search-count {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  padding: 0 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.cg-search-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cg-search-nav:hover:not(:disabled) {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.cg-search-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .cg {
   display: flex;
   flex-direction: column;
@@ -1098,6 +1258,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .cg-row--wip {
   color: var(--color-text-muted);
+}
+
+.cg-row--match {
+  background: rgba(245, 158, 11, 0.10);
+}
+
+.cg-row--match-active {
+  background: rgba(245, 158, 11, 0.28) !important;
+  outline: 1px solid rgba(245, 158, 11, 0.55);
+  outline-offset: -1px;
 }
 
 .wip-msg {

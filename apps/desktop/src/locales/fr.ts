@@ -408,6 +408,10 @@ const fr: Locale = {
     searchPlaceholder: "Filtrer (sujet, auteur, hash\u2026) \u2014 Entr\u00e9e pour une recherche IA",
     searchAiHint: "Recherche IA : tape une question en langage naturel puis Entr\u00e9e ou ✨",
     aiSearchResults: "Recherche IA : {0} commit(s) correspondent.",
+    graphSearchPlaceholder: "Rechercher des commits…",
+    graphSearchPrev: "Correspondance précédente",
+    graphSearchNext: "Correspondance suivante",
+    graphSearchCount: "{0} / {1}",
   },
   commit: {
     summary: "R\u00e9sum\u00e9",

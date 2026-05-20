@@ -401,6 +401,10 @@ const zhCN: Locale = {
     searchPlaceholder: "过滤（主题、作者、哈希…）— 按 Enter 使用 AI 搜索",
     searchAiHint: "AI 搜索：输入自然语言问题，然后按 Enter 或 ✨",
     aiSearchResults: "AI 搜索：{0} 个匹配的提交。",
+    graphSearchPlaceholder: "搜索提交…",
+    graphSearchPrev: "上一个匹配",
+    graphSearchNext: "下一个匹配",
+    graphSearchCount: "{0} / {1}",
   },
   commit: {
     summary: "概要",
