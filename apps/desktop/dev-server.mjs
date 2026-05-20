@@ -962,7 +962,7 @@ async function handleRequest(req, res) {
           });
         }
 
-        return jsonResponse(req, res, entries);
+        return jsonResponse(req, res, entries.filter((e) => !e.message.startsWith("index on ")));
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }

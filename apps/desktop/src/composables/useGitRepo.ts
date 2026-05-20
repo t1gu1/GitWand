@@ -60,10 +60,6 @@ export function useGitRepo() {
   const selectedFileStaged = ref(false);
   const diff = ref<GitDiff | null>(null);
   const log = ref<GitLogEntry[]>([]);
-  // Scope of the commit log:
-  //   "current" → only commits reachable from the current branch HEAD (default, like `git log`)
-  //   "all"     → all refs (`git log --all`)
-  const logScope = ref<"current" | "all">("current");
   // Author filter: "all" → no filter, "mine" → only commits by the current git user
   const logAuthorFilter = ref<"all" | "mine">("all");
   const currentGitUser = ref<GitUser | null>(null);
@@ -264,15 +260,12 @@ export function useGitRepo() {
     if (!requireOnline("fetch")) return;
     isFetching.value = true;
     try {
-      const result = await gitFetch(folderPath.value);
-      console.log("[GitWand] fetch result:", result);
+      await gitFetch(folderPath.value);
       // Always refresh status after fetch attempt to get updated ahead/behind
       await loadStatus(folderPath.value);
-      console.log("[GitWand] status after fetch:", {
-        ahead: status.value?.ahead,
-        behind: status.value?.behind,
-        remote: status.value?.remote,
-      });
+      // v2.14 — Refresh log so clicking "Up to date" or periodic fetch
+      // updates the Git Tree / History view with new remote commits.
+      await loadLog();
     } catch (err) {
       console.warn("[GitWand] fetch failed:", err);
     } finally {
@@ -335,10 +328,15 @@ export function useGitRepo() {
 
   /**
    * Refresh status (e.g. after a commit or stage operation).
+   * v2.14 — Now also refreshes the commit log so the Git Tree and History
+   * views stay in sync with the repository state.
    */
   async function refresh() {
     if (!folderPath.value) return;
-    await loadStatus(folderPath.value);
+    await Promise.all([
+      loadStatus(folderPath.value),
+      loadLog(),
+    ]);
     // Also refresh diff if a file is selected
     if (selectedFilePath.value) {
       await loadDiff(selectedFilePath.value, selectedFileStaged.value);
@@ -383,7 +381,7 @@ export function useGitRepo() {
       const entries = await getGitLog(
         folderPath.value,
         pageSize,
-        logScope.value === "all",
+        true, // all refs
         authorEmail,
         0,
       );
@@ -413,7 +411,7 @@ export function useGitRepo() {
       const next = await getGitLog(
         folderPath.value,
         LOG_PAGE,
-        logScope.value === "all",
+        true, // all refs
         authorEmail,
         offset,
       );
@@ -426,15 +424,6 @@ export function useGitRepo() {
     } finally {
       logLoadingMore.value = false;
     }
-  }
-
-  /**
-   * Switch the log scope (current branch vs all refs) and reload the log.
-   */
-  async function setLogScope(scope: "current" | "all") {
-    if (logScope.value === scope) return;
-    logScope.value = scope;
-    await loadLog();
   }
 
   /**
@@ -568,7 +557,6 @@ export function useGitRepo() {
       selectedFileStaged.value = false;
       diff.value = null;
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `commit: ${err.message}`;
     } finally {
@@ -592,7 +580,6 @@ export function useGitRepo() {
       selectedFileStaged.value = false;
       diff.value = null;
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `amend: ${err.message}`;
     }
@@ -614,7 +601,6 @@ export function useGitRepo() {
         successMessage.value = "push-done";
       }
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `push: ${err.message}`;
     } finally {
@@ -642,7 +628,6 @@ export function useGitRepo() {
         }
       }
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `pull: ${err.message}`;
     } finally {
@@ -685,10 +670,6 @@ export function useGitRepo() {
       } else {
         successMessage.value = "merge-done";
       }
-
-      if (viewMode.value === "history") {
-        await loadLog();
-      }
     } catch (err: any) {
       error.value = `merge: ${err?.message || String(err) || "unknown error"}`;
     } finally {
@@ -719,9 +700,6 @@ export function useGitRepo() {
         successMessage.value = "merge-done";
       } else {
         error.value = `merge --continue: ${result.message || "unknown error"}`;
-      }
-      if (viewMode.value === "history") {
-        await loadLog();
       }
     } catch (err: any) {
       error.value = `merge --continue: ${err?.message || String(err)}`;
@@ -764,7 +742,6 @@ export function useGitRepo() {
       } else {
         successMessage.value = "cherry-pick-done";
       }
-      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick: ${err.message}`;
     } finally {
@@ -780,7 +757,6 @@ export function useGitRepo() {
       await gitCherryPickAbort(folderPath.value);
       successMessage.value = "cherry-pick-aborted";
       await refresh();
-      await loadLog();
     } catch (err: any) {
       error.value = `cherry-pick abort: ${err.message}`;
     } finally {
@@ -796,7 +772,6 @@ export function useGitRepo() {
       await refresh();
       if (result.success) {
         successMessage.value = "cherry-pick-done";
-        await loadLog();
       } else if (result.conflicts) {
         // More conflicts remain — stay in cherry-pick mode
         if (status.value && status.value.conflicted.length > 0) {
@@ -848,6 +823,7 @@ export function useGitRepo() {
     try {
       await gitStashDrop(folderPath.value, index);
       await loadStashes();
+      await loadLog();
     } catch (err: any) {
       error.value = `stash drop: ${err.message}`;
     }
@@ -899,6 +875,7 @@ export function useGitRepo() {
     try {
       await gitDeleteBranch(folderPath.value, name, false);
       await loadBranches();
+      await loadLog();
     } catch (err: any) {
       error.value = `delete branch: ${err.message}`;
     }
@@ -915,6 +892,7 @@ export function useGitRepo() {
       if (status.value?.branch === oldName) {
         await loadStatus(folderPath.value);
       }
+      await loadLog();
     } catch (err: any) {
       error.value = `rename branch: ${err.message}`;
     }
@@ -950,7 +928,6 @@ export function useGitRepo() {
     selectedFileStaged,
     diff,
     log,
-    logScope,
     logAuthorFilter,
     logHasMore,
     logLoadingMore,
@@ -995,7 +972,6 @@ export function useGitRepo() {
     selectFile,
     loadLog,
     loadMoreLog,
-    setLogScope,
     setLogAuthorFilter,
     stageFiles,
     stageAll,

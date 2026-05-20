@@ -381,7 +381,7 @@ async function loadDashboard() {
   // TODO Phase 2 (v2.9): bring it back via a `ghMergedSinceCount(cwd, since)`
   // backed by GitHub `search?q=is:merged merged:>=YYYY-MM-DD`.
   const results = await Promise.allSettled([
-    getGitLog(props.cwd, 250),
+    getGitLog(props.cwd, 250, true),
     getGitBranches(props.cwd),
     gitRemoteInfo(props.cwd),
     gitFileCount(props.cwd).catch(() => 0),

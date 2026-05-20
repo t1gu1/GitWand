@@ -135,6 +135,7 @@ const emit = defineEmits<{
   openTags: [];
   openWorkspace: [];
   openAgents: [];
+  changeView: [mode: 'dashboard' | 'changes' | 'history' | 'prs' | 'launchpad'];
 }>();
 
 // ─── Merge-into picker popover (triggered by BranchMenu) ──────────
@@ -448,6 +449,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @delete-branch="(name) => emit('deleteBranch', name)"
             @open-worktrees="(branch) => emit('openWorktrees', branch)"
             @load-branches="emit('loadBranches')"
+            @change-view="(mode) => emit('changeView', mode)"
           />
 
           <!-- BranchMenu + its two piggy-backed popovers.

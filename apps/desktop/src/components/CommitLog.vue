@@ -150,7 +150,7 @@ const emit = defineEmits<{
   splitCommit: [entry: GitLogEntry];
   // v1.9 — commit context menu
   checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
+  resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   revertCommit: [entry: GitLogEntry];
   createBranchFromCommit: [entry: GitLogEntry];
   tagCommit: [entry: GitLogEntry];
@@ -171,16 +171,18 @@ interface CommitCtxMenu {
   entry: GitLogEntry | null;
   /** Index in the displayed list — used to restrict some actions to HEAD. */
   idx: number;
+  /** The specific branch name that was right-clicked (if any). */
+  clickedBranch?: string;
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
-function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string) {
   e.preventDefault();
   e.stopPropagation();
   // Select the commit first — the user expects the diff view to reflect what
   // they right-clicked on.
   emit("selectCommit", entry.hashFull);
-  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx, clickedBranch: branchName };
 }
 
 function closeCommitContextMenu() {
@@ -210,6 +212,25 @@ function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | 
 async function onCtxCopySha(full: boolean) {
   const sha = full ? ctxMenu.value.entry?.hashFull : ctxMenu.value.entry?.hash;
   if (sha) await navigator.clipboard.writeText(sha);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyBranchName() {
+  if (ctxMenu.value.clickedBranch) {
+    await navigator.clipboard.writeText(ctxMenu.value.clickedBranch);
+  }
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySummary() {
+  const entry = ctxMenu.value.entry;
+  if (entry) await navigator.clipboard.writeText(entry.message);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyDescription() {
+  const entry = ctxMenu.value.entry;
+  if (entry?.body) await navigator.clipboard.writeText(entry.body);
   closeCommitContextMenu();
 }
 
@@ -360,16 +381,34 @@ watch(searchQuery, () => {
   aiMatches.value = null;
 });
 
-interface RefBadge { type: "head" | "branch" | "remote" | "tag"; label: string; }
+interface RefBadge { type: "head" | "branch" | "remote" | "tag" | "stash"; label: string; }
 
 function parseRefBadges(refs: string): RefBadge[] {
   if (!refs) return [];
-  return refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
+  const parsed = refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
     if (r.startsWith("HEAD -> ")) return { type: "head" as const, label: r.slice(8) };
     if (r === "HEAD") return { type: "head" as const, label: "HEAD" };
     if (r.startsWith("tag: ")) return { type: "tag" as const, label: r.slice(5) };
+    if (r === "refs/stash") return { type: "stash" as const, label: "stash" };
     if (r.includes("/")) return { type: "remote" as const, label: r };
     return { type: "branch" as const, label: r };
+  });
+
+  // Sort: Local Branch (head/branch) > Remote > Tag > Stash > HEAD (detached)
+  // Note: in CommitLog, "HEAD -> branch" is typed as "head" with the branch name as label.
+  const weights: Record<string, number> = {
+    head: 1,
+    branch: 1,
+    remote: 2,
+    tag: 3,
+    stash: 4,
+  };
+
+  return parsed.sort((a, b) => {
+    // Special case: detached "HEAD" should be last
+    if (a.label === "HEAD" && a.type === "head") return 1;
+    if (b.label === "HEAD" && b.type === "head") return -1;
+    return (weights[a.type] ?? 99) - (weights[b.type] ?? 99);
   });
 }
 
@@ -396,6 +435,14 @@ function authorInitials(name: string): string {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+function isCurrent(entry: GitLogEntry): boolean {
+  if (!entry.refs) return false;
+  return entry.refs.split(",").some((r) => {
+    const trimmed = r.trim();
+    return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
+  });
 }
 
 function authorColor(name: string): string {
@@ -484,6 +531,7 @@ function authorColor(name: string): string {
               :class="{
                 'commit-item--selected': selectedHash === c(vr.index).hashFull,
                 'commit-item--unpushed': isUnpushed(c(vr.index)),
+                'commit-item--current': isCurrent(c(vr.index)),
               }"
               @click="emit('selectCommit', c(vr.index).hashFull)"
               @contextmenu="openCommitContextMenu($event, c(vr.index), oi(vr.index))"
@@ -515,6 +563,7 @@ function authorColor(name: string): string {
                     :key="badge.label"
                     class="commit-ref-badge"
                     :class="`commit-ref-badge--${badge.type}`"
+                    @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label)"
                   >{{ badge.label }}</span>
                 </div>
               </div>
@@ -675,6 +724,36 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.copyFullSha') }}</span>
         </li>
+        <li
+          v-if="ctxMenu.clickedBranch"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyBranchName"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyBranchName') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copySummary') }}</span>
+        </li>
+        <li
+          v-if="ctxMenu.entry?.body"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyDescription"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyDescription') }}</span>
+        </li>
         <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyMessage">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -816,6 +895,15 @@ function authorColor(name: string): string {
 .commit-item--selected {
   background: var(--color-bg-tertiary);
   border-left-color: var(--color-accent);
+}
+
+.commit-item--current {
+  background: var(--color-accent-soft);
+}
+
+.commit-item--current:hover {
+  background: var(--color-accent-soft);
+  opacity: 0.9;
 }
 
 .commit-item:focus-visible {
@@ -1011,6 +1099,12 @@ function authorColor(name: string): string {
 .commit-ref-badge--tag {
   background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
   color: var(--color-warning, #f59e0b);
+}
+
+.commit-ref-badge--stash {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+  border: 1px dashed var(--color-warning, #f59e0b);
 }
 
 .commit-ref-badge--remote {

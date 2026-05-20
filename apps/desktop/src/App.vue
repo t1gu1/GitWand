@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent, nextTick } from "vue";
 
 // ─── Eager imports — main views & shared building blocks ─────────────────────
 // These are part of the always-rendered UI (header, sidebar, main content
@@ -134,7 +134,6 @@ const {
   selectedFileStaged: repoSelectedFileStaged,
   diff: repoDiff,
   log: repoLog,
-  logScope,
   logAuthorFilter,
   logHasMore,
   logLoadingMore,
@@ -170,7 +169,6 @@ const {
   selectFile: repoSelectFile,
   loadLog,
   loadMoreLog,
-  setLogScope,
   stageFiles,
   stageAll,
   unstageFiles,
@@ -1526,6 +1524,11 @@ const { triggerReleaseNotesIfEnabled } = scheduler;
 const poller = useRepoPoller({
   onStatusChange: async (cwd) => {
     await repoRefresh();
+    // v2.14 — Refresh log if the history view or the Git Tree side panel is
+    // active, so terminal actions (commit/push/pull) update the graph.
+    if (viewMode.value === 'history' || showGitTree.value) {
+      await loadLog();
+    }
   },
   onConflictDetected: async (_cwd) => {
     // scheduler.onConflictDetected reads cwd from its callback ref
@@ -1545,6 +1548,13 @@ const poller = useRepoPoller({
   },
 });
 watch(repoFolderPath, (p) => poller.setFolderPath(p), { immediate: true });
+
+// v2.14 — Ensure the log is loaded when the Git Tree is toggled on.
+watch(showGitTree, (show) => {
+  if (show && hasRepo.value) {
+    void loadLog();
+  }
+});
 
 // ─── Global shortcut listener (Cmd+Shift+G from anywhere) ─
 let unlistenGlobalShortcut: (() => void) | null = null;
@@ -1681,6 +1691,23 @@ useAppMenu(
   { hasRepo },
 );
 
+const historyVisibleFileIdx = ref(0);
+const scrollToFileIdx = ref<number | null>(null);
+
+function onHistoryScrollToFile(idx: number) {
+  historyVisibleFileIdx.value = idx;
+  scrollToFileIdx.value = idx;
+  // Reset so that clicking the same file again triggers the scroll
+  nextTick(() => {
+    scrollToFileIdx.value = null;
+  });
+}
+
+watch(selectedCommitHash, () => {
+  historyVisibleFileIdx.value = 0;
+  scrollToFileIdx.value = null;
+});
+
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   applyGitConfig();
@@ -1709,6 +1736,7 @@ onUnmounted(() => {
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
+      @change-view="onViewModeChange"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
@@ -1722,26 +1750,20 @@ onUnmounted(() => {
         <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
           :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
-          :log-entries="repoLog" :log-loading="repoLoading" :log-scope="logScope" :log-author-filter="logAuthorFilter"
-          :log-has-more="logHasMore" :log-loading-more="logLoadingMore" @load-more-log="loadMoreLog"
-          :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
+          :log-entries="repoLog" :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
           :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
+          :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
           @select="onRepoFileSelect" @change-view="onViewModeChange"
           @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
           @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
           @stage-paths="(paths) => stageFiles(paths)" @unstage-all="unstageAll" :git-user="currentGitUser"
           @commit="(trailers) => doCommit(trailers)" @update:commit-summary="(val) => commitSummary = val"
-          @update:commit-description="(val) => commitDescription = val" @select-commit="selectCommit"
-          @edit-commit="handleEditCommit" @split-commit="handleSplitCommitRequest"
-          @checkout-commit="handleCheckoutCommit" @reset-to-commit="handleResetToCommit"
-          @revert-commit="handleRevertCommit" @create-branch-from-commit="handleCreateBranchFromCommit"
-          @tag-commit="handleTagCommit" @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge"
-          @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
+          @update:commit-description="(val) => commitDescription = val"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
           @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
           @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
-          @open-launchpad="handleLaunchpadShortcut" />
+          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile" />
       </aside>
 
       <main class="main">
@@ -1828,7 +1850,8 @@ onUnmounted(() => {
             <!-- History view: commit diff (log is in sidebar) -->
             <CommitDiffViewer v-else-if="viewMode === 'history'" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
               :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
-              @update:diff-mode="onDiffModeChange" />
+              :scroll-to-file-idx="scrollToFileIdx" @update:diff-mode="onDiffModeChange"
+              @update:visible-file-idx="historyVisibleFileIdx = $event" />
 
             <!-- PRs view: creation form takes over when showCreateForm is true -->
             <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
@@ -1863,9 +1886,19 @@ onUnmounted(() => {
       <Transition name="git-tree-panel">
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
-          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="branchDisplay"
-            :fork-point-sha="graphForkPointSha"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats"
+            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+            @change-view="onViewModeChange"
+            @edit-commit="handleEditCommit"
+            @split-commit="handleSplitCommitRequest"
+            @checkout-commit="handleCheckoutCommit"
+            @reset-to-commit="handleResetToCommit"
+            @revert-commit="handleRevertCommit"
+            @create-branch-from-commit="handleCreateBranchFromCommit"
+            @tag-commit="handleTagCommit"
+            @cherry-pick-commit="handleCherryPickCommit"
+            @view-on-forge="handleViewOnForge" />
         </aside>
       </Transition>
     </div>
@@ -1902,7 +1935,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Interactive rebase panel -->
-    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="branchDisplay"
+    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
       :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
@@ -2038,12 +2071,12 @@ onUnmounted(() => {
       @run-action="onPaletteAction" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
-         Both teleport to body and guard against `branchDisplay` going
+         Both teleport to body and guard against `repoStatus?.branch` going
          null between open + confirm (the :current-branch / :branch-name
          binding is non-null because we only mount when showing). -->
-    <BranchRenameModal v-if="showBranchRenameModal && branchDisplay" :current-branch="branchDisplay"
+    <BranchRenameModal v-if="showBranchRenameModal && repoStatus?.branch" :current-branch="repoStatus.branch"
       @close="showBranchRenameModal = false" @confirm="onBranchRenameConfirm" />
-    <BranchDeleteModal v-if="showBranchDeleteModal && branchDisplay" :branch-name="branchDisplay"
+    <BranchDeleteModal v-if="showBranchDeleteModal && repoStatus?.branch" :branch-name="repoStatus.branch"
       @close="showBranchDeleteModal = false" @confirm="onBranchDeleteConfirm" />
 
     <!-- ── Commit context-menu modals (v1.9) — using BaseModal for design consistency ── -->
