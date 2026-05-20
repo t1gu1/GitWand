@@ -1237,7 +1237,7 @@ function authorColor(name: string): string {
   margin-top: 3px;
 }
 
-.commit-ref-badge {
+.log-badge {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
@@ -1250,24 +1250,24 @@ function authorColor(name: string): string {
   text-overflow: ellipsis;
 }
 
-.commit-ref-badge--head,
-.commit-ref-badge--branch {
+.log-badge--head,
+.log-badge--branch {
   background: var(--color-accent-soft, rgba(124, 58, 237, 0.12));
   color: var(--color-accent);
 }
 
-.commit-ref-badge--tag {
+.log-badge--tag {
   background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
   color: var(--color-warning, #f59e0b);
 }
 
-.commit-ref-badge--stash {
+.log-badge--stash {
   background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
   color: var(--color-warning, #f59e0b);
   border: 1px dashed var(--color-warning, #f59e0b);
 }
 
-.commit-ref-badge--remote {
+.log-badge--remote {
   background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
 }

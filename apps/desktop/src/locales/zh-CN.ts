@@ -546,7 +546,7 @@ const zhCN: Locale = {
     resetSoft: "重置 (Soft) — 保留暂存区和工作区变更",
     resetMixed: "重置 (Mixed) — 取消暂存，保留工作区文件",
     resetHard: "重置 (Hard) — 丢弃所有变更",
-    resetSoftHint: "保留暂存区 and 工作区变更",
+    resetSoftHint: "保留暂存区和工作区变更",
     resetMixedHint: "取消暂存，保留工作区文件",
     resetHardHint: "丢弃所有暂存和工作区变更",
     resetHardWarn: "⚠️ --hard 将永久丢弃所有未提交的变更。",

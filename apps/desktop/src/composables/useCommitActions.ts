@@ -107,7 +107,17 @@ export function useCommitActions(deps: Deps) {
   });
 
   function closeModal() {
-    modal.value = { ...modal.value, type: null, entry: null, busy: false, error: "" };
+    modal.value = {
+      ...modal.value,
+      type: null,
+      entry: null,
+      busy: false,
+      error: "",
+      deleteBranchName: "",
+      deleteBranchMode: "local",
+      deleteTagName: "",
+      deleteTagMode: "local",
+    };
   }
 
   // ── Branch deletion ────────────────────────────────────

@@ -1749,7 +1749,7 @@ async function handleRequest(req, res) {
       if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        execSync(`git push "${remote}" --delete "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        execFileSync("git", ["push", remote, "--delete", name], { cwd: resolvedCwd, encoding: "utf-8" });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
