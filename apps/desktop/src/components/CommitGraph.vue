@@ -934,6 +934,12 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   color: var(--color-accent-text);
 }
 
+.cg-ref--stash {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+  border: 1px dashed var(--color-warning, #f59e0b);
+}
+
 .cg-msg {
   flex: 1;
   overflow: hidden;

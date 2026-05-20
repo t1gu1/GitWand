@@ -381,16 +381,34 @@ watch(searchQuery, () => {
   aiMatches.value = null;
 });
 
-interface RefBadge { type: "head" | "branch" | "remote" | "tag"; label: string; }
+interface RefBadge { type: "head" | "branch" | "remote" | "tag" | "stash"; label: string; }
 
 function parseRefBadges(refs: string): RefBadge[] {
   if (!refs) return [];
-  return refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
+  const parsed = refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
     if (r.startsWith("HEAD -> ")) return { type: "head" as const, label: r.slice(8) };
     if (r === "HEAD") return { type: "head" as const, label: "HEAD" };
     if (r.startsWith("tag: ")) return { type: "tag" as const, label: r.slice(5) };
+    if (r === "refs/stash") return { type: "stash" as const, label: "stash" };
     if (r.includes("/")) return { type: "remote" as const, label: r };
     return { type: "branch" as const, label: r };
+  });
+
+  // Sort: Local Branch (head/branch) > Remote > Tag > Stash > HEAD (detached)
+  // Note: in CommitLog, "HEAD -> branch" is typed as "head" with the branch name as label.
+  const weights: Record<string, number> = {
+    head: 1,
+    branch: 1,
+    remote: 2,
+    tag: 3,
+    stash: 4,
+  };
+
+  return parsed.sort((a, b) => {
+    // Special case: detached "HEAD" should be last
+    if (a.label === "HEAD" && a.type === "head") return 1;
+    if (b.label === "HEAD" && b.type === "head") return -1;
+    return (weights[a.type] ?? 99) - (weights[b.type] ?? 99);
   });
 }
 
@@ -1081,6 +1099,12 @@ function authorColor(name: string): string {
 .commit-ref-badge--tag {
   background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
   color: var(--color-warning, #f59e0b);
+}
+
+.commit-ref-badge--stash {
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  color: var(--color-warning, #f59e0b);
+  border: 1px dashed var(--color-warning, #f59e0b);
 }
 
 .commit-ref-badge--remote {

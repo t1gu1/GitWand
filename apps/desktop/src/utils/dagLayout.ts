@@ -218,14 +218,31 @@ export function computeDagLayout(
   return { nodes, edges, maxLane };
 }
 
-/** Parse ref decoration string into individual labels */
-export function parseRefs(refs: string): Array<{ type: "head" | "branch" | "remote" | "tag"; name: string }> {
+/** Parse ref decoration string into individual labels, sorted by priority (branch > remote > tag > head) */
+export function parseRefs(refs: string): Array<{ type: "head" | "branch" | "remote" | "tag" | "stash"; name: string }> {
   if (!refs) return [];
-  return refs.split(",").map((r) => r.trim()).filter(Boolean).map((r) => {
+  const parsed = refs.split(",").map((r) => r.trim()).filter(Boolean).map((r) => {
     if (r === "HEAD") return { type: "head" as const, name: "HEAD" };
     if (r.startsWith("HEAD -> ")) return { type: "branch" as const, name: r.slice(8) };
     if (r.startsWith("tag: ")) return { type: "tag" as const, name: r.slice(5) };
+    if (r === "refs/stash") return { type: "stash" as const, name: "stash" };
     if (r.includes("/")) return { type: "remote" as const, name: r };
     return { type: "branch" as const, name: r };
+  });
+
+  // Sort: Branch (local) > Remote > Tag > Stash > HEAD (detached)
+  const weights: Record<string, number> = {
+    branch: 1,
+    remote: 2,
+    tag: 3,
+    stash: 4,
+    head: 5,
+  };
+
+  return parsed.sort((a, b) => {
+    // If one is "HEAD -> branch" and other is just "branch", they both have type "branch"
+    // but we might want to keep the one from HEAD first if they are different.
+    // In practice, git log --decorate gives us what we need.
+    return (weights[a.type] ?? 99) - (weights[b.type] ?? 99);
   });
 }
