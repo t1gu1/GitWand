@@ -569,7 +569,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
-          @contextmenu="openCommitContextMenu($event, vc.entry, vc.index)"
+          @contextmenu="vc.entry.hashFull === 'WIP' ? $event.preventDefault() : openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
             <span class="cg-msg wip-msg">{{ vc.entry.message }}</span>
