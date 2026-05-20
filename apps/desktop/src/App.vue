@@ -1200,10 +1200,30 @@ async function onDiscardSectionConfirmed() {
   const ctx = discardSectionConfirm.value;
   if (!ctx) return;
   discardSectionConfirm.value = null;
+  if (ctx.sectionKey === 'all') {
+    const files = repoFiles.value;
+    const staged = files.filter(f => f.section === 'staged').map(f => f.path);
+    const unstaged = files.filter(f => f.section === 'unstaged').map(f => f.path);
+    const untracked = files.filter(f => f.section === 'untracked').map(f => f.path);
+    if (staged.length) await unstageFiles(staged);
+    if (unstaged.length) await discardFiles(unstaged, false);
+    if (untracked.length) await discardFiles(untracked, true);
+    return;
+  }
   if (ctx.sectionKey === 'staged') {
     await unstageFiles(ctx.paths);
   }
   await discardFiles(ctx.paths, ctx.sectionKey === 'untracked');
+}
+
+function handleWipDiscardAll() {
+  const allPaths = repoFiles.value.map(f => f.path);
+  if (!allPaths.length) return;
+  discardSectionConfirm.value = { sectionKey: 'all', paths: allPaths };
+}
+
+function handleWipStash() {
+  showStash.value = true;
 }
 
 // ─── Push + tags confirmation modal ─────────────────────
@@ -1924,7 +1944,9 @@ onUnmounted(() => {
             @delete-tag="handleDeleteTagRequest"
             @apply-stash="applyStash"
             @pop-stash="popStash"
-            @drop-stash="dropStash" />
+            @drop-stash="dropStash"
+            @wip-discard-all="handleWipDiscardAll"
+            @wip-stash="handleWipStash" />
 
         </aside>
       </Transition>

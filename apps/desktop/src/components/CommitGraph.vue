@@ -58,6 +58,8 @@ const emit = defineEmits<{
   "apply-stash": [index: number];
   "pop-stash": [index: number];
   "drop-stash": [index: number];
+  "wip-discard-all": [];
+  "wip-stash": [];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -246,17 +248,31 @@ const isCtxEntryHead = computed(() => {
 
 onMounted(() => {
   window.addEventListener("click", closeCommitContextMenu);
+  window.addEventListener("click", closeWipContextMenu);
   window.addEventListener("contextmenu", closeCommitContextMenu, { capture: false });
   window.addEventListener("keydown", onCtxKey);
 });
 onUnmounted(() => {
   window.removeEventListener("click", closeCommitContextMenu);
+  window.removeEventListener("click", closeWipContextMenu);
   window.removeEventListener("contextmenu", closeCommitContextMenu, { capture: false } as EventListenerOptions);
   window.removeEventListener("keydown", onCtxKey);
 });
 
 function onCtxKey(e: KeyboardEvent) {
-  if (e.key === "Escape") closeCommitContextMenu();
+  if (e.key === "Escape") { closeCommitContextMenu(); closeWipContextMenu(); }
+}
+
+// ─── WIP context menu ────────────────────────────────
+const wipCtxMenu = ref<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 });
+
+function openWipContextMenu(e: MouseEvent) {
+  e.preventDefault();
+  wipCtxMenu.value = { visible: true, x: e.clientX, y: e.clientY };
+}
+
+function closeWipContextMenu() {
+  wipCtxMenu.value.visible = false;
 }
 
 // ─── WIP commit (v2.14) ──────────────────────────────
@@ -802,7 +818,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
-          @contextmenu="vc.entry.hashFull === 'WIP' ? $event.preventDefault() : openCommitContextMenu($event, vc.entry, vc.index)"
+          @contextmenu="vc.entry.hashFull === 'WIP' ? openWipContextMenu($event) : openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
             <span class="cg-msg wip-msg">{{ vc.entry.message }}</span>
@@ -1066,6 +1082,42 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <span>{{ t('commitCtx.viewOnForge') }}</span>
       </li>
       </template>
+    </ul>
+  </Teleport>
+
+  <!-- WIP context menu -->
+  <Teleport to="body">
+    <ul
+      v-if="wipCtxMenu.visible"
+      class="commit-ctx-menu"
+      :style="{ left: wipCtxMenu.x + 'px', top: wipCtxMenu.y + 'px' }"
+      role="menu"
+      @click.stop
+      @contextmenu.prevent
+    >
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="emit('wip-stash'); closeWipContextMenu()"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 5h12v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M1 2h14v3H1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          <path d="M6 8h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span>{{ t('sidebar.footerStash') }}</span>
+      </li>
+      <li class="commit-ctx-menu-sep" role="separator"></li>
+      <li
+        class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+        role="menuitem"
+        @click="emit('wip-discard-all'); closeWipContextMenu()"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('sidebar.discardAll') }}</span>
+      </li>
     </ul>
   </Teleport>
 </template>
