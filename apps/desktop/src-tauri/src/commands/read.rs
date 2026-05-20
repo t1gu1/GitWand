@@ -646,7 +646,7 @@ pub(crate) fn git_log(
         });
     }
 
-    entries.retain(|e| !e.message.starts_with("index on "));
+    entries.retain(|e| !e.message.starts_with("index on ") && !e.message.starts_with("untracked files on "));
 
     Ok(entries)
 }
