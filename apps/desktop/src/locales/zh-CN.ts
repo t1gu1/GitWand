@@ -542,6 +542,7 @@ const zhCN: Locale = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "检出此提交…",
+    checkoutBranch: "切换到分支…",
     checkoutHint: "切换到此提交（分离 HEAD）",
     checkoutHeadDisabled: "已在此提交",
     checkoutDesc: "检出提交 {0}",

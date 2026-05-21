@@ -549,6 +549,7 @@ const ptBR: Locale = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "Checkout deste commit…",
+    checkoutBranch: "Checkout branch…", // TODO: translate
     checkoutHint: "Alternar para este commit (HEAD desanexado)",
     checkoutHeadDisabled: "Já está neste commit",
     checkoutDesc: "Checkout do commit {0}",

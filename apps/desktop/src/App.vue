@@ -1934,6 +1934,7 @@ onUnmounted(() => {
             @edit-commit="handleEditCommit"
             @split-commit="handleSplitCommitRequest"
             @checkout-commit="handleCheckoutCommit"
+            @checkout-branch="handleSwitchBranch"
             @reset-to-commit="handleResetToCommit"
             @revert-commit="handleRevertCommit"
             @create-branch-from-commit="handleCreateBranchFromCommit"

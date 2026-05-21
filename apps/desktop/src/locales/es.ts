@@ -548,6 +548,7 @@ const es: Locale = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "Ver este commit…",
+    checkoutBranch: "Checkout branch…", // TODO: translate
     checkoutHint: "Cambiar a este commit (HEAD desvinculado)",
     checkoutHeadDisabled: "Ya estás en este commit",
     checkoutDesc: "Checkout del commit {0}",

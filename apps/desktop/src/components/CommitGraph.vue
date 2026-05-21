@@ -30,6 +30,7 @@ type CommitEvent =
   | "edit-commit"
   | "split-commit"
   | "checkout-commit"
+  | "checkout-branch"
   | "reset-to-commit"
   | "revert-commit"
   | "create-branch-from-commit"
@@ -47,6 +48,7 @@ const emit = defineEmits<{
   "edit-commit": [entry: GitLogEntry];
   "split-commit": [entry: GitLogEntry];
   "checkout-commit": [entry: GitLogEntry];
+  "checkout-branch": [name: string];
   "reset-to-commit": [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   "revert-commit": [entry: GitLogEntry];
   "create-branch-from-commit": [entry: GitLogEntry];
@@ -541,6 +543,18 @@ function commitRefs(entry: GitLogEntry) {
   if (!refs.some(r => r.type === 'stash') && stashByHash.value.has(entry.hashFull)) {
     refs.push({ type: 'stash' as const, name: 'stash' });
   }
+  // Sort: tag → current branch → other branches → remote → stash → head
+  refs.sort((a, b) => {
+    const rank = (r: { type: string; name: string }) => {
+      if (r.type === 'tag') return 0;
+      if (r.type === 'branch' && r.name === props.currentBranch) return 1;
+      if (r.type === 'branch') return 2;
+      if (r.type === 'remote') return 3;
+      if (r.type === 'stash') return 4;
+      return 5;
+    };
+    return rank(a) - rank(b);
+  });
   return refs;
 }
 
@@ -860,7 +874,8 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               v-for="r in commitRefs(vc.entry)"
               :key="r.name"
               class="cg-ref"
-              :class="`cg-ref--${r.type}`"
+              :class="[`cg-ref--${r.type}`, r.type === 'branch' && r.name === props.currentBranch ? 'cg-ref--branch-current' : '']"
+              :style="(r.type === 'branch' || r.type === 'tag' || r.type === 'remote') ? { '--ref-lane-color': laneColor(indexToLane.get(vc.index) ?? 0) } : {}"
               @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
             >{{ r.name }}</span>
             <!-- Message -->
@@ -934,13 +949,13 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
           role="menuitem"
           :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-          @click="!isCtxEntryHead && onCtxEmit('checkout-commit')"
+          @click="!isCtxEntryHead && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
         >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
           <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
-        <span>{{ t('commitCtx.checkout') }}</span>
+        <span>{{ ctxMenu.clickedBranch ? t('commitCtx.checkoutBranch') : t('commitCtx.checkout') }}</span>
       </li>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
@@ -1378,27 +1393,43 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   line-height: 1.5;
 }
 
-.cg-ref--branch,
+.cg-ref--branch {
+  background: transparent;
+  color: var(--ref-lane-color, var(--color-accent));
+  border: 1px solid var(--ref-lane-color, var(--color-accent));
+  font-size: 11px;
+  font-weight: 700;
+}
+.cg-ref--branch-current {
+  background: var(--ref-lane-color, var(--color-accent));
+  color: #fff;
+  border: none;
+}
 .cg-ref--head {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  display: none;
 }
 
 .cg-ref--remote {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--ref-lane-color, var(--color-text-muted));
+  border: 1px solid var(--ref-lane-color, var(--color-border));
+  opacity: 0.75;
 }
 
 .cg-ref--tag {
-  background: var(--color-warning);
-  color: var(--color-accent-text);
+  background: var(--ref-lane-color, var(--color-warning));
+  color: #fff;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .cg-ref--stash {
   background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
   color: var(--color-warning, #f59e0b);
   border: 1px dashed var(--color-warning, #f59e0b);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .cg-msg {

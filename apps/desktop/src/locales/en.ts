@@ -561,6 +561,7 @@ const en = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "Checkout commit\u2026",
+    checkoutBranch: "Checkout branch\u2026",
     checkoutHint: "Switch to this commit (detached HEAD)",
     checkoutHeadDisabled: "Already on this commit",
     checkoutDesc: "Checkout commit {0}",
