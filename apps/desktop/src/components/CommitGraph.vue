@@ -549,6 +549,14 @@ function truncate(str: string, limit = 20) {
   return str.slice(0, limit - 1) + "…";
 }
 
+function abbrevAuthor(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return name.slice(0, 5);
+  const first = parts[0].slice(0, 3);
+  const rest = parts.slice(1).map(p => p[0].toUpperCase() + ".").join("");
+  return `${first} ${rest}`;
+}
+
 function formatDate(raw: string): string {
   try {
     const d = new Date(raw);
@@ -960,7 +968,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             <span class="cg-msg">{{ vc.entry.message }}</span>
             <!-- Author + date -->
             <span class="cg-meta muted">
-              <span>{{ vc.entry.author }}</span>
+              <span :title="vc.entry.author">{{ abbrevAuthor(vc.entry.author) }}</span>
               <span class="cg-sep">&middot;</span>
               <span>{{ formatDate(vc.entry.date) }}</span>
             </span>

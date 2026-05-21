@@ -593,6 +593,14 @@ function truncate(str: string, limit = 20) {
   return str.slice(0, limit - 1) + "…";
 }
 
+function abbrevAuthor(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length <= 1) return name.slice(0, 5);
+  const first = parts[0].slice(0, 3);
+  const rest = parts.slice(1).map(p => p[0].toUpperCase() + ".").join("");
+  return `${first} ${rest}`;
+}
+
 function relativeDate(isoDate: string): string {
   const date = new Date(isoDate);
   const now = new Date();
@@ -735,7 +743,7 @@ function authorColor(name: string): string {
                 <div class="commit-meta">
                   <span class="commit-hash mono">{{ c(vr.index).hash }}</span>
                   <span class="commit-separator" aria-hidden="true">&middot;</span>
-                  <span class="commit-author">{{ c(vr.index).author }}</span>
+                  <span class="commit-author" :title="c(vr.index).author">{{ abbrevAuthor(c(vr.index).author) }}</span>
                   <span class="commit-separator" aria-hidden="true">&middot;</span>
                   <time class="commit-date" :datetime="c(vr.index).date">{{ relativeDate(c(vr.index).date) }}</time>
                 </div>
