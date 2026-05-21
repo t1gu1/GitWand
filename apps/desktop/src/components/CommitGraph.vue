@@ -19,7 +19,7 @@ const props = defineProps<{
    * Optional — no dimming when absent or empty.
    */
   forkPointSha?: string;
-  repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches?: GitBranch[];
   stashes?: any[];
 }>();
@@ -313,7 +313,7 @@ function closeWipContextMenu() {
 // the top of the graph, connected to the current HEAD.
 const totalChanges = computed(() => {
   if (!props.repoStats) return 0;
-  return props.repoStats.staged + props.repoStats.unstaged + props.repoStats.untracked + props.repoStats.conflicted;
+  return props.repoStats.added + props.repoStats.modified + props.repoStats.deleted + props.repoStats.renamed;
 });
 const hasChanges = computed(() => totalChanges.value > 0);
 
@@ -937,11 +937,11 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
             <span class="cg-msg wip-msg">{{ vc.entry.message }}</span>
-            <span class="cg-meta wip-meta">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-              </svg>
-              <span>{{ totalChanges }}</span>
+            <span class="cg-meta wip-meta" v-if="props.repoStats">
+              <span v-if="props.repoStats.added > 0" class="wip-stat wip-stat--added">+{{ props.repoStats.added }}</span>
+              <span v-if="props.repoStats.modified > 0" class="wip-stat wip-stat--modified">~{{ props.repoStats.modified }}</span>
+              <span v-if="props.repoStats.deleted > 0" class="wip-stat wip-stat--deleted">-{{ props.repoStats.deleted }}</span>
+              <span v-if="props.repoStats.renamed > 0" class="wip-stat wip-stat--renamed">→{{ props.repoStats.renamed }}</span>
             </span>
           </template>
           <template v-else>
@@ -1478,9 +1478,28 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 .wip-meta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+}
+
+.wip-stat {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.wip-stat--added {
+  color: var(--color-success);
+}
+
+.wip-stat--modified {
   color: var(--color-warning);
-  font-weight: 600;
+}
+
+.wip-stat--deleted {
+  color: var(--color-danger);
+}
+
+.wip-stat--renamed {
+  color: var(--color-info);
 }
 
 

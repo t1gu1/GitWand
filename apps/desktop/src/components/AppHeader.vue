@@ -52,7 +52,7 @@ const props = defineProps<{
   hasFiles: boolean;
   theme: Theme;
   branchDisplay: string;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   hasRepo: boolean;
   /** Kept for compat — no longer rendered directly, but handy for callers. */
   folderName: string;

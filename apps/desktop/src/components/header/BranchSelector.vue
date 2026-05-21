@@ -39,7 +39,7 @@ const { t } = useI18n();
 
 const props = defineProps<{
   branchDisplay: string;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches: GitBranch[];
   branchesLoading: boolean;
   isSwitchingBranch: boolean;

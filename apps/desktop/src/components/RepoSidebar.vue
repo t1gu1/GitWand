@@ -23,7 +23,7 @@ const props = defineProps<{
   files: RepoFileEntry[];
   selectedFile: string | null;
   viewMode: ViewMode;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   commitSummary: string;
   commitDescription: string;
   canCommit: boolean;
@@ -86,6 +86,10 @@ const emit = defineEmits<{
 const { t, locale } = useI18n();
 
 function getFileStatus(diff: GitDiff): { label: string; color: string; icon: string } {
+  if (diff.status === 'renamed') return { label: 'Renamed', color: 'var(--color-info)', icon: 'R' };
+  if (diff.status === 'added') return { label: 'Added', color: 'var(--color-success)', icon: 'A' };
+  if (diff.status === 'deleted') return { label: 'Deleted', color: 'var(--color-danger)', icon: 'D' };
+
   const adds = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'add').length, 0);
   const dels = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'delete').length, 0);
 
@@ -515,7 +519,7 @@ function statusColor(status: string): string {
     added: "var(--color-success)",
     modified: "var(--color-warning)",
     deleted: "var(--color-danger)",
-    renamed: "var(--color-accent)",
+    renamed: "var(--color-info)",
   };
   return map[status] ?? "var(--color-text-muted)";
 }

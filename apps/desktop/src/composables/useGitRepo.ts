@@ -186,15 +186,49 @@ export function useGitRepo() {
     return result;
   });
 
-  /** Quick stats for the header. */
+  /** Quick stats for the header and graph. */
   const repoStats = computed(() => {
-    if (!status.value) return { staged: 0, unstaged: 0, untracked: 0, conflicted: 0 };
+    if (!status.value) return { staged: 0, unstaged: 0, untracked: 0, conflicted: 0, added: 0, modified: 0, deleted: 0, renamed: 0 };
     const s = status.value;
+
+    const fileStates = new Map<string, "added" | "modified" | "deleted" | "renamed">();
+
+    for (const path of s.untracked) {
+      fileStates.set(path, "added");
+    }
+    for (const path of s.conflicted) {
+      fileStates.set(path, "modified");
+    }
+    for (const f of s.staged) {
+      if (f.status === "added") fileStates.set(f.path, "added");
+      else if (f.status === "deleted") fileStates.set(f.path, "deleted");
+      else if (f.status === "renamed") fileStates.set(f.path, "renamed");
+      else fileStates.set(f.path, "modified");
+    }
+    for (const f of s.unstaged) {
+      const current = fileStates.get(f.path);
+      if (f.status === "deleted") fileStates.set(f.path, "deleted");
+      else if (f.status === "added") fileStates.set(f.path, "added");
+      else if (!current) fileStates.set(f.path, "modified");
+    }
+
+    let added = 0, modified = 0, deleted = 0, renamed = 0;
+    for (const state of fileStates.values()) {
+      if (state === "added") added++;
+      else if (state === "modified") modified++;
+      else if (state === "deleted") deleted++;
+      else if (state === "renamed") renamed++;
+    }
+
     return {
       staged: s.staged.length,
       unstaged: s.unstaged.length,
       untracked: s.untracked.length,
       conflicted: s.conflicted.length,
+      added,
+      modified,
+      deleted,
+      renamed
     };
   });
 
