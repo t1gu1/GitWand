@@ -383,35 +383,6 @@ const layout = computed<DagLayout>(() => {
   return _cachedLayout;
 });
 
-// ─── Fork Point dimming (v2.11) ──────────────────────
-// Commits at or below the fork point (shared history) are displayed with
-// reduced opacity. This highlights the commits unique to the current branch.
-//
-// forkPointIndex is -1 when no fork point is set (no dimming).
-// A commit at index >= forkPointIndex is in shared history (dim it).
-// A commit at index <  forkPointIndex is branch-specific (full opacity).
-//
-// Logic: git log is newest-first, so lower index = newer. The fork point
-// is the last shared commit. Everything AFTER it in the list is shared.
-const forkPointIndex = computed<number>(() => {
-  if (!props.forkPointSha) return -1;
-  const sha = props.forkPointSha;
-  // Match against either full SHA or the 7-char short hash displayed in the UI
-  const idx = displayCommits.value.findIndex(
-    (c) => c.hashFull === sha || c.hashFull.startsWith(sha) || sha.startsWith(c.hashFull),
-  );
-  return idx; // -1 when not found in current window (no dimming)
-});
-
-/** Returns true when the commit at `index` is shared history (should be dimmed). */
-function isSharedHistory(index: number): boolean {
-  const fp = forkPointIndex.value;
-  if (fp === -1) return false;
-  // WIP is never shared history
-  if (hasChanges.value && index === 0) return false;
-  return index >= fp;
-}
-
 // ─── Commit search / highlight ───────────────────────
 const searchQuery = ref("");
 const currentMatchIdx = ref(-1);
@@ -841,7 +812,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :stroke-dasharray="edge.isMerge || (hasChanges && edge.fromIndex === 0) || stashByHash.has(displayCommits[edge.fromIndex]?.hashFull) ? '3,3' : 'none'"
           fill="none"
           stroke-linecap="round"
-          :opacity="isSharedHistory(edge.fromIndex) ? 0.25 : 1"
         />
         <!-- Nodes (R6: visible only). Always fully opaque — dots never fade. -->
         <g
@@ -930,7 +900,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           class="cg-row"
           :class="{
             'cg-row--selected': vc.entry.hashFull === selectedHash,
-            'cg-row--shared': isSharedHistory(vc.index),
             'cg-row--current': isCurrent(vc.entry),
             'cg-row--wip': vc.entry.hashFull === 'WIP',
             'cg-row--match': matchedHashSet.has(vc.entry.hashFull),
@@ -1477,13 +1446,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   font-weight: 600;
 }
 
-/* Shared-history commits (pre-fork-point): dimmed to de-emphasise */
-.cg-row--shared {
-  opacity: 0.45;
-}
-.cg-row--shared.cg-row--selected {
-  opacity: 1; /* Always show selected commit at full opacity */
-}
 
 .cg-ref {
   padding: 1px 6px;
