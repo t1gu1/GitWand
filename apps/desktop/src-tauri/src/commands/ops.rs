@@ -532,16 +532,29 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
 // ─── Git discard ───────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_discard(cwd: String, paths: Vec<String>) -> Result<(), String> {
-    let mut cmd = git_cmd();
-    cmd.arg("checkout").arg("--").current_dir(&cwd);
-    for p in &paths {
-        cmd.arg(p);
-    }
-    let output = cmd.output().map_err(|e| format!("Failed to run git checkout: {}", e))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("git checkout failed: {}", stderr));
+pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> Result<(), String> {
+    if untracked {
+        let mut cmd = git_cmd();
+        cmd.arg("clean").arg("-f").arg("--").current_dir(&cwd);
+        for p in &paths {
+            cmd.arg(p);
+        }
+        let output = cmd.output().map_err(|e| format!("Failed to run git clean: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git clean failed: {}", stderr));
+        }
+    } else {
+        let mut cmd = git_cmd();
+        cmd.arg("checkout").arg("--").current_dir(&cwd);
+        for p in &paths {
+            cmd.arg(p);
+        }
+        let output = cmd.output().map_err(|e| format!("Failed to run git checkout: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git checkout failed: {}", stderr));
+        }
     }
     Ok(())
 }

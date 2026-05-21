@@ -1209,20 +1209,38 @@ async function onDiscardSectionConfirmed() {
   const ctx = discardSectionConfirm.value;
   if (!ctx) return;
   discardSectionConfirm.value = null;
-  if (ctx.sectionKey === 'all') {
-    const files = repoFiles.value;
-    const staged = files.filter(f => f.section === 'staged').map(f => f.path);
-    const unstaged = files.filter(f => f.section === 'unstaged').map(f => f.path);
-    const untracked = files.filter(f => f.section === 'untracked').map(f => f.path);
-    if (staged.length) await unstageFiles(staged);
-    if (unstaged.length) await discardFiles(unstaged, false);
-    if (untracked.length) await discardFiles(untracked, true);
-    return;
+
+  const allFiles = repoFiles.value;
+  const targetFiles = ctx.sectionKey === 'all'
+    ? allFiles
+    : allFiles.filter(f => ctx.paths.includes(f.path));
+
+  const staged = targetFiles.filter(f => f.section === 'staged');
+  const unstaged = targetFiles.filter(f => f.section === 'unstaged');
+  const untracked = targetFiles.filter(f => f.section === 'untracked');
+
+  // 1. Unstage any staged files first
+  if (staged.length) {
+    await unstageFiles(staged.map(f => f.path));
   }
-  if (ctx.sectionKey === 'staged') {
-    await unstageFiles(ctx.paths);
+
+  // 2. Discard tracked files (was unstaged + was staged but not added)
+  const toCheckout = [
+    ...unstaged.map(f => f.path),
+    ...staged.filter(f => f.status !== 'added').map(f => f.path)
+  ];
+  if (toCheckout.length) {
+    await discardFiles(toCheckout, false);
   }
-  await discardFiles(ctx.paths, ctx.sectionKey === 'untracked');
+
+  // 3. Discard untracked files (was untracked + was staged added)
+  const toClean = [
+    ...untracked.map(f => f.path),
+    ...staged.filter(f => f.status === 'added').map(f => f.path)
+  ];
+  if (toClean.length) {
+    await discardFiles(toClean, true);
+  }
 }
 
 function handleWipDiscardAll() {
