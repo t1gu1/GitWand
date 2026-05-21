@@ -526,8 +526,22 @@ function formatDate(raw: string): string {
   } catch { return raw; }
 }
 
+// stash@{1+} have no regular ref decoration (%D empty). Build a hash→index
+// map from props.stashes so we can inject a synthetic stash ref for them.
+const stashByHash = computed(() => {
+  const map = new Map<string, number>();
+  for (const s of (props.stashes ?? [])) {
+    map.set(s.hash, s.index);
+  }
+  return map;
+});
+
 function commitRefs(entry: GitLogEntry) {
-  return parseRefs(entry.refs);
+  const refs = parseRefs(entry.refs);
+  if (!refs.some(r => r.type === 'stash') && stashByHash.value.has(entry.hashFull)) {
+    refs.push({ type: 'stash' as const, name: 'stash' });
+  }
+  return refs;
 }
 
 function isCurrent(entry: GitLogEntry): boolean {
@@ -543,7 +557,7 @@ type NodeKind = 'stash' | 'trunk' | 'merge' | 'normal';
 function nodeKind(node: DagNode): NodeKind {
   const entry = displayCommits.value[node.index];
   if (!entry) return 'normal';
-  const refs = parseRefs(entry.refs);
+  const refs = commitRefs(entry);
   if (refs.some(r => r.type === 'stash')) return 'stash';
   if (refs.some(r =>
     (r.type === 'branch' && TRUNK_NAMES.has(r.name)) ||
@@ -729,7 +743,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :d="edgePath(edge)"
           :stroke="laneColor(edge.fromLane)"
           :stroke-width="edge.isMerge ? 1.2 : 1.6"
-          :stroke-dasharray="edge.isMerge || (hasChanges && edge.fromIndex === 0) ? '3,3' : 'none'"
+          :stroke-dasharray="edge.isMerge || (hasChanges && edge.fromIndex === 0) || stashByHash.has(displayCommits[edge.fromIndex]?.hashFull) ? '3,3' : 'none'"
           fill="none"
           stroke-linecap="round"
           :opacity="isSharedHistory(edge.fromIndex) ? 0.25 : 1"

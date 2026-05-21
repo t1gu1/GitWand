@@ -601,6 +601,23 @@ pub(crate) fn git_log(
     args.push(format!("-n{}", limit));
     args.push(format!("--format={}", format));
 
+    // stash@{1+} are only in the reflog, not reachable via --all alone.
+    // Add every stash commit hash as an extra starting point so all stashes appear.
+    if include_all {
+        if let Ok(stash_out) = git_cmd()
+            .args(["stash", "list", "--format=%H"])
+            .current_dir(&cwd)
+            .output()
+        {
+            for hash in String::from_utf8_lossy(&stash_out.stdout).lines() {
+                let hash = hash.trim();
+                if !hash.is_empty() {
+                    args.push(hash.to_string());
+                }
+            }
+        }
+    }
+
     let output = git_cmd()
         .args(&args)
         .current_dir(&cwd)

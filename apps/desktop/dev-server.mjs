@@ -937,6 +937,14 @@ async function handleRequest(req, res) {
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
         args.push(`-n${count}`, `--format=${format}`);
+        // stash@{1+} are only in the reflog, not reachable via --all alone.
+        if (all) {
+          try {
+            const stashHashes = execFileSync(GIT, ["stash", "list", "--format=%H"], { cwd: resolvedCwd, encoding: "utf-8" })
+              .trim().split("\n").filter(Boolean);
+            args.push(...stashHashes);
+          } catch (_) { /* no stashes */ }
+        }
         // Stream via spawn — execSync's default 1 MB cap can be exceeded with
         // large `count` values or commits with very long bodies.
         const stdout = await gitSpawn(args, resolvedCwd);
