@@ -485,16 +485,36 @@ function parseRefBadges(refs: string): RefBadge[] {
     return { type: "branch" as const, label: r };
   });
 
+  // Re-classify refs using props.branches (v2.14)
+  // parseRefBadges is generic and thinks anything with a '/' is remote.
+  // We use our ground-truth branches list to fix this.
+  const reclassified = parsed.map(r => {
+    if (r.type === 'branch' || r.type === 'remote') {
+      const match = props.branches?.find(b => b.name === r.label);
+      if (match) {
+        return { ...r, type: (match.isRemote ? 'remote' : 'branch') as 'remote' | 'branch' };
+      }
+    }
+    return r;
+  });
+
   // Filter out redundant remote tracking branches (v2.14)
   // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
   // hide the remote one to keep the tree row clean.
-  const localBranchNames = new Set(parsed.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.label));
-  const filtered = parsed.filter(r => {
+  const localBranchNames = new Set(reclassified.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.label));
+  const filtered = reclassified.filter(r => {
     if (r.type === 'remote') {
       const slashIdx = r.label.indexOf('/');
       if (slashIdx !== -1) {
         const baseName = r.label.slice(slashIdx + 1);
         if (localBranchNames.has(baseName)) return false;
+      }
+      // Also check against local branches that might have the same name as upstream
+      const match = props.branches?.find(b => b.name === r.label && b.isRemote);
+      if (match) {
+        // Find if any local branch has this remote as its upstream
+        const hasLocalUpstream = props.branches?.some(b => !b.isRemote && b.upstream === r.label && localBranchNames.has(b.name));
+        if (hasLocalUpstream) return false;
       }
     }
     return true;

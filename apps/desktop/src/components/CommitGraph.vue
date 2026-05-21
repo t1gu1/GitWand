@@ -556,16 +556,36 @@ function commitRefs(entry: GitLogEntry) {
     refs.push({ type: 'stash' as const, name: 'stash' });
   }
 
-  // Filter out redundant remote tracking branches (v2.14)
+  // Re-classify refs using props.branches (v2.14)
+  // parseRefs is generic and thinks anything with a '/' is remote.
+  // We use our ground-truth branches list to fix this.
+  const reclassified = refs.map(r => {
+    if (r.type === 'branch' || r.type === 'remote') {
+      const match = props.branches?.find(b => b.name === r.name);
+      if (match) {
+        return { ...r, type: (match.isRemote ? 'remote' : 'branch') as 'remote' | 'branch' };
+      }
+    }
+    return r;
+  });
+
+  // Filter out redundant remote tracking branches
   // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
   // hide the remote one to keep the tree row clean.
-  const localBranchNames = new Set(refs.filter(r => r.type === 'branch').map(r => r.name));
-  const filtered = refs.filter(r => {
+  const localBranchNames = new Set(reclassified.filter(r => r.type === 'branch').map(r => r.name));
+  const filtered = reclassified.filter(r => {
     if (r.type === 'remote') {
       const slashIdx = r.name.indexOf('/');
       if (slashIdx !== -1) {
         const baseName = r.name.slice(slashIdx + 1);
         if (localBranchNames.has(baseName)) return false;
+      }
+      // Also check against local branches that might have the same name as upstream
+      const match = props.branches?.find(b => b.name === r.name && b.isRemote);
+      if (match) {
+        // Find if any local branch has this remote as its upstream
+        const hasLocalUpstream = props.branches?.some(b => !b.isRemote && b.upstream === r.name && localBranchNames.has(b.name));
+        if (hasLocalUpstream) return false;
       }
     }
     return true;
