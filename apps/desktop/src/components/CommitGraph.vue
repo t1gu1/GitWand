@@ -22,6 +22,8 @@ const props = defineProps<{
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches?: GitBranch[];
   stashes?: any[];
+  hasMore?: boolean;
+  loadingMore?: boolean;
 }>();
 
 type CommitEvent =
@@ -64,6 +66,7 @@ const emit = defineEmits<{
   "wip-stash": [];
   "wip-quick-stash": [];
   "wip-quick-stash-ai": [];
+  "load-more": [];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -739,11 +742,24 @@ const scrollContainer = ref<HTMLDivElement | null>(null);
 const scrollTop = ref(0);
 const clientHeight = ref(0);
 
+let _loadMorePending = false;
+
 function onScroll() {
-  if (scrollContainer.value) {
-    scrollTop.value = scrollContainer.value.scrollTop;
+  const el = scrollContainer.value;
+  if (!el) return;
+  scrollTop.value = el.scrollTop;
+  if (props.hasMore && !props.loadingMore && !_loadMorePending) {
+    const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (remaining < 200) {
+      _loadMorePending = true;
+      emit("load-more");
+    }
   }
 }
+
+watch(() => props.commits.length, () => {
+  _loadMorePending = false;
+});
 
 let _ro: ResizeObserver | null = null;
 onMounted(() => {
@@ -1052,6 +1068,9 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             </span>
           </template>
         </div>
+      </div>
+      <div v-if="hasMore" class="cg-load-more">
+        <span v-if="loadingMore" class="cg-load-more__spinner" aria-label="Loading more commits"></span>
       </div>
     </div>
   </div>
@@ -1809,5 +1828,25 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   width: 18px; height: 18px;
   font-size: 8px;
 }
+
+.cg-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 0 12px;
+}
+
+.cg-load-more__spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: cg-spin 0.7s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes cg-spin { to { transform: rotate(360deg); } }
 </style>
 

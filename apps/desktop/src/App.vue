@@ -1992,6 +1992,7 @@ onUnmounted(() => {
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
             :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
+            :has-more="logHasMore" :loading-more="logLoadingMore"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange"
             @edit-commit="handleEditCommit"
@@ -2012,7 +2013,8 @@ onUnmounted(() => {
             @wip-discard-all="handleWipDiscardAll"
             @wip-stash="handleWipStash"
             @wip-quick-stash="handleWipQuickStash"
-            @wip-quick-stash-ai="handleWipQuickStashAi" />
+            @wip-quick-stash-ai="handleWipQuickStashAi"
+            @load-more="loadMoreLog" />
 
         </aside>
       </Transition>

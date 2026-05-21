@@ -920,10 +920,11 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>
+    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>
     if (url.pathname === "/api/git-log" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const count = parseInt(url.searchParams.get("count") || "50");
+      const offset = parseInt(url.searchParams.get("offset") || "0");
       // Default: current branch only (like `git log`). Pass `all=true` for all refs.
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
@@ -936,6 +937,7 @@ async function handleRequest(req, res) {
         const args = ["log"];
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
+        if (offset > 0) args.push(`--skip=${offset}`);
         args.push(`-n${count}`, `--format=${format}`);
         // stash@{1+} are only in the reflog, not reachable via --all alone.
         if (all) {

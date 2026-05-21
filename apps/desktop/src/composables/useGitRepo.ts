@@ -414,7 +414,9 @@ export function useGitRepo() {
     try {
       const authorEmail =
         logAuthorFilter.value === "mine" ? (currentGitUser.value?.email ?? "") : undefined;
-      const pageSize = count ?? LOG_PAGE;
+      // When refreshing, reload at least as many commits as are currently visible
+      // so polling doesn't silently collapse a paginated log back to page 1.
+      const pageSize = count ?? Math.max(LOG_PAGE, log.value.length);
       const entries = await getGitLog(
         folderPath.value,
         pageSize,
