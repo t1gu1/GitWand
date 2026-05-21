@@ -80,6 +80,7 @@ import { useLogs } from "./composables/useLogs";
 import {
   BRANCH_CREATE_REQUEST_KEY,
   MERGE_POPOVER_REQUEST_KEY,
+  MERGE_POPOVER_PRESELECT_KEY,
   UNDO_POPOVER_REQUEST_KEY,
   LOG_FOCUS_SEARCH_KEY,
   LAUNCHPAD_OPEN_REQUEST_KEY,
@@ -181,7 +182,6 @@ const {
   pull: doPull,
   fetch: doFetch,
   mergeBranch: doMergeRaw,
-  rebaseOntoBranch: doRebaseOntoBranchRaw,
   mergeContinue: doMergeContinue,
   abortMerge: doAbortMerge,
   cherryPick: doCherryPick,
@@ -295,11 +295,13 @@ watch(() => prPanel.showCreateForm.value, (val) => {
 // pattern. New bridges go in the same file — one symbol per surface.
 const branchCreateRequest = ref(0);
 const mergePopoverRequest = ref(0);
+const mergePopoverPreselect = ref("");
 const undoPopoverRequest = ref(0);
 const logFocusRequest = ref(0);
 const launchpadOpenRequest = ref(0);
 provide(BRANCH_CREATE_REQUEST_KEY, branchCreateRequest);
 provide(MERGE_POPOVER_REQUEST_KEY, mergePopoverRequest);
+provide(MERGE_POPOVER_PRESELECT_KEY, mergePopoverPreselect);
 provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
 provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
 provide(LAUNCHPAD_OPEN_REQUEST_KEY, launchpadOpenRequest);
@@ -395,8 +397,16 @@ async function doMerge(branch: string) {
   await doMergeRaw(branch);
 }
 
-async function doRebaseOntoBranch(branch: string) {
-  await doRebaseOntoBranchRaw(branch);
+/** Graph context menu: open merge picker pre-filled with the clicked branch. */
+function doGraphMerge(branch: string) {
+  mergePopoverPreselect.value = branch;
+  mergePopoverRequest.value++;
+}
+
+/** Graph context menu: open RebaseEditor pre-filled with the clicked branch. */
+function doGraphRebase(branch: string) {
+  rebaseInitialBranch.value = branch;
+  showRebase.value = true;
 }
 
 // ─── Merge success modal ──────────────────────────────────
@@ -1047,6 +1057,7 @@ async function onForked(path: string) {
 
 // ─── Interactive rebase panel ────────────────────────────
 const showRebase = ref(false);
+const rebaseInitialBranch = ref("");
 
 // ─── Rebase-in-progress state (plain rebase from pull --rebase) ──────────
 // Polled after every repo refresh so the banner appears/disappears automatically.
@@ -2010,8 +2021,8 @@ onUnmounted(() => {
             @create-branch-from-commit="handleCreateBranchFromCommit"
             @tag-commit="handleTagCommit"
             @cherry-pick-commit="handleCherryPickCommit"
-            @merge-branch="doMerge"
-            @rebase-onto-branch="doRebaseOntoBranch"
+            @merge-branch="doGraphMerge"
+            @rebase-onto-branch="doGraphRebase"
             @view-on-forge="handleViewOnForge"
             @delete-branch="handleDeleteBranchRequest"
             @delete-tag="handleDeleteTagRequest"
@@ -2061,7 +2072,8 @@ onUnmounted(() => {
 
     <!-- Interactive rebase panel -->
     <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
-      :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
+      :branches="branches" :initial-branch="rebaseInitialBranch"
+      @close="showRebase = false; rebaseInitialBranch = ''" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
     <StashManager v-if="showStash && repoFolderPath" :cwd="repoFolderPath" @close="showStash = false"

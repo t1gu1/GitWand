@@ -781,21 +781,6 @@ export async function gitMerge(cwd: string, branch: string): Promise<GitPushPull
 }
 
 /**
- * Rebase the current branch onto `branch` (`git rebase <branch>`).
- */
-export async function gitRebaseOntoBranch(cwd: string, branch: string): Promise<GitPushPullResult> {
-  if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_rebase_onto_branch", { cwd, branch });
-  }
-  const res = await devFetch(`${DEV_SERVER}/api/git-rebase-onto-branch`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, branch }),
-  });
-  return res.json();
-}
-
-/**
  * Abort an in-progress merge.
  */
 export async function gitMergeAbort(cwd: string): Promise<GitPushPullResult> {

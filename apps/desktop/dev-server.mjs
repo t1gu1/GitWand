@@ -1305,6 +1305,32 @@ async function handleRequest(req, res) {
       }
     }
 
+    // POST /api/git-rebase-onto-branch  { cwd, branch }
+    if (url.pathname === "/api/git-rebase-onto-branch" && req.method === "POST") {
+      const { cwd, branch } = await readBody(req);
+      if (!cwd || !branch) return jsonResponse(req, res, { success: false, message: "Missing cwd or branch" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const stdout = execSync(`git rebase "${branch}" 2>&1`, {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+          shell: true,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+        return jsonResponse(req, res, { success: true, message: stdout.trim() || "Rebase completed" });
+      } catch (err) {
+        const stderr = (err.stderr || "").toString();
+        const stdout = (err.stdout || "").toString();
+        const combined = stderr + stdout;
+        const isConflict = combined.includes("CONFLICT") || combined.includes("could not apply");
+        return jsonResponse(req, res, {
+          success: false,
+          conflicts: isConflict || undefined,
+          message: isConflict ? "Rebase conflicts detected" : (stderr || stdout || err.message || "Rebase failed").trim(),
+        });
+      }
+    }
+
     // POST /api/git-merge-continue  { cwd }
     if (url.pathname === "/api/git-merge-continue" && req.method === "POST") {
       const { cwd } = await readBody(req);

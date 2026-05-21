@@ -19,6 +19,7 @@ const props = defineProps<{
   cwd: string;
   currentBranch: string;
   branches: GitBranch[];
+  initialBranch?: string;
 }>();
 
 // ─── Local branches (fetched on mount for freshness) ─────────
@@ -29,6 +30,9 @@ async function fetchBranches() {
   branchesLoading.value = true;
   try {
     localBranches.value = await getGitBranches(props.cwd);
+    if (props.initialBranch) {
+      await selectBase(props.initialBranch);
+    }
   } catch { /* ignore */ }
   finally { branchesLoading.value = false; }
 }

@@ -18,6 +18,9 @@ export const BRANCH_CREATE_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("bran
 /** Open AppHeader's merge-into popover (Repository menu → Merge…). */
 export const MERGE_POPOVER_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("mergePopoverRequest");
 
+/** Pre-fill the merge-into popover filter (set before bumping MERGE_POPOVER_REQUEST_KEY). */
+export const MERGE_POPOVER_PRESELECT_KEY: InjectionKey<Ref<string>> = Symbol("mergePopoverPreselect");
+
 /** Open AppHeader's undo/rewind popover (Repository menu → Undo Last Operation…). */
 export const UNDO_POPOVER_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("undoPopoverRequest");
 

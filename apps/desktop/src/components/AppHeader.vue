@@ -36,6 +36,7 @@ import { useI18n } from "../composables/useI18n";
 import { useUndoStack, type UndoEntry, type UndoOpType } from "../composables/useUndoStack";
 import {
   MERGE_POPOVER_REQUEST_KEY,
+  MERGE_POPOVER_PRESELECT_KEY,
   UNDO_POPOVER_REQUEST_KEY,
 } from "../composables/branchPickerBridge";
 import RepoTabStrip from "./header/RepoTabStrip.vue";
@@ -144,7 +145,8 @@ const mergeFilter = ref("");
 
 function openMergePopover() {
   showMergePopover.value = true;
-  mergeFilter.value = "";
+  mergeFilter.value = mergePreselect?.value ?? "";
+  if (mergePreselect) mergePreselect.value = "";
   emit("loadBranches");
 }
 
@@ -247,6 +249,7 @@ watch(
 // the same UI the BranchMenu would, without lifting the popover state
 // up to App.vue.
 const mergeRequestCounter = inject<Ref<number> | null>(MERGE_POPOVER_REQUEST_KEY, null);
+const mergePreselect = inject<Ref<string> | null>(MERGE_POPOVER_PRESELECT_KEY, null);
 const undoRequestCounter = inject<Ref<number> | null>(UNDO_POPOVER_REQUEST_KEY, null);
 if (mergeRequestCounter) {
   watch(mergeRequestCounter, () => openMergePopover());
