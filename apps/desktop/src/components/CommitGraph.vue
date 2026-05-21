@@ -323,13 +323,17 @@ const layout = computed<DagLayout>(() => {
   _prevFingerprint = fp;
 
   // Trunk = the lineage to pin on lane 0 (far left).
-  // Priority 1: WIP (if present) — it always sits on lane 0 of the current branch.
-  // Priority 2: current HEAD branch.
-  // Priority 3: main / master as fallback.
+  // Priority 1: main / master — always lane 0 regardless of current branch.
+  // Priority 2: current HEAD branch (if no main/master in view).
+  // Priority 3: WIP (edge case: detached HEAD with no trunk branch).
   let trunkHash: string | undefined;
-  if (hasChanges.value) {
-    trunkHash = "WIP";
-  } else {
+  for (const commit of commits) {
+    if (parseRefs(commit.refs).some((r) => r.type === "branch" && TRUNK_NAMES.has(r.name))) {
+      trunkHash = commit.hashFull;
+      break;
+    }
+  }
+  if (!trunkHash) {
     for (const commit of commits) {
       const refs = parseRefs(commit.refs);
       if (props.currentBranch && refs.some((r) => r.type === "branch" && r.name === props.currentBranch)) {
@@ -337,14 +341,9 @@ const layout = computed<DagLayout>(() => {
         break;
       }
     }
-    if (!trunkHash) {
-      for (const commit of commits) {
-        if (parseRefs(commit.refs).some((r) => r.type === "branch" && TRUNK_NAMES.has(r.name))) {
-          trunkHash = commit.hashFull;
-          break;
-        }
-      }
-    }
+  }
+  if (!trunkHash && hasChanges.value) {
+    trunkHash = "WIP";
   }
 
   _cachedLayout = computeDagLayout(commits, trunkHash);
