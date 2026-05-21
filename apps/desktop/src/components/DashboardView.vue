@@ -689,7 +689,7 @@ watch(() => props.cwd, loadDashboard);
               v-for="(c, i) in topContributors.slice(0, 4)"
               :key="c.email"
               class="avatar avatar--sm"
-              :style="{ ...avatarStyle(c.email || c.name), zIndex: 10 - i }"
+              :style="{ ...avatarStyle(c.email || c.name), background: 'var(--color-bg-secondary)', zIndex: 10 - i }"
               :title="c.name"
             >{{ initials(c.name) }}</span>
           </div>
@@ -1287,6 +1287,14 @@ button.stat-card:hover {
   margin-top: var(--space-2);
 }
 .avatar-stack .avatar + .avatar { margin-left: -6px; }
+.avatar-stack .avatar {
+  box-shadow: 0 0 0 2px var(--color-bg-secondary);
+  transition: transform var(--transition-fast), z-index 0s;
+}
+.avatar-stack .avatar:hover {
+  transform: translateY(-3px) scale(1.15);
+  z-index: 20 !important;
+}
 
 .stat-breakdown {
   display: flex;
