@@ -87,6 +87,7 @@ const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, id
 
 // Sub-menu collision detection (v2.14)
 const resetSubMenuPos = ref({ flipLeft: false, flipUp: false });
+const copySubMenuPos = ref({ flipLeft: false, flipUp: false });
 
 function onResetSubMenuEnter(e: MouseEvent) {
   const item = e.currentTarget as HTMLElement;
@@ -96,6 +97,19 @@ function onResetSubMenuEnter(e: MouseEvent) {
   const subMenuHeight = 120; // Approx height for 3 items + padding
 
   resetSubMenuPos.value = {
+    flipLeft: rect.right + subMenuWidth > windowWidth,
+    flipUp: rect.top + subMenuHeight > windowHeight,
+  };
+}
+
+function onCopySubMenuEnter(e: MouseEvent) {
+  const item = e.currentTarget as HTMLElement;
+  const rect = item.getBoundingClientRect();
+  const { innerWidth: windowWidth, innerHeight: windowHeight } = window;
+  const subMenuWidth = 280;
+  const subMenuHeight = 200;
+
+  copySubMenuPos.value = {
     flipLeft: rect.right + subMenuWidth > windowWidth,
     flipUp: rect.top + subMenuHeight > windowHeight,
   };
@@ -1251,50 +1265,77 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
       <li class="commit-ctx-menu-sep" role="separator"></li>
 
       <!-- Clipboard -->
-      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(false)">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        <span>{{ t('commitCtx.copyShortSha') }}</span>
-      </li>
-      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(true)">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          <path d="M8 8h3M8 11h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        <span>{{ t('commitCtx.copyFullSha') }}</span>
-      </li>
       <li
-        v-if="ctxMenu.clickedBranch"
-        class="commit-ctx-menu-item"
+        class="commit-ctx-menu-item commit-ctx-menu-item--has-sub"
         role="menuitem"
-        @click="onCtxCopyBranchName"
+        @click.stop
+        @mouseenter="onCopySubMenuEnter"
       >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copySubmenu') }}</span>
+        </div>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="opacity: 0.5;">
+          <path d="M6 12l4-4-4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>{{ t('commitCtx.copyBranchName') }}</span>
-      </li>
-      <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        <span>{{ t('commitCtx.copySummary') }}</span>
-      </li>
-      <li
-        v-if="ctxMenu.entry?.body"
-        class="commit-ctx-menu-item"
-        role="menuitem"
-        @click="onCtxCopyDescription"
-      >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
-          <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        </svg>
-        <span>{{ t('commitCtx.copyDescription') }}</span>
+
+        <ul
+          class="commit-ctx-menu-sub"
+          :class="{
+            'commit-ctx-menu-sub--flip-left': copySubMenuPos.flipLeft,
+            'commit-ctx-menu-sub--flip-up': copySubMenuPos.flipUp
+          }"
+          role="menu"
+        >
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(false)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('commitCtx.copyShortSha') }}</span>
+          </li>
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySha(true)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="5" y="4" width="9" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M3 11H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              <path d="M8 8h3M8 11h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('commitCtx.copyFullSha') }}</span>
+          </li>
+          <li
+            v-if="ctxMenu.clickedBranch"
+            class="commit-ctx-menu-item"
+            role="menuitem"
+            @click="onCtxCopyBranchName"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>{{ t('commitCtx.copyBranchName') }}</span>
+          </li>
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('commitCtx.copySummary') }}</span>
+          </li>
+          <li
+            v-if="ctxMenu.entry?.body"
+            class="commit-ctx-menu-item"
+            role="menuitem"
+            @click="onCtxCopyDescription"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+              <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('commitCtx.copyDescription') }}</span>
+          </li>
+        </ul>
       </li>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>

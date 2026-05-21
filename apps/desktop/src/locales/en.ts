@@ -602,6 +602,7 @@ const en = {
     amend: "Amend commit\u2026",
     amendHeadOnly: "Only the HEAD commit can be amended from here",
     splitHeadOnly: "Only the HEAD commit can be split from here",
+    copySubmenu: "Copy...",
     copyShortSha: "Copy short SHA",
     copyFullSha: "Copy full SHA",
     copyBranchName: "Copy branch name",

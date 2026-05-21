@@ -583,6 +583,7 @@ const zhCN: Locale = {
     amend: "修改此提交…",
     amendHeadOnly: "只有 HEAD 提交可以从此处修改",
     splitHeadOnly: "只有 HEAD 提交可以从此处拆分",
+    copySubmenu: "复制...",
     copyShortSha: "复制短 SHA",
     copyFullSha: "复制完整 SHA",
     copyBranchName: "复制分支名称",

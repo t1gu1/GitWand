@@ -590,6 +590,7 @@ const ptBR: Locale = {
     amend: "Modificar este commit…",
     amendHeadOnly: "Apenas o commit HEAD pode ser modificado daqui",
     splitHeadOnly: "Apenas o commit HEAD pode ser dividido daqui",
+    copySubmenu: "Copiar...",
     copyShortSha: "Copiar SHA curto",
     copyFullSha: "Copiar SHA completo",
     copyBranchName: "Copiar nome da branch",

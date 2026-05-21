@@ -589,6 +589,7 @@ const es: Locale = {
     amend: "Modificar este commit…",
     amendHeadOnly: "Solo se puede modificar el commit HEAD desde aquí",
     splitHeadOnly: "Solo se puede dividir el commit HEAD desde aquí",
+    copySubmenu: "Copiar...",
     copyShortSha: "Copiar SHA corto",
     copyFullSha: "Copiar SHA completo",
     copyBranchName: "Copiar nombre de la rama",
