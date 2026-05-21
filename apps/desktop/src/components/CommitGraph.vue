@@ -140,6 +140,18 @@ function closeCommitContextMenu() {
   ctxMenu.value.visible = false;
 }
 
+function onRowDblClick(entry: GitLogEntry) {
+  if (entry.hashFull === 'WIP') return;
+  if (isCurrent(entry)) return;
+  const refs = commitRefs(entry);
+  const branch = refs.find(r => r.type === 'branch') ?? refs.find(r => r.type === 'remote');
+  if (!branch) return;
+  const name = branch.type === 'remote'
+    ? branch.name.slice(branch.name.indexOf('/') + 1)
+    : branch.name;
+  emit('checkout-branch', name);
+}
+
 function onCtxEmit(event: CommitEvent, mode?: "soft" | "mixed" | "hard") {
   const entry = ctxMenu.value.entry;
   if (!entry) return;
@@ -857,6 +869,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           }"
           :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
           @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
+          @dblclick="onRowDblClick(vc.entry)"
           @contextmenu="vc.entry.hashFull === 'WIP' ? openWipContextMenu($event) : openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
@@ -1406,7 +1419,10 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   border: none;
 }
 .cg-ref--head {
-  display: none;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .cg-ref--remote {
