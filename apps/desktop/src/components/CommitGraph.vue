@@ -83,6 +83,22 @@ interface CommitCtxMenu {
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
+// Sub-menu collision detection (v2.14)
+const resetSubMenuPos = ref({ flipLeft: false, flipUp: false });
+
+function onResetSubMenuEnter(e: MouseEvent) {
+  const item = e.currentTarget as HTMLElement;
+  const rect = item.getBoundingClientRect();
+  const { innerWidth: windowWidth, innerHeight: windowHeight } = window;
+  const subMenuWidth = 280; // Should match min-width in CSS
+  const subMenuHeight = 120; // Approx height for 3 items + padding
+
+  resetSubMenuPos.value = {
+    flipLeft: rect.right + subMenuWidth > windowWidth,
+    flipUp: rect.top + subMenuHeight > windowHeight,
+  };
+}
+
 function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string, branchType?: any) {
   if (entry.hashFull === "WIP") return;
   e.preventDefault();
@@ -134,6 +150,21 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
     clickedTag: tag,
     clickedStashIndex: stashIdx,
   };
+
+  // Keep menu within window bounds (v2.14)
+  nextTick(() => {
+    const menu = document.querySelector('.commit-ctx-menu') as HTMLElement;
+    if (!menu) return;
+    const { offsetWidth: menuWidth, offsetHeight: menuHeight } = menu;
+    const { innerWidth: windowWidth, innerHeight: windowHeight } = window;
+
+    if (ctxMenu.value.x + menuWidth > windowWidth) {
+      ctxMenu.value.x = windowWidth - menuWidth - 4;
+    }
+    if (ctxMenu.value.y + menuHeight > windowHeight) {
+      ctxMenu.value.y = windowHeight - menuHeight - 4;
+    }
+  });
 }
 
 /**
@@ -302,6 +333,21 @@ const wipCtxMenu = ref<{ visible: boolean; x: number; y: number }>({ visible: fa
 function openWipContextMenu(e: MouseEvent) {
   e.preventDefault();
   wipCtxMenu.value = { visible: true, x: e.clientX, y: e.clientY };
+
+  // Keep menu within window bounds (v2.14)
+  nextTick(() => {
+    const menu = document.querySelector('.commit-ctx-menu') as HTMLElement;
+    if (!menu) return;
+    const { offsetWidth: menuWidth, offsetHeight: menuHeight } = menu;
+    const { innerWidth: windowWidth, innerHeight: windowHeight } = window;
+
+    if (wipCtxMenu.value.x + menuWidth > windowWidth) {
+      wipCtxMenu.value.x = windowWidth - menuWidth - 4;
+    }
+    if (wipCtxMenu.value.y + menuHeight > windowHeight) {
+      wipCtxMenu.value.y = windowHeight - menuHeight - 4;
+    }
+  });
 }
 
 function closeWipContextMenu() {
@@ -1060,6 +1106,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         class="commit-ctx-menu-item commit-ctx-menu-item--has-sub"
         role="menuitem"
         @click.stop
+        @mouseenter="onResetSubMenuEnter"
       >
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -1072,7 +1119,14 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
 
         <!-- Sub-menu -->
-        <ul class="commit-ctx-menu-sub" role="menu">
+        <ul
+          class="commit-ctx-menu-sub"
+          :class="{
+            'commit-ctx-menu-sub--flip-left': resetSubMenuPos.flipLeft,
+            'commit-ctx-menu-sub--flip-up': resetSubMenuPos.flipUp
+          }"
+          role="menu"
+        >
           <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'soft')">
             <span>{{ t('commitCtx.resetSoft') }}</span>
           </li>
@@ -1351,6 +1405,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .commit-ctx-menu-item--has-sub:hover > .commit-ctx-menu-sub {
   display: block;
+}
+
+.commit-ctx-menu-sub--flip-left {
+  left: auto !important;
+  right: 100% !important;
+}
+
+.commit-ctx-menu-sub--flip-up {
+  top: auto !important;
+  bottom: -4px !important;
 }
 
 .commit-ctx-menu-sep {
