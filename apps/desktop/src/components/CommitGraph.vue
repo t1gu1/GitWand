@@ -140,16 +140,20 @@ function closeCommitContextMenu() {
   ctxMenu.value.visible = false;
 }
 
+function onBranchDblClick(branch: { name: string, type: string }) {
+  const name = branch.type === 'remote'
+    ? branch.name.slice(branch.name.indexOf('/') + 1)
+    : branch.name;
+  emit('checkout-branch', name);
+}
+
 function onRowDblClick(entry: GitLogEntry) {
   if (entry.hashFull === 'WIP') return;
   if (isCurrent(entry)) return;
   const refs = commitRefs(entry);
   const branch = refs.find(r => r.type === 'branch') ?? refs.find(r => r.type === 'remote');
   if (!branch) return;
-  const name = branch.type === 'remote'
-    ? branch.name.slice(branch.name.indexOf('/') + 1)
-    : branch.name;
-  emit('checkout-branch', name);
+  onBranchDblClick(branch);
 }
 
 function onCtxEmit(event: CommitEvent, mode?: "soft" | "mixed" | "hard") {
@@ -926,6 +930,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               :class="[`cg-ref--${r.type}`, r.type === 'branch' && r.name === props.currentBranch ? 'cg-ref--branch-current' : '']"
               :style="(r.type === 'branch' || r.type === 'tag' || r.type === 'remote') ? { '--ref-lane-color': laneColor(indexToLane.get(vc.index) ?? 0) } : {}"
               @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
+              @dblclick.stop="onBranchDblClick(r)"
             >{{ r.name }}</span>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>

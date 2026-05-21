@@ -228,6 +228,22 @@ function onCtxSplit() {
   closeCommitContextMenu();
 }
 
+function onBranchDblClick(badge: { type: string, label: string }) {
+  if (badge.type === 'tag' || badge.type === 'stash') return;
+  const name = badge.type === 'remote'
+    ? badge.label.slice(badge.label.indexOf('/') + 1)
+    : badge.label;
+  emit('checkoutBranch', name);
+}
+
+function onRowDblClick(entry: GitLogEntry) {
+  if (isCurrent(entry)) return;
+  const badges = parseRefBadges(entry.refs);
+  const branch = badges.find(b => b.type === 'head' || b.type === 'branch') ?? badges.find(b => b.type === 'remote');
+  if (!branch) return;
+  onBranchDblClick(branch);
+}
+
 function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | "createBranchFromCommit" | "tagCommit" | "cherryPickCommit" | "viewOnForge") {
   const entry = ctxMenu.value.entry;
   if (!entry) return;
@@ -660,6 +676,7 @@ function authorColor(name: string): string {
                 'commit-item--current': isCurrent(c(vr.index)),
               }"
               @click="emit('selectCommit', c(vr.index).hashFull)"
+              @dblclick="onRowDblClick(c(vr.index))"
               @contextmenu="openCommitContextMenu($event, c(vr.index), oi(vr.index))"
               tabindex="0"
               @keydown.enter="emit('selectCommit', c(vr.index).hashFull)"
@@ -690,6 +707,7 @@ function authorColor(name: string): string {
                     class="log-badge"
                     :class="`log-badge--${badge.type}`"
                     @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label, badge.type)"
+                    @dblclick.stop="onBranchDblClick(badge)"
                   >
                     {{ badge.label }}
                   </span>
