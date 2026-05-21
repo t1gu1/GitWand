@@ -131,6 +131,26 @@ function toggleSection(sectionKey: string) {
   }
 }
 
+function expandSectionForFile(path: string) {
+  for (const sectionKey of ['conflicted', 'staged', 'unstaged', 'untracked']) {
+    if (sections.value[sectionKey].some(f => f.path === path)) {
+      if (collapsedSections.value[sectionKey]) {
+        collapsedSections.value[sectionKey] = false;
+        try {
+          localStorage.setItem(COLLAPSED_SECTIONS_KEY, JSON.stringify(collapsedSections.value));
+        } catch {
+          // ignore
+        }
+      }
+      break;
+    }
+  }
+}
+
+watch(() => props.selectedFile, (path) => {
+  if (path) expandSectionForFile(path);
+});
+
 function openContextMenu(e: MouseEvent, file: RepoFileEntry) {
   e.preventDefault();
   e.stopPropagation();
