@@ -7,6 +7,11 @@
  *
  * The algorithm assigns lanes left-to-right, reusing freed lanes
  * when branches merge back. This produces a compact graph.
+ *
+ * Lane priority:
+ *   0          — main / master (trunk)
+ *   1, 2, …    — release/* branches (one lane each, in appearance order)
+ *   next slots — all other branches, allocated on demand
  */
 
 export interface DagNode {
@@ -41,10 +46,16 @@ export interface DagLayout {
 /**
  * Compute DAG layout for a list of commits.
  * Commits must be in reverse chronological order (newest first).
+ *
+ * @param trunkHash     Head of main/master — pinned to lane 0.
+ * @param secondaryHashes Heads of release/* branches — pinned to lanes 1, 2, …
+ *                        in the order supplied. Commits on their first-parent
+ *                        chains are kept on those lanes throughout the graph.
  */
 export function computeDagLayout(
   commits: Array<{ hashFull: string; parents: string[] }>,
   trunkHash?: string,
+  secondaryHashes?: string[],
 ): DagLayout {
   const nodes: DagNode[] = [];
   const edges: DagEdge[] = [];
@@ -54,22 +65,43 @@ export function computeDagLayout(
     hashToIndex.set(commits[i].hashFull, i);
   }
 
-  // Trace the trunk first-parent chain — every commit on it is forced to
-  // lane 0 regardless of processing order. "Trunk" is the current HEAD
-  // branch lineage (HEAD → ancestors through first-parent).
-  const trunkSet = new Set<string>();
-  if (trunkHash && hashToIndex.has(trunkHash)) {
-    let h: string | undefined = trunkHash;
+  // ── Build pinnedLane: hash → forced lane number ──────────────────────────
+  // Lower lane numbers take priority (trunk wins over release, etc.).
+  // Each priority chain is the first-parent lineage of its head commit.
+  const pinnedLane = new Map<string, number>();
+
+  function tracePinnedChain(headHash: string, lane: number): void {
+    let h: string | undefined = headHash;
     while (h && hashToIndex.has(h)) {
-      trunkSet.add(h);
-      const idx: number = hashToIndex.get(h)!;
-      h = commits[idx].parents[0];
+      if (!pinnedLane.has(h)) pinnedLane.set(h, lane);
+      h = commits[hashToIndex.get(h)!].parents[0];
     }
   }
 
+  if (trunkHash && hashToIndex.has(trunkHash)) {
+    tracePinnedChain(trunkHash, 0);
+  }
+
+  // Only accept secondary hashes that exist in the loaded commit list.
+  const validSecondary: Array<{ hash: string; lane: number }> = [];
+  let nextSecLane = 1;
+  for (const sh of (secondaryHashes ?? [])) {
+    if (hashToIndex.has(sh)) {
+      const ln = nextSecLane++;
+      validSecondary.push({ hash: sh, lane: ln });
+      tracePinnedChain(sh, ln);
+    }
+  }
+
+  // ── Lane allocation state ────────────────────────────────────────────────
   const hashToLane = new Map<string, number>();
   const freeLanes: number[] = [];
-  let lanesAllocated = 0;
+  // Reserve lanes 0 … (1 + validSecondary.length - 1) for pinned chains.
+  // allocLane() issues numbers starting after this block.
+  let lanesAllocated = trunkHash && hashToIndex.has(trunkHash)
+    ? 1 + validSecondary.length
+    : 0;
+
   // Reference-count per lane. A lane only enters the cooldown queue when its
   // count drops to 0. freeLanes may contain stale entries (re-claimed lanes) —
   // allocLane skips them via the !lanePendingCount.has() guard.
@@ -81,9 +113,8 @@ export function computeDagLayout(
   const parentReservations = new Map<string, number[]>();
   // Cooldown: after a lane's last edge terminates, wait this many rows before
   // allowing reuse. Prevents two unrelated branches from appearing on the same
-  // column with less than 3 commits of visual gap between them.
+  // column with fewer than 3 commits of visual gap between them.
   const LANE_REUSE_COOLDOWN = 3;
-  // cooldownMap[row] = list of lanes that become free at that row.
   const cooldownMap = new Map<number, number[]>();
   let maxLane = 0;
 
@@ -150,26 +181,28 @@ export function computeDagLayout(
     parentReservations.set(parentHash, list);
   }
 
-  // Pre-seed: trunk head starts on lane 0.
-  if (trunkHash && hashToIndex.has(trunkHash)) {
-    lanesAllocated = 1;
-    claimLane(trunkHash, 0);
-  }
-
-  // Move a hash from its current (wrong) lane to lane 0 without disturbing
-  // reference counts more than necessary. Called when a trunk commit was
-  // pre-claimed to a non-0 lane before we knew it was trunk.
-  function relaneToTrunk(h: string): void {
+  // Move a hash that was pre-claimed to the wrong lane onto its forced lane,
+  // keeping reference counts consistent.
+  function relaneToForced(h: string, targetLane: number): void {
     const wrongLane = hashToLane.get(h);
-    if (wrongLane === undefined || wrongLane === 0) return;
+    if (wrongLane === undefined || wrongLane === targetLane) return;
     const n = lanePendingCount.get(wrongLane) ?? 1;
     if (n <= 1) lanePendingCount.delete(wrongLane);
     else lanePendingCount.set(wrongLane, n - 1);
-    hashToLane.set(h, 0);
-    if (maxLane < 0) maxLane = 0;
-    lanePendingCount.set(0, (lanePendingCount.get(0) ?? 0) + 1);
+    hashToLane.set(h, targetLane);
+    if (targetLane > maxLane) maxLane = targetLane;
+    lanePendingCount.set(targetLane, (lanePendingCount.get(targetLane) ?? 0) + 1);
   }
 
+  // ── Pre-seed pinned heads so their lanes are claimed from the start ───────
+  if (trunkHash && hashToIndex.has(trunkHash)) {
+    claimLane(trunkHash, 0);
+  }
+  for (const { hash: sh, lane: ln } of validSecondary) {
+    if (!hashToLane.has(sh)) claimLane(sh, ln);
+  }
+
+  // ── Main loop ─────────────────────────────────────────────────────────────
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
     const hash = commit.hashFull;
@@ -188,11 +221,12 @@ export function computeDagLayout(
       parentReservations.delete(hash);
     }
 
-    // Trunk commits must always land on lane 0, even if a merge-parent edge
-    // from a later-processed (newer) commit pre-claimed them to another lane.
-    if (trunkSet.has(hash)) {
-      if (!hashToLane.has(hash)) claimLane(hash, 0);
-      else relaneToTrunk(hash);
+    // Pinned commits (trunk or release) must land on their forced lane, even
+    // if a merge-parent edge from a newer commit pre-claimed them elsewhere.
+    if (pinnedLane.has(hash)) {
+      const forcedLane = pinnedLane.get(hash)!;
+      if (!hashToLane.has(hash)) claimLane(hash, forcedLane);
+      else relaneToForced(hash, forcedLane);
     }
     const lane = getOrClaimLane(hash);
     nodes.push({ index: i, hash, parents: commit.parents, lane });
@@ -204,17 +238,18 @@ export function computeDagLayout(
       if (parentIndex === undefined) continue;
 
       let parentLane: number;
-      // trunkSet check MUST come before hashToLane: a trunk parent may have
+      // pinnedLane check MUST come before hashToLane: a pinned parent may have
       // been pre-claimed to the wrong lane as a merge-parent of an earlier
-      // (newer) commit.  Force it to 0 and fix the reference counts.
-      if (trunkSet.has(parentHash)) {
-        if (!hashToLane.has(parentHash)) claimLane(parentHash, 0);
-        else relaneToTrunk(parentHash);
-        parentLane = 0;
+      // (newer) commit.  Force it to the correct lane and fix ref counts.
+      if (pinnedLane.has(parentHash)) {
+        const forcedLane = pinnedLane.get(parentHash)!;
+        if (!hashToLane.has(parentHash)) claimLane(parentHash, forcedLane);
+        else relaneToForced(parentHash, forcedLane);
+        parentLane = forcedLane;
       } else if (hashToLane.has(parentHash)) {
         parentLane = hashToLane.get(parentHash)!;
       } else if (p === 0) {
-        // First non-trunk parent inherits this lane (straight continuation).
+        // First non-pinned parent inherits this lane (straight continuation).
         claimLane(parentHash, lane);
         parentLane = lane;
       } else {
@@ -263,9 +298,6 @@ export function parseRefs(refs: string): Array<{ type: "head" | "branch" | "remo
   };
 
   return parsed.sort((a, b) => {
-    // If one is "HEAD -> branch" and other is just "branch", they both have type "branch"
-    // but we might want to keep the one from HEAD first if they are different.
-    // In practice, git log --decorate gives us what we need.
     return (weights[a.type] ?? 99) - (weights[b.type] ?? 99);
   });
 }
