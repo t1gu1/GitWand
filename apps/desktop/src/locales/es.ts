@@ -461,6 +461,7 @@ const es: Locale = {
     switchStashHint: "Tus cambios se guardarán en stash y se restaurarán tras cambiar a « {0} ». Ponle una etiqueta para encontrarlo después.",
     switchStashPlaceholder: "Mensaje opcional (vacío = etiqueta por defecto)",
     switchStashConfirm: "Stash y cambiar",
+    pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
   },
 
   // ─── Merge Preview ──────────────────────────────────────

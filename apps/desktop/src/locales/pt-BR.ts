@@ -462,6 +462,7 @@ const ptBR: Locale = {
     switchStashHint: "Suas alterações serão guardadas no stash e restauradas após trocar para « {0} ». Dê um rótulo para encontrá-las depois.",
     switchStashPlaceholder: "Mensagem opcional (vazio = rótulo padrão)",
     switchStashConfirm: "Stash e trocar",
+    pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
   },
 
   // ─── Merge Preview ──────────────────────────────────────

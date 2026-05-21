@@ -747,6 +747,7 @@ async function handleSwitchBranch(name: string) {
   if (!dirty || behavior === "ask" && !dirty) {
     // Clean tree — just switch
     await switchBranch(name);
+    await promptPullIfBehind();
     return;
   }
 
@@ -768,12 +769,20 @@ async function handleSwitchBranch(name: string) {
     const msg = t("branches.switchConfirmDirty");
     if (window.confirm(msg)) {
       await switchBranch(name);
+      await promptPullIfBehind();
     }
     return;
   }
 
   // Fallback
   await switchBranch(name);
+  await promptPullIfBehind();
+}
+
+async function promptPullIfBehind() {
+  if (behindCount.value > 0 && window.confirm(t("branches.pullAfterCheckout"))) {
+    await doPull();
+  }
 }
 
 // ─── Sync-split button handlers (Phase 5) ─────────────────

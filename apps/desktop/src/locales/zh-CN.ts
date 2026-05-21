@@ -458,6 +458,7 @@ const zhCN: Locale = {
     switchStashHint: "你的更改将被暂存，切换到 \u201c {0} \u201d 后再恢复。给它起个标签以便稍后查找。",
     switchStashPlaceholder: "可选消息（留空 = 默认标签）",
     switchStashConfirm: "储藏并切换",
+    pullAfterCheckout: "此分支落后于远程。是否拉取最新更改？",
   },
 
   mergePreview: {

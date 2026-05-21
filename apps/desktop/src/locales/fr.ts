@@ -468,6 +468,7 @@ const fr: Locale = {
     switchStashHint: "Tes changements seront stash\u00e9s, puis restaur\u00e9s apr\u00e8s bascule vers \u00ab {0} \u00bb. Donne-lui un label pour le retrouver plus tard.",
     switchStashPlaceholder: "Message optionnel (laisse vide pour le label par d\u00e9faut)",
     switchStashConfirm: "Stasher & changer",
+    pullAfterCheckout: "Cette branche est en retard sur son remote. Récupérer les dernières modifications ?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────

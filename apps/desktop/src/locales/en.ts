@@ -474,6 +474,7 @@ const en = {
     switchStashHint: "Your changes will be stashed, then restored after switching to \u00ab {0} \u00bb. Give it a label to find it later.",
     switchStashPlaceholder: "Optional message (empty = default label)",
     switchStashConfirm: "Stash & switch",
+    pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────
