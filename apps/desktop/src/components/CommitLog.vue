@@ -638,6 +638,31 @@ function relativeDate(isoDate: string): string {
 function isCurrent(entry: GitLogEntry): boolean {
   return parseRefBadges(entry.refs).some(b => b.type === "head");
 }
+
+function authorInitials(author: string): string {
+  if (!author) return "?";
+  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
+  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function authorColor(author: string): string {
+  if (!author) return "hsl(260 65% 55%)";
+  let h = 0;
+  for (let i = 0; i < author.length; i++) {
+    h = (h * 31 + author.charCodeAt(i)) >>> 0;
+  }
+  const hue = h % 360;
+  return `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`;
+}
+
+function abbrevAuthor(author: string): string {
+  if (!author) return "";
+  const parts = author.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 12);
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+}
 </script>
 
 <template>
