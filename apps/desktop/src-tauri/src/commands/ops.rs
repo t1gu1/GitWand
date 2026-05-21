@@ -1973,7 +1973,7 @@ pub(crate) fn agent_session_launch(cwd: String, tool: String) -> Result<(), Stri
 #[tauri::command]
 pub(crate) fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
     let output = git_cmd()
-        .args(["shortlog", "-sne", "HEAD", "--max-count=50"])
+        .args(["shortlog", "-sne", "HEAD"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git shortlog: {}", e))?;

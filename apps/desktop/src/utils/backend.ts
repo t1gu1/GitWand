@@ -1621,17 +1621,35 @@ export interface ShortlogEntry {
  * Returns entries sorted by count descending.
  */
 export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
+  let raw: ShortlogEntry[];
   if (isTauri()) {
-    return tauriInvoke<ShortlogEntry[]>("git_shortlog", { cwd });
+    raw = await tauriInvoke<ShortlogEntry[]>("git_shortlog", { cwd });
+  } else {
+    const res = await fetch(
+      `${DEV_SERVER}/api/git-shortlog?cwd=${encodeURIComponent(cwd)}`,
+    );
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error ?? `git shortlog failed: ${res.status}`);
+    }
+    raw = (await res.json()) as ShortlogEntry[];
   }
-  const res = await fetch(
-    `${DEV_SERVER}/api/git-shortlog?cwd=${encodeURIComponent(cwd)}`,
-  );
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    throw new Error(body.error ?? `git shortlog failed: ${res.status}`);
+
+  // Merge contributors with the same name (case-insensitive).
+  // This handles users with multiple email addresses or different name casing.
+  const merged = new Map<string, ShortlogEntry>();
+  for (const entry of raw) {
+    const key = entry.name.toLowerCase();
+    const existing = merged.get(key);
+    if (existing) {
+      existing.count += entry.count;
+    } else {
+      merged.set(key, { ...entry });
+    }
   }
-  return (await res.json()) as ShortlogEntry[];
+
+  // Re-sort because merging might have changed the order
+  return Array.from(merged.values()).sort((a, b) => b.count - a.count);
 }
 
 // ─── Clone & Fork (v2.0) ───────────────────────────────────
