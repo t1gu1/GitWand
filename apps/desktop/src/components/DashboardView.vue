@@ -339,8 +339,11 @@ function hueFor(s: string): number {
 
 function avatarStyle(key: string) {
   const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
   return {
-    background: `linear-gradient(135deg, hsl(${h} 70% 55%), hsl(${(h + 40) % 360} 70% 45%))`,
+    borderColor: color,
+    color: color,
+    background: "transparent",
   };
 }
 
@@ -1310,14 +1313,12 @@ button.stat-card:hover {
   place-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: white;
   flex-shrink: 0;
-  border: 2px solid var(--color-bg-secondary);
+  border: 1.5px solid currentColor;
 }
 .avatar--sm {
   width: 22px; height: 22px;
   font-size: 10px;
-  border-width: 2px;
 }
 
 /* ───────── Grid 2-col panels ───────── */

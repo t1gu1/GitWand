@@ -595,12 +595,28 @@ function truncate(str: string, limit = 20) {
   return str.slice(0, limit - 1) + "…";
 }
 
-function abbrevAuthor(name: string): string {
+/** Deterministic hue for an avatar from a string (same author → same color). */
+function hueFor(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+function avatarStyle(key: string) {
+  const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
+  return {
+    borderColor: color,
+    color: color,
+    background: "transparent",
+  };
+}
+
+function initials(name: string): string {
+  if (!name) return "?";
   const parts = name.trim().split(/\s+/);
-  if (parts.length <= 1) return name.slice(0, 5);
-  const first = parts[0].slice(0, 3);
-  const rest = parts.slice(1).map(p => p[0].toUpperCase() + ".").join("");
-  return `${first} ${rest}`;
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function relativeDate(isoDate: string): string {
@@ -619,31 +635,7 @@ function relativeDate(isoDate: string): string {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-function authorInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-}
-
 function isCurrent(entry: GitLogEntry): boolean {
-  if (!entry.refs) return false;
-  return entry.refs.split(",").some((r) => {
-    const trimmed = r.trim().replace(/^\(|\)$/g, "");
-    return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
-  });
-}
-
-function authorColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 55%, 55%)`;
-}
 </script>
 
 <template>
