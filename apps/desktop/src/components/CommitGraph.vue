@@ -187,6 +187,7 @@ function closeCommitContextMenu() {
 }
 
 function onBranchDblClick(branch: { name: string, type: string }) {
+  window.getSelection()?.removeAllRanges();
   const name = branch.type === 'remote'
     ? branch.name.slice(branch.name.indexOf('/') + 1)
     : branch.name;

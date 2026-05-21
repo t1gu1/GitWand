@@ -261,6 +261,7 @@ function onCtxSplit() {
 }
 
 function onBranchDblClick(badge: { type: string, label: string }) {
+  window.getSelection()?.removeAllRanges();
   if (badge.type === 'tag' || badge.type === 'stash') return;
   const name = badge.type === 'remote'
     ? badge.label.slice(badge.label.indexOf('/') + 1)

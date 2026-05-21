@@ -195,6 +195,7 @@ const editingIndex = ref<number | null>(null);
 const editMessage = ref("");
 
 function startReword(index: number) {
+  window.getSelection()?.removeAllRanges();
   rebase.setAction(index, "reword");
   editingIndex.value = index;
   editMessage.value = rebase.todoEntries.value[index].newMessage || rebase.todoEntries.value[index].message;
