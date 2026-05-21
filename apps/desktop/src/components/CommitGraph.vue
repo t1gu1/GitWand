@@ -527,14 +527,19 @@ const totalHeight = computed(() => displayCommits.value.length * ROW_H);
 // ─── Lane colours — rainbow spectrum left-to-right ───────
 // 45° hue steps: purple → pink → red → orange → yellow → green → cyan → blue
 // Cycles every 8 lanes; each branch gets a visually distinct color.
-function laneColor(lane: number): string {
+function laneColor(lane: number, opacity?: number): string {
+  if (lane === 0) {
+    if (opacity === undefined) return "var(--color-accent)";
+    return `color-mix(in srgb, var(--color-accent), transparent ${Math.round((1 - opacity) * 100)}%)`;
+  }
   const hue = (280 + lane * 45) % 360;
-  return `hsl(${hue}, 80%, 55%)`;
+  if (opacity === undefined) return `hsl(${hue}, 80%, 55%)`;
+  return `hsla(${hue}, 80%, 55%, ${opacity})`;
 }
 
 function laneColorTint(lane: number): string {
-  const hue = (280 + lane * 45) % 360;
-  return `hsla(${hue}, 80%, 55%, 0.09)`;
+  if (lane === 0) return "var(--color-accent-soft)";
+  return laneColor(lane, 0.09);
 }
 
 const indexToLane = computed(() => {
@@ -827,17 +832,17 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <defs>
           <!-- Trunk lane multi-color gradient (vibrant for nodes/edges) -->
           <linearGradient id="trunk-gradient-stroke" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color: #c33eff;" />
+            <stop offset="0%" style="stop-color: var(--color-accent);" />
             <stop offset="33%" style="stop-color: #ffaa3e;" />
             <stop offset="66%" style="stop-color: #3eff88;" />
-            <stop offset="100%" style="stop-color: #c33eff;" />
+            <stop offset="100%" style="stop-color: var(--color-accent);" />
           </linearGradient>
           <!-- Trunk lane multi-color gradient (subtle for row tints) -->
           <linearGradient id="trunk-gradient-tint" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color: hsla(280, 80%, 55%, 0.15);" />
+            <stop offset="0%" style="stop-color: var(--color-accent-soft);" />
             <stop offset="33%" style="stop-color: hsla(35, 80%, 55%, 0.15);" />
             <stop offset="66%" style="stop-color: hsla(140, 80%, 55%, 0.15);" />
-            <stop offset="100%" style="stop-color: hsla(280, 80%, 55%, 0.15);" />
+            <stop offset="100%" style="stop-color: var(--color-accent-soft);" />
           </linearGradient>
         </defs>
 
@@ -976,9 +981,9 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
              top: vc.index * ROW_H + 'px',
              height: ROW_H + 'px',
              backgroundColor: vc.entry.hashFull === selectedHash
-               ? laneColor(indexToLane.get(vc.index) ?? 0).replace('hsl(', 'hsla(').replace(')', ', 0.2)')
+               ? laneColor(indexToLane.get(vc.index) ?? 0, 0.2)
                : isCurrent(vc.entry)
-                 ? laneColor(indexToLane.get(vc.index) ?? 0).replace('hsl(', 'hsla(').replace(')', ', 0.25)')
+                 ? laneColor(indexToLane.get(vc.index) ?? 0, 0.25)
                  : undefined
            }"          @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"          @dblclick="onRowDblClick(vc.entry)"
           @contextmenu="vc.entry.hashFull === 'WIP' ? openWipContextMenu($event) : openCommitContextMenu($event, vc.entry, vc.index)"
