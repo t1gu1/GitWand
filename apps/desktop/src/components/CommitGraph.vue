@@ -1057,14 +1057,32 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
       <!-- Reset options -->
       <li
-        class="commit-ctx-menu-item"
+        class="commit-ctx-menu-item commit-ctx-menu-item--has-sub"
         role="menuitem"
-        @click="onCtxEmit('reset-to-commit')"
+        @click.stop
       >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 8a5 5 0 1 0 1.5-3.5L2 2v4h4L4.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.reset') }}</span>
+        </div>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="opacity: 0.5;">
+          <path d="M6 12l4-4-4-4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>{{ t('commitCtx.reset') }}</span>
+
+        <!-- Sub-menu -->
+        <ul class="commit-ctx-menu-sub" role="menu">
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'soft')">
+            <span>{{ t('commitCtx.resetSoft') }}</span>
+          </li>
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'mixed')">
+            <span>{{ t('commitCtx.resetMixed') }}</span>
+          </li>
+          <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxEmit('reset-to-commit', 'hard')">
+            <span>{{ t('commitCtx.resetHard') }}</span>
+          </li>
+        </ul>
       </li>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
@@ -1309,6 +1327,30 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .commit-ctx-menu-item--disabled:hover {
   background: transparent;
+}
+
+/* Sub-menu support (v2.14) */
+.commit-ctx-menu-item--has-sub {
+  position: relative;
+  justify-content: space-between;
+}
+
+.commit-ctx-menu-sub {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  min-width: 280px;
+  display: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+}
+
+.commit-ctx-menu-item--has-sub:hover > .commit-ctx-menu-sub {
+  display: block;
 }
 
 .commit-ctx-menu-sep {

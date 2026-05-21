@@ -221,6 +221,11 @@ export function useCommitActions(deps: Deps) {
 
   function handleResetToCommit(entry: GitLogEntry, mode?: "soft" | "mixed" | "hard") {
     modal.value = { ...modal.value, type: "reset", entry, resetMode: mode || "mixed", error: "" };
+    // If a mode was explicitly provided (e.g. from a context sub-menu),
+    // we assume the user wants to trigger it immediately.
+    if (mode) {
+      confirmResetToCommit();
+    }
   }
 
   async function confirmResetToCommit() {
