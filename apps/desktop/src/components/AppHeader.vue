@@ -868,7 +868,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   white-space: nowrap;
   font-weight: var(--font-weight-medium);
 }
-
 .mp-item-tag {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -876,9 +875,9 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   letter-spacing: 0.04em;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
-  flex-shrink: 0;
+  background: #ffffff;
+  color: #000000;
+  text-shadow: none;
 }
 
 .mp-empty {

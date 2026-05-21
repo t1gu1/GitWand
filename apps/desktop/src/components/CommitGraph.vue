@@ -1693,11 +1693,12 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 }
 
 .cg-ref--tag {
-  background: var(--color-bg);
-  color: var(--ref-lane-color, var(--color-warning));
-  border: 1.2px solid var(--ref-lane-color, var(--color-warning));
+  background: #ffffff;
+  color: #000000;
+  border: 1.2px solid #ffffff;
   font-size: 11px;
   font-weight: 700;
+  text-shadow: none;
 }
 
 .cg-ref--stash {

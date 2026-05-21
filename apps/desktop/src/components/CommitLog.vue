@@ -1383,9 +1383,10 @@ function authorColor(name: string): string {
 }
 
 .log-badge--tag {
-  background: var(--color-bg);
-  color: var(--color-warning, #f59e0b);
-  border: 1px solid var(--color-warning, #f59e0b);
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  text-shadow: none;
 }
 
 .log-badge--stash {

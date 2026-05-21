@@ -2838,10 +2838,11 @@ function savePresetForm() {
   font-size: 10px;
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0.04em;
-  border: 1px solid var(--color-border);
+  border: 1px solid #ffffff;
   border-radius: var(--radius-sm);
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
+  background: #ffffff;
+  color: #000000;
+  text-shadow: none;
 }
 
 /* ── Form fields ── */

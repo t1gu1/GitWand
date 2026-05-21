@@ -1619,17 +1619,20 @@ button.stat-card:hover {
   font-weight: 600;
   flex-shrink: 0;
   text-transform: lowercase;
+  background: #ffffff;
+  color: #000000;
+  text-shadow: none;
 }
-.tag--feat { background: var(--color-success-soft); color: var(--color-success); }
-.tag--fix { background: var(--color-danger-soft); color: var(--color-danger); }
-.tag--docs { background: var(--color-info-soft); color: var(--color-info); }
+.tag--feat,
+.tag--fix,
+.tag--docs,
 .tag--chore,
 .tag--refactor,
 .tag--test,
 .tag--style,
 .tag--perf,
 .tag--build,
-.tag--ci { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
+.tag--ci { background: #ffffff; color: #000000; }
 
 .commit-hash {
   font-family: "SF Mono", "Fira Code", monospace;
