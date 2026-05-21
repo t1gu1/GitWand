@@ -811,6 +811,22 @@ pub(crate) fn git_stash_drop(cwd: String, index: usize) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub(crate) fn git_stash_clear(cwd: String) -> Result<(), String> {
+    let output = git_cmd()
+        .args(["stash", "clear"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git stash clear: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "git stash clear failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) fn git_stash_show(cwd: String, index: usize) -> Result<String, String> {
     let stash_ref = format!("stash@{{{}}}", index);
     let output = git_cmd()

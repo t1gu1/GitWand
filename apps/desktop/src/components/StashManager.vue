@@ -6,6 +6,7 @@ import {
   gitStashPop,
   gitStashApply,
   gitStashDrop,
+  gitStashClear,
   gitStashShow,
   type StashEntry,
 } from "../utils/backend";
@@ -122,6 +123,19 @@ async function dropStash(index: number) {
   }
 }
 
+async function dropAllStashes() {
+  if (!props.cwd || stashes.value.length === 0) return;
+  if (!window.confirm(t('stash.dropAllConfirm'))) return;
+  try {
+    await gitStashClear(props.cwd);
+    expandedIndex.value = null;
+    expandedDiff.value = "";
+    await loadStashes();
+  } catch (err: any) {
+    error.value = err.message;
+  }
+}
+
 async function toggleDiff(index: number) {
   if (expandedIndex.value === index) {
     expandedIndex.value = null;
@@ -205,6 +219,14 @@ watch(() => props.cwd, loadStashes);
           :title="t('stash.popTooltip')"
         >
           {{ t('stash.popButton') }}
+        </button>
+        <button
+          class="bm-btn bm-btn--danger sm-btn-sm"
+          @click="dropAllStashes"
+          :disabled="stashes.length === 0"
+          :title="t('stash.dropAllTooltip')"
+        >
+          {{ t('stash.dropAllButton') }}
         </button>
       </div>
     </template>

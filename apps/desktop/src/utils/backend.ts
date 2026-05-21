@@ -1731,6 +1731,22 @@ export async function gitStashDrop(cwd: string, index: number): Promise<void> {
 }
 
 /**
+ * Drop all stash entries (git stash clear).
+ */
+export async function gitStashClear(cwd: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_stash_clear", { cwd });
+    return;
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/git-stash-clear`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd }),
+  });
+  if (!res.ok) throw new Error(`Failed to clear stashes: ${res.status}`);
+}
+
+/**
  * Show the diff of a stash entry.
  */
 export async function gitStashShow(cwd: string, index: number): Promise<string> {

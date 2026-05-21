@@ -1861,6 +1861,24 @@ async function handleRequest(req, res) {
       }
     }
 
+    // POST /api/git-stash-clear  { cwd }
+    if (url.pathname === "/api/git-stash-clear" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) {
+        return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      }
+      try {
+        const resolvedCwd = resolve(cwd);
+        execFileSync("git", ["stash", "clear"], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // GET /api/git-stash-show?cwd=<path>&index=<n>
     if (url.pathname === "/api/git-stash-show" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
