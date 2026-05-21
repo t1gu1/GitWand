@@ -169,11 +169,13 @@ function onRowDblClick(entry: GitLogEntry) {
   onBranchDblClick(branch);
 }
 
-function onCtxEmit(event: CommitEvent, mode?: "soft" | "mixed" | "hard") {
+function onCtxEmit(event: CommitEvent, mode?: "soft" | "mixed" | "hard", branchName?: string, branchType?: any) {
   const entry = ctxMenu.value.entry;
   if (!entry) return;
   if (event === "reset-to-commit") {
     (emit as any)(event, entry, mode);
+  } else if (event === "checkout-commit") {
+    (emit as any)(event, entry, branchName, branchType);
   } else {
     (emit as any)(event, entry);
   }
@@ -1017,12 +1019,28 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           role="menuitem"
           :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
           @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
-        >        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        <span>{{ ctxMenu.clickedBranch ? t('commitCtx.checkoutBranch') : t('commitCtx.checkout') }}</span>
-      </li>
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ ctxMenu.clickedBranch ? t('commitCtx.checkoutBranch') : t('commitCtx.checkout') }}</span>
+        </li>
+
+        <li
+          v-if="ctxMenu.clickedBranch"
+          class="commit-ctx-menu-item"
+          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+          role="menuitem"
+          :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+          @click="!isCtxEntryHead && onCtxEmit('checkout-commit')"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.checkout') }}</span>
+        </li>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
 
