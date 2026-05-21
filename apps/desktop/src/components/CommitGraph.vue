@@ -905,9 +905,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             'cg-row--match': matchedHashSet.has(vc.entry.hashFull),
             'cg-row--match-active': vc.entry.hashFull === activeMatchHash,
           }"
-          :style="{ top: vc.index * ROW_H + 'px', height: ROW_H + 'px' }"
-          @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"
-          @dblclick="onRowDblClick(vc.entry)"
+           :style="{
+             top: vc.index * ROW_H + 'px',
+             height: ROW_H + 'px',
+             backgroundColor: vc.entry.hashFull === selectedHash
+               ? laneColor(indexToLane.get(vc.index) ?? 0).replace('hsl(', 'hsla(').replace(')', ', 0.2)')
+               : isCurrent(vc.entry)
+                 ? laneColor(indexToLane.get(vc.index) ?? 0).replace('hsl(', 'hsla(').replace(')', ', 0.25)')
+                 : undefined
+           }"          @click="vc.entry.hashFull === 'WIP' ? emit('change-view', 'changes') : emit('select-commit', vc.entry.hashFull)"          @dblclick="onRowDblClick(vc.entry)"
           @contextmenu="vc.entry.hashFull === 'WIP' ? openWipContextMenu($event) : openCommitContextMenu($event, vc.entry, vc.index)"
         >
           <template v-if="vc.entry.hashFull === 'WIP'">
@@ -1404,17 +1410,19 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   transition: background 0.1s;
   overflow: hidden;
   white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
-.cg-row:hover {
-  background: rgba(255, 255, 255, 0.06);
+.cg-row:not(.cg-row--selected):not(.cg-row--current):hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  filter: brightness(1.15);
 }
 
 .cg-row--selected {
-  background: rgba(139, 92, 246, 0.22) !important;
+  /* Dynamic branch-colored background is set in :style at 0.2 opacity */
 }
 
 .cg-row--current {
-  background: rgba(139, 92, 246, 0.12);
+  /* Dynamic branch-colored background is set in :style at 0.25 opacity */
 }
 
 .cg-row--wip {
@@ -1429,8 +1437,11 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   background: rgba(245, 158, 11, 0.40) !important;
 }
 
-.cg-row--selected:hover {
-  background: rgba(139, 92, 246, 0.28) !important;
+/* Hover does nothing on selected or current branch rows (v2.14) */
+.cg-row--selected:hover,
+.cg-row--current:hover {
+  filter: none;
+  background-color: transparent; /* fallback, but inline style wins */
 }
 
 .cg-row:focus-visible {
@@ -1464,16 +1475,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 }
 
 .cg-ref--branch {
-  background: transparent;
+  background: var(--color-bg);
   color: var(--ref-lane-color, var(--color-accent));
-  border: 1px solid var(--ref-lane-color, var(--color-accent));
+  border: 1.2px solid var(--ref-lane-color, var(--color-accent));
   font-size: 11px;
   font-weight: 700;
 }
 .cg-ref--branch-current {
   background: var(--ref-lane-color, var(--color-accent));
   color: #fff;
-  border: none;
+  border: 1.2px solid var(--ref-lane-color, var(--color-accent));
 }
 .cg-ref--head {
   background: var(--color-accent);
@@ -1483,16 +1494,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 }
 
 .cg-ref--remote {
-  background: transparent;
+  background: var(--color-bg);
   color: var(--ref-lane-color, var(--color-text-muted));
   border: 1px solid var(--ref-lane-color, var(--color-border));
-  opacity: 0.75;
 }
 
 .cg-ref--tag {
-  background: var(--ref-lane-color, var(--color-warning));
-  color: #fff;
-  border: none;
+  background: var(--color-bg);
+  color: var(--ref-lane-color, var(--color-warning));
+  border: 1.2px solid var(--ref-lane-color, var(--color-warning));
   font-size: 11px;
   font-weight: 700;
 }

@@ -1139,6 +1139,7 @@ function authorColor(name: string): string {
   cursor: pointer;
   transition: background var(--transition-fast);
   border-left: 3px solid transparent;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .commit-item--unpushed {
@@ -1374,24 +1375,27 @@ function authorColor(name: string): string {
 
 .log-badge--head,
 .log-badge--branch {
-  background: var(--color-accent-soft, rgba(124, 58, 237, 0.12));
+  background: var(--color-bg);
   color: var(--color-accent);
+  border: 1px solid var(--color-accent);
 }
 
 .log-badge--tag {
-  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  background: var(--color-bg);
   color: var(--color-warning, #f59e0b);
+  border: 1px solid var(--color-warning, #f59e0b);
 }
 
 .log-badge--stash {
-  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+  background: var(--color-bg);
   color: var(--color-warning, #f59e0b);
   border: 1px dashed var(--color-warning, #f59e0b);
 }
 
 .log-badge--remote {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg);
   color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .commit-ai-reason {
