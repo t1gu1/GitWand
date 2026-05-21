@@ -1469,7 +1469,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   padding: 1px 6px;
   font-size: 10px;
   font-weight: 600;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
   line-height: 1.5;
 }

@@ -1366,7 +1366,7 @@ function authorColor(name: string): string {
   font-size: 10px;
   font-weight: var(--font-weight-medium);
   padding: 1px 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   max-width: 160px;
   overflow: hidden;
