@@ -465,6 +465,7 @@ watch(repoSuccess, (val) => {
     "already-up-to-date": { key: "header.syncUpToDate" },
     "sync-done": { key: "header.syncDone" },
     "push-done": { key: "header.pushDone" },
+    "stash-done": { key: "header.stashDone" },
     "merge-done": { key: "header.mergeDone" },
     "merge-aborted": { key: "header.mergeAborted" },
   };
@@ -1312,6 +1313,37 @@ const {
 const aiProvider = useAIProvider();
 const { locale: uiLocale } = useI18n();
 
+const {
+  generate: generateQuickStashMessage,
+} = useStashMessage();
+
+async function handleWipQuickStash() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    await gitStash(cwd);
+    await repoRefresh();
+    repoSuccess.value = "stash-done";
+  } catch (err: any) {
+    repoError.value = `Quick stash failed: ${err.message}`;
+  }
+}
+
+async function handleWipQuickStashAi() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    const message = await generateQuickStashMessage(cwd, {
+      locale: uiLocale.value,
+    });
+    await gitStash(cwd, message || undefined);
+    await repoRefresh();
+    repoSuccess.value = "stash-done";
+  } catch (err: any) {
+    repoError.value = `Quick stash AI failed: ${err.message}`;
+  }
+}
+
 async function suggestSwitchStashMessage() {
   if (!repoFolderPath.value) return;
   try {
@@ -1974,7 +2006,9 @@ onUnmounted(() => {
             @pop-stash="popStash"
             @drop-stash="dropStash"
             @wip-discard-all="handleWipDiscardAll"
-            @wip-stash="handleWipStash" />
+            @wip-stash="handleWipStash"
+            @wip-quick-stash="handleWipQuickStash"
+            @wip-quick-stash-ai="handleWipQuickStashAi" />
 
         </aside>
       </Transition>

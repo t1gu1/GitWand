@@ -62,6 +62,8 @@ const emit = defineEmits<{
   "drop-stash": [index: number];
   "wip-discard-all": [];
   "wip-stash": [];
+  "wip-quick-stash": [];
+  "wip-quick-stash-ai": [];
 }>();
 
 // ─── Context menu (v1.9) ─────────────────────────────
@@ -1314,6 +1316,29 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
         <span>{{ t('sidebar.footerStash') }}</span>
       </li>
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="emit('wip-quick-stash'); closeWipContextMenu()"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M13 8L9 4M13 8L9 12M13 8H3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('sidebar.quickStash') }}</span>
+      </li>
+      <li
+        class="commit-ctx-menu-item"
+        role="menuitem"
+        @click="emit('wip-quick-stash-ai'); closeWipContextMenu()"
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 2v12M2 8h12M4.5 4.5l7 7M11.5 4.5l-7 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        <span class="commit-ctx-menu-item__ai">
+          {{ t('sidebar.quickStashAi') }}
+          <span class="ai-badge">{{ t('sidebar.aiLabel') }}</span>
+        </span>
+      </li>
       <li class="commit-ctx-menu-sep" role="separator"></li>
       <li
         class="commit-ctx-menu-item commit-ctx-menu-item--danger"
@@ -1405,6 +1430,24 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 .commit-ctx-menu-item--has-sub:hover > .commit-ctx-menu-sub {
   display: block;
+}
+
+.commit-ctx-menu-item__ai {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.ai-badge {
+  background: var(--color-accent-soft, rgba(63, 131, 248, 0.1));
+  color: var(--color-accent, #3f83f8);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-left: 8px;
 }
 
 .commit-ctx-menu-sub--flip-left {
