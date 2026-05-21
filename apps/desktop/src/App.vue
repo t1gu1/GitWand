@@ -704,6 +704,10 @@ function onViewModeChange(mode: ViewMode) {
     return;
   }
   viewMode.value = mode;
+  if (mode === "changes" && !repoSelectedFile.value && repoFiles.value.length > 0) {
+    const first = repoFiles.value[0];
+    repoSelectFile(first.path, first.section === "staged");
+  }
 }
 
 function onDiscardSection(sectionKey: string, paths: string[]) {
