@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout, type DagNode } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
