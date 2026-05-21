@@ -636,6 +636,8 @@ function relativeDate(isoDate: string): string {
 }
 
 function isCurrent(entry: GitLogEntry): boolean {
+  return parseRefBadges(entry.refs).some(b => b.type === "head");
+}
 </script>
 
 <template>
