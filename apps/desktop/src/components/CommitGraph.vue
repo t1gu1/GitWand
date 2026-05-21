@@ -750,7 +750,7 @@ function onScroll() {
   scrollTop.value = el.scrollTop;
   if (props.hasMore && !props.loadingMore && !_loadMorePending) {
     const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
-    if (remaining < 200) {
+    if (remaining < 1000) {
       _loadMorePending = true;
       emit("load-more");
     }
