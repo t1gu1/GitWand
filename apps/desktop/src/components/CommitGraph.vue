@@ -581,12 +581,28 @@ function truncate(str: string, limit = 20) {
   return str.slice(0, limit - 1) + "…";
 }
 
-function abbrevAuthor(name: string): string {
+/** Deterministic hue for an avatar from a string (same author → same color). */
+function hueFor(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+function avatarStyle(key: string) {
+  const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
+  return {
+    borderColor: color,
+    color: color,
+    background: "transparent",
+  };
+}
+
+function initials(name: string): string {
+  if (!name) return "?";
   const parts = name.trim().split(/\s+/);
-  if (parts.length <= 1) return name.slice(0, 5);
-  const first = parts[0].slice(0, 3);
-  const rest = parts.slice(1).map(p => p[0].toUpperCase() + ".").join("");
-  return `${first} ${rest}`;
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function formatDate(raw: string): string {
@@ -1016,7 +1032,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             <span class="cg-msg">{{ vc.entry.message }}</span>
             <!-- Author + date -->
             <span class="cg-meta muted">
-              <span :title="vc.entry.author">{{ abbrevAuthor(vc.entry.author) }}</span>
+              <span class="avatar avatar--sm" :style="avatarStyle(vc.entry.email || vc.entry.author)" :title="vc.entry.author">{{ initials(vc.entry.author) }}</span>
               <span class="cg-sep">&middot;</span>
               <span>{{ formatDate(vc.entry.date) }}</span>
             </span>
@@ -1735,6 +1751,22 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   justify-content: center;
   padding: 40px;
   font-size: 13px;
+}
+
+/* ───────── Avatar ───────── */
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+  border: 1.5px solid currentColor;
+}
+.avatar--sm {
+  width: 18px; height: 18px;
+  font-size: 8px;
 }
 </style>
 
