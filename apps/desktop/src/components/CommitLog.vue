@@ -588,6 +588,11 @@ function parseRefBadges(refs: string): RefBadge[] {
   });
 }
 
+function truncate(str: string, limit = 20) {
+  if (str.length <= limit) return str;
+  return str.slice(0, limit - 1) + "…";
+}
+
 function relativeDate(isoDate: string): string {
   const date = new Date(isoDate);
   const now = new Date();
@@ -735,16 +740,19 @@ function authorColor(name: string): string {
                   <time class="commit-date" :datetime="c(vr.index).date">{{ relativeDate(c(vr.index).date) }}</time>
                 </div>
                 <div v-if="!isSearchActive && c(vr.index).refs" class="commit-refs">
-                  <span
-                    v-for="badge in parseRefBadges(c(vr.index).refs)"
-                    :key="badge.label"
-                    class="log-badge"
-                    :class="`log-badge--${badge.type}`"
-                    @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label, badge.type)"
-                    @dblclick.stop="onBranchDblClick(badge)"
-                  >
-                    {{ badge.label }}
-                  </span>
+                  <template v-for="(badgeList, r_key) in { list: parseRefBadges(c(vr.index).refs) }" :key="r_key">
+                    <span
+                      v-for="badge in badgeList"
+                      :key="badge.label"
+                      class="log-badge"
+                      :class="`log-badge--${badge.type}`"
+                      :title="badge.label"
+                      @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label, badge.type)"
+                      @dblclick.stop="onBranchDblClick(badge)"
+                    >
+                      {{ badgeList.length > 1 ? truncate(badge.label) : badge.label }}
+                    </span>
+                  </template>
 
               <button
                 v-if="!isSearchActive && aheadCount != null && oi(vr.index) === 0"

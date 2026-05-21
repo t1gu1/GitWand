@@ -544,6 +544,11 @@ function starPath(x: number, y: number): string {
 }
 
 // ─── Helpers ─────────────────────────────────────────
+function truncate(str: string, limit = 20) {
+  if (str.length <= limit) return str;
+  return str.slice(0, limit - 1) + "…";
+}
+
 function formatDate(raw: string): string {
   try {
     const d = new Date(raw);
@@ -939,15 +944,18 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           </template>
           <template v-else>
             <!-- Ref badges -->
-            <span
-              v-for="r in commitRefs(vc.entry)"
-              :key="r.name"
-              class="cg-ref"
-              :class="[`cg-ref--${r.type}`, r.type === 'branch' && r.name === props.currentBranch ? 'cg-ref--branch-current' : '']"
-              :style="(r.type === 'branch' || r.type === 'tag' || r.type === 'remote') ? { '--ref-lane-color': laneColor(indexToLane.get(vc.index) ?? 0) } : {}"
-              @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
-              @dblclick.stop="onBranchDblClick(r)"
-            >{{ r.name }}</span>
+            <template v-for="(branchList, r_key) in { list: commitRefs(vc.entry) }" :key="r_key">
+              <span
+                v-for="r in branchList"
+                :key="r.name"
+                class="cg-ref"
+                :class="[`cg-ref--${r.type}`, r.type === 'branch' && r.name === props.currentBranch ? 'cg-ref--branch-current' : '']"
+                :style="(r.type === 'branch' || r.type === 'tag' || r.type === 'remote') ? { '--ref-lane-color': laneColor(indexToLane.get(vc.index) ?? 0) } : {}"
+                :title="r.name"
+                @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
+                @dblclick.stop="onBranchDblClick(r)"
+              >{{ branchList.length > 1 ? truncate(r.name) : r.name }}</span>
+            </template>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>
             <!-- Author + date -->
