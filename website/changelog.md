@@ -5,6 +5,34 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.14.0 — May 2026
+
+### GitLab diff-line discussions
+
+Inline comments on GitLab MRs are now anchored to the exact diff line. Previously, `createComment` posted a general MR note (visible but not attached to a line). In v2.14, when a path and line number are supplied, GitWand routes the call to the GitLab Discussions API instead — passing the three SHAs (`base_sha`, `start_sha`, `head_sha`) fetched from the MR's `diffRefs`, plus `old_line` / `new_line` to pin the thread. The result looks and behaves identically to a GitHub review comment: the thread is anchored in the diff, collapsed when resolved, and visible in the MR timeline.
+
+### Bitbucket CI checks
+
+The CI checks panel now works on Bitbucket repositories. Build status is fetched from the Bitbucket Pipelines commit statuses endpoint (`/commit/{sha}/statuses`) and mapped to the same `CICheck` shape used for GitHub and GitLab — name, state, conclusion, and a deep link to the pipeline run. `SUCCESSFUL` → success, `FAILED` → failure, `STOPPED` → cancelled, `INPROGRESS` → in_progress.
+
+### Bitbucket draft → ready
+
+`convertDraftToReady` is now implemented for Bitbucket. Since Bitbucket has no native draft concept, the de-facto convention is a `"Draft: "` title prefix — GitWand strips it and PATCHes the PR title. The **Mark as ready** button only renders when the prefix is detected, so there are no false positives.
+
+### `updateComment` / `deleteComment` on all three forges
+
+Comment editing and deletion now work on GitLab and Bitbucket in addition to GitHub. Both methods gained an optional `prNumber` parameter — required at runtime for GitLab and Bitbucket (their REST paths include the MR/PR ID), silently ignored on GitHub (comment IDs are globally unique there).
+
+### Forge-agnostic conflict preview and hotspot analysis
+
+The conflict preview widget and hotspot analysis panel are no longer GitHub-only. Both features run entirely on local git data — `git merge-tree` for conflicts, a commit-graph walk for hotspots — with no forge API call. The `forge.name === "github"` guard that blocked them on GitLab and Bitbucket repos has been removed.
+
+### Multi-account credential context
+
+Each `ForgeProvider` method that makes an API call now accepts an optional `Account` parameter. Switching the active account in **Settings → Accounts** and refreshing the PR panel picks up the new credentials immediately, without closing or re-opening the repo tab.
+
+---
+
 ## v2.13.0 — May 2026
 
 ### AI Prompt Presets
