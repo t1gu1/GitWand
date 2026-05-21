@@ -38,6 +38,8 @@ type CommitEvent =
   | "create-branch-from-commit"
   | "tag-commit"
   | "cherry-pick-commit"
+  | "merge-branch"
+  | "rebase-onto-branch"
   | "view-on-forge"
   | "delete-tag"
   | "apply-stash"
@@ -56,6 +58,8 @@ const emit = defineEmits<{
   "create-branch-from-commit": [entry: GitLogEntry];
   "tag-commit": [entry: GitLogEntry];
   "cherry-pick-commit": [entry: GitLogEntry];
+  "merge-branch": [branch: string];
+  "rebase-onto-branch": [branch: string];
   "view-on-forge": [entry: GitLogEntry];
   "delete-branch": [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
   "delete-tag": [name: string, hasLocal: boolean, hasRemote: boolean];
@@ -1293,6 +1297,39 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
         <span>{{ t('commitCtx.cherryPick') }}</span>
       </li>
+
+      <!-- Merge / Rebase from graph context menu -->
+      <template v-if="ctxMenu.clickedBranch && ctxMenu.clickedBranch !== props.currentBranch && ctxMenu.clickedBranchType !== 'stash'">
+        <li class="commit-ctx-menu-sep" role="separator"></li>
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="emit('merge-branch', ctxMenu.clickedBranch!); closeCommitContextMenu()"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="4" cy="3" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="4" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="12" cy="3" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M4 5v6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M12 5c0 4-4 6-8 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('branchMenu.mergeInto') }}</span>
+        </li>
+        <li
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="emit('rebase-onto-branch', ctxMenu.clickedBranch!); closeCommitContextMenu()"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="4" cy="13" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="4" cy="3" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <circle cx="12" cy="3" r="2" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M4 11V5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M4 5c4 0 8 0 8-2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('branchMenu.rebaseOnto') }}</span>
+        </li>
+      </template>
 
       <!-- Branch Deletion (v2.12) -->
       <template v-if="branchToDelete">

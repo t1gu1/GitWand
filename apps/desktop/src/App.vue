@@ -181,6 +181,7 @@ const {
   pull: doPull,
   fetch: doFetch,
   mergeBranch: doMergeRaw,
+  rebaseOntoBranch: doRebaseOntoBranchRaw,
   mergeContinue: doMergeContinue,
   abortMerge: doAbortMerge,
   cherryPick: doCherryPick,
@@ -394,6 +395,10 @@ async function doMerge(branch: string) {
   await doMergeRaw(branch);
 }
 
+async function doRebaseOntoBranch(branch: string) {
+  await doRebaseOntoBranchRaw(branch);
+}
+
 // ─── Merge success modal ──────────────────────────────────
 const showMergeSuccess = ref(false);
 /** Branch that was just merged — offered for cleanup in MergeSuccessModal. */
@@ -468,6 +473,7 @@ watch(repoSuccess, (val) => {
     "stash-done": { key: "header.stashDone" },
     "merge-done": { key: "header.mergeDone" },
     "merge-aborted": { key: "header.mergeAborted" },
+    "rebase-done": { key: "header.rebaseDone" },
   };
   const info = meta[val];
   successToast.value = info ? t(info.key as any) : val;
@@ -2004,6 +2010,8 @@ onUnmounted(() => {
             @create-branch-from-commit="handleCreateBranchFromCommit"
             @tag-commit="handleTagCommit"
             @cherry-pick-commit="handleCherryPickCommit"
+            @merge-branch="doMerge"
+            @rebase-onto-branch="doRebaseOntoBranch"
             @view-on-forge="handleViewOnForge"
             @delete-branch="handleDeleteBranchRequest"
             @delete-tag="handleDeleteTagRequest"

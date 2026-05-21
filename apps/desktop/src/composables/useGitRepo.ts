@@ -32,6 +32,7 @@ import {
   gitStashList,
   gitStashApply,
   gitStashDrop,
+  gitRebaseOntoBranch,
   type GitStatus,
   type GitDiff,
   type GitLogEntry,
@@ -716,6 +717,30 @@ export function useGitRepo() {
     }
   }
 
+  async function rebaseOntoBranch(branchName: string) {
+    if (!folderPath.value || !branchName) return;
+    try {
+      const result = await gitRebaseOntoBranch(folderPath.value, branchName);
+      await refresh();
+      if (result.conflicts === true) {
+        const hasConflictedFiles = status.value && status.value.conflicted.length > 0;
+        if (hasConflictedFiles) {
+          viewMode.value = "changes";
+          await selectFile(status.value!.conflicted[0], false);
+        } else {
+          viewMode.value = "changes";
+          error.value = `rebase: ${result.message || "conflicts detected"}`;
+        }
+      } else if (!result.success) {
+        error.value = `rebase: ${result.message || "unknown error"}`;
+      } else {
+        successMessage.value = "rebase-done";
+      }
+    } catch (err: any) {
+      error.value = `rebase: ${err?.message || String(err) || "unknown error"}`;
+    }
+  }
+
   /** Abort an in-progress merge. */
   async function abortMerge() {
     if (!folderPath.value) return;
@@ -1068,6 +1093,7 @@ export function useGitRepo() {
     pull,
     fetch: fetchRemote,
     mergeBranch,
+    rebaseOntoBranch,
     mergeContinue,
     abortMerge,
     discardFiles,

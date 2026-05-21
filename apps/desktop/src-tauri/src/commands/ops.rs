@@ -529,6 +529,37 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
     Ok(())
 }
 
+/// Rebase the current branch onto `branch` (`git rebase <branch>`).
+/// Returns a `GitPushPullResult` so callers can detect conflicts uniformly.
+#[tauri::command]
+pub(crate) fn git_rebase_onto_branch(cwd: String, branch: String) -> Result<GitPushPullResult, String> {
+    let _t0 = Instant::now();
+    let output = git_cmd()
+        .args(["rebase", &branch])
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git rebase: {}", e))?;
+    record_cmd(&format!("git rebase {}", branch), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
+
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let combined = format!("{}{}", stderr, stdout);
+    let is_conflict = combined.contains("CONFLICT") || combined.contains("could not apply");
+
+    Ok(GitPushPullResult {
+        success: output.status.success(),
+        message: if output.status.success() {
+            stdout.trim().to_string()
+        } else if is_conflict {
+            "Rebase conflicts detected".to_string()
+        } else {
+            stderr.trim().to_string()
+        },
+        conflicts: if is_conflict { Some(true) } else { None },
+    })
+}
+
 // ─── Git discard ───────────────────────────────────────────────
 
 #[tauri::command]

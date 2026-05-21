@@ -85,6 +85,7 @@ const zhCN: Locale = {
     stashDone: "更改已暂存 (Stash)",
     mergeDone: "合并已完成",
     mergeAborted: "合并已中止",
+    rebaseDone: "Rebase 已完成",
     resolveConflicts: "请先解决冲突",
     abortMerge: "中止合并",
     abortCherryPick: "中止 cherry-pick",

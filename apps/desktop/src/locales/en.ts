@@ -80,6 +80,7 @@ const en = {
     stashDone: "Changes stashed",
     mergeDone: "Merge completed",
     mergeAborted: "Merge aborted",
+    rebaseDone: "Rebase completed",
     resolveConflicts: "resolve conflicts to continue",
     abortMerge: "Abort merge",
     abortCherryPick: "Abort cherry-pick",

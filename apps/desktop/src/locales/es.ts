@@ -80,6 +80,7 @@ const es: Locale = {
     stashDone: "Cambios guardados en stash",
     mergeDone: "Merge completado",
     mergeAborted: "Merge abortado",
+    rebaseDone: "Rebase completado",
     resolveConflicts: "resuelve los conflictos para continuar",
     abortMerge: "Abortar merge",
     abortCherryPick: "Abortar cherry-pick",

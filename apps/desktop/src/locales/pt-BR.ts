@@ -81,6 +81,7 @@ const ptBR: Locale = {
     stashDone: "Mudanças guardadas no stash",
     mergeDone: "Merge concluído",
     mergeAborted: "Merge abortado",
+    rebaseDone: "Rebase concluído",
     resolveConflicts: "resolva os conflitos para continuar",
     abortMerge: "Abortar merge",
     abortCherryPick: "Abortar cherry-pick",

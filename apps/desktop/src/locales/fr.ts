@@ -74,6 +74,7 @@ const fr: Locale = {
     stashDone: "Changements stashed",
     mergeDone: "Merge termin\u00e9",
     mergeAborted: "Merge annul\u00e9",
+    rebaseDone: "Rebase termin\u00e9",
     resolveConflicts: "r\u00e9solvez les conflits pour continuer",
     abortMerge: "Annuler le merge",
     abortCherryPick: "Annuler le cherry-pick",
