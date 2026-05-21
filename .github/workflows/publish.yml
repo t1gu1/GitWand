@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.14'
           cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
@@ -64,7 +64,6 @@ jobs:
       - name: Publish @gitwand/core
         working-directory: packages/core
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           PKG=$(node -p "require('./package.json').name")
@@ -83,7 +82,6 @@ jobs:
       - name: Publish @gitwand/cli
         working-directory: packages/cli
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           PKG=$(node -p "require('./package.json').name")
@@ -102,7 +100,6 @@ jobs:
       - name: Publish @gitwand/mcp
         working-directory: packages/mcp
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
         run: |
           PKG=$(node -p "require('./package.json').name")
