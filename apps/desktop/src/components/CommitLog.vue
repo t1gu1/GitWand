@@ -189,6 +189,8 @@ interface CommitCtxMenu {
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
+const currentBranchName = computed(() => props.branches?.find(b => b.isCurrent)?.name);
+
 function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string, branchType?: any) {
   e.preventDefault();
   e.stopPropagation();
@@ -204,18 +206,47 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
     if (stash) stashIdx = stash.index;
   }
 
+  // If no branchName provided, pick a candidate branch from the commit refs if any (v2.14)
+  let finalBranchName = branchName;
+  let finalBranchType = branchType;
+
+  if (!finalBranchName && !tag && stashIdx === undefined) {
+    const badges = parseRefBadges(entry.refs);
+    const branchesAtCommit = badges.filter(b => b.type === 'head' || b.type === 'branch' || b.type === 'remote');
+    if (branchesAtCommit.length > 0) {
+      // Prioritize branches that are NOT the current one
+      const notCurrent = branchesAtCommit.find(b => b.label !== currentBranchName.value);
+      const candidate = notCurrent || branchesAtCommit[0];
+      finalBranchName = candidate.label;
+      finalBranchType = candidate.type;
+    }
+  }
+
   ctxMenu.value = {
     visible: true,
     x: e.clientX,
     y: e.clientY,
     entry,
     idx,
-    clickedBranch: branchName,
-    clickedBranchType: branchType || (stashIdx !== undefined ? "stash" : undefined),
+    clickedBranch: finalBranchName,
+    clickedBranchType: finalBranchType || (stashIdx !== undefined ? "stash" : undefined),
     clickedTag: tag,
     clickedStashIndex: stashIdx,
   };
 }
+
+/**
+ * True when the checkout action should be disabled:
+ * - We are already on the branch being clicked
+ * - Or we are checking out a commit that is already HEAD (and no specific branch was clicked)
+ */
+const isCheckoutDisabled = computed(() => {
+  if (!ctxMenu.value.entry) return true;
+  if (ctxMenu.value.clickedBranch) {
+    return ctxMenu.value.clickedBranch === currentBranchName.value;
+  }
+  return isCtxEntryHead.value;
+});
 
 function closeCommitContextMenu() {
   ctxMenu.value.visible = false;
@@ -788,17 +819,17 @@ function authorColor(name: string): string {
           <!-- Navigation -->
           <li
             class="commit-ctx-menu-item"
-            :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+            :class="{ 'commit-ctx-menu-item--disabled': isCheckoutDisabled }"
             role="menuitem"
-            :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-            @click="!isCtxEntryHead && onCtxEmit('checkoutCommit')"
+            :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+            @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? onBranchDblClick({ type: ctxMenu.clickedBranchType || 'branch', label: ctxMenu.clickedBranch }) : onCtxEmit('checkoutCommit'))"
           >
 
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
             <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
           </svg>
-          <span>{{ t('commitCtx.checkout') }}</span>
+          <span>{{ ctxMenu.clickedBranch ? t('commitCtx.checkoutBranch') : t('commitCtx.checkout') }}</span>
         </li>
         <li
           class="commit-ctx-menu-item"

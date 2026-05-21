@@ -115,9 +115,9 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
   if (!finalBranchName && !tag && stashIdx === undefined) {
     const branchesAtCommit = refs.filter(r => r.type === 'branch' || r.type === 'remote');
     if (branchesAtCommit.length > 0) {
-      // Prioritize local branches
-      const local = branchesAtCommit.find(r => r.type === 'branch');
-      const candidate = local || branchesAtCommit[0];
+      // Prioritize branches that are NOT the current one (v2.14)
+      const notCurrent = branchesAtCommit.find(r => r.name !== props.currentBranch);
+      const candidate = notCurrent || branchesAtCommit[0];
       finalBranchName = candidate.name;
       finalBranchType = candidate.type;
     }
@@ -135,6 +135,19 @@ function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, b
     clickedStashIndex: stashIdx,
   };
 }
+
+/**
+ * True when the checkout action should be disabled:
+ * - We are already on the branch being clicked
+ * - Or we are checking out a commit that is already HEAD (and no specific branch was clicked)
+ */
+const isCheckoutDisabled = computed(() => {
+  if (!ctxMenu.value.entry) return true;
+  if (ctxMenu.value.clickedBranch) {
+    return ctxMenu.value.clickedBranch === props.currentBranch;
+  }
+  return isCtxEntryHead.value;
+});
 
 function closeCommitContextMenu() {
   ctxMenu.value.visible = false;
@@ -1000,12 +1013,11 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         <!-- Navigation -->
         <li
           class="commit-ctx-menu-item"
-          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+          :class="{ 'commit-ctx-menu-item--disabled': isCheckoutDisabled }"
           role="menuitem"
-          :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-          @click="!isCtxEntryHead && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
-        >
-        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+          @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
+        >        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
           <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
