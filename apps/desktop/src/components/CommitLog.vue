@@ -545,11 +545,14 @@ function parseRefBadges(refs: string): RefBadge[] {
     return r;
   });
 
-  // Filter out redundant remote tracking branches (v2.14)
+  // Filter out redundant remote tracking branches and noise (v2.14)
   // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
   // hide the remote one to keep the tree row clean.
   const localBranchNames = new Set(reclassified.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.label));
   const filtered = reclassified.filter(r => {
+    // Hide origin/HEAD (noise)
+    if (r.label === 'origin/HEAD') return false;
+
     if (r.type === 'remote') {
       const slashIdx = r.label.indexOf('/');
       if (slashIdx !== -1) {

@@ -588,11 +588,12 @@ function commitRefs(entry: GitLogEntry) {
     return r;
   });
 
-  // Filter out redundant remote tracking branches
-  // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
-  // hide the remote one to keep the tree row clean.
+  // Filter out redundant remote tracking branches and noise (v2.14)
   const localBranchNames = new Set(reclassified.filter(r => r.type === 'branch').map(r => r.name));
   const filtered = reclassified.filter(r => {
+    // Hide origin/HEAD (noise)
+    if (r.name === 'origin/HEAD') return false;
+
     if (r.type === 'remote') {
       const slashIdx = r.name.indexOf('/');
       if (slashIdx !== -1) {
