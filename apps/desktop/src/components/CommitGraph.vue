@@ -319,7 +319,22 @@ const hasChanges = computed(() => totalChanges.value > 0);
 
 const displayCommits = computed(() => {
   if (!hasChanges.value) return props.commits;
-  const headCommit = props.commits.find(isCurrent);
+
+  // Find the HEAD commit to attach WIP to.
+  // Priority 1: Commit that actually has the current branch label (most reliable for WIP)
+  // Priority 2: Commit that has the HEAD decoration
+  let headCommit: GitLogEntry | undefined;
+
+  if (props.currentBranch) {
+    headCommit = props.commits.find((e) =>
+      parseRefs(e.refs).some((r) => (r.type === "branch" || r.type === "remote") && r.name === props.currentBranch)
+    );
+  }
+
+  if (!headCommit) {
+    headCommit = props.commits.find(isCurrent);
+  }
+
   if (!headCommit) return props.commits;
 
   const wip: GitLogEntry = {
@@ -349,19 +364,26 @@ const layout = computed<DagLayout>(() => {
   const n = commits.length;
   // Include currentBranch + hasChanges in fingerprint: branch change or WIP
   // state change must recompute layout even when commit hashes are identical.
+  // We also include the parent of the WIP node (if present) to detect HEAD
+  // movement that doesn't change the overall log bounds (v2.16).
+  const wipParent = hasChanges.value && commits[0]?.hashFull === "WIP" ? commits[0].parents[0] : "";
   const fp =
     n + ":" + (commits[0]?.hashFull ?? "") + ":" + (commits[n - 1]?.hashFull ?? "") + ":" +
-    (props.currentBranch ?? "") + ":" + hasChanges.value;
+    (props.currentBranch ?? "") + ":" + hasChanges.value + ":" + wipParent;
   if (fp === _prevFingerprint && _cachedLayout) return _cachedLayout;
   _prevFingerprint = fp;
 
   // Trunk = the lineage to pin on lane 0 (far left).
-  // Priority 1: main / master — always lane 0 regardless of current branch.
+  // Priority 1: main / master (local or remote) — always lane 0 regardless of current branch.
   // Priority 2: current HEAD branch (if no main/master in view).
   // Priority 3: WIP (edge case: detached HEAD with no trunk branch).
   let trunkHash: string | undefined;
   for (const commit of commits) {
-    if (parseRefs(commit.refs).some((r) => r.type === "branch" && TRUNK_NAMES.has(r.name))) {
+    const refs = parseRefs(commit.refs);
+    if (refs.some((r) =>
+      (r.type === "branch" || r.type === "remote") &&
+      TRUNK_NAMES.has(r.name.includes("/") ? r.name.split("/").pop()! : r.name)
+    )) {
       trunkHash = commit.hashFull;
       break;
     }
@@ -369,7 +391,7 @@ const layout = computed<DagLayout>(() => {
   if (!trunkHash) {
     for (const commit of commits) {
       const refs = parseRefs(commit.refs);
-      if (props.currentBranch && refs.some((r) => r.type === "branch" && r.name === props.currentBranch)) {
+      if (props.currentBranch && refs.some((r) => (r.type === "branch" || r.type === "head") && r.name === props.currentBranch)) {
         trunkHash = commit.hashFull;
         break;
       }
@@ -598,7 +620,7 @@ function commitRefs(entry: GitLogEntry) {
 function isCurrent(entry: GitLogEntry): boolean {
   if (!entry.refs) return false;
   return entry.refs.split(",").some((r) => {
-    const trimmed = r.trim();
+    const trimmed = r.trim().replace(/^\(|\)$/g, "");
     return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
   });
 }
@@ -611,8 +633,8 @@ function nodeKind(node: DagNode): NodeKind {
   const refs = commitRefs(entry);
   if (refs.some(r => r.type === 'stash')) return 'stash';
   if (refs.some(r =>
-    (r.type === 'branch' && TRUNK_NAMES.has(r.name)) ||
-    (r.type === 'remote' && (r.name.endsWith('/main') || r.name.endsWith('/master')))
+    (r.type === 'branch' || r.type === 'remote') &&
+    TRUNK_NAMES.has(r.name.includes('/') ? r.name.split('/').pop()! : r.name)
   )) return 'trunk';
   if (node.parents.length > 1) return 'merge';
   return 'normal';

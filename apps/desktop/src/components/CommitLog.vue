@@ -630,7 +630,7 @@ function authorInitials(name: string): string {
 function isCurrent(entry: GitLogEntry): boolean {
   if (!entry.refs) return false;
   return entry.refs.split(",").some((r) => {
-    const trimmed = r.trim();
+    const trimmed = r.trim().replace(/^\(|\)$/g, "");
     return trimmed === "HEAD" || trimmed.startsWith("HEAD -> ");
   });
 }
