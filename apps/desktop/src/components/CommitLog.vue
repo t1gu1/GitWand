@@ -152,6 +152,7 @@ const emit = defineEmits<{
   splitCommit: [entry: GitLogEntry];
   // v1.9 — commit context menu
   checkoutCommit: [entry: GitLogEntry];
+  checkoutBranch: [name: string];
   resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   revertCommit: [entry: GitLogEntry];
   createBranchFromCommit: [entry: GitLogEntry];
