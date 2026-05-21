@@ -499,21 +499,6 @@ function edgePath(e: { fromIndex: number; fromLane: number; toIndex: number; toL
   return `M${x1},${y1} L${x1},${y2 - r} Q${x1},${y2} ${x1 + xSign * r},${y2} L${x2},${y2}`;
 }
 
-/** Build an SVG path for a 5-pointed star centered at (cx, cy) */
-function starPath(x: number, y: number): string {
-  const R = NODE_R + 1.8; // outer radius
-  const r = NODE_R / 2.2; // inner radius
-  let d = "";
-  for (let i = 0; i < 10; i++) {
-    const angle = (i * Math.PI) / 5 - Math.PI / 2;
-    const rad = i % 2 === 0 ? R : r;
-    const px = x + rad * Math.cos(angle);
-    const py = y + rad * Math.sin(angle);
-    d += (i === 0 ? "M" : "L") + px.toFixed(1) + "," + py.toFixed(1);
-  }
-  return d + "Z";
-}
-
 // ─── Helpers ─────────────────────────────────────────
 function truncate(str: string, limit = 20) {
   if (str.length <= limit) return str;
@@ -856,19 +841,31 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
             stroke-width="1.5"
             stroke-dasharray="2,2"
           />
-          <!-- Trunk commit (main/master): star icon (v2.13) -->
+          <!-- Trunk commit (main/master): circle icon with branch-colored core (v2.16) -->
           <template v-else-if="nodeKind(node) === 'trunk' && node.hash !== 'WIP'">
-            <!-- The Shadow: slightly larger, offset, and semi-transparent with blur -->
-            <path
-              :d="starPath(cx(node.lane), cy(node.index) - 0.2)"
-              fill="rgba(0,0,0,0.5)"
-              style="transform: scale(1.5); transform-origin: center; transform-box: fill-box; filter: blur(1px);"
+            <!-- The Shadow: larger, offset, and semi-transparent with blur -->
+            <circle
+              :cx="cx(node.lane)"
+              :cy="cy(node.index) + 0.6"
+              :r="NODE_R + 2.2"
+              fill="rgba(0,0,0,0.35)"
+              style="filter: blur(1.2px);"
             />
 
-            <!-- The Star -->
-            <path
-              :d="starPath(cx(node.lane), cy(node.index))"
+            <!-- The Rainbow Border -->
+            <circle
+              :cx="cx(node.lane)"
+              :cy="cy(node.index)"
+              :r="NODE_R + 1.8"
               fill="url(#trunk-gradient-stroke)"
+            />
+
+            <!-- The Branch-colored Core -->
+            <circle
+              :cx="cx(node.lane)"
+              :cy="cy(node.index)"
+              :r="NODE_R + 0.4"
+              :fill="laneColor(node.lane)"
             />
           </template>
           <!-- Merge commit: solid filled, slightly larger circle -->
