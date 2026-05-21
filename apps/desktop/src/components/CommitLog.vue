@@ -485,6 +485,21 @@ function parseRefBadges(refs: string): RefBadge[] {
     return { type: "branch" as const, label: r };
   });
 
+  // Filter out redundant remote tracking branches (v2.14)
+  // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
+  // hide the remote one to keep the tree row clean.
+  const localBranchNames = new Set(parsed.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.label));
+  const filtered = parsed.filter(r => {
+    if (r.type === 'remote') {
+      const slashIdx = r.label.indexOf('/');
+      if (slashIdx !== -1) {
+        const baseName = r.label.slice(slashIdx + 1);
+        if (localBranchNames.has(baseName)) return false;
+      }
+    }
+    return true;
+  });
+
   // Sort: Local Branch (head/branch) > Remote > Tag > Stash > HEAD (detached)
   // Note: in CommitLog, "HEAD -> branch" is typed as "head" with the branch name as label.
   const weights: Record<string, number> = {
@@ -495,7 +510,7 @@ function parseRefBadges(refs: string): RefBadge[] {
     stash: 4,
   };
 
-  return parsed.sort((a, b) => {
+  return filtered.sort((a, b) => {
     // Special case: detached "HEAD" should be last
     if (a.label === "HEAD" && a.type === "head") return 1;
     if (b.label === "HEAD" && b.type === "head") return -1;

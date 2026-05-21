@@ -555,8 +555,24 @@ function commitRefs(entry: GitLogEntry) {
   if (!refs.some(r => r.type === 'stash') && stashByHash.value.has(entry.hashFull)) {
     refs.push({ type: 'stash' as const, name: 'stash' });
   }
+
+  // Filter out redundant remote tracking branches (v2.14)
+  // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
+  // hide the remote one to keep the tree row clean.
+  const localBranchNames = new Set(refs.filter(r => r.type === 'branch').map(r => r.name));
+  const filtered = refs.filter(r => {
+    if (r.type === 'remote') {
+      const slashIdx = r.name.indexOf('/');
+      if (slashIdx !== -1) {
+        const baseName = r.name.slice(slashIdx + 1);
+        if (localBranchNames.has(baseName)) return false;
+      }
+    }
+    return true;
+  });
+
   // Sort: tag → current branch → other branches → remote → stash → head
-  refs.sort((a, b) => {
+  filtered.sort((a, b) => {
     const rank = (r: { type: string; name: string }) => {
       if (r.type === 'tag') return 0;
       if (r.type === 'branch' && r.name === props.currentBranch) return 1;
@@ -567,7 +583,7 @@ function commitRefs(entry: GitLogEntry) {
     };
     return rank(a) - rank(b);
   });
-  return refs;
+  return filtered;
 }
 
 function isCurrent(entry: GitLogEntry): boolean {
