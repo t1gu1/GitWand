@@ -1405,17 +1405,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   overflow: hidden;
   white-space: nowrap;
 }
-
 .cg-row:hover {
-  background: var(--color-bg-tertiary);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .cg-row--selected {
-  background: var(--color-accent-bg, rgba(56, 132, 255, 0.08));
+  background: rgba(139, 92, 246, 0.22) !important;
 }
 
 .cg-row--current {
-  background: var(--color-accent-soft);
+  background: rgba(139, 92, 246, 0.12);
 }
 
 .cg-row--wip {
@@ -1423,13 +1422,21 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 }
 
 .cg-row--match {
-  background: rgba(245, 158, 11, 0.10);
+  background: rgba(245, 158, 11, 0.20);
 }
 
 .cg-row--match-active {
-  background: rgba(245, 158, 11, 0.28) !important;
-  outline: 1px solid rgba(245, 158, 11, 0.55);
-  outline-offset: -1px;
+  background: rgba(245, 158, 11, 0.40) !important;
+}
+
+.cg-row--selected:hover {
+  background: rgba(139, 92, 246, 0.28) !important;
+}
+
+.cg-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .wip-msg {

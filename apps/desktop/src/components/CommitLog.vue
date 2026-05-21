@@ -1166,26 +1166,31 @@ function authorColor(name: string): string {
 }
 
 .commit-item:hover {
-  background: var(--color-bg-tertiary);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .commit-item--selected {
-  background: var(--color-bg-tertiary);
+  background: rgba(139, 92, 246, 0.22) !important;
   border-left-color: var(--color-accent);
 }
 
+.commit-item--selected:hover {
+  background: rgba(139, 92, 246, 0.28) !important;
+}
+
 .commit-item--current {
-  background: var(--color-accent-soft);
+  background: rgba(139, 92, 246, 0.12);
 }
 
 .commit-item--current:hover {
-  background: var(--color-accent-soft);
-  opacity: 0.9;
+  background: rgba(139, 92, 246, 0.18);
+  opacity: 1;
 }
 
 .commit-item:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .commit-item:last-child {
