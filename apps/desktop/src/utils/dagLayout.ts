@@ -156,6 +156,20 @@ export function computeDagLayout(
     claimLane(trunkHash, 0);
   }
 
+  // Move a hash from its current (wrong) lane to lane 0 without disturbing
+  // reference counts more than necessary. Called when a trunk commit was
+  // pre-claimed to a non-0 lane before we knew it was trunk.
+  function relaneToTrunk(h: string): void {
+    const wrongLane = hashToLane.get(h);
+    if (wrongLane === undefined || wrongLane === 0) return;
+    const n = lanePendingCount.get(wrongLane) ?? 1;
+    if (n <= 1) lanePendingCount.delete(wrongLane);
+    else lanePendingCount.set(wrongLane, n - 1);
+    hashToLane.set(h, 0);
+    if (maxLane < 0) maxLane = 0;
+    lanePendingCount.set(0, (lanePendingCount.get(0) ?? 0) + 1);
+  }
+
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i];
     const hash = commit.hashFull;
@@ -174,6 +188,12 @@ export function computeDagLayout(
       parentReservations.delete(hash);
     }
 
+    // Trunk commits must always land on lane 0, even if a merge-parent edge
+    // from a later-processed (newer) commit pre-claimed them to another lane.
+    if (trunkSet.has(hash)) {
+      if (!hashToLane.has(hash)) claimLane(hash, 0);
+      else relaneToTrunk(hash);
+    }
     const lane = getOrClaimLane(hash);
     nodes.push({ index: i, hash, parents: commit.parents, lane });
     releaseClaim(hash, i);
@@ -184,12 +204,15 @@ export function computeDagLayout(
       if (parentIndex === undefined) continue;
 
       let parentLane: number;
-      if (hashToLane.has(parentHash)) {
-        parentLane = hashToLane.get(parentHash)!;
-      } else if (trunkSet.has(parentHash)) {
-        // Trunk-chain parent always on lane 0.
-        claimLane(parentHash, 0);
+      // trunkSet check MUST come before hashToLane: a trunk parent may have
+      // been pre-claimed to the wrong lane as a merge-parent of an earlier
+      // (newer) commit.  Force it to 0 and fix the reference counts.
+      if (trunkSet.has(parentHash)) {
+        if (!hashToLane.has(parentHash)) claimLane(parentHash, 0);
+        else relaneToTrunk(parentHash);
         parentLane = 0;
+      } else if (hashToLane.has(parentHash)) {
+        parentLane = hashToLane.get(parentHash)!;
       } else if (p === 0) {
         // First non-trunk parent inherits this lane (straight continuation).
         claimLane(parentHash, lane);
