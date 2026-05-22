@@ -1718,7 +1718,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   transition: background 0.1s;
   overflow: hidden;
   white-space: nowrap;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 .cg-row:not(.cg-row--selected):not(.cg-row--current):hover {
   background-color: rgba(255, 255, 255, 0.08) !important;
@@ -1806,7 +1805,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   color: var(--ref-lane-color, var(--color-accent));
   border: 1.2px solid var(--ref-lane-color, var(--color-accent));
   font-size: 11px;
-  font-weight: 700;
 }
 .cg-ref--branch-current {
   background: var(--ref-lane-color, var(--color-accent));
