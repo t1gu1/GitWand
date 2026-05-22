@@ -52,7 +52,7 @@ const props = defineProps<{
   hasFiles: boolean;
   theme: Theme;
   branchDisplay: string;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   hasRepo: boolean;
   /** Kept for compat — no longer rendered directly, but handy for callers. */
   folderName: string;
@@ -135,6 +135,7 @@ const emit = defineEmits<{
   openTags: [];
   openWorkspace: [];
   openAgents: [];
+  changeView: [mode: 'dashboard' | 'changes' | 'history' | 'prs' | 'launchpad'];
 }>();
 
 // ─── Merge-into picker popover (triggered by BranchMenu) ──────────
@@ -448,6 +449,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @delete-branch="(name) => emit('deleteBranch', name)"
             @open-worktrees="(branch) => emit('openWorktrees', branch)"
             @load-branches="emit('loadBranches')"
+            @change-view="(mode) => emit('changeView', mode)"
           />
 
           <!-- BranchMenu + its two piggy-backed popovers.
@@ -866,7 +868,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   white-space: nowrap;
   font-weight: var(--font-weight-medium);
 }
-
 .mp-item-tag {
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -874,9 +875,9 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   letter-spacing: 0.04em;
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-pill);
-  background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
-  flex-shrink: 0;
+  background: #ffffff;
+  color: #000000;
+  text-shadow: none;
 }
 
 .mp-empty {

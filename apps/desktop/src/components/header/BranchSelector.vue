@@ -39,7 +39,7 @@ const { t } = useI18n();
 
 const props = defineProps<{
   branchDisplay: string;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches: GitBranch[];
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
@@ -53,6 +53,7 @@ const emit = defineEmits<{
   deleteBranch: [name: string];
   openWorktrees: [branch?: string];
   loadBranches: [];
+  changeView: [mode: 'changes'];
 }>();
 
 // Whether the working tree has anything worth reporting — drives the
@@ -261,7 +262,15 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       </svg>
 
       <span class="branch-trigger__body">
-        <span class="branch-trigger__name mono">{{ branchDisplay }}</span>
+        <div class="branch-trigger__name-row">
+          <span class="branch-trigger__name mono">{{ branchDisplay }}</span>
+          <span
+            v-if="hasRepoStats"
+            class="branch-trigger__changes-dot"
+            :title="t('sidebar.tabChanges')"
+            @click.stop="emit('changeView', 'changes')"
+          ></span>
+        </div>
         <span v-if="hasRepoStats" class="branch-trigger__stats">
           <span v-if="repoStats.staged > 0" class="branch-trigger__stat">
             <span class="branch-trigger__stat-dot" style="background: var(--color-success)"></span>
@@ -479,6 +488,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   line-height: 1.15;
 }
 
+.branch-trigger__name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .branch-trigger__name {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
@@ -487,6 +503,19 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   white-space: nowrap;
   min-width: 0;
   max-width: 240px;
+}
+
+.branch-trigger__changes-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  border: 1.2px dashed var(--color-accent);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+.branch-trigger__changes-dot:hover {
+  transform: scale(1.2);
+  border-color: var(--color-accent-hover, var(--color-accent));
 }
 
 /* Inline stats row: tiny dots + count label + unit. Colour-muted so

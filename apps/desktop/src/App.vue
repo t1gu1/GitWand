@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncComponent, nextTick } from "vue";
 
 // ─── Eager imports — main views & shared building blocks ─────────────────────
 // These are part of the always-rendered UI (header, sidebar, main content
@@ -134,7 +134,6 @@ const {
   selectedFileStaged: repoSelectedFileStaged,
   diff: repoDiff,
   log: repoLog,
-  logScope,
   logAuthorFilter,
   logHasMore,
   logLoadingMore,
@@ -170,7 +169,6 @@ const {
   selectFile: repoSelectFile,
   loadLog,
   loadMoreLog,
-  setLogScope,
   stageFiles,
   stageAll,
   unstageFiles,
@@ -202,8 +200,18 @@ const {
   createBranch,
   switchBranch,
   deleteBranch,
+  deleteRemoteBranch,
+  deleteTag,
+  deleteRemoteTag,
   renameBranch: doRenameBranch,
   currentGitUser,
+  // Stash Manager (Phase 8.2)
+  stashes,
+  stashesLoading,
+  loadStashes,
+  applyStash,
+  popStash,
+  dropStash,
 } = useGitRepo();
 
 // ─── Git Tree panel ──────────────────────────────────────
@@ -457,6 +465,7 @@ watch(repoSuccess, (val) => {
     "already-up-to-date": { key: "header.syncUpToDate" },
     "sync-done": { key: "header.syncDone" },
     "push-done": { key: "header.pushDone" },
+    "stash-done": { key: "header.stashDone" },
     "merge-done": { key: "header.mergeDone" },
     "merge-aborted": { key: "header.mergeAborted" },
   };
@@ -619,14 +628,29 @@ const {
   handleTagCommit,
   handleCherryPickCommit,
   handleViewOnForge,
+  handleDeleteBranchRequest,
+  handleDeleteTagRequest,
   confirmCheckoutCommit,
   confirmResetToCommit,
   confirmCreateBranchFromCommit,
   confirmTagCommit,
+  confirmDeleteBranch,
+  confirmDeleteTag,
   suggestTagWithAI,
   isTagAISuggesting,
   isAIAvailable,
-} = useCommitActions({ repoFolderPath, repoError, loadLog, loadBranches, repoRefresh, cherryPick: doCherryPick });
+} = useCommitActions({
+  repoFolderPath,
+  repoError,
+  loadLog,
+  loadBranches,
+  repoRefresh,
+  cherryPick: doCherryPick,
+  deleteBranch,
+  deleteRemoteBranch,
+  deleteTag,
+  deleteRemoteTag,
+});
 
 // ─── Folder opening ─────────────────────────────────────
 async function handleOpenFolder() {
@@ -680,6 +704,10 @@ function onViewModeChange(mode: ViewMode) {
     return;
   }
   viewMode.value = mode;
+  if (mode === "changes" && !repoSelectedFile.value && repoFiles.value.length > 0) {
+    const first = repoFiles.value[0];
+    repoSelectFile(first.path, first.section === "staged");
+  }
 }
 
 function onDiscardSection(sectionKey: string, paths: string[]) {
@@ -724,6 +752,7 @@ async function handleSwitchBranch(name: string) {
   if (!dirty || behavior === "ask" && !dirty) {
     // Clean tree — just switch
     await switchBranch(name);
+    await promptPullIfBehind();
     return;
   }
 
@@ -745,12 +774,20 @@ async function handleSwitchBranch(name: string) {
     const msg = t("branches.switchConfirmDirty");
     if (window.confirm(msg)) {
       await switchBranch(name);
+      await promptPullIfBehind();
     }
     return;
   }
 
   // Fallback
   await switchBranch(name);
+  await promptPullIfBehind();
+}
+
+async function promptPullIfBehind() {
+  if (behindCount.value > 0 && window.confirm(t("branches.pullAfterCheckout"))) {
+    await doPull();
+  }
 }
 
 // ─── Sync-split button handlers (Phase 5) ─────────────────
@@ -1092,20 +1129,15 @@ const showWorkspace = ref(false);
 const showAgents = ref(false);
 const showCommandLog = ref(false);
 
-const stashCount = ref(0);
-async function loadStashCount() {
-  if (!repoFolderPath.value) { stashCount.value = 0; return; }
-  try {
-    const list = await gitStashList(repoFolderPath.value);
-    stashCount.value = Array.isArray(list) ? list.length : 0;
-  } catch {
-    stashCount.value = 0;
-  }
-}
-watch(repoFolderPath, loadStashCount, { immediate: true });
+const stashCount = computed(() => stashes.value.length);
+watch(repoFolderPath, () => {
+  if (repoFolderPath.value) loadStashes();
+}, { immediate: true });
 watch(
   () => repoStats.value.staged + repoStats.value.unstaged + repoStats.value.untracked + repoStats.value.conflicted,
-  loadStashCount,
+  () => {
+    if (repoFolderPath.value) loadStashes();
+  },
 );
 
 // ─── Launchpad panel ─────────────────────────────────────
@@ -1182,10 +1214,48 @@ async function onDiscardSectionConfirmed() {
   const ctx = discardSectionConfirm.value;
   if (!ctx) return;
   discardSectionConfirm.value = null;
-  if (ctx.sectionKey === 'staged') {
-    await unstageFiles(ctx.paths);
+
+  const allFiles = repoFiles.value;
+  const targetFiles = ctx.sectionKey === 'all'
+    ? allFiles
+    : allFiles.filter(f => ctx.paths.includes(f.path));
+
+  const staged = targetFiles.filter(f => f.section === 'staged');
+  const unstaged = targetFiles.filter(f => f.section === 'unstaged');
+  const untracked = targetFiles.filter(f => f.section === 'untracked');
+
+  // 1. Unstage any staged files first
+  if (staged.length) {
+    await unstageFiles(staged.map(f => f.path));
   }
-  await discardFiles(ctx.paths, ctx.sectionKey === 'untracked');
+
+  // 2. Discard tracked files (was unstaged + was staged but not added)
+  const toCheckout = [
+    ...unstaged.map(f => f.path),
+    ...staged.filter(f => f.status !== 'added').map(f => f.path)
+  ];
+  if (toCheckout.length) {
+    await discardFiles(toCheckout, false);
+  }
+
+  // 3. Discard untracked files (was untracked + was staged added)
+  const toClean = [
+    ...untracked.map(f => f.path),
+    ...staged.filter(f => f.status === 'added').map(f => f.path)
+  ];
+  if (toClean.length) {
+    await discardFiles(toClean, true);
+  }
+}
+
+function handleWipDiscardAll() {
+  const allPaths = repoFiles.value.map(f => f.path);
+  if (!allPaths.length) return;
+  discardSectionConfirm.value = { sectionKey: 'all', paths: allPaths };
+}
+
+function handleWipStash() {
+  showStash.value = true;
 }
 
 // ─── Push + tags confirmation modal ─────────────────────
@@ -1246,6 +1316,37 @@ const {
 } = useStashMessage();
 const aiProvider = useAIProvider();
 const { locale: uiLocale } = useI18n();
+
+const {
+  generate: generateQuickStashMessage,
+} = useStashMessage();
+
+async function handleWipQuickStash() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    await gitStash(cwd);
+    await repoRefresh();
+    repoSuccess.value = "stash-done";
+  } catch (err: any) {
+    repoError.value = `Quick stash failed: ${err.message}`;
+  }
+}
+
+async function handleWipQuickStashAi() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    const message = await generateQuickStashMessage(cwd, {
+      locale: uiLocale.value,
+    });
+    await gitStash(cwd, message || undefined);
+    await repoRefresh();
+    repoSuccess.value = "stash-done";
+  } catch (err: any) {
+    repoError.value = `Quick stash AI failed: ${err.message}`;
+  }
+}
 
 async function suggestSwitchStashMessage() {
   if (!repoFolderPath.value) return;
@@ -1526,6 +1627,11 @@ const { triggerReleaseNotesIfEnabled } = scheduler;
 const poller = useRepoPoller({
   onStatusChange: async (cwd) => {
     await repoRefresh();
+    // v2.14 — Refresh log if the history view or the Git Tree side panel is
+    // active, so terminal actions (commit/push/pull) update the graph.
+    if (viewMode.value === 'history' || showGitTree.value) {
+      await loadLog();
+    }
   },
   onConflictDetected: async (_cwd) => {
     // scheduler.onConflictDetected reads cwd from its callback ref
@@ -1545,6 +1651,13 @@ const poller = useRepoPoller({
   },
 });
 watch(repoFolderPath, (p) => poller.setFolderPath(p), { immediate: true });
+
+// v2.14 — Ensure the log is loaded when the Git Tree is toggled on.
+watch(showGitTree, (show) => {
+  if (show && hasRepo.value) {
+    void loadLog();
+  }
+});
 
 // ─── Global shortcut listener (Cmd+Shift+G from anywhere) ─
 let unlistenGlobalShortcut: (() => void) | null = null;
@@ -1681,6 +1794,23 @@ useAppMenu(
   { hasRepo },
 );
 
+const historyVisibleFileIdx = ref(0);
+const scrollToFileIdx = ref<number | null>(null);
+
+function onHistoryScrollToFile(idx: number) {
+  historyVisibleFileIdx.value = idx;
+  scrollToFileIdx.value = idx;
+  // Reset so that clicking the same file again triggers the scroll
+  nextTick(() => {
+    scrollToFileIdx.value = null;
+  });
+}
+
+watch(selectedCommitHash, () => {
+  historyVisibleFileIdx.value = 0;
+  scrollToFileIdx.value = null;
+});
+
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
   applyGitConfig();
@@ -1709,6 +1839,7 @@ onUnmounted(() => {
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
+      @change-view="onViewModeChange"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
       @open-rebase="showRebase = true"
@@ -1722,26 +1853,21 @@ onUnmounted(() => {
         <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
           :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
-          :log-entries="repoLog" :log-loading="repoLoading" :log-scope="logScope" :log-author-filter="logAuthorFilter"
-          :log-has-more="logHasMore" :log-loading-more="logLoadingMore" @load-more-log="loadMoreLog"
-          :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
+          :log-entries="repoLog" :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
           :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
+          :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
           @select="onRepoFileSelect" @change-view="onViewModeChange"
           @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
           @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
           @stage-paths="(paths) => stageFiles(paths)" @unstage-all="unstageAll" :git-user="currentGitUser"
           @commit="(trailers) => doCommit(trailers)" @update:commit-summary="(val) => commitSummary = val"
-          @update:commit-description="(val) => commitDescription = val" @select-commit="selectCommit"
-          @edit-commit="handleEditCommit" @split-commit="handleSplitCommitRequest"
-          @checkout-commit="handleCheckoutCommit" @reset-to-commit="handleResetToCommit"
-          @revert-commit="handleRevertCommit" @create-branch-from-commit="handleCreateBranchFromCommit"
-          @tag-commit="handleTagCommit" @cherry-pick-commit="handleCherryPickCommit" @view-on-forge="handleViewOnForge"
-          @update:log-scope="setLogScope" @update:log-author-filter="setLogAuthorFilter"
+          @update:commit-description="(val) => commitDescription = val"
           @discard="(path, section) => discardFiles([path], section === 'untracked')"
           @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
           @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
           @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
-          @open-launchpad="handleLaunchpadShortcut" />
+          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile"
+          @delete-branch="handleDeleteBranchRequest" />
       </aside>
 
       <main class="main">
@@ -1828,7 +1954,8 @@ onUnmounted(() => {
             <!-- History view: commit diff (log is in sidebar) -->
             <CommitDiffViewer v-else-if="viewMode === 'history'" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
               :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
-              @update:diff-mode="onDiffModeChange" />
+              :scroll-to-file-idx="scrollToFileIdx" @update:diff-mode="onDiffModeChange"
+              @update:visible-file-idx="historyVisibleFileIdx = $event" />
 
             <!-- PRs view: creation form takes over when showCreateForm is true -->
             <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
@@ -1863,9 +1990,32 @@ onUnmounted(() => {
       <Transition name="git-tree-panel">
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
-          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="branchDisplay"
-            :fork-point-sha="graphForkPointSha"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
+            :has-more="logHasMore" :loading-more="logLoadingMore"
+            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
+            @change-view="onViewModeChange"
+            @edit-commit="handleEditCommit"
+            @split-commit="handleSplitCommitRequest"
+            @checkout-commit="handleCheckoutCommit"
+            @checkout-branch="handleSwitchBranch"
+            @reset-to-commit="handleResetToCommit"
+            @revert-commit="handleRevertCommit"
+            @create-branch-from-commit="handleCreateBranchFromCommit"
+            @tag-commit="handleTagCommit"
+            @cherry-pick-commit="handleCherryPickCommit"
+            @view-on-forge="handleViewOnForge"
+            @delete-branch="handleDeleteBranchRequest"
+            @delete-tag="handleDeleteTagRequest"
+            @apply-stash="applyStash"
+            @pop-stash="popStash"
+            @drop-stash="dropStash"
+            @wip-discard-all="handleWipDiscardAll"
+            @wip-stash="handleWipStash"
+            @wip-quick-stash="handleWipQuickStash"
+            @wip-quick-stash-ai="handleWipQuickStashAi"
+            @load-more="loadMoreLog" />
+
         </aside>
       </Transition>
     </div>
@@ -1902,7 +2052,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Interactive rebase panel -->
-    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="branchDisplay"
+    <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
       :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
@@ -2038,12 +2188,12 @@ onUnmounted(() => {
       @run-action="onPaletteAction" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
-         Both teleport to body and guard against `branchDisplay` going
+         Both teleport to body and guard against `repoStatus?.branch` going
          null between open + confirm (the :current-branch / :branch-name
          binding is non-null because we only mount when showing). -->
-    <BranchRenameModal v-if="showBranchRenameModal && branchDisplay" :current-branch="branchDisplay"
+    <BranchRenameModal v-if="showBranchRenameModal && repoStatus?.branch" :current-branch="repoStatus.branch"
       @close="showBranchRenameModal = false" @confirm="onBranchRenameConfirm" />
-    <BranchDeleteModal v-if="showBranchDeleteModal && branchDisplay" :branch-name="branchDisplay"
+    <BranchDeleteModal v-if="showBranchDeleteModal && repoStatus?.branch" :branch-name="repoStatus.branch"
       @close="showBranchDeleteModal = false" @confirm="onBranchDeleteConfirm" />
 
     <!-- ── Commit context-menu modals (v1.9) — using BaseModal for design consistency ── -->
@@ -2085,6 +2235,81 @@ onUnmounted(() => {
         <button class="bm-btn" :class="commitActionModal.resetMode === 'hard' ? 'bm-btn--danger' : 'bm-btn--primary'"
           :disabled="commitActionModal.busy" @click="confirmResetToCommit">
           {{ commitActionModal.busy ? t('common.loading') : t('commitCtx.resetConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Delete branch options (v2.12) -->
+    <BaseModal v-if="commitActionModal.type === 'deleteBranch'" :title="t('branchMenu.deleteModalTitle')"
+      :subtitle="t('branchMenu.deleteOptionsDesc', commitActionModal.deleteBranchName)" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
+      <div class="cam-radio-group">
+        <label v-if="commitActionModal.deleteBranchHasLocal" class="cam-radio">
+          <input type="radio" name="deleteMode" value="local" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteLocalOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteLocalOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteBranchHasRemote" class="cam-radio">
+          <input type="radio" name="deleteMode" value="remote" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteRemoteOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteRemoteOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteBranchHasLocal && commitActionModal.deleteBranchHasRemote"
+          class="cam-radio">
+          <input type="radio" name="deleteMode" value="both" v-model="commitActionModal.deleteBranchMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('branchMenu.deleteBothOption') }}</strong>
+            <span class="cam-radio-hint">{{ t('branchMenu.deleteBothOptionHint') }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="commitActionModal.error" class="cam-error" style="margin-top: var(--space-3)">{{ commitActionModal.error
+        }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteBranch">
+          {{ commitActionModal.busy ? t('common.loading') : t('branchMenu.deleteModalConfirm') }}
+        </button>
+      </template>
+    </BaseModal>
+
+    <!-- Delete tag options (v2.12) -->
+    <BaseModal v-if="commitActionModal.type === 'deleteTag'" :title="t('tags.delete')"
+      :subtitle="t('tags.deleteOptionsDesc', commitActionModal.deleteTagName)" size="sm" role="alertdialog"
+      @close="closeCommitActionModal">
+      <div class="cam-radio-group">
+        <label v-if="commitActionModal.deleteTagHasLocal" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="local" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteLocalOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteLocalOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteTagHasRemote" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="remote" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteRemoteOnly') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteRemoteOnlyHint') }}</span>
+          </span>
+        </label>
+        <label v-if="commitActionModal.deleteTagHasLocal && commitActionModal.deleteTagHasRemote" class="cam-radio">
+          <input type="radio" name="deleteTagMode" value="both" v-model="commitActionModal.deleteTagMode" />
+          <span class="cam-radio-label">
+            <strong>{{ t('tags.deleteBothOption') }}</strong>
+            <span class="cam-radio-hint">{{ t('tags.deleteBothOptionHint') }}</span>
+          </span>
+        </label>
+      </div>
+      <p v-if="commitActionModal.error" class="cam-error" style="margin-top: var(--space-3)">{{ commitActionModal.error
+        }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteTag">
+          {{ commitActionModal.busy ? t('common.loading') : t('tags.deleteConfirm') }}
         </button>
       </template>
     </BaseModal>

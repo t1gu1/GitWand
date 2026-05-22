@@ -339,8 +339,11 @@ function hueFor(s: string): number {
 
 function avatarStyle(key: string) {
   const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
   return {
-    background: `linear-gradient(135deg, hsl(${h} 70% 55%), hsl(${(h + 40) % 360} 70% 45%))`,
+    borderColor: color,
+    color: color,
+    background: "transparent",
   };
 }
 
@@ -381,7 +384,7 @@ async function loadDashboard() {
   // TODO Phase 2 (v2.9): bring it back via a `ghMergedSinceCount(cwd, since)`
   // backed by GitHub `search?q=is:merged merged:>=YYYY-MM-DD`.
   const results = await Promise.allSettled([
-    getGitLog(props.cwd, 250),
+    getGitLog(props.cwd, 250, true),
     getGitBranches(props.cwd),
     gitRemoteInfo(props.cwd),
     gitFileCount(props.cwd).catch(() => 0),
@@ -686,7 +689,7 @@ watch(() => props.cwd, loadDashboard);
               v-for="(c, i) in topContributors.slice(0, 4)"
               :key="c.email"
               class="avatar avatar--sm"
-              :style="{ ...avatarStyle(c.email || c.name), zIndex: 10 - i }"
+              :style="{ ...avatarStyle(c.email || c.name), background: 'var(--color-bg-secondary)', zIndex: 10 - i }"
               :title="c.name"
             >{{ initials(c.name) }}</span>
           </div>
@@ -1284,6 +1287,14 @@ button.stat-card:hover {
   margin-top: var(--space-2);
 }
 .avatar-stack .avatar + .avatar { margin-left: -6px; }
+.avatar-stack .avatar {
+  box-shadow: 0 0 0 2px var(--color-bg-secondary);
+  transition: transform var(--transition-fast), z-index 0s;
+}
+.avatar-stack .avatar:hover {
+  transform: translateY(-3px) scale(1.15);
+  z-index: 20 !important;
+}
 
 .stat-breakdown {
   display: flex;
@@ -1310,14 +1321,12 @@ button.stat-card:hover {
   place-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: white;
   flex-shrink: 0;
-  border: 2px solid var(--color-bg-secondary);
+  border: 1.5px solid currentColor;
 }
 .avatar--sm {
   width: 22px; height: 22px;
   font-size: 10px;
-  border-width: 2px;
 }
 
 /* ───────── Grid 2-col panels ───────── */
@@ -1619,17 +1628,20 @@ button.stat-card:hover {
   font-weight: 600;
   flex-shrink: 0;
   text-transform: lowercase;
+  background: #ffffff;
+  color: #000000;
+  text-shadow: none;
 }
-.tag--feat { background: var(--color-success-soft); color: var(--color-success); }
-.tag--fix { background: var(--color-danger-soft); color: var(--color-danger); }
-.tag--docs { background: var(--color-info-soft); color: var(--color-info); }
+.tag--feat,
+.tag--fix,
+.tag--docs,
 .tag--chore,
 .tag--refactor,
 .tag--test,
 .tag--style,
 .tag--perf,
 .tag--build,
-.tag--ci { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
+.tag--ci { background: #ffffff; color: #000000; }
 
 .commit-hash {
   font-family: "SF Mono", "Fira Code", monospace;

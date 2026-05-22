@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
-import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser } from "../utils/backend";
-import CommitLog from "./CommitLog.vue";
+import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser, type GitDiff } from "../utils/backend";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
 import { useCommitMessage } from "../composables/useCommitMessage";
@@ -24,26 +23,12 @@ const props = defineProps<{
   files: RepoFileEntry[];
   selectedFile: string | null;
   viewMode: ViewMode;
-  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   commitSummary: string;
   commitDescription: string;
   canCommit: boolean;
   isCommitting: boolean;
-  // History mode props
   logEntries: GitLogEntry[];
-  logLoading: boolean;
-  selectedCommitHash: string | null;
-  aheadCount: number;
-  /** True when the current branch has no upstream (no origin/<branch>). */
-  needsPublish?: boolean;
-  /** Scope of the commit log: only the current branch, or all refs. */
-  logScope: "current" | "all";
-  /** Author filter: show all commits, or only those by the current git user. */
-  logAuthorFilter: "all" | "mine";
-  /** True when more commits are available beyond the current page. */
-  logHasMore?: boolean;
-  /** True while the next page is being loaded. */
-  logLoadingMore?: boolean;
   /** Display name of the current branch (for the toggle label). */
   currentBranch: string;
   /** Files inside the currently-selected untracked directory */
@@ -52,6 +37,16 @@ const props = defineProps<{
   branches?: GitBranch[];
   /** Current git user — used to auto-fill Signed-off-by trailer. */
   gitUser?: GitUser | null;
+  /** The currently selected commit hash (if any) */
+  selectedCommitHash?: string | null;
+  /** How many commits ahead / behind the remote tracking branch. */
+  aheadCount?: number;
+  /** True when the current branch has no upstream (no origin/<branch>). */
+  needsPublish?: boolean;
+  /** Files for history view */
+  commitDiffs?: GitDiff[];
+  /** Currently visible file index in CommitDiffViewer */
+  visibleFileIdx?: number;
 }>();
 
 const emit = defineEmits<{
@@ -67,21 +62,6 @@ const emit = defineEmits<{
   commit: [trailers: string];
   "update:commitSummary": [value: string];
   "update:commitDescription": [value: string];
-  selectCommit: [hash: string];
-  editCommit: [entry: GitLogEntry];
-  splitCommit: [entry: GitLogEntry];
-  // v1.9 — commit context menu actions
-  checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
-  revertCommit: [entry: GitLogEntry];
-  createBranchFromCommit: [entry: GitLogEntry];
-  tagCommit: [entry: GitLogEntry];
-  cherryPickCommit: [entry: GitLogEntry];
-  viewOnForge: [entry: GitLogEntry];
-  /** Change the log scope toggle (current branch vs all refs). */
-  "update:logScope": [scope: "current" | "all"];
-  /** Toggle the author filter (all commits vs mine only). */
-  "update:logAuthorFilter": [filter: "all" | "mine"];
   /** Select a specific file inside an expanded untracked directory */
   "select-dir-file": [path: string];
   /** Discard changes to a file (tracked: restore, untracked: delete) */
@@ -98,11 +78,25 @@ const emit = defineEmits<{
   openWorkspace: [];
   openAgents: [];
   openLaunchpad: [];
-  /** Request the next page of commits (infinite scroll). */
-  loadMoreLog: [];
+  /** Scroll to a specific file in the history view */
+  scrollToFile: [index: number];
+  deleteBranch: [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
 }>();
 
 const { t, locale } = useI18n();
+
+function getFileStatus(diff: GitDiff): { label: string; color: string; icon: string } {
+  if (diff.status === 'renamed') return { label: 'Renamed', color: 'var(--color-info)', icon: 'R' };
+  if (diff.status === 'added') return { label: 'Added', color: 'var(--color-success)', icon: 'A' };
+  if (diff.status === 'deleted') return { label: 'Deleted', color: 'var(--color-danger)', icon: 'D' };
+
+  const adds = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'add').length, 0);
+  const dels = diff.hunks.reduce((acc, h) => acc + h.lines.filter(l => l.type === 'delete').length, 0);
+
+  if (adds > 0 && dels === 0) return { label: 'Added', color: 'var(--color-success)', icon: 'A' };
+  if (dels > 0 && adds === 0) return { label: 'Deleted', color: 'var(--color-danger)', icon: 'D' };
+  return { label: 'Modified', color: 'var(--color-warning)', icon: 'M' };
+}
 
 // ─── Context menu ─────────────────────────────────────────────
 interface CtxMenu {
@@ -136,6 +130,26 @@ function toggleSection(sectionKey: string) {
     // ignore
   }
 }
+
+function expandSectionForFile(path: string) {
+  for (const sectionKey of ['conflicted', 'staged', 'unstaged', 'untracked']) {
+    if (sections.value[sectionKey].some(f => f.path === path)) {
+      if (collapsedSections.value[sectionKey]) {
+        collapsedSections.value[sectionKey] = false;
+        try {
+          localStorage.setItem(COLLAPSED_SECTIONS_KEY, JSON.stringify(collapsedSections.value));
+        } catch {
+          // ignore
+        }
+      }
+      break;
+    }
+  }
+}
+
+watch(() => props.selectedFile, (path) => {
+  if (path) expandSectionForFile(path);
+});
 
 function openContextMenu(e: MouseEvent, file: RepoFileEntry) {
   e.preventDefault();
@@ -525,7 +539,7 @@ function statusColor(status: string): string {
     added: "var(--color-success)",
     modified: "var(--color-warning)",
     deleted: "var(--color-danger)",
-    renamed: "var(--color-accent)",
+    renamed: "var(--color-info)",
   };
   return map[status] ?? "var(--color-text-muted)";
 }
@@ -720,6 +734,48 @@ function onBranchCtxUnarchive() {
   closeBranchCtx();
 }
 
+const branchToDelete = computed(() => {
+  if (!branchCtx.value.branchName || !props.branches) return null;
+  const name = branchCtx.value.branchName;
+  // In sidebar, we don't have an explicit 'type', but we can check if it starts with origin/
+  const isRemote = name.startsWith("origin/") || name.startsWith("remotes/");
+
+  if (!isRemote) {
+    const local = props.branches.find((b) => b.name === name && !b.isRemote);
+    if (!local) {
+      return { name, localName: name, hasLocal: true, hasRemote: false };
+    }
+    const remote = props.branches.find(
+      (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
+    );
+    return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+  } else {
+    const remote = props.branches.find((b) => b.name === name && b.isRemote);
+    const slashIdx = name.indexOf("/");
+    const baseName = slashIdx !== -1 ? name.slice(slashIdx + 1) : name;
+
+    if (!remote) {
+      return { name: baseName, remoteName: name, hasLocal: false, hasRemote: true };
+    }
+
+    const local = props.branches.find((b) => !b.isRemote && (b.name === baseName || b.upstream === name));
+    return {
+      name: baseName,
+      localName: local?.name,
+      remoteName: name,
+      hasLocal: !!local,
+      hasRemote: true,
+    };
+  }
+});
+
+function onBranchCtxDelete() {
+  const b = branchToDelete.value;
+  if (!b) return;
+  emit("deleteBranch", b.name, b.hasLocal, b.hasRemote, b.remoteName);
+  closeBranchCtx();
+}
+
 /** Up to 3 most recent commits — shown as a mini-activity feed. */
 const recentActivity = computed(() => props.logEntries.slice(0, 3));
 
@@ -773,19 +829,54 @@ function formatActivityDate(dateStr: string): string {
         <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
       </button>
       <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'history' }"
-        @click="emit('changeView', 'history')"
-      >
-        {{ t('sidebar.tabLog') }}
-      </button>
-      <button
         class="view-tab view-tab--pr"
         :class="{ 'view-tab--active': viewMode === 'prs' }"
         @click="emit('changeView', 'prs')"
       >
         PRs
       </button>
+    </div>
+
+    <!-- History file list -->
+    <div class="sections" v-if="viewMode === 'history'">
+      <div class="section">
+        <div class="section-header">
+          <span class="section-icon" style="color: var(--color-accent)">H</span>
+          <span class="section-label">{{ t('header.files') }}</span>
+          <span class="section-count" v-if="commitDiffs">{{ commitDiffs.length }}</span>
+        </div>
+        <ul class="file-items" role="listbox" v-if="commitDiffs">
+          <li
+            v-for="(diff, idx) in commitDiffs"
+            :key="idx"
+            class="file-item"
+            :class="{ 'file-item--selected': idx === visibleFileIdx }"
+            role="option"
+            :aria-selected="idx === visibleFileIdx"
+            tabindex="0"
+            @click="emit('scrollToFile', idx)"
+            @keydown.enter="emit('scrollToFile', idx)"
+            @keydown.space.prevent="emit('scrollToFile', idx)"
+          >
+            <span
+              class="file-status-badge mono"
+              :style="{ color: getFileStatus(diff).color }"
+            >
+              {{ getFileStatus(diff).icon }}
+            </span>
+            <div class="file-info">
+              <span class="file-name mono">{{ fileName(diff.path) }}</span>
+              <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
+            </div>
+          </li>
+        </ul>
+        <div v-else-if="selectedCommitHash" class="empty-section">
+          <span class="empty-text">{{ t('log.noDiffForCommit') }}</span>
+        </div>
+        <div v-else class="empty-section">
+          <span class="empty-text">{{ t('log.selectCommit') }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- File sections -->
@@ -1182,72 +1273,6 @@ function formatActivityDate(dateStr: string): string {
       <span class="commit-hint muted">{{ t('sidebar.commitHint') }}</span>
     </div>
 
-    <!-- History view: commit log in sidebar -->
-    <div class="sidebar-log" v-if="viewMode === 'history'">
-      <!-- Scope toggle: current branch vs all refs -->
-      <div
-        class="log-scope-toggle"
-        role="tablist"
-        :aria-label="t('sidebar.logScopeLabel')"
-      >
-        <button
-          class="log-scope-btn"
-          :class="{ 'log-scope-btn--active': logScope === 'current' }"
-          role="tab"
-          :aria-selected="logScope === 'current'"
-          :title="currentBranch ? t('sidebar.logScopeCurrentTitle', currentBranch) : t('sidebar.logScopeCurrent')"
-          @click="emit('update:logScope', 'current')"
-        >
-          {{ t('sidebar.logScopeCurrent') }}
-        </button>
-        <button
-          class="log-scope-btn"
-          :class="{ 'log-scope-btn--active': logScope === 'all' }"
-          role="tab"
-          :aria-selected="logScope === 'all'"
-          :title="t('sidebar.logScopeAllTitle')"
-          @click="emit('update:logScope', 'all')"
-        >
-          {{ t('sidebar.logScopeAll') }}
-        </button>
-      </div>
-      <!-- Author filter: all commits vs mine only -->
-      <div class="log-author-filter">
-        <button
-          class="log-author-btn"
-          :class="{ 'log-author-btn--active': logAuthorFilter === 'mine' }"
-          :aria-pressed="logAuthorFilter === 'mine'"
-          :title="logAuthorFilter === 'mine' ? t('sidebar.logAuthorMineTitle') : t('sidebar.logAuthorAllTitle')"
-          @click="emit('update:logAuthorFilter', logAuthorFilter === 'mine' ? 'all' : 'mine')"
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true" style="flex-shrink:0">
-            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-          </svg>
-          {{ t('sidebar.logAuthorMine') }}
-        </button>
-      </div>
-      <CommitLog
-        :entries="logEntries"
-        :loading="logLoading"
-        :selected-hash="selectedCommitHash"
-        :ahead-count="aheadCount"
-        :needs-publish="needsPublish"
-        :has-more="logHasMore"
-        :loading-more="logLoadingMore"
-        @select-commit="(hash: string) => emit('selectCommit', hash)"
-        @edit-commit="(entry) => emit('editCommit', entry)"
-        @split-commit="(entry) => emit('splitCommit', entry)"
-        @checkout-commit="(entry) => emit('checkoutCommit', entry)"
-        @reset-to-commit="(entry) => emit('resetToCommit', entry)"
-        @revert-commit="(entry) => emit('revertCommit', entry)"
-        @create-branch-from-commit="(entry) => emit('createBranchFromCommit', entry)"
-        @tag-commit="(entry) => emit('tagCommit', entry)"
-        @cherry-pick-commit="(entry) => emit('cherryPickCommit', entry)"
-        @view-on-forge="(entry) => emit('viewOnForge', entry)"
-        @load-more="emit('loadMoreLog')"
-      />
-    </div>
-
     <!-- PRs view: compact PR list in sidebar -->
     <div class="sidebar-prs" v-if="viewMode === 'prs'">
       <PrListSidebar />
@@ -1352,6 +1377,20 @@ function formatActivityDate(dateStr: string): string {
           <template v-else>
             <button class="ctx-item" @click="onBranchCtxUnarchive">
               {{ t('branch.unarchive') }}
+            </button>
+          </template>
+
+          <!-- Branch Deletion (v2.12) -->
+          <template v-if="branchToDelete">
+            <div class="ctx-separator"></div>
+            <button
+              class="ctx-item ctx-item--danger"
+              @click="onBranchCtxDelete"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ t('branchMenu.deleteLabel') }}</span>
             </button>
           </template>
         </div>
@@ -1560,93 +1599,6 @@ function formatActivityDate(dateStr: string): string {
   flex-direction: column;
 }
 
-.sidebar-log {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Log scope toggle (current branch vs all refs) */
-.log-scope-toggle {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.log-scope-btn {
-  flex: 1;
-  padding: var(--space-2) var(--space-4);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 50%;
-}
-
-.log-scope-btn:hover {
-  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
-  color: var(--color-text);
-}
-
-.log-scope-btn--active {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-  border-color: var(--color-accent, #3b82f6);
-}
-
-.log-scope-btn--active:hover {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-}
-
-/* Author filter row */
-.log-author-filter {
-  display: flex;
-  padding: var(--space-2) var(--space-6);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.log-author-btn {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  cursor: pointer;
-  transition: background var(--transition-hover), color var(--transition-hover), border-color var(--transition-hover);
-  white-space: nowrap;
-}
-
-.log-author-btn:hover {
-  background: var(--color-bg-hover, rgba(0, 0, 0, 0.04));
-  color: var(--color-text);
-}
-
-.log-author-btn--active {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-  border-color: var(--color-accent, #3b82f6);
-}
-
-.log-author-btn--active:hover {
-  background: var(--color-accent, #3b82f6);
-  color: var(--color-accent-text, #ffffff);
-}
-
 .sidebar-prs {
   flex: 1;
   overflow: hidden;
@@ -1758,7 +1710,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .file-item--selected {
-  background: var(--color-bg-tertiary);
+  background: var(--color-accent-soft);
   border-left-color: var(--color-accent);
 }
 
@@ -1790,7 +1742,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .file-item--sub.file-item--selected {
-  background: var(--color-bg-tertiary);
+  background: var(--color-accent-soft);
   border-left-color: var(--color-accent);
 }
 

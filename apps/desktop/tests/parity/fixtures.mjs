@@ -140,3 +140,28 @@ export function fixtureBranches() {
 
   return cwd;
 }
+
+/**
+ * Fixture « stash » : 2 commits + 2 stashes.
+ *
+ * Couvre git_stash_list.
+ */
+export function fixtureStash() {
+  const cwd = mkTempRepo("gw-stash-");
+  commitFile(cwd, "README.md", "# Parity Fixture\n", "initial commit", 0);
+  commitFile(cwd, "a.txt", "alpha\n", "add a.txt", 1);
+
+  // Premier stash : modif de a.txt
+  writeFileSync(join(cwd, "a.txt"), "alpha STASH 1\n", "utf-8");
+  execFileSync("git", ["-C", cwd, "stash", "push", "-m", "first stash", "--quiet"], {
+    env: { ...process.env, ...commitEnv(2) },
+  });
+
+  // Second stash : nouveau fichier
+  writeFileSync(join(cwd, "b.txt"), "beta STASH 2\n", "utf-8");
+  execFileSync("git", ["-C", cwd, "stash", "push", "-m", "second stash", "--quiet"], {
+    env: { ...process.env, ...commitEnv(3) },
+  });
+
+  return cwd;
+}

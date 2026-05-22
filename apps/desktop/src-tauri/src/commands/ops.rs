@@ -532,16 +532,29 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
 // ─── Git discard ───────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_discard(cwd: String, paths: Vec<String>) -> Result<(), String> {
-    let mut cmd = git_cmd();
-    cmd.arg("checkout").arg("--").current_dir(&cwd);
-    for p in &paths {
-        cmd.arg(p);
-    }
-    let output = cmd.output().map_err(|e| format!("Failed to run git checkout: {}", e))?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("git checkout failed: {}", stderr));
+pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> Result<(), String> {
+    if untracked {
+        let mut cmd = git_cmd();
+        cmd.arg("clean").arg("-f").arg("--").current_dir(&cwd);
+        for p in &paths {
+            cmd.arg(p);
+        }
+        let output = cmd.output().map_err(|e| format!("Failed to run git clean: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git clean failed: {}", stderr));
+        }
+    } else {
+        let mut cmd = git_cmd();
+        cmd.arg("checkout").arg("--").current_dir(&cwd);
+        for p in &paths {
+            cmd.arg(p);
+        }
+        let output = cmd.output().map_err(|e| format!("Failed to run git checkout: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git checkout failed: {}", stderr));
+        }
     }
     Ok(())
 }
@@ -683,6 +696,22 @@ pub(crate) fn git_delete_branch(cwd: String, name: String, force: bool) -> Resul
 }
 
 #[tauri::command]
+pub(crate) fn git_delete_remote_branch(cwd: String, remote: String, name: String) -> Result<(), String> {
+    let _t0 = Instant::now();
+    let output = git_cmd()
+        .args(["push", &remote, "--delete", &name])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to delete remote branch: {}", e))?;
+    record_cmd(&format!("git push {} --delete {}", remote, name), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git push --delete failed: {}", stderr));
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub(crate) fn git_rename_branch(cwd: String, old_name: String, new_name: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["branch", "-m", &old_name, &new_name])
@@ -751,9 +780,25 @@ pub(crate) fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
         let parts: Vec<&str> = line.split('\0').collect();
         if parts.len() >= 4 {
             let subject = parts[2];
+            // Skip internal untracked-files commits created by --include-untracked.
+            if subject.starts_with("untracked files on ") {
+                continue;
+            }
             let (branch, message) = if subject.starts_with("On ") {
+                // "On <branch>: <custom-message>"
                 if let Some(colon_pos) = subject.find(": ") {
                     (subject[3..colon_pos].to_string(), subject[colon_pos + 2..].to_string())
+                } else {
+                    (String::new(), subject.to_string())
+                }
+            } else if subject.starts_with("WIP on ") {
+                // "WIP on <branch>: <sha> <commit-msg>"
+                if let Some(colon_pos) = subject.find(": ") {
+                    let branch = subject[7..colon_pos].to_string();
+                    // drop the leading "<sha> " from the commit message portion
+                    let rest = &subject[colon_pos + 2..];
+                    let msg = rest.splitn(2, ' ').nth(1).unwrap_or(rest).to_string();
+                    (branch, msg)
                 } else {
                     (String::new(), subject.to_string())
                 }

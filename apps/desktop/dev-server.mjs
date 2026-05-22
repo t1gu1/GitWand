@@ -920,10 +920,11 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>
+    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>
     if (url.pathname === "/api/git-log" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const count = parseInt(url.searchParams.get("count") || "50");
+      const offset = parseInt(url.searchParams.get("offset") || "0");
       // Default: current branch only (like `git log`). Pass `all=true` for all refs.
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
@@ -936,7 +937,16 @@ async function handleRequest(req, res) {
         const args = ["log"];
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
+        if (offset > 0) args.push(`--skip=${offset}`);
         args.push(`-n${count}`, `--format=${format}`);
+        // stash@{1+} are only in the reflog, not reachable via --all alone.
+        if (all) {
+          try {
+            const stashHashes = execFileSync(GIT, ["stash", "list", "--format=%H"], { cwd: resolvedCwd, encoding: "utf-8" })
+              .trim().split("\n").filter(Boolean);
+            args.push(...stashHashes);
+          } catch (_) { /* no stashes */ }
+        }
         // Stream via spawn — execSync's default 1 MB cap can be exceeded with
         // large `count` values or commits with very long bodies.
         const stdout = await gitSpawn(args, resolvedCwd);
@@ -962,7 +972,7 @@ async function handleRequest(req, res) {
           });
         }
 
-        return jsonResponse(req, res, entries);
+        return jsonResponse(req, res, entries.filter((e) => !e.message.startsWith("index on ") && !e.message.startsWith("untracked files on ")));
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }
@@ -1743,6 +1753,19 @@ async function handleRequest(req, res) {
       }
     }
 
+    // POST /api/git-delete-remote-branch  { cwd, remote, name }
+    if (url.pathname === "/api/git-delete-remote-branch" && req.method === "POST") {
+      const { cwd, remote, name } = await readBody(req);
+      if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execFileSync("git", ["push", remote, "--delete", name], { cwd: resolvedCwd, encoding: "utf-8" });
+        return jsonResponse(req, res, { ok: true });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
     // POST /api/git-rename-branch  { cwd, oldName, newName }
     if (url.pathname === "/api/git-rename-branch" && req.method === "POST") {
       const { cwd, oldName, newName } = await readBody(req);
@@ -1796,7 +1819,7 @@ async function handleRequest(req, res) {
         const resolvedCwd = resolve(cwd);
         const out = execFileSync(
           "git",
-          ["stash", "list", "--format=%gd%x09%gs%x09%ct"],
+          ["stash", "list", "--format=%H%x09%gd%x09%gs%x09%ct"],
           { cwd: resolvedCwd, encoding: "utf-8" },
         );
         const entries = out
@@ -1804,7 +1827,7 @@ async function handleRequest(req, res) {
           .map((line) => line.trim())
           .filter(Boolean)
           .map((line) => {
-            const [ref, message, ts] = line.split("\t");
+            const [hash, ref, message, ts] = line.split("\t");
             const indexMatch = /stash@\{(\d+)\}/.exec(ref ?? "");
             const date = ts ? new Date(parseInt(ts, 10) * 1000).toISOString() : "";
             // `message` looks like "WIP on <branch>: <subject>" or
@@ -1814,6 +1837,7 @@ async function handleRequest(req, res) {
             const subject = onMatch ? onMatch[2] : (message ?? "");
             return {
               index: indexMatch ? parseInt(indexMatch[1], 10) : 0,
+              hash,
               message: subject,
               branch,
               date,

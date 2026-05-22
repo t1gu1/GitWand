@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, inject, nextTick, onMounted, onUnmounted, type Ref } from "vue";
-import type { GitLogEntry } from "../utils/backend";
+import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
@@ -24,6 +24,8 @@ const props = defineProps<{
   hasMore?: boolean;
   /** True while the next page is being loaded. */
   loadingMore?: boolean;
+  branches?: GitBranch[];
+  stashes?: any[];
 }>();
 
 /**
@@ -150,12 +152,18 @@ const emit = defineEmits<{
   splitCommit: [entry: GitLogEntry];
   // v1.9 — commit context menu
   checkoutCommit: [entry: GitLogEntry];
-  resetToCommit: [entry: GitLogEntry];
+  checkoutBranch: [name: string];
+  resetToCommit: [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   revertCommit: [entry: GitLogEntry];
   createBranchFromCommit: [entry: GitLogEntry];
   tagCommit: [entry: GitLogEntry];
   cherryPickCommit: [entry: GitLogEntry];
   viewOnForge: [entry: GitLogEntry];
+  deleteBranch: [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
+  deleteTag: [name: string, hasLocal: boolean, hasRemote: boolean];
+  applyStash: [index: number];
+  popStash: [index: number];
+  dropStash: [index: number];
   /** User scrolled near the bottom — request more commits. */
   loadMore: [];
 }>();
@@ -171,17 +179,75 @@ interface CommitCtxMenu {
   entry: GitLogEntry | null;
   /** Index in the displayed list — used to restrict some actions to HEAD. */
   idx: number;
+  /** The specific branch name that was right-clicked (if any). */
+  clickedBranch?: string;
+  /** The type of ref that was right-clicked (if any). */
+  clickedBranchType?: "head" | "branch" | "remote" | "tag" | "stash";
+  /** The specific tag name that was right-clicked (if any). */
+  clickedTag?: string;
+  /** The specific stash index that was right-clicked (if any). */
+  clickedStashIndex?: number;
 }
 const ctxMenu = ref<CommitCtxMenu>({ visible: false, x: 0, y: 0, entry: null, idx: -1 });
 
-function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number) {
+const currentBranchName = computed(() => props.branches?.find(b => b.isCurrent)?.name);
+
+function openCommitContextMenu(e: MouseEvent, entry: GitLogEntry, idx: number, branchName?: string, branchType?: any) {
   e.preventDefault();
   e.stopPropagation();
   // Select the commit first — the user expects the diff view to reflect what
   // they right-clicked on.
   emit("selectCommit", entry.hashFull);
-  ctxMenu.value = { visible: true, x: e.clientX, y: e.clientY, entry, idx };
+  const tag = branchType === "tag" ? branchName : undefined;
+
+  // Identify if this is a stash commit
+  let stashIdx: number | undefined;
+  if (branchType === "stash" || entry.refs.includes("refs/stash")) {
+    const stash = props.stashes?.find((s) => s.hash === entry.hashFull);
+    if (stash) stashIdx = stash.index;
+  }
+
+  // If no branchName provided, pick a candidate branch from the commit refs if any (v2.14)
+  let finalBranchName = branchName;
+  let finalBranchType = branchType;
+
+  if (!finalBranchName && !tag && stashIdx === undefined) {
+    const badges = parseRefBadges(entry.refs);
+    const branchesAtCommit = badges.filter(b => b.type === 'head' || b.type === 'branch' || b.type === 'remote');
+    if (branchesAtCommit.length > 0) {
+      // Prioritize branches that are NOT the current one
+      const notCurrent = branchesAtCommit.find(b => b.label !== currentBranchName.value);
+      const candidate = notCurrent || branchesAtCommit[0];
+      finalBranchName = candidate.label;
+      finalBranchType = candidate.type;
+    }
+  }
+
+  ctxMenu.value = {
+    visible: true,
+    x: e.clientX,
+    y: e.clientY,
+    entry,
+    idx,
+    clickedBranch: finalBranchName,
+    clickedBranchType: finalBranchType || (stashIdx !== undefined ? "stash" : undefined),
+    clickedTag: tag,
+    clickedStashIndex: stashIdx,
+  };
 }
+
+/**
+ * True when the checkout action should be disabled:
+ * - We are already on the branch being clicked
+ * - Or we are checking out a commit that is already HEAD (and no specific branch was clicked)
+ */
+const isCheckoutDisabled = computed(() => {
+  if (!ctxMenu.value.entry) return true;
+  if (ctxMenu.value.clickedBranch) {
+    return ctxMenu.value.clickedBranch === currentBranchName.value;
+  }
+  return isCtxEntryHead.value;
+});
 
 function closeCommitContextMenu() {
   ctxMenu.value.visible = false;
@@ -192,6 +258,23 @@ function onCtxSplit() {
   if (isCtxEntryMerge.value) return;
   emit("splitCommit", ctxMenu.value.entry);
   closeCommitContextMenu();
+}
+
+function onBranchDblClick(badge: { type: string, label: string }) {
+  window.getSelection()?.removeAllRanges();
+  if (badge.type === 'tag' || badge.type === 'stash') return;
+  const name = badge.type === 'remote'
+    ? badge.label.slice(badge.label.indexOf('/') + 1)
+    : badge.label;
+  emit('checkoutBranch', name);
+}
+
+function onRowDblClick(entry: GitLogEntry) {
+  if (isCurrent(entry)) return;
+  const badges = parseRefBadges(entry.refs);
+  const branch = badges.find(b => b.type === 'head' || b.type === 'branch') ?? badges.find(b => b.type === 'remote');
+  if (!branch) return;
+  onBranchDblClick(branch);
 }
 
 function onCtxEmit(event: "checkoutCommit" | "resetToCommit" | "revertCommit" | "createBranchFromCommit" | "tagCommit" | "cherryPickCommit" | "viewOnForge") {
@@ -213,11 +296,89 @@ async function onCtxCopySha(full: boolean) {
   closeCommitContextMenu();
 }
 
+async function onCtxCopyBranchName() {
+  if (ctxMenu.value.clickedBranch) {
+    await navigator.clipboard.writeText(ctxMenu.value.clickedBranch);
+  }
+  closeCommitContextMenu();
+}
+
+async function onCtxCopySummary() {
+  const entry = ctxMenu.value.entry;
+  if (entry) await navigator.clipboard.writeText(entry.message);
+  closeCommitContextMenu();
+}
+
+async function onCtxCopyDescription() {
+  const entry = ctxMenu.value.entry;
+  if (entry?.body) await navigator.clipboard.writeText(entry.body);
+  closeCommitContextMenu();
+}
+
 async function onCtxCopyMessage() {
   const entry = ctxMenu.value.entry;
   if (!entry) return;
   const text = entry.body ? `${entry.message}\n\n${entry.body}` : entry.message;
   await navigator.clipboard.writeText(text);
+  closeCommitContextMenu();
+}
+
+const branchToDelete = computed(() => {
+  if (!ctxMenu.value.clickedBranch || !props.branches) return null;
+  const name = ctxMenu.value.clickedBranch;
+  const type = ctxMenu.value.clickedBranchType;
+
+  if (type === "branch" || type === "head") {
+    // Standard local branch (or current branch HEAD -> ...)
+    const local = props.branches.find((b) => b.name === name && !b.isRemote);
+    if (!local) {
+      // Fallback: assume it's a local branch if the log says so
+      return { name, localName: name, hasLocal: true, hasRemote: false };
+    }
+    const remote = props.branches.find(
+      (b) => b.isRemote && (b.name === `origin/${name}` || b.name === local.upstream),
+    );
+    return { name, localName: name, remoteName: remote?.name, hasLocal: true, hasRemote: !!remote };
+  } else if (type === "remote") {
+    // Remote tracking branch (e.g. origin/main)
+    const remote = props.branches.find((b) => b.name === name && b.isRemote);
+    // Extract base name from remote name (e.g. origin/main -> main)
+    const slashIdx = name.indexOf("/");
+    const baseName = slashIdx !== -1 ? name.slice(slashIdx + 1) : name;
+
+    if (!remote) {
+      // Fallback: assume it's a remote branch even if not in props.branches
+      return { name: baseName, remoteName: name, hasLocal: false, hasRemote: true };
+    }
+
+    const local = props.branches.find((b) => !b.isRemote && (b.name === baseName || b.upstream === name));
+    return {
+      name: baseName,
+      localName: local?.name,
+      remoteName: name,
+      hasLocal: !!local,
+      hasRemote: true,
+    };
+  }
+  return null;
+});
+
+function onCtxDeleteBranch() {
+  const b = branchToDelete.value;
+  if (!b) return;
+  emit("deleteBranch", b.name, b.hasLocal, b.hasRemote, b.remoteName);
+  closeCommitContextMenu();
+}
+
+const tagToDelete = computed(() => {
+  if (!ctxMenu.value.clickedTag) return null;
+  return { name: ctxMenu.value.clickedTag, hasLocal: true, hasRemote: true };
+});
+
+function onCtxDeleteTag() {
+  const t = tagToDelete.value;
+  if (!t) return;
+  emit("deleteTag", t.name, t.hasLocal, t.hasRemote);
   closeCommitContextMenu();
 }
 
@@ -360,17 +521,102 @@ watch(searchQuery, () => {
   aiMatches.value = null;
 });
 
-interface RefBadge { type: "head" | "branch" | "remote" | "tag"; label: string; }
+interface RefBadge { type: "head" | "branch" | "remote" | "tag" | "stash"; label: string; }
 
 function parseRefBadges(refs: string): RefBadge[] {
   if (!refs) return [];
-  return refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
+  const parsed = refs.split(",").map(r => r.trim()).filter(Boolean).map(r => {
     if (r.startsWith("HEAD -> ")) return { type: "head" as const, label: r.slice(8) };
     if (r === "HEAD") return { type: "head" as const, label: "HEAD" };
     if (r.startsWith("tag: ")) return { type: "tag" as const, label: r.slice(5) };
+    if (r === "refs/stash") return { type: "stash" as const, label: "stash" };
     if (r.includes("/")) return { type: "remote" as const, label: r };
     return { type: "branch" as const, label: r };
   });
+
+  // Re-classify refs using props.branches (v2.14)
+  // parseRefBadges is generic and thinks anything with a '/' is remote.
+  // We use our ground-truth branches list to fix this.
+  const reclassified = parsed.map(r => {
+    if (r.type === 'branch' || r.type === 'remote') {
+      const match = props.branches?.find(b => b.name === r.label);
+      if (match) {
+        return { ...r, type: (match.isRemote ? 'remote' : 'branch') as 'remote' | 'branch' };
+      }
+    }
+    return r;
+  });
+
+  // Filter out redundant remote tracking branches and noise (v2.14)
+  // If we have 'main' (branch) and 'origin/main' (remote) at the same commit,
+  // hide the remote one to keep the tree row clean.
+  const localBranchNames = new Set(reclassified.filter(r => r.type === 'head' || r.type === 'branch').map(r => r.label));
+  const filtered = reclassified.filter(r => {
+    // Hide origin/HEAD (noise)
+    if (r.label === 'origin/HEAD') return false;
+
+    if (r.type === 'remote') {
+      const slashIdx = r.label.indexOf('/');
+      if (slashIdx !== -1) {
+        const baseName = r.label.slice(slashIdx + 1);
+        if (localBranchNames.has(baseName)) return false;
+      }
+      // Also check against local branches that might have the same name as upstream
+      const match = props.branches?.find(b => b.name === r.label && b.isRemote);
+      if (match) {
+        // Find if any local branch has this remote as its upstream
+        const hasLocalUpstream = props.branches?.some(b => !b.isRemote && b.upstream === r.label && localBranchNames.has(b.name));
+        if (hasLocalUpstream) return false;
+      }
+    }
+    return true;
+  });
+
+  // Sort: Local Branch (head/branch) > Remote > Tag > Stash > HEAD (detached)
+  // Note: in CommitLog, "HEAD -> branch" is typed as "head" with the branch name as label.
+  const weights: Record<string, number> = {
+    head: 1,
+    branch: 1,
+    remote: 2,
+    tag: 3,
+    stash: 4,
+  };
+
+  return filtered.sort((a, b) => {
+    // Special case: detached "HEAD" should be last
+    if (a.label === "HEAD" && a.type === "head") return 1;
+    if (b.label === "HEAD" && b.type === "head") return -1;
+    return (weights[a.type] ?? 99) - (weights[b.type] ?? 99);
+  });
+}
+
+function truncate(str: string, limit = 20) {
+  if (str.length <= limit) return str;
+  return str.slice(0, limit - 1) + "…";
+}
+
+/** Deterministic hue for an avatar from a string (same author → same color). */
+function hueFor(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+function avatarStyle(key: string) {
+  const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
+  return {
+    borderColor: color,
+    color: color,
+    background: "transparent",
+  };
+}
+
+function initials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function relativeDate(isoDate: string): string {
@@ -389,22 +635,33 @@ function relativeDate(isoDate: string): string {
   return date.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
 
-function authorInitials(name: string): string {
-  return name
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+function isCurrent(entry: GitLogEntry): boolean {
+  return parseRefBadges(entry.refs).some(b => b.type === "head");
 }
 
-function authorColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+function authorInitials(author: string): string {
+  if (!author) return "?";
+  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
+  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function authorColor(author: string): string {
+  if (!author) return "hsl(260 65% 55%)";
+  let h = 0;
+  for (let i = 0; i < author.length; i++) {
+    h = (h * 31 + author.charCodeAt(i)) >>> 0;
   }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 55%, 55%)`;
+  const hue = h % 360;
+  return `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`;
+}
+
+function abbrevAuthor(author: string): string {
+  if (!author) return "";
+  const parts = author.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 12);
+  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 </script>
 
@@ -484,8 +741,10 @@ function authorColor(name: string): string {
               :class="{
                 'commit-item--selected': selectedHash === c(vr.index).hashFull,
                 'commit-item--unpushed': isUnpushed(c(vr.index)),
+                'commit-item--current': isCurrent(c(vr.index)),
               }"
               @click="emit('selectCommit', c(vr.index).hashFull)"
+              @dblclick="onRowDblClick(c(vr.index))"
               @contextmenu="openCommitContextMenu($event, c(vr.index), oi(vr.index))"
               tabindex="0"
               @keydown.enter="emit('selectCommit', c(vr.index).hashFull)"
@@ -505,19 +764,25 @@ function authorColor(name: string): string {
                 <div class="commit-meta">
                   <span class="commit-hash mono">{{ c(vr.index).hash }}</span>
                   <span class="commit-separator" aria-hidden="true">&middot;</span>
-                  <span class="commit-author">{{ c(vr.index).author }}</span>
+                  <span class="commit-author" :title="c(vr.index).author">{{ abbrevAuthor(c(vr.index).author) }}</span>
                   <span class="commit-separator" aria-hidden="true">&middot;</span>
                   <time class="commit-date" :datetime="c(vr.index).date">{{ relativeDate(c(vr.index).date) }}</time>
                 </div>
                 <div v-if="!isSearchActive && c(vr.index).refs" class="commit-refs">
-                  <span
-                    v-for="badge in parseRefBadges(c(vr.index).refs)"
-                    :key="badge.label"
-                    class="commit-ref-badge"
-                    :class="`commit-ref-badge--${badge.type}`"
-                  >{{ badge.label }}</span>
-                </div>
-              </div>
+                  <template v-for="(badgeList, r_key) in { list: parseRefBadges(c(vr.index).refs) }" :key="r_key">
+                    <span
+                      v-for="badge in badgeList"
+                      :key="badge.label"
+                      class="log-badge"
+                      :class="`log-badge--${badge.type}`"
+                      :title="badge.label"
+                      @contextmenu.stop="openCommitContextMenu($event, c(vr.index), vr.index, badge.label, badge.type)"
+                      @dblclick.stop="onBranchDblClick(badge)"
+                    >
+                      {{ badgeList.length > 1 ? truncate(badge.label) : badge.label }}
+                    </span>
+                  </template>
+
               <button
                 v-if="!isSearchActive && aheadCount != null && oi(vr.index) === 0"
                 class="commit-edit-btn"
@@ -552,21 +817,74 @@ function authorColor(name: string): string {
         role="menu"
         @click.stop
         @contextmenu.prevent
-      >
-        <!-- Navigation -->
-        <li
-          class="commit-ctx-menu-item"
-          :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
-          role="menuitem"
-          :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-          @click="!isCtxEntryHead && onCtxEmit('checkoutCommit')"
         >
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
-            <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>{{ t('commitCtx.checkout') }}</span>
-        </li>
+        <!-- Stash actions (v2.12) — shown ONLY for stash commits -->
+        <template v-if="ctxMenu.clickedBranchType === 'stash' && ctxMenu.clickedStashIndex !== undefined">
+          <li
+            class="commit-ctx-menu-item"
+            role="menuitem"
+            @click="emit('applyStash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 11 12 14 22 4"></polyline>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+            </svg>
+            <span>{{ t('stash.applyStash') }}</span>
+          </li>
+          <li
+            class="commit-ctx-menu-item"
+            role="menuitem"
+            @click="emit('popStash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <span>{{ t('stash.popStash') }}</span>
+          </li>
+          <li
+            class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+            role="menuitem"
+            @click="emit('dropStash', ctxMenu.clickedStashIndex!); closeCommitContextMenu()"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>{{ t('stash.dropStash') }}</span>
+          </li>
+        </template>
+
+        <!-- Standard git actions — hidden for stashes -->
+        <template v-else>
+          <!-- Navigation -->
+          <li
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isCheckoutDisabled }"
+            role="menuitem"
+            :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+            @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? onBranchDblClick({ type: ctxMenu.clickedBranchType || 'branch', label: ctxMenu.clickedBranch }) : onCtxEmit('checkoutCommit'))"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>{{ ctxMenu.clickedBranch ? t('commitCtx.checkoutBranch') : t('commitCtx.checkout') }}</span>
+          </li>
+
+          <li
+            v-if="ctxMenu.clickedBranch"
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isCtxEntryHead }"
+            role="menuitem"
+            :title="isCtxEntryHead ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
+            @click="!isCtxEntryHead && onCtxEmit('checkoutCommit')"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
+              <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('commitCtx.checkout') }}</span>
+          </li>
         <li
           class="commit-ctx-menu-item"
           role="menuitem"
@@ -618,8 +936,37 @@ function authorColor(name: string): string {
           <span>{{ t('commitCtx.cherryPick') }}</span>
         </li>
 
-        <li class="commit-ctx-menu-sep" role="separator"></li>
+        <!-- Branch Deletion (v2.12) -->
+        <template v-if="branchToDelete">
+          <li class="commit-ctx-menu-sep" role="separator"></li>
+          <li
+            class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+            role="menuitem"
+            @click="onCtxDeleteBranch"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>{{ t('branchMenu.deleteLabel') }}</span>
+            </li>
+            </template>
 
+            <!-- Tag Deletion (v2.12) -->
+            <template v-if="tagToDelete">
+            <li class="commit-ctx-menu-sep" role="separator"></li>
+            <li
+            class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+            role="menuitem"
+            @click="onCtxDeleteTag"
+            >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>{{ t('tags.deleteTag') }}</span>
+            </li>
+            </template>
+
+            <li class="commit-ctx-menu-sep" role="separator"></li>
         <!-- History operations -->
         <li
           class="commit-ctx-menu-item"
@@ -675,6 +1022,36 @@ function authorColor(name: string): string {
           </svg>
           <span>{{ t('commitCtx.copyFullSha') }}</span>
         </li>
+        <li
+          v-if="ctxMenu.clickedBranch"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyBranchName"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 2v8m0 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm8-4a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyBranchName') }}</span>
+        </li>
+        <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopySummary">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copySummary') }}</span>
+        </li>
+        <li
+          v-if="ctxMenu.entry?.body"
+          class="commit-ctx-menu-item"
+          role="menuitem"
+          @click="onCtxCopyDescription"
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <span>{{ t('commitCtx.copyDescription') }}</span>
+        </li>
         <li class="commit-ctx-menu-item" role="menuitem" @click="onCtxCopyMessage">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M2 4h12v8H2z" rx="1" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -695,12 +1072,12 @@ function authorColor(name: string): string {
             <path d="M7 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M10 2h4v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M14 2L8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-          </svg>
-          <span>{{ t('commitCtx.viewOnForge') }}</span>
-        </li>
-      </ul>
-    </Teleport>
-  </div>
+        </svg>
+        <span>{{ t('commitCtx.viewOnForge') }}</span>
+      </li>
+      </template>
+    </ul>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -783,6 +1160,7 @@ function authorColor(name: string): string {
   cursor: pointer;
   transition: background var(--transition-fast);
   border-left: 3px solid transparent;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .commit-item--unpushed {
@@ -810,17 +1188,31 @@ function authorColor(name: string): string {
 }
 
 .commit-item:hover {
-  background: var(--color-bg-tertiary);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .commit-item--selected {
-  background: var(--color-bg-tertiary);
+  background: rgba(139, 92, 246, 0.22) !important;
   border-left-color: var(--color-accent);
+}
+
+.commit-item--selected:hover {
+  background: rgba(139, 92, 246, 0.28) !important;
+}
+
+.commit-item--current {
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.commit-item--current:hover {
+  background: rgba(139, 92, 246, 0.18);
+  opacity: 1;
 }
 
 .commit-item:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .commit-item:last-child {
@@ -989,33 +1381,43 @@ function authorColor(name: string): string {
   margin-top: 3px;
 }
 
-.commit-ref-badge {
+.log-badge {
   display: inline-flex;
   align-items: center;
   font-size: 10px;
   font-weight: var(--font-weight-medium);
   padding: 1px 6px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   white-space: nowrap;
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.commit-ref-badge--head,
-.commit-ref-badge--branch {
-  background: var(--color-accent-soft, rgba(124, 58, 237, 0.12));
+.log-badge--head,
+.log-badge--branch {
+  background: var(--color-bg);
   color: var(--color-accent);
+  border: 1px solid var(--color-accent);
 }
 
-.commit-ref-badge--tag {
-  background: var(--color-warning-soft, rgba(245, 158, 11, 0.12));
+.log-badge--tag {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  text-shadow: none;
+}
+
+.log-badge--stash {
+  background: var(--color-bg);
   color: var(--color-warning, #f59e0b);
+  border: 1px dashed var(--color-warning, #f59e0b);
 }
 
-.commit-ref-badge--remote {
-  background: var(--color-bg-tertiary);
+.log-badge--remote {
+  background: var(--color-bg);
   color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .commit-ai-reason {
@@ -1085,6 +1487,15 @@ function authorColor(name: string): string {
 .commit-ctx-menu-item svg {
   color: var(--color-text-muted);
   flex-shrink: 0;
+}
+
+.commit-ctx-menu-item--danger:hover {
+  background: var(--color-danger-soft, rgba(220, 38, 38, 0.12));
+  color: var(--color-danger, #dc2626);
+}
+
+.commit-ctx-menu-item--danger:hover svg {
+  color: var(--color-danger, #dc2626);
 }
 
 .commit-ctx-menu-item--disabled {

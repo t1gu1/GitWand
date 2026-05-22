@@ -6,7 +6,6 @@ import type { DiffMode } from "../utils/diffMode";
 import { detectLanguage, highlightLine } from "../utils/highlight";
 import { safeHtml } from "../composables/useSafeHtml";
 import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
-import FolderDiffTree from "./FolderDiffTree.vue";
 
 const { t } = useI18n();
 
@@ -15,10 +14,12 @@ const props = defineProps<{
   commitHash: string | null;
   commitInfo: GitLogEntry | null;
   diffMode: DiffMode;
+  scrollToFileIdx?: number | null;
 }>();
 
 const emit = defineEmits<{
   "update:diffMode": [mode: DiffMode];
+  "update:visibleFileIdx": [idx: number];
 }>();
 
 // ─── Side-by-side line pairing with word-diff ────────
@@ -74,12 +75,23 @@ function fileName(path: string): string {
   return path.split("/").pop() ?? path;
 }
 
-// Deterministic pastel color from author name
-function avatarColor(name: string): string {
+function hueFor(s: string): number {
   let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  const hue = ((h % 360) + 360) % 360;
-  return `hsl(${hue}, 55%, 45%)`;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+function avatarStyle(key: string) {
+  const h = hueFor(key);
+  const color = `hsl(${h} 70% 55%)`;
+  return { borderColor: color, color, background: "transparent" };
+}
+
+function initials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function cleanBody(raw: string): string {
@@ -147,215 +159,6 @@ const totalStats = computed(() => {
   }
   return { adds, dels, files: props.diffs.length };
 });
-
-// ─── File-list view toggle: flat vs tree (v1.6.3) ────────
-const fileListView = ref<"flat" | "tree">("flat");
-const folderFilter = ref<string | null>(null);
-
-/** Map path → index in props.diffs for O(1) lookup from tree events */
-const pathToIdx = computed(() => {
-  const m = new Map<string, number>();
-  props.diffs.forEach((d, i) => m.set(d.path, i));
-  return m;
-});
-
-/** Aggregated status letter from fileStats (A/D/M) matching existing flat-list icon */
-function statusForIdx(idx: number): string {
-  const s = fileStats.value[idx];
-  if (!s) return "M";
-  if (s.adds > 0 && s.dels === 0) return "A";
-  if (s.dels > 0 && s.adds === 0) return "D";
-  return "M";
-}
-
-/** Build a folder-diff tree from diffs + fileStats (client-side, no IPC). */
-const folderTree = computed<FolderDiffNode>(() => {
-  const root: FolderDiffNode = {
-    path: "",
-    name: "",
-    kind: "folder",
-    status: null,
-    oldPath: null,
-    filesChanged: 0,
-    additions: 0,
-    deletions: 0,
-    binary: false,
-    children: [],
-  };
-  props.diffs.forEach((diff, idx) => {
-    const stats = fileStats.value[idx] ?? { adds: 0, dels: 0 };
-    const segments = diff.path.split("/").filter(Boolean);
-    let cursor = root;
-    let acc = "";
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      acc = acc ? `${acc}/${seg}` : seg;
-      const isLeaf = i === segments.length - 1;
-      if (isLeaf) {
-        cursor.children.push({
-          path: acc,
-          name: seg,
-          kind: "file",
-          status: statusForIdx(idx),
-          oldPath: null,
-          filesChanged: 1,
-          additions: stats.adds,
-          deletions: stats.dels,
-          binary: false,
-          children: [],
-        });
-      } else {
-        let child = cursor.children.find(
-          (c) => c.kind === "folder" && c.name === seg,
-        );
-        if (!child) {
-          child = {
-            path: acc,
-            name: seg,
-            kind: "folder",
-            status: null,
-            oldPath: null,
-            filesChanged: 0,
-            additions: 0,
-            deletions: 0,
-            binary: false,
-            children: [],
-          };
-          cursor.children.push(child);
-        }
-        cursor = child;
-      }
-    }
-    // Walk again to accumulate folder totals
-    let cur: FolderDiffNode = root;
-    root.filesChanged += 1;
-    root.additions += stats.adds;
-    root.deletions += stats.dels;
-    for (let i = 0; i < segments.length - 1; i++) {
-      const seg = segments[i];
-      const nxt = cur.children.find(
-        (c) => c.kind === "folder" && c.name === seg,
-      );
-      if (!nxt) break;
-      nxt.filesChanged += 1;
-      nxt.additions += stats.adds;
-      nxt.deletions += stats.dels;
-      cur = nxt;
-    }
-  });
-
-  // Sort: folders first, alphabetical
-  function sortNode(n: FolderDiffNode) {
-    n.children.sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    for (const c of n.children) if (c.kind === "folder") sortNode(c);
-  }
-  sortNode(root);
-  return root;
-});
-
-/** Indices into props.diffs that match the current folder filter (or all if none). */
-const visibleIndices = computed<number[]>(() => {
-  if (!folderFilter.value) return props.diffs.map((_, i) => i);
-  const prefix = folderFilter.value + "/";
-  const out: number[] = [];
-  props.diffs.forEach((d, i) => {
-    if (d.path === folderFilter.value || d.path.startsWith(prefix)) out.push(i);
-  });
-  return out;
-});
-
-function onTreeSelectFolder(path: string) {
-  folderFilter.value = path;
-  // Scroll main content to first file under this folder
-  const firstIdx = visibleIndices.value[0];
-  if (firstIdx != null) scrollToFile(firstIdx);
-}
-
-function onTreeSelectFile(path: string) {
-  const idx = pathToIdx.value.get(path);
-  if (idx != null) scrollToFile(idx);
-}
-
-function clearFolderFilter() {
-  folderFilter.value = null;
-}
-
-function toggleFileListView() {
-  fileListView.value = fileListView.value === "flat" ? "tree" : "flat";
-  if (fileListView.value === "flat") folderFilter.value = null;
-}
-
-// ─── Resizable file-list column (v1.6.3) ─────────────────
-const FILELIST_WIDTH_KEY = "gitwand.cdv.filelistWidth";
-const FILELIST_MIN = 180;
-const FILELIST_MAX = 600;
-const FILELIST_DEFAULT = 220;
-
-function readStoredWidth(): number {
-  try {
-    const raw = localStorage.getItem(FILELIST_WIDTH_KEY);
-    if (!raw) return FILELIST_DEFAULT;
-    const n = parseInt(raw, 10);
-    if (Number.isFinite(n) && n >= FILELIST_MIN && n <= FILELIST_MAX) return n;
-  } catch {
-    /* localStorage unavailable */
-  }
-  return FILELIST_DEFAULT;
-}
-
-const filelistWidth = ref<number>(readStoredWidth());
-const isResizingFilelist = ref(false);
-
-let dragStartX = 0;
-let dragStartWidth = 0;
-
-function onFilelistResizeStart(e: MouseEvent) {
-  e.preventDefault();
-  isResizingFilelist.value = true;
-  dragStartX = e.clientX;
-  dragStartWidth = filelistWidth.value;
-  document.addEventListener("mousemove", onFilelistResizeMove);
-  document.addEventListener("mouseup", onFilelistResizeEnd);
-  document.body.style.cursor = "col-resize";
-  document.body.style.userSelect = "none";
-}
-
-function onFilelistResizeMove(e: MouseEvent) {
-  // Drag handle is on the left edge of the right-hand aside:
-  // moving mouse LEFT widens the column.
-  const delta = dragStartX - e.clientX;
-  const next = Math.min(
-    FILELIST_MAX,
-    Math.max(FILELIST_MIN, dragStartWidth + delta),
-  );
-  filelistWidth.value = next;
-}
-
-function onFilelistResizeEnd() {
-  isResizingFilelist.value = false;
-  document.removeEventListener("mousemove", onFilelistResizeMove);
-  document.removeEventListener("mouseup", onFilelistResizeEnd);
-  document.body.style.cursor = "";
-  document.body.style.userSelect = "";
-  try {
-    localStorage.setItem(FILELIST_WIDTH_KEY, String(filelistWidth.value));
-  } catch {
-    /* localStorage unavailable */
-  }
-}
-
-// Double-click on the handle → reset to default
-function onFilelistResizeReset() {
-  filelistWidth.value = FILELIST_DEFAULT;
-  try {
-    localStorage.setItem(FILELIST_WIDTH_KEY, String(FILELIST_DEFAULT));
-  } catch {
-    /* localStorage unavailable */
-  }
-}
 
 // ─── Lazy rendering: only expand a few files at a time ──
 const MAX_INITIAL_FILES = 20;
@@ -438,6 +241,7 @@ watch(
 const contentEl = ref<HTMLElement | null>(null);
 const fileEls = ref<HTMLElement[]>([]);
 const visibleFileIdx = ref(0);
+const isManualScrolling = ref(false);
 
 let observer: IntersectionObserver | null = null;
 const visibleSet = new Map<number, number>();
@@ -448,6 +252,7 @@ function setupObserver() {
 
   observer = new IntersectionObserver(
     (entries) => {
+      if (isManualScrolling.value) return;
       for (const entry of entries) {
         const idx = Number((entry.target as HTMLElement).dataset.fileIdx);
         if (entry.isIntersecting) {
@@ -468,6 +273,16 @@ function setupObserver() {
   }
 }
 
+watch(visibleFileIdx, (val) => {
+  emit("update:visibleFileIdx", val);
+});
+
+watch(() => props.scrollToFileIdx, (idx) => {
+  if (idx !== null && idx !== undefined) {
+    scrollToFile(idx);
+  }
+});
+
 function teardownObserver() {
   if (observer) {
     observer.disconnect();
@@ -486,13 +301,6 @@ watch(
 
 onUnmounted(() => {
   teardownObserver();
-  // Safety: if the component unmounts mid-drag, detach global listeners
-  if (isResizingFilelist.value) {
-    document.removeEventListener("mousemove", onFilelistResizeMove);
-    document.removeEventListener("mouseup", onFilelistResizeEnd);
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-  }
 });
 
 // Click on a file in the list → expand & scroll to it
@@ -507,10 +315,17 @@ function scrollToFile(idx: number) {
     s.add(idx);
     expandedFiles.value = s;
   }
+  isManualScrolling.value = true;
   nextTick(() => {
     const el = fileEls.value[idx];
     if (el) {
       el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Clear manual scroll flag after a delay to allow smooth scroll to finish
+      setTimeout(() => {
+        isManualScrolling.value = false;
+      }, 800);
+    } else {
+      isManualScrolling.value = false;
     }
   });
 }
@@ -542,13 +357,13 @@ function onContentScroll(e: Event) {
     <div class="cdv-commit-card" v-if="commitInfo">
       <!-- Row 1: avatar + subject + hash -->
       <div class="cdv-commit-top">
-        <span class="cdv-avatar" :style="{ background: avatarColor(commitInfo.author) }">
-          {{ commitInfo.author.charAt(0).toUpperCase() }}
+        <span class="cdv-avatar" :style="avatarStyle(commitInfo.email || commitInfo.author)">
+          {{ initials(commitInfo.author) }}
         </span>
         <div class="cdv-commit-top-text">
           <div class="cdv-commit-subject">{{ commitInfo.message }}</div>
           <div class="cdv-commit-meta">
-            <span class="cdv-author">{{ commitInfo.author }}</span>
+            <span class="cdv-author" :style="{ color: avatarStyle(commitInfo.email || commitInfo.author).color }">{{ commitInfo.author }}</span>
             <span class="cdv-meta-sep">&middot;</span>
             <span class="cdv-date">{{ formatDate(commitInfo.date) }}</span>
             <span class="cdv-meta-sep">&middot;</span>
@@ -700,88 +515,6 @@ function onContentScroll(e: Event) {
           {{ diffs.length - renderedFileCount }} more files — scroll down to load
         </div>
       </div>
-
-      <!-- Resize handle between main content and aside -->
-      <div
-        class="cdv-filelist-resize"
-        :class="{ 'cdv-filelist-resize--active': isResizingFilelist }"
-        role="separator"
-        aria-orientation="vertical"
-        :aria-label="t('folderDiff.resizeHandle')"
-        :title="t('folderDiff.resizeHandle')"
-        @mousedown="onFilelistResizeStart"
-        @dblclick="onFilelistResizeReset"
-      ></div>
-
-      <!-- Right-side file list / folder tree -->
-      <aside class="cdv-filelist" :style="{ width: filelistWidth + 'px' }">
-        <div class="cdv-filelist-header">
-          <span class="cdv-filelist-title">
-            {{ fileListView === 'tree' ? t('folderDiff.title') : t('header.files') }}
-          </span>
-          <button
-            type="button"
-            class="cdv-view-toggle"
-            :title="fileListView === 'flat' ? t('folderDiff.viewTree') : t('folderDiff.viewFlat')"
-            :aria-label="fileListView === 'flat' ? t('folderDiff.viewTree') : t('folderDiff.viewFlat')"
-            @click="toggleFileListView"
-          >
-            <svg v-if="fileListView === 'flat'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 6h18M3 12h18M3 18h18" />
-            </svg>
-            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M3 5h7l2 2h9v12H3z" />
-              <path d="M3 10h18" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Active folder filter breadcrumb -->
-        <div v-if="fileListView === 'tree' && folderFilter" class="cdv-folder-filter">
-          <span class="cdv-folder-filter-path" :title="folderFilter">{{ folderFilter }}</span>
-          <button
-            type="button"
-            class="cdv-folder-filter-clear"
-            @click="clearFolderFilter"
-            :title="t('folderDiff.clearFilter')"
-            :aria-label="t('folderDiff.clearFilter')"
-          >×</button>
-        </div>
-
-        <!-- Tree view -->
-        <FolderDiffTree
-          v-if="fileListView === 'tree'"
-          :tree="folderTree"
-          :selected-folder-path="folderFilter"
-          :selected-file-path="diffs[visibleFileIdx]?.path ?? null"
-          @select-folder="onTreeSelectFolder"
-          @select-file="onTreeSelectFile"
-          @clear-filter="clearFolderFilter"
-        />
-
-        <!-- Flat list view -->
-        <ul v-else class="cdv-filelist-items">
-          <li
-            v-for="(fileDiff, idx) in diffs"
-            :key="idx"
-            class="cdv-filelist-item"
-            :class="{ 'cdv-filelist-item--active': idx === visibleFileIdx }"
-            @click="scrollToFile(idx)"
-            :title="fileDiff.path"
-          >
-            <span class="cdv-filelist-icon mono" :class="{
-              'cdv-filelist-icon--add': fileStats[idx]?.adds > 0 && fileStats[idx]?.dels === 0,
-              'cdv-filelist-icon--del': fileStats[idx]?.dels > 0 && fileStats[idx]?.adds === 0,
-              'cdv-filelist-icon--mod': fileStats[idx]?.adds > 0 && fileStats[idx]?.dels > 0,
-            }">{{ fileStats[idx]?.adds > 0 && fileStats[idx]?.dels === 0 ? 'A' : fileStats[idx]?.dels > 0 && fileStats[idx]?.adds === 0 ? 'D' : 'M' }}</span>
-            <span class="cdv-filelist-name">{{ fileName(fileDiff.path) }}</span>
-            <span class="cdv-filelist-stats">
-              <span v-if="fileStats[idx]?.adds > 0" class="cdv-stat cdv-stat--add">+{{ fileStats[idx].adds }}</span>
-              <span v-if="fileStats[idx]?.dels > 0" class="cdv-stat cdv-stat--del">-{{ fileStats[idx].dels }}</span>
-            </span>
-          </li>
-        </ul>
-      </aside>
     </div>
 
     <!-- Empty state -->
@@ -825,13 +558,12 @@ function onContentScroll(e: Event) {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
-  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
   flex-shrink: 0;
+  border: 1.5px solid currentColor;
 }
 
 .cdv-commit-top-text {
@@ -966,166 +698,6 @@ function onContentScroll(e: Event) {
 .cdv-content {
   flex: 1;
   overflow: auto;
-}
-
-/* ─── Right-side file list ────────────────────────────── */
-
-.cdv-filelist-resize {
-  flex: 0 0 4px;
-  cursor: col-resize;
-  background: transparent;
-  position: relative;
-  transition: background 120ms ease;
-  user-select: none;
-}
-
-.cdv-filelist-resize:hover,
-.cdv-filelist-resize--active {
-  background: var(--color-accent, var(--color-primary));
-  opacity: 0.5;
-}
-
-.cdv-filelist {
-  flex: 0 0 auto;
-  min-width: 180px;
-  max-width: 600px;
-  border-left: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.cdv-filelist-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px 4px 12px;
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.cdv-filelist-title {
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-subtle);
-}
-
-.cdv-view-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--color-text-subtle);
-  cursor: pointer;
-}
-
-.cdv-view-toggle:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
-}
-
-.cdv-folder-filter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 8px 4px 12px;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  background: var(--color-bg-tertiary, var(--color-bg));
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
-}
-
-.cdv-folder-filter-path {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-}
-
-.cdv-folder-filter-clear {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 3px;
-  color: var(--color-text-subtle);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.cdv-folder-filter-clear:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text);
-}
-
-.cdv-filelist-items {
-  list-style: none;
-  margin: 0;
-  padding: 4px 0;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.cdv-filelist-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  font-size: var(--text-base);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  border-left: 2px solid transparent;
-}
-
-.cdv-filelist-item:hover {
-  background: var(--color-bg-tertiary);
-}
-
-.cdv-filelist-item--active {
-  background: var(--color-bg-tertiary);
-  border-left-color: var(--color-accent);
-}
-
-.cdv-filelist-icon {
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  width: 16px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.cdv-filelist-icon--add { color: var(--color-success); }
-.cdv-filelist-icon--del { color: var(--color-danger); }
-.cdv-filelist-icon--mod { color: var(--color-warning); }
-
-.cdv-filelist-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-}
-
-.cdv-filelist-item--active .cdv-filelist-name {
-  font-weight: var(--font-semibold);
-}
-
-.cdv-filelist-stats {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
 }
 
 /* ─── File diff blocks ────────────────────────────────── */
