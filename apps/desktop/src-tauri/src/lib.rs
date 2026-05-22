@@ -293,6 +293,7 @@ pub fn run() {
             commands::ops::git_stash_list,
             commands::ops::git_stash_apply,
             commands::ops::git_stash_drop,
+            commands::ops::git_stash_clear,
             commands::ops::git_stash_show,
             commands::ops::detect_monorepo,
             commands::ops::git_remote_info,

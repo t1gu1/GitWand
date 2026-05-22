@@ -387,7 +387,8 @@ onUnmounted(() => {
    Keep at the same (0,2,0) flat layer as other modifiers — never prefix
    with .base-modal__footer or the override silently loses. */
 .bm-btn--primary:disabled,
-.bm-btn--danger:disabled {
+.bm-btn--danger:disabled,
+.bm-btn--ghost:disabled {
   background: var(--color-bg-tertiary);
   color: var(--color-text-muted);
   border-color: var(--color-border);
