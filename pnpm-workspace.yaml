@@ -2,3 +2,12 @@ packages:
   - "packages/*"
   - "apps/*"
   - "website"
+
+allowBuilds:
+  '@vscode/vsce-sign': true
+  esbuild: true
+  keytar: true
+
+# pnpm 10+ reads overrides here instead of package.json's "pnpm.overrides"
+overrides:
+  hono: "^4.12.14"
