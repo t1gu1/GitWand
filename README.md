@@ -11,42 +11,44 @@
 <p align="center">
   <a href="#desktop-app">Desktop</a> &bull;
   <a href="#conflict-resolution-engine">Conflict engine</a> &bull;
-  <a href="#merge-preview">Merge preview</a> &bull;
   <a href="#cli">CLI</a> &bull;
   <a href="#mcp-server">MCP Server</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
-  <a href="#roadmap">Roadmap</a> &bull;
+  <a href="./ROADMAP.md">Roadmap</a> &bull;
   <a href="#code-signing-policy">Code signing</a>
 </p>
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-8B5CF6">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-100%25-3178C6">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-322%20passing-22c55e">
-  <img alt="Version" src="https://img.shields.io/badge/version-2.0.1-22c55e">
+  <img alt="Version" src="https://img.shields.io/badge/version-2.15.0-22c55e">
 </p>
 
 ---
 
-GitWand is a lightweight, native Git client built with Tauri 2 and Vue 3. It covers the full daily workflow — changes, history, branches, push/pull — and goes further with **automatic resolution of trivial merge conflicts**, **integrated code review** with inline comments and intelligence analysis, and a typed resolution engine with composite confidence scoring. Since v1.3, AI assists every step of the workflow — branch naming, PR writing, hunk-level review, semantic squash, natural-language commit search, and more.
+GitWand is a lightweight, native Git client built with Tauri 2 and Vue 3. It covers the full daily workflow — changes, history, branches, push/pull — and goes further with **automatic resolution of trivial merge conflicts**, **integrated PR code review** with inline comments, and a **Git Tree** as the primary history view. Since v1.3, AI assists every step of the workflow — branch naming, PR writing, hunk-level review, semantic squash, and natural-language commit search. v2.7+ adds multi-repo Workspaces and Worktrees; v2.8 adds Agent Sessions (MCP); v2.9 adds a cross-repo Launchpad.
 
 ## Desktop app
 
+### Git Tree
+
+The **Git Tree** is the primary history view — a full-resolution DAG that renders the branch topology as an SVG with trunk-pinning, lane cooldowns, WIP node, and ref badges. Click any commit to see its diff; right-click to checkout, reset, branch, tag, or cherry-pick. Branches, stashes, and tags are all managed from here without a separate panel.
+
 ### Repository view
 
-Staged, unstaged, untracked and conflicted files in a sidebar with inline diffs in the main area. Stage, unstage, discard and commit without leaving the interface. Partial staging at the line or hunk level.
+Staged, unstaged, untracked, and conflicted files in a sidebar with inline diffs in the main area. Stage, unstage, discard, and commit without leaving the interface. Partial staging at the line or hunk level.
 
 ### Commit workflow
 
-Summary + description fields, optional commit signature, Ctrl+Enter shortcut. **Unpushed commits can be amended** directly from the history log — a pencil icon appears on hover, opening an overlay pre-filled with the existing message.
+Summary + description fields, optional commit signature, Ctrl+Enter shortcut. **Unpushed commits can be amended** directly from the Git Tree — a pencil icon appears on hover, opening an overlay pre-filled with the existing message.
 
 ### Branches
 
-Click the branch name in the header to search, switch, create or delete branches. Merge any branch from the dedicated merge button. Each non-current branch shows a **merge preview button** that simulates the merge result before committing.
+Click the branch name in the header to search, switch, create, or delete branches. Merge any branch from the dedicated merge button. Each non-current branch shows a **merge preview button** that simulates the merge result before committing.
 
 ### Merge preview
 
-Before merging a branch, GitWand predicts the outcome without touching the working tree — using `git merge-base`, `git show` and `git merge-file -p --diff3`. The result shows a per-file breakdown:
+Before merging a branch, GitWand predicts the outcome without touching the working tree — using `git merge-base`, `git show`, and `git merge-file -p --diff3`. The result shows a per-file breakdown:
 
 - **Auto-resolvable** — GitWand can handle it automatically
 - **Partial** — some hunks need manual resolution
@@ -59,10 +61,6 @@ A badge summarises the overall result: `Clean merge`, `100% auto-resolvable`, or
 
 One-click push and pull with badge counters showing ahead/behind commits. Auto-fetch runs in the background every 30 seconds.
 
-### History & graph
-
-Browse the full commit log in the sidebar. Click any commit to see its diff with a file list and scroll-spy highlighting. Long commit descriptions collapse to 2 lines with an expand toggle. A separate **DAG graph view** renders the full branch topology as an SVG with lane layout and ref badges.
-
 ### Diff viewer
 
 Side-by-side or inline toggle, persisted across sessions. Syntax highlighting for 30+ languages, word-level diff using LCS, collapsible unchanged regions, canvas minimap, hunk navigation (prev/next), double-column line numbers.
@@ -71,21 +69,29 @@ Side-by-side or inline toggle, persisted across sessions. Syntax highlighting fo
 
 Full file history with `git log --follow`, blame view grouped by commit, time-travel diff between any two versions of a file.
 
-### Repo switcher
+### Repo switcher & Workspaces
 
-The current repo name in the header opens a dropdown showing all recently opened repositories. Pin favourites, remove entries, switch instantly — no file picker needed.
+The current repo name in the header opens a dropdown showing recently opened repositories. Pin favourites, switch instantly — no file picker needed. **Workspaces** (v2.7) group multiple repos into a single dashboard with cross-repo status, coordinated push/pull, and quick-create worktrees (`⌘⇧N`).
+
+### Launchpad
+
+**Launchpad** (`⌘L`, v2.9) is a cross-repo dashboard with four tabs — WIP, PRs, Issues, Team — for a bird's-eye view of everything in flight. Pin or snooze any item; the Team tab loads lazily for performance on large workspaces.
 
 ### Pull Requests & Code Review
 
-Browse, create, checkout and merge GitHub PRs without leaving the app. The PR list sits in the sidebar (like the commit log) and the full detail — diff, CI checks, comments, inline review — fills the main area.
+Browse, create, checkout, and merge GitHub PRs without leaving the app. The PR list sits in the sidebar and the full detail — diff, CI checks, comments, inline review — fills the main area.
 
 - **Inline comments** — read and write review comments anchored to diff lines, with full threading and code suggestions (` ```suggestion ``` ` blocks applicable in one click)
 - **Review submission** — Approve / Request changes / Comment, with a draft queue to accumulate comments before sending
-- **🧠 Intelligence panel** — conflict prediction (`git merge-tree` before merging), hotspot analysis (files that caused conflicts historically), review scope (% of codebase touched), static AI suggestions (breaking changes, missing migrations, removed exports), file review history
+- **🧠 Intelligence panel** — conflict prediction (`git merge-tree` before merging), hotspot analysis, review scope, static AI suggestions, file review history
+
+### Agent Sessions
+
+The **Agents panel** (v2.8) shows active MCP sessions and lets you launch Claude Code directly from GitWand — the agent's changes appear live in the diff viewer. The MCP catalog (`Settings > MCP`) lets you install any MCP server in one click.
 
 ### Settings
 
-Language (FR/EN, OS auto-detected), theme (dark/light/system), commit signature, diff mode, AI provider (Claude / OpenAI-compatible / Ollama), external editor, Git binary path, switch behavior (stash/ask/refuse). All persisted in localStorage.
+Language (FR/EN, OS auto-detected), theme (dark/light/system), commit signature, diff mode, AI provider (Claude / OpenAI-compatible / Ollama), external editor, Git binary path, switch behavior (stash/ask/refuse). All persisted in app settings.
 
 ### Installing
 
@@ -119,7 +125,7 @@ GitWand's core engine (`@gitwand/core`) automatically resolves trivial Git merge
 
 ### Resolution patterns
 
-GitWand v1.4 introduced a **pattern registry** — the classifier evaluates patterns in priority order, each declaring whether it requires diff3 (base available), diff2, or works on both.
+GitWand uses a **pattern registry** — the classifier evaluates patterns in priority order, each declaring whether it requires diff3 (base available), diff2, or works on both.
 
 | Pattern | Description | Confidence |
 |---|---|---|
@@ -128,8 +134,8 @@ GitWand v1.4 introduced a **pattern registry** — the classifier evaluates patt
 | **delete_no_change** | One branch deleted, the other didn't touch it | Certain |
 | **non_overlapping** | Additions at different locations in the block | High |
 | **whitespace_only** | Same logic, different indentation/spacing | High |
-| **reorder_only** | Same lines, different order — pure permutation (v1.4) | High |
-| **insertion_at_boundary** | Pure insertions on both sides, base intact (v1.4) | High |
+| **reorder_only** | Same lines, different order — pure permutation | High |
+| **insertion_at_boundary** | Pure insertions on both sides, base intact | High |
 | **value_only_change** | Scalar value update (version number, constant) | Medium |
 | **generated_file** | File matches a known generated-file path pattern | High |
 | **complex** | Overlapping edits — never auto-resolved | — |
@@ -213,7 +219,7 @@ gitwand resolve --ci         # CI mode: JSON output + semantic exit codes
 
 ### Enriched JSON output
 
-The `--ci` / `--json` flag now returns a full structured report with composite confidence scores, decision traces, and pending hunks for LLM-assisted resolution:
+The `--ci` / `--json` flag returns a full structured report with composite confidence scores, decision traces, and pending hunks for LLM-assisted resolution:
 
 ```json
 {
@@ -259,33 +265,6 @@ The `--ci` / `--json` flag now returns a full structured report with composite c
         }
       ],
       "pendingHunks": []
-    },
-    {
-      "path": "src/complex.ts",
-      "totalConflicts": 2,
-      "autoResolved": 1,
-      "remaining": 1,
-      "validation": {
-        "isValid": false,
-        "hasResidualMarkers": true,
-        "syntaxError": null
-      },
-      "resolutions": ["..."],
-      "pendingHunks": [
-        {
-          "line": 42,
-          "type": "complex",
-          "explanation": "Overlapping edits on both sides.",
-          "ours": "const timeout = 5000;",
-          "theirs": "const timeout = 10000;\nconst retries = 3;",
-          "base": "const timeout = 3000;",
-          "trace": {
-            "selected": null,
-            "summary": "Both sides modified — manual resolution required.",
-            "steps": ["..."]
-          }
-        }
-      ]
     }
   ]
 }
@@ -366,17 +345,17 @@ GitWand also ships `.claude/commands/` for Claude Code:
 ```
 gitwand/
 ├── packages/
-│   ├── core/       @gitwand/core — Resolution engine (TypeScript)
+│   ├── core/       @gitwand/core — Resolution engine (TypeScript, browser-safe)
 │   │               parser, resolver, classifier, format resolvers,
-│   │               confidence scoring, corpus tests (322 tests)
+│   │               confidence scoring, tree-sitter structural dispatch
 │   ├── cli/        @gitwand/cli — Command-line interface
 │   ├── mcp/        @gitwand/mcp — MCP server (stdio transport)
 │   │               tools (5), resources (3), Claude Code commands
 │   └── vscode/     VS Code extension — CodeLens, diagnostics, status bar
 ├── apps/
 │   └── desktop/    Tauri 2 + Vue 3 desktop app
-│                   src-tauri/  Rust backend (git commands, IPC)
-│                   src/        Vue frontend
+│                   src-tauri/  Rust backend (git commands, IPC, libgit2)
+│                   src/        Vue frontend (stores, composables, panels)
 └── .claude/
     └── commands/   Claude Code slash commands (/resolve, /preview)
 ```
@@ -406,7 +385,7 @@ git clone https://github.com/devlint/GitWand.git
 cd GitWand
 pnpm install
 pnpm build          # Build all packages
-pnpm test           # 322 tests across core
+pnpm test           # Tests across all workspaces
 ```
 
 ### Running benchmarks
@@ -433,98 +412,7 @@ GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference l
 
 ## Roadmap
 
-### v1.0.0 — Shipped ✅
-
-- [x] Core engine — 8 conflict patterns, LCS 3-way, diff2 + diff3, format-aware resolvers (JSON, Markdown, YAML, Vue SFC, CSS, lockfiles)
-- [x] Composite confidence scoring (score 0–100 + dimensions)
-- [x] Configurable merge policies — `.gitwandrc`, per-glob overrides
-- [x] Decision trace + explain-only mode
-- [x] Corpus of 20 reference fixtures + metrics + benchmarks
-- [x] CLI — `gitwand resolve`, `gitwand status`, CI mode
-- [x] VS Code extension — CodeLens, diagnostics, one-click resolve
-- [x] Desktop app — full Git client (changes, history, branches, push/pull)
-- [x] Diff viewer — side-by-side, word-level, syntax highlighting, staging, minimap
-- [x] File history + blame + time-travel diff
-- [x] DAG commit graph
-- [x] Merge preview — zero side-effect simulation before merging
-- [x] Cherry-pick, stash manager, amend commit
-- [x] Repo switcher, multi-repo tabs, monorepo awareness
-- [x] AI suggestions — Claude / OpenAI-compatible / Ollama for conflict resolution
-- [x] PR workflow — list, create, checkout, merge (GitHub via `gh` CLI)
-- [x] Inline code review — comments, threads, suggestions, multi-line selection
-- [x] Review submission — Approve / Request changes / Comment, draft queue
-- [x] 🧠 Intelligence panel — conflict prediction, hotspot analysis, review scope, AI suggestions, file review history
-
-### v1.1.0 — LLM Integration ✅
-
-- [x] MCP server (`@gitwand/mcp`) — 5 tools + 3 resources, stdio transport
-- [x] Claude Code slash commands — `/resolve` and `/preview` workflows
-- [x] Enriched CLI JSON output — confidence scores, decision traces, `pendingHunks`
-- [x] Human ↔ LLM collaboration loop for complex conflict resolution
-
-### v1.2.0 — Interactive Rebase & AI Commits ✅
-
-- [x] Interactive rebase — drag-and-drop reorder, squash, edit message, drop, fixup
-- [x] Squash multi-sélection with combined message
-- [x] Rebase onto branch from UI, conflict handling (continue/abort/skip)
-- [x] AI commit message transforms — dropdown menu (Claude Code CLI / Claude / OpenAI / Ollama)
-- [x] Undo stack scaffolding (commit, merge, rebase, cherry-pick, stash, discard)
-- [x] `gh-merge-pr` dev-server endpoint + TypeScript wrapper
-- [x] Website — LLM/MCP section and FAQ on homepage
-
-### v1.3.0 — AI Everywhere ✅
-
-- [x] AI branch-name suggestion from diff or description
-- [x] AI PR title & description from commit range
-- [x] Hunk-level AI critique in the Intelligence panel
-- [x] Natural-language conflict explanation in the merge editor
-- [x] Pre-merge AI risk summary in the merge preview
-- [x] AI stash message from unstaged diff (including switch-branch flow)
-- [x] Semantic squash grouping in interactive rebase
-- [x] AI-ranked Absorb target when lines span multiple commits
-- [x] Natural-language commit log search
-- [x] Blame context — "why did this line change?"
-- [x] AI release notes / changelog generator
-- [x] Dashboard: rotating feature tips before repo selection
-
-### v1.4.0 — Pattern Registry & Auto-Update ✅
-
-- [x] Pattern registry — prioritised, `diff3` / `diff2` / `both` declarative patterns
-- [x] New resolver `reorder_only` — pure permutations auto-resolved
-- [x] New resolver `insertion_at_boundary` — pure insertions on both sides, base intact
-- [x] Refined composite confidence scoring (boosters/penalties tuned for v1.4 patterns)
-- [x] Desktop — auto-update check against GitHub Releases + app version display
-- [x] Shared hex-cube favicon across desktop app and website
-
-### v1.5.0 — Hardening, performance & English-first ✅
-
-- [x] XSS hardening — shared `useSafeHtml` / `useMarkdown` composable sanitising every `v-html` via DOMPurify + markdown-it
-- [x] Dev-server CORS + filesystem-path enforcement to prevent cross-origin and traversal
-- [x] English-first UI — default locale flipped to English across app and website, French kept in sync
-- [x] `.gitwandrc` — `generatedFiles` option for user-defined glob patterns routed to the `generated_file` resolver
-- [x] Post-merge validation extended to YAML + TOML with format-specific error reporting
-- [x] LCS memory — O(n·m) → O(min(n, m)) via hybrid `Int32Array` DP + Hirschberg (~35× on 3000×3000)
-- [x] Parallel conflict loading + `saveAllFiles` in the desktop app (bounded concurrency)
-- [x] Parallel CLI file loop in `gitwand resolve`
-- [x] Rust↔Node parity probe harness for 3 Tauri commands
-
-### v1.5.1 — Release hotfix & macOS TCC ✅
-
-- [x] Fix CI universal-darwin `lipo` failure — `autobins = false` so `parity-probe` only builds under its feature flag
-- [x] Stop macOS 50× permission prompt loop — skip `.git` probe on TCC-protected home subfolders (Documents, Desktop, Downloads, Pictures, Movies, Music, Library)
-- [x] Composable error messages routed through i18n (`errors.*` keys across 5 locales)
-
-### Next — v1.6.0 — Distribution & visual diff
-
-Target: end of May 2026. Planned scope (see [PLAN-v1.6.md](./PLAN-v1.6.md) for specs):
-
-- [x] **`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp` published to npm** + listed on the official [MCP Registry](https://registry.modelcontextprotocol.io/?search=gitwand) as `io.github.devlint/gitwand` (shipped 2026-04-20 — see CHANGELOG for 1.6.1)
-- [ ] **Image diff** — side-by-side, overlay, blink, slider (PNG, JPEG, SVG, WebP, GIF); heatmap + AI alt-text (P1)
-- [ ] **Folder diff** — compare two folders, branches, or commits; AI summary per folder (P1)
-
-Deferred to v1.7: Submodules & Git worktrees, GitLab / Bitbucket integration, macOS notarization + Windows code signing.
-
-See [ROADMAP.md](./ROADMAP.md) for the full phased plan with competitive analysis.
+See [ROADMAP.md](./ROADMAP.md) for the full phased plan — upcoming features, competitive analysis, and shipped version history.
 
 ---
 
