@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted } from "vue";
+import { ref, computed, nextTick, watch, onMounted, inject } from "vue";
+import { TOGGLE_GIT_TREE_KEY } from "../composables/branchPickerBridge";
 import type { GitDiff, DiffLine } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import type { DiffMode } from "../utils/diffMode";
@@ -9,6 +10,12 @@ import { wordDiff, segmentsToHtml } from "../utils/wordDiff";
 import { buildPatch, selectWholeHunk, type LineSelection } from "../utils/patchBuilder";
 
 const { t } = useI18n();
+
+const toggleGitTree = inject(TOGGLE_GIT_TREE_KEY, () => {});
+function onFileItemDblClick() {
+  toggleGitTree();
+  window.getSelection()?.removeAllRanges();
+}
 
 const props = defineProps<{
   diff: GitDiff | null;
@@ -698,6 +705,7 @@ function onDiffScroll() {
           tabindex="0"
           role="button"
           @click="emit('select-dir-file', f)"
+          @dblclick="onFileItemDblClick"
           @keydown.enter="emit('select-dir-file', f)"
         >
           <span class="diff-dir-badge">A</span>
