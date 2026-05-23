@@ -421,7 +421,7 @@ const es: Locale = {
     summaryPlaceholder: "Resumen (obligatorio)",
     description: "Descripción",
     descriptionPlaceholder: "Descripción (opcional)",
-    templatePicker: "Templates", // TODO: translate
+    templatePicker: "Plantillas",
     identityDefault: "Config global",
   },
 
@@ -466,12 +466,16 @@ const es: Locale = {
     aiHint: "Sugerir un nombre con IA (desde tu descripción o el diff actual)",
     switchRefusedDirty: "Cambio rechazado: hay cambios sin confirmar.",
     switchConfirmDirty: "Los cambios sin confirmar se perderán. ¿Continuar de todos modos?",
+    switchConfirmDirtyTitle: "¿Descartar cambios?",
     switchStashTitle: "Hacer stash antes de cambiar de rama",
     switchStashHint: "Tus cambios se guardarán en stash y se restaurarán tras cambiar a « {0} ». Ponle una etiqueta para encontrarlo después.",
     switchStashPlaceholder: "Mensaje opcional (vacío = etiqueta por defecto)",
     switchStashConfirm: "Stash y cambiar",
-    pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
-    resetToOriginConfirm: "Your local branch \u00ab {0} \u00bb has unpushed changes. Do you want to reset it to \u00ab {1} \u00bb?",
+    pullAfterCheckout: "Esta rama está por detrás de su remoto. ¿Hacer pull de los últimos cambios?",
+    pullAfterCheckoutTitle: "¿Hacer pull de los cambios?",
+    reset: "Restaurar",
+    resetToOriginConfirm: "Tu rama local \u00ab {0} \u00bb tiene cambios sin pushear. ¿Quieres restaurarla a \u00ab {1} \u00bb?",
+    resetToOriginTitle: "¿Restaurar a origin?",
   },
 
   // ─── Merge Preview ──────────────────────────────────────
@@ -559,7 +563,7 @@ const es: Locale = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "Ver este commit…",
-    checkoutBranch: "Checkout branch…", // TODO: translate
+    checkoutBranch: "Hacer checkout de la rama…",
     checkoutHint: "Cambiar a este commit (HEAD desvinculado)",
     checkoutHeadDisabled: "Ya estás en este commit",
     checkoutDesc: "Checkout del commit {0}",
@@ -1293,6 +1297,7 @@ const es: Locale = {
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Historial de operaciones",
+    undoTitle: "¿Rebobinar operación?",
     undoButton: "Rebobinar",
     undoTooltip: "Rebobinar la última operación Git",
     noHistory: "Sin operaciones recientes",
@@ -1382,6 +1387,7 @@ const es: Locale = {
     dropAllButton: "Eliminar todo",
     dropAllTooltip: "Eliminar todos los stashes",
     dropAllConfirm: "¿Eliminar todos los stashes? Esta acción no se puede deshacer.",
+    dropAllTitle: "¿Eliminar todos los stashes?",
     loading: "Cargando stashes…",
     empty: "No hay stashes. Usa",
     emptyAction: "+ Stash",

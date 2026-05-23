@@ -428,7 +428,7 @@ const fr: Locale = {
     summaryPlaceholder: "R\u00e9sum\u00e9 (requis)",
     description: "Description",
     descriptionPlaceholder: "Description (optionnel)",
-    templatePicker: "Templates", // TODO: translate
+    templatePicker: "Modèles",
     identityDefault: "Config globale",
   },
 
@@ -472,13 +472,17 @@ const fr: Locale = {
     previewMerge: "Aperçu du merge",
     aiHint: "Sugg\u00e9rer un nom via l'IA (depuis ta description ou le diff courant)",
     switchRefusedDirty: "Switch refus\u00e9 : des changements non commit\u00e9s sont pr\u00e9sents.",
-    switchConfirmDirty: "Des changements non commit\u00e9s seront perdus. Continuer quand m\u00eame ?",
+    switchConfirmDirty: "Des changements non commités seront perdus. Continuer quand même ?",
+    switchConfirmDirtyTitle: "Abandonner les changements ?",
     switchStashTitle: "Stasher avant de changer de branche",
-    switchStashHint: "Tes changements seront stash\u00e9s, puis restaur\u00e9s apr\u00e8s bascule vers \u00ab {0} \u00bb. Donne-lui un label pour le retrouver plus tard.",
-    switchStashPlaceholder: "Message optionnel (laisse vide pour le label par d\u00e9faut)",
+    switchStashHint: "Tes changements seront stashés, puis restaurés après bascule vers \u00ab {0} \u00bb. Donne-lui un label pour le retrouver plus tard.",
+    switchStashPlaceholder: "Message optionnel (laisse vide pour le label par défaut)",
     switchStashConfirm: "Stasher & changer",
     pullAfterCheckout: "Cette branche est en retard sur son remote. Récupérer les dernières modifications ?",
+    pullAfterCheckoutTitle: "Puller les changements ?",
+    reset: "Réinitialiser",
     resetToOriginConfirm: "Ta branche locale \u00ab {0} \u00bb a des changements non-poussés. Veux-tu la réinitialiser sur \u00ab {1} \u00bb ?",
+    resetToOriginTitle: "Réinitialiser sur origin ?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────
@@ -1304,6 +1308,7 @@ const fr: Locale = {
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Historique des opérations",
+    undoTitle: "Rembobiner l'opération ?",
     undoButton: "Rembobiner",
     undoTooltip: "Rembobiner la dernière opération Git",
     noHistory: "Aucune opération récente",
@@ -1393,7 +1398,8 @@ const fr: Locale = {
     dropTooltip: "Supprimer ce stash",
     dropAllButton: "Tout supprimer",
     dropAllTooltip: "Supprimer tous les stashes",
-    dropAllConfirm: "Supprimer tous les stashes ? Cette action est irréversible.",
+    dropAllConfirm: "Supprimer tous les stashes ? Cette opération est irréversible.",
+    dropAllTitle: "Supprimer tous les stashes ?",
     loading: "Chargement des stashes…",
     empty: "Aucun stash. Utilisez",
     emptyAction: "+ Stash",

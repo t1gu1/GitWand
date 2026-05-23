@@ -421,7 +421,7 @@ const zhCN: Locale = {
     summaryPlaceholder: "概要（必填）",
     description: "描述",
     descriptionPlaceholder: "描述（可选）",
-    templatePicker: "Templates", // TODO: translate
+    templatePicker: "模板",
     identityDefault: "全局配置",
   },
 
@@ -463,12 +463,16 @@ const zhCN: Locale = {
     aiHint: "根据描述或当前差异用 AI 推荐名称",
     switchRefusedDirty: "切换被拒绝：存在未提交的更改。",
     switchConfirmDirty: "未提交的更改将会丢失。仍要继续吗？",
+    switchConfirmDirtyTitle: "放弃更改？",
     switchStashTitle: "切换分支前先暂存",
     switchStashHint: "你的更改将被暂存，切换到 \u201c {0} \u201d 后再恢复。给它起个标签以便稍后查找。",
     switchStashPlaceholder: "可选消息（留空 = 默认标签）",
     switchStashConfirm: "储藏并切换",
     pullAfterCheckout: "此分支落后于远程。是否拉取最新更改？",
+    pullAfterCheckoutTitle: "拉取更改？",
+    reset: "重置",
     resetToOriginConfirm: "你的本地分支 \u00ab {0} \u00bb 有未推送的更改。是否将其重置为 \u00ab {1} \u00bb？",
+    resetToOriginTitle: "重置为远程状态？",
   },
 
   mergePreview: {
@@ -1279,6 +1283,7 @@ const zhCN: Locale = {
 
   undoStack: {
     title: "操作历史",
+    undoTitle: "回退操作？",
     undoButton: "回退",
     undoTooltip: "回退上一次 Git 操作",
     noHistory: "没有近期操作",
@@ -1367,6 +1372,7 @@ const zhCN: Locale = {
     dropAllButton: "全部删除",
     dropAllTooltip: "删除所有储藏",
     dropAllConfirm: "删除所有储藏？此操作无法撤销。",
+    dropAllTitle: "删除所有储藏？",
     loading: "加载储藏…",
     empty: "暂无储藏。使用",
     emptyAction: "+ 储藏",

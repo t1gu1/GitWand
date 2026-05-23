@@ -320,6 +320,7 @@ provide(MERGE_POPOVER_REQUEST_KEY, mergePopoverRequest);
 provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
 provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
 provide(LAUNCHPAD_OPEN_REQUEST_KEY, launchpadOpenRequest);
+provide("askConfirm", askConfirm);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────
 const {
@@ -774,7 +775,12 @@ async function handleSwitchBranch(name: string, isRemote = false) {
   // and they have unpushed changes, ask if they want to reset.
   if (isRemote && name === repoStatus.value?.branch && aheadCount.value > 0) {
     const remote = repoStatus.value.remote || `origin/${name}`;
-    if (window.confirm(t("branches.resetToOriginConfirm", name, remote))) {
+    if (await askConfirm({
+      title: t("branches.resetToOriginTitle"),
+      message: t("branches.resetToOriginConfirm", name, remote),
+      confirmLabel: t("branches.reset"),
+      danger: true,
+    })) {
       try {
         await gitResetToCommit(repoFolderPath.value, remote, "hard");
         await repoRefresh();
@@ -810,9 +816,13 @@ async function handleSwitchBranch(name: string, isRemote = false) {
   }
 
   if (behavior === "ask") {
-    // Show a simple confirm — Vue dialog would be nicer but window.confirm is universal
-    const msg = t("branches.switchConfirmDirty");
-    if (window.confirm(msg)) {
+    // Show a professional confirmation modal
+    if (await askConfirm({
+      title: t("branches.switchConfirmDirtyTitle"),
+      message: t("branches.switchConfirmDirty"),
+      confirmLabel: t("common.confirm"),
+      danger: true,
+    })) {
       await switchBranch(name);
       await promptPullIfBehind();
     }
@@ -825,7 +835,11 @@ async function handleSwitchBranch(name: string, isRemote = false) {
 }
 
 async function promptPullIfBehind() {
-  if (behindCount.value > 0 && window.confirm(t("branches.pullAfterCheckout"))) {
+  if (behindCount.value > 0 && await askConfirm({
+    title: t("branches.pullAfterCheckoutTitle"),
+    message: t("branches.pullAfterCheckout"),
+    confirmLabel: t("header.pull"),
+  })) {
     await doPull();
   }
 }
@@ -1264,6 +1278,49 @@ const showSubmodules = ref(false);
 
 // ─── Discard-section confirmation modal ─────────────────
 const discardSectionConfirm = ref<{ sectionKey: string; paths: string[] } | null>(null);
+
+// ─── Generic confirmation modal ─────────────────────────
+const genericConfirm = ref<{
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  resolve: (value: boolean) => void;
+  danger?: boolean;
+} | null>(null);
+
+function askConfirm(options: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+}): Promise<boolean> {
+  return new Promise((resolve) => {
+    genericConfirm.value = {
+      title: options.title,
+      message: options.message,
+      confirmLabel: options.confirmLabel || t("common.confirm"),
+      cancelLabel: options.cancelLabel || t("common.cancel"),
+      danger: options.danger,
+      resolve,
+    };
+  });
+}
+
+function onGenericConfirmClose() {
+  if (genericConfirm.value) {
+    genericConfirm.value.resolve(false);
+    genericConfirm.value = null;
+  }
+}
+
+function onGenericConfirmDone() {
+  if (genericConfirm.value) {
+    genericConfirm.value.resolve(true);
+    genericConfirm.value = null;
+  }
+}
 
 async function onDiscardSectionConfirmed() {
   const ctx = discardSectionConfirm.value;
@@ -2455,6 +2512,19 @@ onUnmounted(() => {
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="discardSectionConfirm = null">{{ t('common.cancel') }}</button>
         <button class="bm-btn bm-btn--danger" @click="onDiscardSectionConfirmed">{{ t('sidebar.discardAll') }}</button>
+      </template>
+    </BaseModal>
+
+    <!-- Generic confirmation modal -->
+    <BaseModal v-if="genericConfirm" :title="genericConfirm.title" size="sm" role="alertdialog"
+      @close="onGenericConfirmClose">
+      <p class="ptc-desc">{{ genericConfirm.message }}</p>
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="onGenericConfirmClose">{{ genericConfirm.cancelLabel }}</button>
+        <button class="bm-btn" :class="genericConfirm.danger ? 'bm-btn--danger' : 'bm-btn--primary'"
+          @click="onGenericConfirmDone">
+          {{ genericConfirm.confirmLabel }}
+        </button>
       </template>
     </BaseModal>
   </div>

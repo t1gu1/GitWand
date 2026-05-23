@@ -47,6 +47,7 @@ import SearchTrigger from "./header/SearchTrigger.vue";
 import type { RepoTab } from "../composables/useRepoTabs";
 
 const { t } = useI18n();
+const askConfirm = inject<(options: any) => Promise<boolean>>("askConfirm");
 
 const props = defineProps<{
   hasFiles: boolean;
@@ -228,8 +229,19 @@ async function handleUndo(entry: UndoEntry) {
   const msg = isHardUndo(entry)
     ? t("undoStack.undoHardConfirm")
     : t("undoStack.undoConfirm");
-  // eslint-disable-next-line no-alert
-  if (!confirm(msg)) return;
+  
+  if (askConfirm) {
+    if (!await askConfirm({
+      title: t("undoStack.undoTitle"),
+      message: msg,
+      confirmLabel: t("undoStack.undoButton"),
+      danger: isHardUndo(entry),
+    })) return;
+  } else {
+    // eslint-disable-next-line no-alert
+    if (!confirm(msg)) return;
+  }
+
   try {
     await undoStack.undo(props.cwd, entry);
     closeUndoPopover();

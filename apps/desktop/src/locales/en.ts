@@ -480,12 +480,16 @@ const en = {
     aiHint: "Suggest a name with AI (from your description or the current diff)",
     switchRefusedDirty: "Switch refused: uncommitted changes are present.",
     switchConfirmDirty: "Uncommitted changes will be lost. Continue anyway?",
+    switchConfirmDirtyTitle: "Discard changes?",
     switchStashTitle: "Stash before switching branch",
     switchStashHint: "Your changes will be stashed, then restored after switching to \u00ab {0} \u00bb. Give it a label to find it later.",
     switchStashPlaceholder: "Optional message (empty = default label)",
     switchStashConfirm: "Stash & switch",
     pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?",
+    pullAfterCheckoutTitle: "Pull changes?",
+    reset: "Reset",
     resetToOriginConfirm: "Your local branch \u00ab {0} \u00bb has unpushed changes. Do you want to reset it to \u00ab {1} \u00bb?",
+    resetToOriginTitle: "Reset to origin?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────
@@ -1326,6 +1330,7 @@ const en = {
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Operation history",
+    undoTitle: "Rewind operation?",
     undoButton: "Rewind",
     undoTooltip: "Rewind last Git operation",
     noHistory: "No recent operations",
@@ -1416,6 +1421,7 @@ const en = {
     dropAllButton: "Drop all",
     dropAllTooltip: "Drop all stashes",
     dropAllConfirm: "Drop all stashes? This cannot be undone.",
+    dropAllTitle: "Drop all stashes?",
     loading: "Loading stashes…",
     empty: "No stashes. Use",
     emptyAction: "+ Stash",
