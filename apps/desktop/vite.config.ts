@@ -24,6 +24,11 @@ export default defineConfig({
       // Production builds go through the same alias, so no separate
       // `pnpm --filter @gitwand/core build` step is required.
       "@gitwand/core": resolve(__dirname, "../../packages/core/src/index.ts"),
+      // Force web-tree-sitter to resolve to the version installed in apps/desktop
+      // (0.26.x). packages/core pins an older ~0.20.x version, but copy-grammars.mjs
+      // copies the WASM runtime from the 0.26.x build. Bundling mismatched JS (0.20.x)
+      // with the 0.26.x WASM causes a LinkError: _abort_js is not a Function.
+      "web-tree-sitter": resolve(__dirname, "node_modules/web-tree-sitter"),
     },
   },
   define: {

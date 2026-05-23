@@ -609,6 +609,7 @@ pub(crate) fn git_log(
     all: Option<bool>,
     author: Option<String>,
     offset: Option<i32>,
+    branch: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
     let limit = count.unwrap_or(100);
     let skip  = offset.unwrap_or(0).max(0);
@@ -631,6 +632,11 @@ pub(crate) fn git_log(
         args.push(format!("--skip={}", skip));
     }
     args.push(format!("-n{}", limit));
+    if let Some(ref b) = branch {
+        if !b.is_empty() {
+            args.push(b.clone());
+        }
+    }
     args.push(format!("--format={}", format));
 
     // stash@{1+} are only in the reflog, not reachable via --all alone.

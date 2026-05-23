@@ -938,7 +938,7 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>
+    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>&branch=<name>
     if (url.pathname === "/api/git-log" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const count = parseInt(url.searchParams.get("count") || "50");
@@ -946,6 +946,7 @@ async function handleRequest(req, res) {
       // Default: current branch only (like `git log`). Pass `all=true` for all refs.
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
+      const branch = url.searchParams.get("branch") || "";
 
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
@@ -956,7 +957,9 @@ async function handleRequest(req, res) {
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
         if (offset > 0) args.push(`--skip=${offset}`);
-        args.push(`-n${count}`, `--format=${format}`);
+        args.push(`-n${count}`);
+        if (branch) args.push(branch);
+        args.push(`--format=${format}`);
         // stash@{1+} are only in the reflog, not reachable via --all alone.
         if (all) {
           try {
@@ -1356,6 +1359,71 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, { success: true, message: "Merge aborted" });
       } catch (err) {
         return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+      }
+    }
+
+    // POST /api/git-cherry-pick  { cwd, hashes }
+    if (url.pathname === "/api/git-cherry-pick" && req.method === "POST") {
+      const { cwd, hashes } = await readBody(req);
+      if (!cwd || !Array.isArray(hashes) || hashes.length === 0)
+        return jsonResponse(req, res, { success: false, message: "Missing cwd or hashes" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const { spawnSync } = await import("child_process");
+        const result = spawnSync("git", ["cherry-pick", ...hashes], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        const stdout = result.stdout || "";
+        const stderr = result.stderr || "";
+        const combined = stdout + stderr;
+        const hasConflicts = combined.includes("CONFLICT") || combined.includes("conflict");
+        const success = result.status === 0;
+        return jsonResponse(req, res, {
+          success,
+          conflicts: hasConflicts,
+          message: success ? stdout.trim() : (stderr.trim() || stdout.trim() || "Cherry-pick failed"),
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { success: false, message: err.message || "Cherry-pick failed" });
+      }
+    }
+
+    // POST /api/git-cherry-pick-abort  { cwd }
+    if (url.pathname === "/api/git-cherry-pick-abort" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execSync("git cherry-pick --abort 2>&1", { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, { success: true, message: "Cherry-pick aborted" });
+      } catch (err) {
+        return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+      }
+    }
+
+    // POST /api/git-cherry-pick-continue  { cwd }
+    if (url.pathname === "/api/git-cherry-pick-continue" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const stdout = execSync("git cherry-pick --continue 2>&1", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+          shell: true,
+          env: { ...process.env, GIT_EDITOR: "true" },
+        });
+        const hasConflicts = stdout.includes("CONFLICT") || stdout.includes("conflict");
+        return jsonResponse(req, res, { success: !hasConflicts, conflicts: hasConflicts, message: stdout.trim() });
+      } catch (err) {
+        const combined = ((err.stderr || "") + (err.stdout || "")).toString();
+        const hasConflicts = combined.includes("CONFLICT") || combined.includes("conflict");
+        return jsonResponse(req, res, {
+          success: false,
+          conflicts: hasConflicts,
+          message: (err.stderr || err.stdout || err.message || "").toString().trim(),
+        });
       }
     }
 

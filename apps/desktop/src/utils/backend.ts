@@ -515,6 +515,7 @@ export async function getGitLog(
   all?: boolean,
   author?: string,
   offset?: number,
+  branch?: string,
 ): Promise<GitLogEntry[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
@@ -529,7 +530,7 @@ export async function getGitLog(
         parents: string[];
         refs: string;
       }>
-    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0 });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0, branch: branch ?? null });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -544,7 +545,7 @@ export async function getGitLog(
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}${branch ? `&branch=${encodeURIComponent(branch)}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();
