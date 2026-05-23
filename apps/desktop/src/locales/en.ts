@@ -120,7 +120,7 @@ const en = {
     fetch: "Fetch",
     rebaseOntoRemote: "Rebase onto remote",
     mergeRemote: "Merge remote",
-    forcePush: "Force push (overwrite remote)",
+    forcePush: "Force push",
     upToDate: "Up to date",
 
     tooltipClean: "Up to date \u2014 click to fetch",

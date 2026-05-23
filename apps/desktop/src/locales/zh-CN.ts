@@ -125,7 +125,7 @@ const zhCN: Locale = {
     fetch: "Fetch",
     rebaseOntoRemote: "\u53d8\u57fa\u5230\u8fdc\u7a0b",
     mergeRemote: "\u5408\u5e76\u8fdc\u7a0b",
-    forcePush: "\u5f3a\u5236\u63a8\u9001 (Force push)",
+    forcePush: "\u5f3a\u5236\u63a8\u9001",
     upToDate: "\u5df2\u662f\u6700\u65b0",
     tooltipClean: "\u5df2\u662f\u6700\u65b0 \u2014 \u70b9\u51fb\u6293\u53d6",
     forkBadgeTooltip: "领先于您的 fork ({0}) 的提交 — push 以同步",

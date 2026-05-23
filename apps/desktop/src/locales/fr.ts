@@ -114,7 +114,7 @@ const fr: Locale = {
     fetch: "Fetch",
     rebaseOntoRemote: "Rebase sur la remote",
     mergeRemote: "Merger la remote",
-    forcePush: "Pousser (force)",
+    forcePush: "Force-push",
     upToDate: "\u00c0 jour",
     tooltipClean: "\u00c0 jour \u2014 cliquer pour fetch",
     forkBadgeTooltip: "Commits en avance sur votre fork ({0}) — poussez pour synchroniser",
