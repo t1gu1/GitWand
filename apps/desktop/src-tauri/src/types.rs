@@ -61,6 +61,7 @@ pub struct GitStatus {
     pub remote: Option<String>,
     pub ahead: i32,
     pub behind: i32,
+    pub main_commit_count: i32,
     pub push_remote: Option<String>,
     pub ahead_push: i32,
     pub staged: Vec<FileChange>,

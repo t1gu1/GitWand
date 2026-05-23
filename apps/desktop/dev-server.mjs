@@ -796,7 +796,25 @@ async function handleRequest(req, res) {
           }
         }
 
-        return jsonResponse(req, res, { branch, remote, ahead, behind, staged, unstaged, untracked, conflicted });
+        let mainCommitCount = 1;
+        const remoteRef = `origin/${branch}`;
+        for (const base of ["main", "master", "origin/main", "origin/master"]) {
+          try {
+            const countOut = execSync(`git rev-list --count ${base}..${remoteRef}`, {
+              cwd: resolvedCwd,
+              encoding: "utf-8",
+            }).trim();
+            const count = parseInt(countOut, 10);
+            if (!isNaN(count)) {
+              mainCommitCount = count;
+              break;
+            }
+          } catch {
+            // base or remote ref may not exist, try next
+          }
+        }
+
+        return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, staged, unstaged, untracked, conflicted });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }

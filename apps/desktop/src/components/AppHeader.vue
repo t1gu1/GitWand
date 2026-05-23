@@ -62,6 +62,8 @@ const props = defineProps<{
   needsPublish?: boolean;
   aheadCount: number;
   behindCount: number;
+  /** Number of commits current HEAD is ahead of main (for action gating). */
+  mainCommitCount?: number;
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   pushRemote?: string | null;
   /** Commits ahead of the push remote (fork setup). */
@@ -79,8 +81,6 @@ const props = defineProps<{
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
   isMerging: boolean;
-  /** Whether there are uncommitted changes (drives the discard action). */
-  hasFiles: boolean;
   /** Path to the current repository (for merge preview). */
   cwd: string;
   // Tabs (repo strip)
@@ -466,6 +466,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :current-branch="branchDisplay"
             :disabled="isMerging || isSwitchingBranch"
             :has-changes="hasFiles"
+            :main-commit-count="mainCommitCount"
             @open-merge-picker="onBranchMenuMerge"
             @open-rebase-picker="onBranchMenuRebase"
             @open-rename-modal="onBranchMenuRename"

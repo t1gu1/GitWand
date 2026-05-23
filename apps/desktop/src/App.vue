@@ -159,6 +159,7 @@ const {
   needsPublish,
   aheadCount,
   behindCount,
+  mainCommitCount,
   pushRemote,
   aheadPushCount,
   isPushing,
@@ -1881,7 +1882,8 @@ onUnmounted(() => {
   <div class="app">
     <AppHeader :has-files="hasFiles" :theme="theme" :branch-display="branchDisplay" :repo-stats="repoStats"
       :has-repo="hasRepo" :folder-name="folderName" :can-push="canPush" :can-pull="canPull"
-      :needs-publish="needsPublish" :ahead-count="aheadCount" :behind-count="behindCount" :push-remote="pushRemote"
+      :needs-publish="needsPublish" :ahead-count="aheadCount" :behind-count="behindCount"
+      :main-commit-count="mainCommitCount" :push-remote="pushRemote"
       :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling"
       :force-push-preferred="forcePushPreferred" :is-fetching="isFetching"
       :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
@@ -2108,7 +2110,7 @@ onUnmounted(() => {
 
     <!-- Interactive rebase panel -->
     <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
-      :branches="repoBranches" @close="showRebase = false" @done="onRebaseDone" />
+      :branches="branches" @close="showRebase = false" @done="onRebaseDone" />
 
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->

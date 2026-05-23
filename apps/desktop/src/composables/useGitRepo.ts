@@ -258,6 +258,7 @@ export function useGitRepo() {
   /** How many commits ahead / behind the remote tracking branch. */
   const aheadCount = computed(() => status.value?.ahead ?? 0);
   const behindCount = computed(() => status.value?.behind ?? 0);
+  const mainCommitCount = computed(() => status.value?.mainCommitCount ?? 1);
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   const pushRemote = computed(() => status.value?.pushRemote ?? null);
   /** Commits ahead of the push remote (fork setup only). */
@@ -1073,6 +1074,7 @@ export function useGitRepo() {
     needsPublish,
     aheadCount,
     behindCount,
+    mainCommitCount,
     pushRemote,
     aheadPushCount,
     // Actions

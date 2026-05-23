@@ -309,6 +309,7 @@ export interface GitStatus {
   remote: string | null;
   ahead: number;
   behind: number;
+  mainCommitCount: number;
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   pushRemote: string | null;
   /** Commits ahead of the push remote (relevant when pushRemote differs from remote). */
@@ -329,6 +330,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: string | null;
       ahead: number;
       behind: number;
+      main_commit_count: number;
       push_remote: string | null;
       ahead_push: number;
       staged: Array<{ path: string; status: string; old_path?: string }>;
@@ -342,6 +344,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: raw.remote,
       ahead: raw.ahead,
       behind: raw.behind,
+      mainCommitCount: raw.main_commit_count,
       pushRemote: raw.push_remote ?? null,
       aheadPush: raw.ahead_push ?? 0,
       staged: raw.staged.map((f) => ({
@@ -357,14 +360,13 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       untracked: raw.untracked,
       conflicted: raw.conflicted,
     };
-  }
+    }
 
-  const res = await devFetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
-  if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
-  const data = await res.json();
-  // dev-server doesn't compute push remote — fill defaults
-  return { pushRemote: null, aheadPush: 0, ...data };
-}
+    const res = await devFetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
+    if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
+    const data = await res.json();
+    // dev-server doesn't compute push remote — fill defaults
+    return { pushRemote: null, aheadPush: 0, mainCommitCount: 1, ...data };}
 
 // ─── Git diff ──────────────────────────────────────────────
 

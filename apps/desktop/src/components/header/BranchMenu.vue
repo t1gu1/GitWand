@@ -32,6 +32,8 @@ const props = defineProps<{
   disabled?: boolean;
   /** Whether there are uncommitted changes (drives the discard action). */
   hasChanges?: boolean;
+  /** Number of commits current HEAD is ahead of main (for action gating). */
+  mainCommitCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -174,7 +176,7 @@ const hasBranch = computed(() => !!props.currentBranch);
         type="button"
         role="menuitem"
         class="branch-menu__item"
-        :disabled="!hasBranch"
+        :disabled="!hasBranch || mainCommitCount === 0"
         @click="onMergeInto"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -190,7 +192,7 @@ const hasBranch = computed(() => !!props.currentBranch);
         type="button"
         role="menuitem"
         class="branch-menu__item"
-        :disabled="!hasBranch"
+        :disabled="!hasBranch || mainCommitCount === 0"
         @click="onRebaseOnto"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
