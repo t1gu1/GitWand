@@ -1247,9 +1247,9 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           <li class="commit-ctx-menu-sep" role="separator"></li>
           <li
             class="commit-ctx-menu-item"
-            :class="{ 'commit-ctx-menu-item--disabled': isClickedBranchEmpty }"
+            :class="{ 'commit-ctx-menu-item--disabled': isCurrentBranchEmpty }"
             role="menuitem"
-            @click="!isClickedBranchEmpty && (emit('merge-into-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
+            @click="!isCurrentBranchEmpty && (emit('merge-into-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.3" />
