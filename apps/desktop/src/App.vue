@@ -210,10 +210,26 @@ const {
   stashes,
   stashesLoading,
   loadStashes,
-  applyStash,
-  popStash,
+  applyStash: applyStashRepo,
+  popStash: popStashRepo,
   dropStash,
 } = useGitRepo();
+
+function switchToChangesWithFirstFile() {
+  viewMode.value = "changes";
+  const first = repoFiles.value[0];
+  if (first) repoSelectFile(first.path, first.section === "staged");
+}
+
+async function applyStash(index: number) {
+  await applyStashRepo(index);
+  switchToChangesWithFirstFile();
+}
+
+async function popStash(index: number) {
+  await popStashRepo(index);
+  switchToChangesWithFirstFile();
+}
 
 // ─── Git Tree panel ──────────────────────────────────────
 const showGitTree = ref(false);
@@ -648,9 +664,7 @@ const {
   repoRefresh,
   onReset: () => {
     forcePushPreferred.value = true;
-    viewMode.value = "changes";
-    const first = repoFiles.value[0];
-    if (first) repoSelectFile(first.path, first.section === "staged");
+    switchToChangesWithFirstFile();
   },
   cherryPick: doCherryPick,
   deleteBranch,
