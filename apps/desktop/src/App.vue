@@ -646,7 +646,12 @@ const {
   loadLog,
   loadBranches,
   repoRefresh,
-  onReset: () => { forcePushPreferred.value = true; },
+  onReset: () => {
+    forcePushPreferred.value = true;
+    viewMode.value = "changes";
+    const first = repoFiles.value[0];
+    if (first) repoSelectFile(first.path, first.section === "staged");
+  },
   cherryPick: doCherryPick,
   deleteBranch,
   deleteRemoteBranch,
