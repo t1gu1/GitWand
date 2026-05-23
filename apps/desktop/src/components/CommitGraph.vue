@@ -1776,7 +1776,6 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
 }
 
 .wip-discard-inline {
@@ -1790,19 +1789,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   border: 0;
   color: var(--color-danger);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.8;
   transition: all var(--transition-fast);
   margin-left: auto;
-  margin-right: var(--space-4);
-}
-
-.cg-row--wip:hover .wip-discard-inline {
-  opacity: 1;
+  margin-right: -5px;
 }
 
 .wip-discard-inline:hover {
   background: var(--color-danger-soft);
   transform: scale(1.1);
+  opacity: 1;
 }
 
 .wip-stat {
