@@ -20,6 +20,7 @@ const props = defineProps<{
   needsPublish: boolean;
   isPushing: boolean;
   isPulling: boolean;
+  forcePushPreferred: boolean;
   isFetching: boolean;
   canPush: boolean;
   canPull: boolean;
@@ -41,6 +42,7 @@ const emit = defineEmits<{
   publish: [];
   rebaseOntoRemote: [];
   mergeRemote: [];
+  forcePush: [];
 }>();
 
 const { t } = useI18n();
@@ -50,6 +52,7 @@ const action = computed(() =>
     aheadCount: props.aheadCount,
     behindCount: props.behindCount,
     needsPublish: props.needsPublish,
+    forcePushPreferred: props.forcePushPreferred,
   }),
 );
 
@@ -113,6 +116,9 @@ function runAction(id: SyncAction) {
       break;
     case "mergeRemote":
       emit("mergeRemote");
+      break;
+    case "forcePush":
+      emit("forcePush");
       break;
   }
 }

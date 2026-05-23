@@ -723,14 +723,15 @@ export interface GitPushPullResult {
 export async function gitPush(
   cwd: string,
   setUpstream: boolean = false,
+  force: boolean = false,
 ): Promise<GitPushPullResult> {
   if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream }, IPC_TIMEOUT.NETWORK);
+    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream, force }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-push`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, setUpstream }),
+    body: JSON.stringify({ cwd, setUpstream, force }),
   });
   return res.json();
 }

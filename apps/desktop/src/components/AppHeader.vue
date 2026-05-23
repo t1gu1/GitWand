@@ -68,6 +68,8 @@ const props = defineProps<{
   aheadPushCount?: number;
   isPushing: boolean;
   isPulling: boolean;
+  /** Whether a rebase or reset just happened — makes Force Push primary. */
+  forcePushPreferred: boolean;
   /** Whether a fetch is in flight (drives the sync-split spinner). */
   isFetching?: boolean;
   /** True when the device has no network connectivity. */
@@ -105,6 +107,7 @@ const emit = defineEmits<{
   publish: [];
   rebaseOntoRemote: [];
   mergeRemote: [];
+  forcePush: [];
   // ── Branch actions ───────────────────────────────────────────
   switchBranch: [name: string];
   createBranch: [name: string];
@@ -476,6 +479,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :needs-publish="needsPublish ?? false"
             :is-pushing="isPushing"
             :is-pulling="isPulling"
+            :force-push-preferred="forcePushPreferred"
             :is-fetching="isFetching ?? false"
             :can-push="canPush"
             :can-pull="canPull"
@@ -487,6 +491,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @publish="emit('publish')"
             @rebase-onto-remote="emit('rebaseOntoRemote')"
             @merge-remote="emit('mergeRemote')"
+            @force-push="emit('forcePush')"
           />
 
           <!-- Stash button -->

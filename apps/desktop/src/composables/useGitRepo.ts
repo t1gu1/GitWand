@@ -74,6 +74,7 @@ export function useGitRepo() {
   const error = ref<string | null>(null);
   const successMessage = ref<string | null>(null);
   const viewMode = ref<ViewMode>("dashboard");
+  const forcePushPreferred = ref(false);
 
   // Commit editor state
   const COMMIT_SIGNATURE = "\u{1FA84} Commit via GitWand";
@@ -626,18 +627,19 @@ export function useGitRepo() {
 
   // ─── Push / Pull ────────────────────────────────────────
 
-  async function push() {
+  async function push(force: boolean = false) {
     if (!folderPath.value) return;
     if (!requireOnline("push")) return;
     isPushing.value = true;
     try {
       // If the current branch has no upstream, publish it with --set-upstream.
       const publish = needsPublish.value;
-      const result = await gitPush(folderPath.value, publish);
+      const result = await gitPush(folderPath.value, publish, force);
       if (!result.success) {
         error.value = `push: ${result.message}`;
       } else {
         successMessage.value = "push-done";
+        forcePushPreferred.value = false;
       }
       await refresh();
     } catch (err: any) {
@@ -665,6 +667,7 @@ export function useGitRepo() {
         } else {
           successMessage.value = "sync-done";
         }
+        forcePushPreferred.value = false;
       }
       await refresh();
     } catch (err: any) {
@@ -913,6 +916,7 @@ export function useGitRepo() {
     isSwitchingBranch.value = true;
     try {
       await gitSwitchBranch(folderPath.value, name);
+      forcePushPreferred.value = false;
       await refresh();
       await loadBranches();
     } catch (err: any) {
@@ -1019,6 +1023,7 @@ export function useGitRepo() {
     error,
     successMessage,
     viewMode,
+    forcePushPreferred,
     isCommitting,
     isPushing,
     isPulling,

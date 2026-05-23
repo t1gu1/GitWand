@@ -55,6 +55,7 @@ interface Deps {
   loadLog: () => Promise<void>;
   loadBranches: () => void;
   repoRefresh: () => Promise<void>;
+  onReset?: () => void;
   /** cherry-pick one or more commits (owned by useGitRepo — handles conflict flow). */
   cherryPick: (hashes: string[]) => Promise<void>;
   /** Branch deletion actions (owned by useGitRepo) */
@@ -239,6 +240,7 @@ export function useCommitActions(deps: Deps) {
       // repoRefresh reloads staged/unstaged status — critical for --hard.
       await Promise.all([loadLog(), repoRefresh()]);
       loadBranches();
+      deps.onReset?.();
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {

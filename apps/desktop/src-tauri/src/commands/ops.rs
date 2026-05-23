@@ -346,10 +346,13 @@ pub(crate) fn git_split_commit(
 // ─── Git push / pull / merge ─────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>) -> Result<GitPushPullResult, String> {
+pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>, force: Option<bool>) -> Result<GitPushPullResult, String> {
     let mut args: Vec<&str> = vec!["push"];
     if set_upstream.unwrap_or(false) {
         args.extend(["--set-upstream", "origin", "HEAD"]);
+    }
+    if force.unwrap_or(false) {
+        args.push("--force-with-lease");
     }
     let _t0 = Instant::now();
     let output = git_cmd()

@@ -142,6 +142,7 @@ const {
   error: repoError,
   successMessage: repoSuccess,
   viewMode,
+  forcePushPreferred,
   hasRepo,
   branchDisplay,
   isClean,
@@ -645,6 +646,7 @@ const {
   loadLog,
   loadBranches,
   repoRefresh,
+  onReset: () => { forcePushPreferred.value = true; },
   cherryPick: doCherryPick,
   deleteBranch,
   deleteRemoteBranch,
@@ -818,7 +820,12 @@ async function doSync() {
 
 /** Publish a branch that doesn't yet have an upstream — same as push(). */
 async function doPublish() {
-  await doPush();
+  await handlePush();
+}
+
+/** Explicit force push from the sync split button. */
+async function doForcePush() {
+  await handlePush(true);
 }
 
 /** Dropdown "Rebase onto origin" — explicit rebase pull. */
@@ -1261,6 +1268,7 @@ function handleWipStash() {
 // ─── Push + tags confirmation modal ─────────────────────
 const pushTagsConfirm = ref(false);
 const pendingUnpushedTags = ref<string[]>([]);
+const pendingPushForce = ref(false);
 
 /**
  * Intercepts the normal push flow:
@@ -1268,9 +1276,10 @@ const pendingUnpushedTags = ref<string[]>([]);
  * 2. If any exist, shows a confirmation modal instead of pushing immediately.
  * 3. Otherwise falls through to the regular push.
  */
-async function handlePush() {
+async function handlePush(force: boolean = false) {
   const cwd = repoFolderPath.value;
   if (!cwd) return;
+  pendingPushForce.value = force;
   try {
     const remoteInfo = await gitRemoteInfo(cwd).catch(() => null);
     const remote = remoteInfo?.name || "origin";
@@ -1281,13 +1290,13 @@ async function handlePush() {
       return;
     }
   } catch { /* best-effort — fall through to normal push */ }
-  await doPush();
+  await doPush(force);
 }
 
 async function confirmPushWithTags() {
   const cwd = repoFolderPath.value;
   pushTagsConfirm.value = false;
-  await doPush();
+  await doPush(pendingPushForce.value);
   if (cwd) {
     const remoteInfo = await gitRemoteInfo(cwd).catch(() => null);
     const remote = remoteInfo?.name || "origin";
@@ -1296,14 +1305,17 @@ async function confirmPushWithTags() {
     });
   }
   pendingUnpushedTags.value = [];
+  pendingPushForce.value = false;
   // Trigger scheduled release notes if the user just pushed a version tag
   triggerReleaseNotesIfEnabled();
 }
 
 async function confirmPushWithoutTags() {
   pushTagsConfirm.value = false;
+  const force = pendingPushForce.value;
   pendingUnpushedTags.value = [];
-  await doPush();
+  pendingPushForce.value = false;
+  await doPush(force);
 }
 
 // ─── Stash-and-switch modal (Phase 1.3.3) ──────────────
@@ -1794,6 +1806,17 @@ useAppMenu(
   { hasRepo },
 );
 
+async function onRebaseDone() {
+  showRebase.value = false;
+  forcePushPreferred.value = true;
+  await repoRefresh();
+}
+
+async function onUndoPerformed() {
+  await repoRefresh();
+  forcePushPreferred.value = true;
+}
+
 const historyVisibleFileIdx = ref(0);
 const scrollToFileIdx = ref<number | null>(null);
 
@@ -1830,18 +1853,21 @@ onUnmounted(() => {
     <AppHeader :has-files="hasFiles" :theme="theme" :branch-display="branchDisplay" :repo-stats="repoStats"
       :has-repo="hasRepo" :folder-name="folderName" :can-push="canPush" :can-pull="canPull"
       :needs-publish="needsPublish" :ahead-count="aheadCount" :behind-count="behindCount" :push-remote="pushRemote"
-      :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling" :is-fetching="isFetching"
+      :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling"
+      :force-push-preferred="forcePushPreferred" :is-fetching="isFetching"
       :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
       :is-switching-branch="isSwitchingBranch" :is-merging="isMerging" :tabs="repoTabs" :active-tab-id="activeTabId"
       @open-folder="handleOpenFolder" @open-repo="handleOpenPath" @switch-tab="switchTab" @close-tab="closeTab"
       @new-tab="handleOpenFolder" @open-clone="showCloneModal = true" @open-fork="showForkModal = true"
       @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
+      @force-push="doForcePush"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
+
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
       @change-view="onViewModeChange"
       @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
-      @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="repoRefresh()"
+      @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="onUndoPerformed"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true"
@@ -2053,7 +2079,8 @@ onUnmounted(() => {
 
     <!-- Interactive rebase panel -->
     <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
-      :branches="branches" @close="showRebase = false" @done="handleRebaseDone" />
+      :branches="repoBranches" @close="showRebase = false" @done="onRebaseDone" />
+
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->
     <StashManager v-if="showStash && repoFolderPath" :cwd="repoFolderPath" @close="showStash = false"

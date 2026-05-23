@@ -1241,15 +1241,16 @@ async function handleRequest(req, res) {
       }
     }
 
-    // POST /api/git-push  { cwd, setUpstream? }
+    // POST /api/git-push  { cwd, setUpstream?, force? }
     if (url.pathname === "/api/git-push" && req.method === "POST") {
-      const { cwd, setUpstream } = await readBody(req);
+      const { cwd, setUpstream, force } = await readBody(req);
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const cmd = setUpstream
-          ? "git push --set-upstream origin HEAD 2>&1"
-          : "git push 2>&1";
+        let cmd = "git push";
+        if (setUpstream) cmd += " --set-upstream origin HEAD";
+        if (force) cmd += " --force-with-lease";
+        cmd += " 2>&1";
         const stdout = execSync(cmd, {
           cwd: resolvedCwd,
           encoding: "utf-8",

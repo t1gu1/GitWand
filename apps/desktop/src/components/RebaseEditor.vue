@@ -240,7 +240,7 @@ async function doContinue() {
 
 async function doAbort() {
   await rebase.rebaseAbort(props.cwd);
-  emit("done");
+  emit("close");
 }
 
 async function doSkip() {
