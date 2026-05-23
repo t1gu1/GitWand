@@ -30,6 +30,8 @@ const props = defineProps<{
   currentBranch: string | null;
   /** Disable the whole menu while heavy ops are running. */
   disabled?: boolean;
+  /** Whether there are uncommitted changes (drives the discard action). */
+  hasChanges?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -42,6 +44,7 @@ const emit = defineEmits<{
   openRewind: [];
   openWorktrees: [];
   openSubmodules: [];
+  discardAll: [];
 }>();
 
 const { t } = useI18n();
@@ -132,6 +135,11 @@ function onDeleteClick() {
   emit("openDeleteModal");
 }
 
+function onDiscardAll() {
+  closeMenu();
+  emit("discardAll");
+}
+
 // ─── Derived state ─────────────────────────────────────────────────
 const hasBranch = computed(() => !!props.currentBranch);
 </script>
@@ -208,11 +216,24 @@ const hasBranch = computed(() => !!props.currentBranch);
         type="button"
         role="menuitem"
         class="branch-menu__item branch-menu__item--danger"
+        :disabled="!hasChanges"
+        @click="onDiscardAll"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ t('sidebar.discardAll') }}</span>
+      </button>
+
+      <button
+        type="button"
+        role="menuitem"
+        class="branch-menu__item branch-menu__item--danger"
         :disabled="!hasBranch"
         @click="onDeleteClick"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3 4h10M6 4V2.5A.5.5 0 016.5 2h3a.5.5 0 01.5.5V4M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>{{ t('branchMenu.deleteLabel') }}</span>
       </button>

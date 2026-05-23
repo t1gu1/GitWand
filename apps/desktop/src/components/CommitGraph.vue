@@ -1100,6 +1100,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               <span v-if="props.repoStats.modified > 0" class="wip-stat wip-stat--modified">~{{ props.repoStats.modified }}</span>
               <span v-if="props.repoStats.deleted > 0" class="wip-stat wip-stat--deleted">-{{ props.repoStats.deleted }}</span>
               <span v-if="props.repoStats.renamed > 0" class="wip-stat wip-stat--renamed">→{{ props.repoStats.renamed }}</span>
+              <button
+                class="wip-discard-inline"
+                :title="t('sidebar.discardAll')"
+                @click.stop="emit('wip-discard-all')"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </span>
           </template>
           <template v-else>
@@ -1303,7 +1312,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           @click="onCtxDeleteBranch"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span>{{ t('branchMenu.deleteLabel') }}</span>
         </li>
@@ -1318,7 +1327,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           @click="onCtxDeleteTag"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span>{{ t('tags.deleteTag') }}</span>
         </li>
@@ -1486,7 +1495,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         @click="emit('wip-discard-all'); closeWipContextMenu()"
       >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>{{ t('sidebar.discardAll') }}</span>
       </li>
@@ -1767,6 +1776,33 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+}
+
+.wip-discard-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  color: var(--color-danger);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+  margin-right: var(--space-4);
+}
+
+.cg-row--wip:hover .wip-discard-inline {
+  opacity: 1;
+}
+
+.wip-discard-inline:hover {
+  background: var(--color-danger-soft);
+  transform: scale(1.1);
 }
 
 .wip-stat {

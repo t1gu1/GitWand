@@ -937,6 +937,14 @@ const paletteActions = computed<PaletteAction[]>(() => {
   }
   out.push({ id: "fetch", label: t("header.paletteFetch") });
 
+  // WIP actions — only when there are uncommitted changes.
+  if (hasFiles.value) {
+    out.push(
+      { id: "wip-stash", label: t("sidebar.footerStash"), hint: t("sidebar.stashHint") },
+      { id: "wip-discard-all", label: t("sidebar.discardAll"), hint: t("sidebar.discardAllHint") },
+    );
+  }
+
   // View switchers — quick jumps between the four main modes.
   out.push(
     { id: "view-dashboard", label: t("header.paletteViewDashboard") },
@@ -986,6 +994,8 @@ function onPaletteAction(id: string) {
     case "open-worktrees": showWorktrees.value = true; break;
     case "open-rebase": showRebase.value = true; break;
     case "toggle-theme": toggleTheme(); break;
+    case "wip-stash": handleWipStash(); break;
+    case "wip-discard-all": handleWipDiscardAll(); break;
   }
 }
 
@@ -1880,7 +1890,7 @@ onUnmounted(() => {
       @new-tab="handleOpenFolder" @open-clone="showCloneModal = true" @open-fork="showForkModal = true"
       @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"
-      @force-push="doForcePush"
+      @force-push="doForcePush" @discard-all="handleWipDiscardAll"
       @merge-branch="doMerge" @open-settings="settingsInitialTab = undefined; showSettings = true"
 
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"

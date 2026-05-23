@@ -79,6 +79,8 @@ const props = defineProps<{
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
   isMerging: boolean;
+  /** Whether there are uncommitted changes (drives the discard action). */
+  hasFiles: boolean;
   /** Path to the current repository (for merge preview). */
   cwd: string;
   // Tabs (repo strip)
@@ -138,6 +140,7 @@ const emit = defineEmits<{
   openTags: [];
   openWorkspace: [];
   openAgents: [];
+  discardAll: [];
   changeView: [mode: 'dashboard' | 'changes' | 'history' | 'prs' | 'launchpad'];
 }>();
 
@@ -462,6 +465,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           <BranchMenu
             :current-branch="branchDisplay"
             :disabled="isMerging || isSwitchingBranch"
+            :has-changes="hasFiles"
             @open-merge-picker="onBranchMenuMerge"
             @open-rebase-picker="onBranchMenuRebase"
             @open-rename-modal="onBranchMenuRename"
@@ -469,6 +473,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-rewind="onBranchMenuRewind"
             @open-worktrees="onBranchMenuWorktrees"
             @open-submodules="onBranchMenuSubmodules"
+            @discard-all="emit('discardAll')"
           />
 
           <SyncSplitButton
