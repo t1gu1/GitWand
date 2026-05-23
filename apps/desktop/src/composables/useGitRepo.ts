@@ -76,6 +76,28 @@ export function useGitRepo() {
   const viewMode = ref<ViewMode>("dashboard");
   const forcePushPreferred = ref(false);
 
+  function forcePushKey(): string | null {
+    const path = folderPath.value;
+    const branch = status.value?.branch;
+    if (!path || !branch) return null;
+    return `gitwand:fpp:${path}:${branch}`;
+  }
+
+  // Persist forcePushPreferred to localStorage so it survives app reloads.
+  watch(forcePushPreferred, (val) => {
+    const key = forcePushKey();
+    if (!key) return;
+    if (val) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
+  });
+
+  // Restore from localStorage when status (and thus branch) becomes known.
+  watch(() => status.value?.branch, (branch) => {
+    if (!branch) return;
+    const key = forcePushKey();
+    forcePushPreferred.value = key ? localStorage.getItem(key) === "1" : false;
+  });
+
   // Commit editor state
   const COMMIT_SIGNATURE = "\u{1FA84} Commit via GitWand";
   const commitSummary = ref("");
