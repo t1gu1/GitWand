@@ -485,6 +485,7 @@ const en = {
     switchStashPlaceholder: "Optional message (empty = default label)",
     switchStashConfirm: "Stash & switch",
     pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?",
+    resetToOriginConfirm: "Your local branch \u00ab {0} \u00bb has unpushed changes. Do you want to reset it to \u00ab {1} \u00bb?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────

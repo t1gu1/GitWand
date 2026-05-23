@@ -472,6 +472,7 @@ const ptBR: Locale = {
     switchStashPlaceholder: "Mensagem opcional (vazio = rótulo padrão)",
     switchStashConfirm: "Stash e trocar",
     pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
+    resetToOriginConfirm: "Seu branch local \u00ab {0} \u00bb tem alterações não enviadas. Deseja redefinir para \u00ab {1} \u00bb?",
   },
 
   // ─── Merge Preview ──────────────────────────────────────

@@ -478,6 +478,7 @@ const fr: Locale = {
     switchStashPlaceholder: "Message optionnel (laisse vide pour le label par d\u00e9faut)",
     switchStashConfirm: "Stasher & changer",
     pullAfterCheckout: "Cette branche est en retard sur son remote. Récupérer les dernières modifications ?",
+    resetToOriginConfirm: "Ta branche locale \u00ab {0} \u00bb a des changements non-poussés. Veux-tu la réinitialiser sur \u00ab {1} \u00bb ?",
   },
 
   // ─── Merge Preview (Phase 8.1) ──────────────────────────

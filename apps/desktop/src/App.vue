@@ -84,7 +84,7 @@ import {
   LOG_FOCUS_SEARCH_KEY,
   LAUNCHPAD_OPEN_REQUEST_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase } from "./utils/backend";
+import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -766,8 +766,26 @@ function isDirty(): boolean {
   return s.staged.length > 0 || s.unstaged.length > 0 || s.untracked.length > 0;
 }
 
-async function handleSwitchBranch(name: string) {
+async function handleSwitchBranch(name: string, isRemote = false) {
   if (!repoFolderPath.value) return;
+
+  // v2.14: Reset to origin shortcut
+  // If user double-clicks/checkouts the origin version of their current branch
+  // and they have unpushed changes, ask if they want to reset.
+  if (isRemote && name === repoStatus.value?.branch && aheadCount.value > 0) {
+    const remote = repoStatus.value.remote || `origin/${name}`;
+    if (window.confirm(t("branches.resetToOriginConfirm", name, remote))) {
+      try {
+        await gitResetToCommit(repoFolderPath.value, remote, "hard");
+        await repoRefresh();
+        return;
+      } catch (err: any) {
+        repoError.value = `reset: ${err.message}`;
+        return;
+      }
+    }
+  }
+
   const behavior = settings.value.switchBehavior;
   const dirty = isDirty();
 

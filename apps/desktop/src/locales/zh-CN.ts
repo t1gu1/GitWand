@@ -468,6 +468,7 @@ const zhCN: Locale = {
     switchStashPlaceholder: "可选消息（留空 = 默认标签）",
     switchStashConfirm: "储藏并切换",
     pullAfterCheckout: "此分支落后于远程。是否拉取最新更改？",
+    resetToOriginConfirm: "你的本地分支 \u00ab {0} \u00bb 有未推送的更改。是否将其重置为 \u00ab {1} \u00bb？",
   },
 
   mergePreview: {

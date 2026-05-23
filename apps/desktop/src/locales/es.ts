@@ -471,6 +471,7 @@ const es: Locale = {
     switchStashPlaceholder: "Mensaje opcional (vacío = etiqueta por defecto)",
     switchStashConfirm: "Stash y cambiar",
     pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
+    resetToOriginConfirm: "Your local branch \u00ab {0} \u00bb has unpushed changes. Do you want to reset it to \u00ab {1} \u00bb?",
   },
 
   // ─── Merge Preview ──────────────────────────────────────

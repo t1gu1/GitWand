@@ -52,7 +52,7 @@ const emit = defineEmits<{
   "edit-commit": [entry: GitLogEntry];
   "split-commit": [entry: GitLogEntry];
   "checkout-commit": [entry: GitLogEntry];
-  "checkout-branch": [name: string];
+  "checkout-branch": [name: string, isRemote?: boolean];
   "reset-to-commit": [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   "revert-commit": [entry: GitLogEntry];
   "create-branch-from-commit": [entry: GitLogEntry];
@@ -212,7 +212,7 @@ function onBranchDblClick(branch: { name: string, type: string }) {
   const name = branch.type === 'remote'
     ? branch.name.slice(branch.name.indexOf('/') + 1)
     : branch.name;
-  emit('checkout-branch', name);
+  emit('checkout-branch', name, branch.type === 'remote');
 }
 
 function onRowDblClick(entry: GitLogEntry) {
@@ -1219,7 +1219,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :class="{ 'commit-ctx-menu-item--disabled': isCheckoutDisabled }"
           role="menuitem"
           :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-          @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
+          @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch, ctxMenu.clickedBranchType === 'remote'), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
