@@ -133,7 +133,9 @@ const ptBR: Locale = {
   branchMenu: {
     title: "Ações",
     mergeInto: "Merge na atual\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
     rebaseOnto: "Rebase da atual sobre\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "Renomear branch\u2026",
     deleteLabel: "Excluir branch\u2026",
     rewind: "Retroceder\u2026",

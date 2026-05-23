@@ -566,10 +566,11 @@ pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> R
 
 #[tauri::command]
 pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+    let main_name = get_main_branch_name(&cwd);
     let output = git_cmd()
         .args([
             "branch", "-a",
-            "--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)",
+            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:{})", main_name),
         ])
         .current_dir(&cwd)
         .output()
@@ -581,7 +582,8 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut branches: Vec<GitBranch> = Vec::new();
+    let mut branches_raw: Vec<(GitBranch, Option<String>)> = Vec::new();
+    let mut main_counts: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
 
     for line in stdout.lines() {
         let line = line.trim();
@@ -612,23 +614,67 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
         let last_commit = if parts.len() > 3 { parts[3].to_string() } else { String::new() };
         let last_commit_date = if parts.len() > 4 { parts[4].trim().to_string() } else { String::new() };
 
+        let main_count = if parts.len() > 5 {
+            let ab = parts[5].split_whitespace().next().unwrap_or("0");
+            ab.parse::<i32>().unwrap_or(0)
+        } else {
+            0
+        };
+
         if name.contains("HEAD ->") || name == "origin/HEAD" { continue; }
 
         let is_remote = name.starts_with("origin/") || name.starts_with("remotes/");
+        let clean_name = if name.starts_with("remotes/") {
+            name.strip_prefix("remotes/").unwrap_or(&name).to_string()
+        } else {
+            name.clone()
+        };
 
-        branches.push(GitBranch {
-            name,
+        main_counts.insert(clean_name.clone(), main_count);
+
+        branches_raw.push((GitBranch {
+            name: clean_name,
             is_current,
             is_remote,
-            upstream,
+            upstream: upstream.clone(),
             ahead,
             behind,
+            main_commit_count: 0, // Fill later
             last_commit,
             last_commit_date,
-        });
+        }, upstream));
+    }
+
+    let mut branches = Vec::new();
+    for (mut b, upstream) in branches_raw {
+        if b.is_remote {
+            b.main_commit_count = *main_counts.get(&b.name).unwrap_or(&0);
+        } else if let Some(ref u) = upstream {
+            // For local branches, use the count of their upstream
+            b.main_commit_count = *main_counts.get(u).unwrap_or(&0);
+        } else {
+            // No upstream -> 0 pushed commits
+            b.main_commit_count = 0;
+        }
+        branches.push(b);
     }
 
     Ok(branches)
+}
+
+fn get_main_branch_name(cwd: &str) -> String {
+    for name in ["main", "master", "origin/main", "origin/master"] {
+        if let Ok(output) = git_cmd()
+            .args(["rev-parse", "--verify", name])
+            .current_dir(cwd)
+            .output()
+        {
+            if output.status.success() {
+                return name.to_string();
+            }
+        }
+    }
+    "main".to_string()
 }
 
 #[tauri::command]

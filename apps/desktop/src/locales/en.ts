@@ -133,7 +133,9 @@ const en = {
   branchMenu: {
     title: "Actions",
     mergeInto: "Merge into current\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
     rebaseOnto: "Rebase current onto\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "Rename branch\u2026",
     deleteLabel: "Delete branch\u2026",
     rewind: "Rewind\u2026",

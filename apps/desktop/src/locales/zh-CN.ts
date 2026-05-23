@@ -137,7 +137,9 @@ const zhCN: Locale = {
   branchMenu: {
     title: "\u64cd\u4f5c",
     mergeInto: "\u5408\u5e76\u5230\u5f53\u524d\u5206\u652f\u2026",
-    rebaseOnto: "\u5c06\u5f53\u524d\u5206\u652f\u53d8\u57fa\u5230\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
+    rebaseOnto: "\u5c06\u5f53\u524d\u5206\u652f\u53d8\u57fa\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "\u91cd\u547d\u540d\u5206\u652f\u2026",
     deleteLabel: "\u5220\u9664\u5206\u652f\u2026",
     rewind: "\u56de\u6eaf\u2026",

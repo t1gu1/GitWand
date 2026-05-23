@@ -132,7 +132,9 @@ const es: Locale = {
   branchMenu: {
     title: "Acciones",
     mergeInto: "Merge en la actual\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
     rebaseOnto: "Rebase de la actual sobre\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "Renombrar rama\u2026",
     deleteLabel: "Eliminar rama\u2026",
     rewind: "Rebobinar\u2026",

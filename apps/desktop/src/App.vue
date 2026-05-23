@@ -1836,8 +1836,16 @@ useAppMenu(
   { hasRepo },
 );
 
+const rebaseInitialBase = ref<string | undefined>(undefined);
+
+function handleRebaseOntoCurrent(branchName: string) {
+  rebaseInitialBase.value = branchName;
+  showRebase.value = true;
+}
+
 async function onRebaseDone() {
   showRebase.value = false;
+  rebaseInitialBase.value = undefined;
   forcePushPreferred.value = true;
   await repoRefresh();
 }
@@ -2064,6 +2072,8 @@ onUnmounted(() => {
             @view-on-forge="handleViewOnForge"
             @delete-branch="handleDeleteBranchRequest"
             @delete-tag="handleDeleteTagRequest"
+            @merge-into-current="doMerge"
+            @rebase-onto-current="handleRebaseOntoCurrent"
             @apply-stash="applyStash"
             @pop-stash="popStash"
             @drop-stash="dropStash"
@@ -2110,7 +2120,7 @@ onUnmounted(() => {
 
     <!-- Interactive rebase panel -->
     <RebaseEditor v-if="showRebase && repoFolderPath" :cwd="repoFolderPath" :current-branch="repoStatus?.branch ?? ''"
-      :branches="branches" @close="showRebase = false" @done="onRebaseDone" />
+      :branches="branches" :initial-base="rebaseInitialBase" @close="showRebase = false" @done="onRebaseDone" />
 
 
     <!-- Stash manager (uses BaseModal, owns its own overlay) -->

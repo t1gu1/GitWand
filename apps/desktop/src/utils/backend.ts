@@ -1111,6 +1111,7 @@ export interface GitBranch {
   upstream: string | null;
   ahead: number;
   behind: number;
+  mainCommitCount: number;
   lastCommit: string;
   lastCommitDate: string;
 }
@@ -1128,6 +1129,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
         upstream: string | null;
         ahead: number;
         behind: number;
+        main_commit_count: number;
         last_commit: string;
         last_commit_date: string;
       }>
@@ -1140,6 +1142,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
       upstream: b.upstream,
       ahead: b.ahead,
       behind: b.behind,
+      mainCommitCount: b.main_commit_count,
       lastCommit: b.last_commit,
       lastCommitDate: b.last_commit_date ?? "",
     }));

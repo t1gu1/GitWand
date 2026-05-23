@@ -126,7 +126,9 @@ const fr: Locale = {
   branchMenu: {
     title: "Actions",
     mergeInto: "Merger dans la courante\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
     rebaseOnto: "Rebase la courante sur\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "Renommer la branche\u2026",
     deleteLabel: "Supprimer la branche\u2026",
     rewind: "Rembobiner\u2026",

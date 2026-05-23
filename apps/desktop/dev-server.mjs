@@ -1685,14 +1685,25 @@ async function handleRequest(req, res) {
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const format = "%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)";
+        const mainName = (() => {
+          for (const name of ["main", "master", "origin/main", "origin/master"]) {
+            try {
+              execSync(`git rev-parse --verify ${name}`, { cwd: resolvedCwd, stdio: "ignore" });
+              return name;
+            } catch { /* next */ }
+          }
+          return "main";
+        })();
+
+        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:${mainName})`;
         const stdout = execSync(`git branch -a --format="${format}"`, {
           cwd: resolvedCwd,
           encoding: "utf-8",
           shell: true,
         });
 
-        const branches = [];
+        const mainCounts = new Map();
+        const rawBranches = [];
         for (const line of stdout.split("\n")) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -1707,6 +1718,7 @@ async function handleRequest(req, res) {
           const trackInfo = parts[2] || "";
           const lastCommit = parts[3] || "";
           const lastCommitDate = parts[4] || "";
+          const mainCount = parseInt((parts[5] || "0").split(/\s+/)[0], 10) || 0;
 
           if (name.includes("HEAD ->") || name === "origin/HEAD") continue;
 
@@ -1717,9 +1729,33 @@ async function handleRequest(req, res) {
           }
 
           const isRemote = name.startsWith("origin/") || name.startsWith("remotes/");
+          const cleanName = name.startsWith("remotes/") ? name.slice(8) : name;
 
-          branches.push({ name, isCurrent, isRemote, upstream, ahead, behind, lastCommit, lastCommitDate });
+          mainCounts.set(cleanName, mainCount);
+
+          rawBranches.push({
+            name: cleanName,
+            isCurrent,
+            isRemote,
+            upstream,
+            ahead,
+            behind,
+            mainCommitCount: 0,
+            lastCommit,
+            lastCommitDate,
+          });
         }
+
+        const branches = rawBranches.map((b) => {
+          if (b.isRemote) {
+            b.mainCommitCount = mainCounts.get(b.name) || 0;
+          } else if (b.upstream) {
+            b.mainCommitCount = mainCounts.get(b.upstream) || 0;
+          } else {
+            b.mainCommitCount = 0;
+          }
+          return b;
+        });
 
         return jsonResponse(req, res, branches);
       } catch (err) {

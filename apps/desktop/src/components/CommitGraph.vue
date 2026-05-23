@@ -40,6 +40,8 @@ type CommitEvent =
   | "cherry-pick-commit"
   | "view-on-forge"
   | "delete-tag"
+  | "merge-into-current"
+  | "rebase-onto-current"
   | "apply-stash"
   | "pop-stash"
   | "drop-stash";
@@ -59,6 +61,8 @@ const emit = defineEmits<{
   "view-on-forge": [entry: GitLogEntry];
   "delete-branch": [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
   "delete-tag": [name: string, hasLocal: boolean, hasRemote: boolean];
+  "merge-into-current": [name: string];
+  "rebase-onto-current": [name: string];
   "apply-stash": [index: number];
   "pop-stash": [index: number];
   "drop-stash": [index: number];
@@ -309,6 +313,22 @@ function onCtxDeleteBranch() {
 const tagToDelete = computed(() => {
   if (!ctxMenu.value.clickedTag) return null;
   return { name: ctxMenu.value.clickedTag, hasLocal: true, hasRemote: true };
+});
+
+const clickedBranchData = computed(() => {
+  if (!ctxMenu.value.clickedBranch || !props.branches) return null;
+  const name = ctxMenu.value.clickedBranch;
+  return props.branches.find((b) => b.name === name) || null;
+});
+
+const isClickedBranchEmpty = computed(() => {
+  return clickedBranchData.value?.mainCommitCount === 0;
+});
+
+const isCurrentBranchEmpty = computed(() => {
+  if (!props.currentBranch || !props.branches) return false;
+  const current = props.branches.find((b) => b.name === props.currentBranch);
+  return current?.mainCommitCount === 0;
 });
 
 function onCtxDeleteTag() {
@@ -1222,6 +1242,35 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           </svg>
           <span>{{ t('commitCtx.checkout') }}</span>
         </li>
+
+        <template v-if="ctxMenu.clickedBranch && ctxMenu.clickedBranch !== props.currentBranch">
+          <li class="commit-ctx-menu-sep" role="separator"></li>
+          <li
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isClickedBranchEmpty }"
+            role="menuitem"
+            @click="!isClickedBranchEmpty && (emit('merge-into-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.3" />
+              <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3" />
+              <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
+              <path d="M5 6v4M10 8H7c-1.1 0-2-.9-2-2" stroke="currentColor" stroke-width="1.3" />
+            </svg>
+            <span>{{ t('branchMenu.mergeBranchIntoCurrent', ctxMenu.clickedBranch!) }}</span>
+          </li>
+          <li
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isCurrentBranchEmpty }"
+            role="menuitem"
+            @click="!isCurrentBranchEmpty && (emit('rebase-onto-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 3v6a3 3 0 003 3h5M9 9l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branchMenu.rebaseCurrentOntoBranch', ctxMenu.clickedBranch!) }}</span>
+          </li>
+        </template>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
 
