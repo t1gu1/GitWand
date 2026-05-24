@@ -2956,20 +2956,41 @@ onUnmounted(() => {
 .cam-radio-group {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 
 .cam-radio {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-2);
+  gap: var(--space-4);
   cursor: pointer;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+  background: var(--color-bg-secondary);
+}
+
+.cam-radio:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.cam-radio:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.cam-radio input[type="radio"] {
+  display: none;
 }
 
 .cam-radio-label {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
 }
 
 .cam-radio-hint {
