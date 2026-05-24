@@ -11,6 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "create-tag"): void;  // ask host to open the tag creation flow
+  (e: "refresh"): void;     // ask host to refresh repo data (v2.12 bug fix)
 }>();
 
 const { t } = useI18n();
@@ -85,6 +86,7 @@ async function confirmDeleteTag() {
     }
     confirmDelete.value = null;
     await load();
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -98,6 +100,7 @@ async function pushTag(name: string) {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "single", name);
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -127,6 +130,7 @@ async function confirmRetag() {
     }
     retagDialog.value = null;
     await load();
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -140,6 +144,7 @@ async function pushAllTags() {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "all");
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {

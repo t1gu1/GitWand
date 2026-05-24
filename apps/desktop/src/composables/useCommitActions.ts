@@ -154,6 +154,7 @@ export function useCommitActions(deps: Deps) {
         await deleteRemoteBranch(remote, branch);
       }
       closeModal();
+      await Promise.all([loadBranches(), repoRefresh()]);
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {
@@ -188,6 +189,7 @@ export function useCommitActions(deps: Deps) {
         await deleteRemoteTag("origin", name);
       }
       closeModal();
+      await repoRefresh();
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {
@@ -261,7 +263,7 @@ export function useCommitActions(deps: Deps) {
           ? t("commitCtx.revertConflicts")
           : result.message || t("commitCtx.revertFailed");
       }
-      await loadLog();
+      await repoRefresh();
     } catch (err: any) {
       repoError.value = err?.message ?? String(err);
     }
@@ -282,8 +284,7 @@ export function useCommitActions(deps: Deps) {
     try {
       await gitCreateBranch(cwd, name, true, entry.hashFull);
       closeModal();
-      await loadLog();
-      loadBranches();
+      await Promise.all([repoRefresh(), loadBranches()]);
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {
@@ -322,7 +323,7 @@ export function useCommitActions(deps: Deps) {
     try {
       await gitCreateTag(cwd, name, entry.hashFull, modal.value.tagMessage || undefined);
       closeModal();
-      await loadLog();
+      await repoRefresh();
     } catch (err: any) {
       modal.value.error = err?.message ?? String(err);
     } finally {
