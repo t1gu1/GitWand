@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onMounted, inject } from "vue";
+import { ref, computed, nextTick, watch, onMounted, onUnmounted, inject } from "vue";
 import { TOGGLE_GIT_TREE_KEY } from "../composables/branchPickerBridge";
 import type { GitDiff, DiffLine } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
@@ -441,14 +441,36 @@ function drawMinimap() {
   }
 }
 
-function onMinimapClick(e: MouseEvent) {
+let minimapCleanup: (() => void) | null = null;
+onUnmounted(() => minimapCleanup?.());
+
+function onMinimapMouseDown(e: MouseEvent) {
   const canvas = minimapCanvas.value;
   const contentArea = contentEl.value;
   if (!canvas || !contentArea) return;
-  const rect = canvas.getBoundingClientRect();
-  const y = e.clientY - rect.top;
-  const ratio = y / rect.height;
-  contentArea.scrollTop = ratio * contentArea.scrollHeight - contentArea.clientHeight / 2;
+
+  const scroll = (clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    const ratio = y / rect.height;
+    contentArea.scrollTop = ratio * contentArea.scrollHeight - contentArea.clientHeight / 2;
+  };
+
+  scroll(e.clientY);
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    scroll(moveEvent.clientY);
+  };
+
+  const onMouseUp = () => {
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    minimapCleanup = null;
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+  minimapCleanup = onMouseUp;
 }
 
 // Redraw minimap on diff change or scroll
@@ -678,7 +700,7 @@ function onDiffScroll() {
     </div>
 
     <!-- Minimap -->
-    <div class="diff-minimap" @click="onMinimapClick">
+    <div class="diff-minimap" @mousedown="onMinimapMouseDown">
       <canvas ref="minimapCanvas"></canvas>
     </div>
 

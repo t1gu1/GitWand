@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { ConflictFile } from "../composables/useGitWand";
 import type { ConflictHunk } from "@gitwand/core";
 import { highlightConflict } from "../utils/diffHighlight";
@@ -523,14 +523,36 @@ function drawMinimap() {
   }
 }
 
-function onMinimapClick(e: MouseEvent) {
+let minimapCleanup: (() => void) | null = null;
+onUnmounted(() => minimapCleanup?.());
+
+function onMinimapMouseDown(e: MouseEvent) {
   const canvas = minimapCanvas.value;
   const contentArea = contentEl.value;
   if (!canvas || !contentArea) return;
-  const rect = canvas.getBoundingClientRect();
-  const y = e.clientY - rect.top;
-  const ratio = y / rect.height;
-  contentArea.scrollTop = ratio * contentArea.scrollHeight - contentArea.clientHeight / 2;
+
+  const scroll = (clientY: number) => {
+    const rect = canvas.getBoundingClientRect();
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    const ratio = y / rect.height;
+    contentArea.scrollTop = ratio * contentArea.scrollHeight - contentArea.clientHeight / 2;
+  };
+
+  scroll(e.clientY);
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    scroll(moveEvent.clientY);
+  };
+
+  const onMouseUp = () => {
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+    minimapCleanup = null;
+  };
+
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
+  minimapCleanup = onMouseUp;
 }
 
 function onContentScroll() {
@@ -876,7 +898,7 @@ onMounted(() => {
     </div>
 
     <!-- Minimap (right-side overview) -->
-    <div class="merge-minimap" @click="onMinimapClick">
+    <div class="merge-minimap" @mousedown="onMinimapMouseDown">
       <canvas ref="minimapCanvas"></canvas>
     </div>
     </div><!-- /merge-body -->
