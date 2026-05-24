@@ -243,21 +243,43 @@ const submitModifierClass = computed(() => {
 .prm-radio-label {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
   color: var(--color-text);
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  background: var(--color-bg-secondary);
+  transition: all var(--transition-base);
+  flex: 1;
 }
-.prm-radio-label:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
-.prm-radio-label--active { border-color: var(--color-accent); background: var(--color-accent-soft); }
 
-.prm-radio { display: none; }
-.prm-radio-icon { font-size: 15px; }
-.prm-radio-text { font-weight: 500; }
+.prm-radio-label:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+
+.prm-radio-label:has(input:checked),
+.prm-radio-label--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.prm-radio {
+  display: none;
+}
+
+.prm-radio-icon {
+  font-size: 15px;
+}
+
+.prm-radio-text {
+  font-weight: 600;
+}
 
 /* Textarea */
 .prm-textarea {
