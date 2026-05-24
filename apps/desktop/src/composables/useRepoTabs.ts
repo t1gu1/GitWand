@@ -183,11 +183,27 @@ export function useRepoTabs() {
     }
   }
 
+  /**
+   * Reorder tabs by moving a tab from one index to another.
+   */
+  function reorderTabs(oldIndex: number, newIndex: number) {
+    if (oldIndex < 0 || oldIndex >= tabs.value.length) return;
+    if (newIndex < 0 || newIndex >= tabs.value.length) return;
+    if (oldIndex === newIndex) return;
+
+    const tab = tabs.value[oldIndex];
+    tabs.value.splice(oldIndex, 1);
+    tabs.value.splice(newIndex, 0, tab);
+
+    save(tabs.value, activeTabId.value);
+  }
+
   return {
     tabs,
     activeTabId,
     openTab,
     closeTab,
     switchTab,
+    reorderTabs,
   };
 }

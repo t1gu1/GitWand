@@ -97,6 +97,7 @@ const emit = defineEmits<{
   newTab: [];
   openClone: [];
   openFork: [];
+  reorderTabs: [oldIndex: number, newIndex: number];
   // ── Sync / publish actions ───────────────────────────────────
   push: [];
   pull: [];
@@ -314,6 +315,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         @open-clone="emit('openClone')"
         @open-fork="emit('openFork')"
         @open-recent="(path) => emit('openRepo', path)"
+        @reorder-tabs="(oldIdx, newIdx) => emit('reorderTabs', oldIdx, newIdx)"
       />
 
       <div class="app-header__tabs-spacer"></div>
