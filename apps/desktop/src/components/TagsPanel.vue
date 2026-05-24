@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, type GitTag } from "../utils/backend";
+import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, gitUnpushedTags, type GitTag } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import BaseModal from "./BaseModal.vue";
 
@@ -18,6 +18,7 @@ const { t } = useI18n();
 
 // ─── State ──────────────────────────────────────────────
 const tags = ref<GitTag[]>([]);
+const unpushedTagNames = ref<string[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const remoteName = ref("origin");
@@ -42,6 +43,11 @@ async function load() {
     ]);
     tags.value = tagList;
     if (remoteInfo?.name) remoteName.value = remoteInfo.name;
+
+    // Load unpushed tags (v2.16)
+    if (remoteName.value) {
+      unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
+    }
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -53,6 +59,7 @@ onMounted(load);
 
 // ─── Computed ────────────────────────────────────────────
 const hasRemote = computed(() => !!remoteName.value);
+const hasUnpushed = computed(() => unpushedTagNames.value.length > 0);
 
 function relativeDate(iso: string): string {
   if (!iso) return "";
@@ -102,6 +109,8 @@ async function pushTag(name: string) {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "single", name);
+    // Refresh unpushed list (v2.16)
+    unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
     emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
@@ -146,6 +155,8 @@ async function pushAllTags() {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "all");
+    // Refresh unpushed list (v2.16)
+    unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
     emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
@@ -172,7 +183,7 @@ async function pushAllTags() {
           {{ t('tags.newTag') }}
         </button>
         <button
-          v-if="hasRemote"
+          v-if="hasRemote && hasUnpushed"
           class="bm-btn bm-btn--ghost tp-btn-sm"
           :disabled="busyPushAll || tags.length === 0"
           @click="pushAllTags"
@@ -239,7 +250,7 @@ async function pushAllTags() {
             </svg>
           </button>
           <button
-            v-if="hasRemote"
+            v-if="hasRemote && unpushedTagNames.includes(tag.name)"
             class="tp-action-btn"
             :disabled="busyTag === tag.name"
             v-tooltip="t('tags.pushTag', remoteName)"
