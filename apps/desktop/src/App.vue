@@ -215,9 +215,19 @@ const {
 } = useGitRepo();
 
 // ─── Git Tree panel ──────────────────────────────────────
-const showGitTree = ref(false);
-const gitTreeWidth = ref(720);
+const GIT_TREE_VISIBLE_KEY = "gitwand-git-tree-visible";
+const GIT_TREE_WIDTH_KEY = "gitwand-git-tree-width";
+
+const showGitTree = ref(localStorage.getItem(GIT_TREE_VISIBLE_KEY) === "true");
+const gitTreeWidth = ref(parseInt(localStorage.getItem(GIT_TREE_WIDTH_KEY) || "720"));
 const gitTreeResizing = ref(false);
+
+watch(showGitTree, (val) => {
+  localStorage.setItem(GIT_TREE_VISIBLE_KEY, val.toString());
+});
+watch(gitTreeWidth, (val) => {
+  localStorage.setItem(GIT_TREE_WIDTH_KEY, val.toString());
+});
 
 function onGitTreeMouseDown(e: MouseEvent) {
   const startX = e.clientX;
