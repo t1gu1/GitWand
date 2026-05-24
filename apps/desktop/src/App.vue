@@ -1915,7 +1915,7 @@ onUnmounted(() => {
       <div v-if="hasRepo && showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
         @mousedown="onSidebarMouseDown"></div>
 
-      <main class="main">
+      <main class="main" :class="{ 'main--dashboard': viewMode === 'dashboard' || viewMode === 'launchpad' }">
         <!-- No repo loaded → EmptyState full screen -->
         <EmptyState v-if="!hasRepo && !repoLoading" @open-folder="handleOpenFolder" @open-path="handleOpenPath"
           @open-clone="showCloneModal = true" @open-fork="showForkModal = true" />
@@ -2461,6 +2461,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+.main--dashboard {
+  min-width: 760px;
 }
 
 .git-tree-toggle {
