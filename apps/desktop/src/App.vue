@@ -654,7 +654,6 @@ const {
   confirmCreateBranchFromCommit,
   confirmTagCommit,
   confirmDeleteBranch,
-  confirmDeleteTag,
   suggestTagWithAI,
   isTagAISuggesting,
   isAIAvailable,
@@ -2230,8 +2229,8 @@ onUnmounted(() => {
 
     <!-- Tags panel -->
     <TagsPanel v-if="showTags && repoFolderPath" :cwd="repoFolderPath" @close="showTags = false"
-     @refresh="repoRefresh()"
-     @create-tag="showTags = false; commitActionModal.type = 'tag'; commitActionModal.entry = repoLog[0] ?? null;" />
+      @refresh="repoRefresh()"
+      @create-tag="showTags = false; handleTagCommit(repoLog[0] ?? null)" />
     <!-- Worktree manager (uses BaseModal internally → own Teleport + backdrop) -->
     <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
       :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
@@ -2416,43 +2415,6 @@ onUnmounted(() => {
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
         <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteBranch">
           {{ commitActionModal.busy ? t('common.loading') : t('branchMenu.deleteModalConfirm') }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <!-- Delete tag options (v2.12) -->
-    <BaseModal v-if="commitActionModal.type === 'deleteTag'" :title="t('tags.delete')"
-      :subtitle="t('tags.deleteOptionsDesc', commitActionModal.deleteTagName)" size="sm" role="alertdialog"
-      @close="closeCommitActionModal">
-      <div class="cam-radio-group">
-        <label v-if="commitActionModal.deleteTagHasLocal" class="cam-radio">
-          <input type="radio" name="deleteTagMode" value="local" v-model="commitActionModal.deleteTagMode" />
-          <span class="cam-radio-label">
-            <strong>{{ t('tags.deleteLocalOnly') }}</strong>
-            <span class="cam-radio-hint">{{ t('tags.deleteLocalOnlyHint') }}</span>
-          </span>
-        </label>
-        <label v-if="commitActionModal.deleteTagHasRemote" class="cam-radio">
-          <input type="radio" name="deleteTagMode" value="remote" v-model="commitActionModal.deleteTagMode" />
-          <span class="cam-radio-label">
-            <strong>{{ t('tags.deleteRemoteOnly') }}</strong>
-            <span class="cam-radio-hint">{{ t('tags.deleteRemoteOnlyHint') }}</span>
-          </span>
-        </label>
-        <label v-if="commitActionModal.deleteTagHasLocal && commitActionModal.deleteTagHasRemote" class="cam-radio">
-          <input type="radio" name="deleteTagMode" value="both" v-model="commitActionModal.deleteTagMode" />
-          <span class="cam-radio-label">
-            <strong>{{ t('tags.deleteBothOption') }}</strong>
-            <span class="cam-radio-hint">{{ t('tags.deleteBothOptionHint') }}</span>
-          </span>
-        </label>
-      </div>
-      <p v-if="commitActionModal.error" class="cam-error" style="margin-top: var(--space-3)">{{ commitActionModal.error
-        }}</p>
-      <template #footer>
-        <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--danger" :disabled="commitActionModal.busy" @click="confirmDeleteTag">
-          {{ commitActionModal.busy ? t('common.loading') : t('tags.deleteConfirm') }}
         </button>
       </template>
     </BaseModal>

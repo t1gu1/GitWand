@@ -23,7 +23,6 @@ const error = ref<string | null>(null);
 const remoteName = ref("origin");
 const busyTag = ref<string | null>(null);   // name of tag currently being acted on
 const busyPushAll = ref(false);
-const confirmDelete = ref<{ name: string; withRemote: boolean } | null>(null);
 const retagDialog = ref<{
   name: string;
   isAnnotated: boolean;
@@ -68,23 +67,26 @@ function relativeDate(iso: string): string {
 }
 
 // ─── Actions ─────────────────────────────────────────────
-function askDelete(name: string) {
-  confirmDelete.value = { name, withRemote: false };
-}
-
-async function confirmDeleteTag() {
-  if (!confirmDelete.value) return;
-  const { name, withRemote } = confirmDelete.value;
+async function askDelete(name: string) {
+  // Direct deletion as requested (v2.16)
+  // No modal. Always both local & remote (best effort).
   busyTag.value = name;
   error.value = null;
   try {
-    await gitDeleteTag(props.cwd, name);
-    if (withRemote && hasRemote.value) {
-      await gitDeleteRemoteTag(props.cwd, remoteName.value, name).catch(() => {
-        // Remote delete failure is non-fatal — tag is gone locally
-      });
-    }
-    confirmDelete.value = null;
+    // 1. Determine remote
+    let rName = remoteName.value || "origin";
+    try {
+      const info = await gitRemoteInfo(props.cwd);
+      if (info.name) rName = info.name;
+    } catch { /* ignore */ }
+
+    // 2. Local delete (best effort)
+    await gitDeleteTag(props.cwd, name).catch(() => {});
+
+    // 3. Remote delete (best effort)
+    await gitDeleteRemoteTag(props.cwd, rName, name).catch(() => {});
+
+    // 4. Reload local UI + tell host to refresh
     await load();
     emit("refresh");
   } catch (err: any) {
@@ -304,27 +306,6 @@ async function pushAllTags() {
           @click="confirmRetag"
         >
           {{ busyTag === retagDialog.name ? t('common.loading') : t('tags.retagConfirm') }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <!-- Delete confirmation sub-modal -->
-    <BaseModal
-      v-if="confirmDelete"
-      :title="t('tags.deleteConfirmTitle')"
-      :subtitle="confirmDelete.name"
-      size="sm"
-      role="alertdialog"
-      @close="confirmDelete = null"
-    >
-      <label v-if="hasRemote" class="tp-check-label">
-        <input type="checkbox" v-model="confirmDelete.withRemote" />
-        <span>{{ t('tags.deleteAlsoRemote', remoteName) }}</span>
-      </label>
-      <template #footer>
-        <button class="bm-btn bm-btn--ghost" @click="confirmDelete = null">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--danger" :disabled="busyTag === confirmDelete.name" @click="confirmDeleteTag">
-          {{ busyTag === confirmDelete.name ? t('common.loading') : t('tags.deleteConfirm') }}
         </button>
       </template>
     </BaseModal>

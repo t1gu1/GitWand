@@ -20,6 +20,8 @@ import {
   gitCreateBranch,
   gitCreateTag,
   gitRemoteInfo,
+  gitDeleteTag,
+  gitDeleteRemoteTag,
 } from "../utils/backend";
 import { useI18n } from "./useI18n";
 import { useTagSuggestion } from "./useTagSuggestion";
@@ -164,36 +166,30 @@ export function useCommitActions(deps: Deps) {
 
   // ── Tag deletion ───────────────────────────────────────
 
-  function handleDeleteTagRequest(name: string, hasLocal: boolean, hasRemote: boolean) {
-    modal.value = {
-      ...modal.value,
-      type: "deleteTag",
-      deleteTagName: name,
-      deleteTagHasLocal: hasLocal,
-      deleteTagHasRemote: hasRemote,
-      deleteTagMode: hasLocal && hasRemote ? "both" : hasLocal ? "local" : "remote",
-      error: "",
-    };
-  }
-
-  async function confirmDeleteTag() {
-    const { deleteTagName: name, deleteTagMode: mode } = modal.value;
+  async function handleDeleteTagRequest(name: string) {
     const cwd = repoFolderPath.value;
     if (!cwd) return;
-    modal.value.busy = true;
+
+    // Direct deletion as requested (v2.16)
+    // No modal. Always both local & remote (best effort).
     try {
-      if (mode === "local" || mode === "both") {
-        await deleteTag(name);
-      }
-      if (mode === "remote" || mode === "both") {
-        await deleteRemoteTag("origin", name);
-      }
-      closeModal();
+      // 1. Determine remote
+      let remote = "origin";
+      try {
+        const info = await gitRemoteInfo(cwd);
+        if (info.name) remote = info.name;
+      } catch { /* ignore */ }
+
+      // 2. Local delete (best effort, ignore if already gone)
+      await gitDeleteTag(cwd, name).catch(() => {});
+
+      // 3. Remote delete (best effort, ignore if already gone)
+      await gitDeleteRemoteTag(cwd, remote, name).catch(() => {});
+
+      // 4. Final refresh
       await repoRefresh();
     } catch (err: any) {
-      modal.value.error = err?.message ?? String(err);
-    } finally {
-      modal.value.busy = false;
+      repoError.value = err?.message ?? String(err);
     }
   }
 
@@ -384,7 +380,6 @@ export function useCommitActions(deps: Deps) {
     confirmCreateBranchFromCommit,
     confirmTagCommit,
     confirmDeleteBranch,
-    confirmDeleteTag,
     // AI
     suggestTagWithAI,
     isTagAISuggesting: tagAI.isGenerating,

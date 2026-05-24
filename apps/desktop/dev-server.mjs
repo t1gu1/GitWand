@@ -4103,6 +4103,19 @@ async function handleRequest(req, res) {
           ? ["tag", "-a", name, sha, "-m", message.trim()]
           : ["tag", name, sha];
         execFileSync(GIT, args, { cwd: resolve(cwd) });
+
+        // Auto-push to remote directly as requested (v2.16)
+        // We try 'origin' first, then fall back to the first available remote.
+        try {
+          const remotes = execFileSync(GIT, ["remote"], { cwd: resolve(cwd) }).toString().trim().split("\n").filter(Boolean);
+          const remote = remotes.includes("origin") ? "origin" : remotes[0];
+          if (remote) {
+            execFileSync(GIT, ["push", remote, `refs/tags/${name}`], { cwd: resolve(cwd) });
+          }
+        } catch {
+          // Ignore push errors (missing remote, offline, etc.)
+        }
+
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
@@ -4197,7 +4210,7 @@ async function handleRequest(req, res) {
       const { cwd, remote, name } = await readBody(req);
       if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
       try {
-        execFileSync(GIT, ["push", remote, "--delete", name], { cwd: resolve(cwd) });
+        execFileSync(GIT, ["push", remote, "--delete", `refs/tags/${name}`], { cwd: resolve(cwd) });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);

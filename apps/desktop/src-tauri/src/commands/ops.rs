@@ -1076,6 +1076,7 @@ pub(crate) fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>)
 
 #[tauri::command]
 pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String>) -> Result<(), String> {
+    let tag_name = name.clone();
     let trimmed = message.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let args: Vec<String> = if let Some(m) = trimmed {
         vec!["tag".into(), "-a".into(), name, sha, "-m".into(), m.to_string()]
@@ -1093,6 +1094,30 @@ pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Op
             String::from_utf8_lossy(&output.stderr)
         ));
     }
+
+    // Auto-push to remote directly as requested (v2.16)
+    // We try 'origin' first, then fall back to the first available remote.
+    let remote = match git_cmd().args(["remote"]).current_dir(&cwd).output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let remotes: Vec<&str> = stdout.lines().collect();
+            if remotes.contains(&"origin") {
+                Some("origin".to_string())
+            } else {
+                remotes.first().map(|s| s.to_string())
+            }
+        }
+        _ => None,
+    };
+
+    if let Some(r) = remote {
+        // We ignore push failure if we're offline, as the local tag was already successfully created.
+        let _ = git_cmd()
+            .args(["push", &r, &format!("refs/tags/{}", tag_name)])
+            .current_dir(&cwd)
+            .output();
+    }
+
     Ok(())
 }
 
@@ -1215,7 +1240,7 @@ pub(crate) fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<Strin
 #[tauri::command]
 pub(crate) fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
     let output = git_cmd()
-        .args(["push", &remote, "--delete", &name])
+        .args(["push", &remote, "--delete", &format!("refs/tags/{}", name)])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to delete remote tag: {}", e))?;

@@ -1538,6 +1538,16 @@ export async function gitRetagTo(
   if (result.exitCode !== 0) {
     throw new Error(result.stderr?.trim() || `git tag -f failed (exit ${result.exitCode})`);
   }
+
+  // Auto-push to remote as requested (v2.16)
+  // We use --force because retagging overwrites an existing tag.
+  try {
+    const remoteInfo = await gitRemoteInfo(cwd);
+    const remote = remoteInfo?.name || "origin";
+    await gitExec(cwd, ["push", "--force", remote, `refs/tags/${name}`]);
+  } catch {
+    // Ignore push errors (missing remote, offline, etc.)
+  }
 }
 
 // ─── Tags manager (v1.9) ───────────────────────────────────
