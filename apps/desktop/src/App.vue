@@ -234,9 +234,19 @@ async function popStash(index: number) {
 }
 
 // ─── Git Tree panel ──────────────────────────────────────
-const showGitTree = ref(false);
-const gitTreeWidth = ref(720);
+const GIT_TREE_VISIBLE_KEY = "gitwand-git-tree-visible";
+const GIT_TREE_WIDTH_KEY = "gitwand-git-tree-width";
+
+const showGitTree = ref(localStorage.getItem(GIT_TREE_VISIBLE_KEY) === "true");
+const gitTreeWidth = ref(parseInt(localStorage.getItem(GIT_TREE_WIDTH_KEY) || "720"));
 const gitTreeResizing = ref(false);
+
+watch(showGitTree, (val) => {
+  localStorage.setItem(GIT_TREE_VISIBLE_KEY, val.toString());
+});
+watch(gitTreeWidth, (val) => {
+  localStorage.setItem(GIT_TREE_WIDTH_KEY, val.toString());
+});
 
 function onGitTreeMouseDown(e: MouseEvent) {
   const startX = e.clientX;
@@ -1086,6 +1096,38 @@ const showTerminal = ref(false);
 // View menu → Toggle Sidebar. Defaults to visible; we hide when the user
 // wants more horizontal real estate for the diff / log views.
 const showSidebar = ref(true);
+const SIDEBAR_WIDTH_KEY = "gitwand-sidebar-width";
+const sidebarWidth = ref(parseInt(localStorage.getItem(SIDEBAR_WIDTH_KEY) || "350"));
+const sidebarResizing = ref(false);
+
+watch(sidebarWidth, (val) => {
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, val.toString());
+});
+
+function onSidebarMouseDown(e: MouseEvent) {
+  const startX = e.clientX;
+  const startWidth = sidebarWidth.value;
+
+  const onMouseMove = (ev: MouseEvent) => {
+    sidebarResizing.value = true;
+    const delta = ev.clientX - startX;
+    sidebarWidth.value = Math.max(230, Math.min(600, startWidth + delta));
+  };
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    sidebarResizing.value = false;
+  };
+
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'ew-resize';
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  e.preventDefault();
+}
 
 // ─── Clone & Fork modals (v2.0) ──────────────────────────
 const showCloneModal = ref(false);
@@ -1989,14 +2031,14 @@ onUnmounted(() => {
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
       @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
 
-    <div class="app-body">
+    <div class="app-body" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
       <aside class="sidebar" v-if="hasRepo && showSidebar">
         <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
           :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
           :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
           :log-entries="repoLog" :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
-          :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles" :branches="branches"
-          :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
+          :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles"
+          :branches="branches" :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
           @select="onRepoFileSelect" @change-view="onViewModeChange"
           @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
           @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
@@ -2011,7 +2053,10 @@ onUnmounted(() => {
           @delete-branch="handleDeleteBranchRequest" />
       </aside>
 
-      <main class="main">
+      <div v-if="hasRepo && showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+        @mousedown="onSidebarMouseDown"></div>
+
+      <main class="main" :class="{ 'main--dashboard': viewMode === 'dashboard' || viewMode === 'launchpad' }">
         <!-- No repo loaded → EmptyState full screen -->
         <EmptyState v-if="!hasRepo && !repoLoading" @open-folder="handleOpenFolder" @open-path="handleOpenPath"
           @open-clone="showCloneModal = true" @open-fork="showForkModal = true" />
@@ -2515,12 +2560,31 @@ onUnmounted(() => {
   background: var(--color-bg-secondary);
 }
 
+.sidebar-handle {
+  width: 4px;
+  margin-left: -2px;
+  margin-right: -2px;
+  cursor: ew-resize;
+  z-index: 10;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.sidebar-handle:hover,
+.sidebar-handle--active {
+  background: var(--color-accent);
+}
+
 .main {
   flex: 1;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
+}
+
+.main--dashboard {
+  min-width: 760px;
 }
 
 .git-tree-toggle {
