@@ -1265,6 +1265,16 @@ function formatActivityDate(dateStr: string): string {
           <span>{{ t('sidebar.stageAllButton', unstagedCount) }}</span>
         </button>
         <button
+          v-if="props.files.length > 0"
+          class="commit-discard-all"
+          :title="t('sidebar.discardAll')"
+          @click="emit('discardSection', 'all', props.files.map(f => f.path))"
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button
           class="commit-btn"
           :class="{ 'commit-btn--disabled': !canCommit }"
           :disabled="!canCommit"
@@ -1398,7 +1408,7 @@ function formatActivityDate(dateStr: string): string {
               @click="onBranchCtxDelete"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
               <span>{{ t('branchMenu.deleteLabel') }}</span>
             </button>
@@ -2346,6 +2356,26 @@ function formatActivityDate(dateStr: string): string {
   background: var(--color-bg);
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.commit-discard-all {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-hover), border-color var(--transition-hover), color var(--transition-hover);
+  flex-shrink: 0;
+}
+
+.commit-discard-all:hover {
+  background: var(--color-danger-soft, rgba(220, 38, 38, 0.08));
+  border-color: var(--color-danger, #dc2626);
+  color: var(--color-danger, #dc2626);
 }
 
 .commit-btn {

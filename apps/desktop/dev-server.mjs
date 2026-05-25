@@ -796,7 +796,25 @@ async function handleRequest(req, res) {
           }
         }
 
-        return jsonResponse(req, res, { branch, remote, ahead, behind, staged, unstaged, untracked, conflicted });
+        let mainCommitCount = 1;
+        const remoteRef = `origin/${branch}`;
+        for (const base of ["main", "master", "origin/main", "origin/master"]) {
+          try {
+            const countOut = execSync(`git rev-list --count ${base}..${remoteRef}`, {
+              cwd: resolvedCwd,
+              encoding: "utf-8",
+            }).trim();
+            const count = parseInt(countOut, 10);
+            if (!isNaN(count)) {
+              mainCommitCount = count;
+              break;
+            }
+          } catch {
+            // base or remote ref may not exist, try next
+          }
+        }
+
+        return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, staged, unstaged, untracked, conflicted });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }
@@ -920,7 +938,7 @@ async function handleRequest(req, res) {
       }
     }
 
-    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>
+    // GET /api/git-log?cwd=<path>&count=<n>&all=<bool>&author=<email>&offset=<n>&branch=<name>
     if (url.pathname === "/api/git-log" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       const count = parseInt(url.searchParams.get("count") || "50");
@@ -928,6 +946,7 @@ async function handleRequest(req, res) {
       // Default: current branch only (like `git log`). Pass `all=true` for all refs.
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
+      const branch = url.searchParams.get("branch") || "";
 
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
@@ -938,7 +957,9 @@ async function handleRequest(req, res) {
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
         if (offset > 0) args.push(`--skip=${offset}`);
-        args.push(`-n${count}`, `--format=${format}`);
+        args.push(`-n${count}`);
+        if (branch) args.push(branch);
+        args.push(`--format=${format}`);
         // stash@{1+} are only in the reflog, not reachable via --all alone.
         if (all) {
           try {
@@ -1241,15 +1262,16 @@ async function handleRequest(req, res) {
       }
     }
 
-    // POST /api/git-push  { cwd, setUpstream? }
+    // POST /api/git-push  { cwd, setUpstream?, force? }
     if (url.pathname === "/api/git-push" && req.method === "POST") {
-      const { cwd, setUpstream } = await readBody(req);
+      const { cwd, setUpstream, force } = await readBody(req);
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const cmd = setUpstream
-          ? "git push --set-upstream origin HEAD 2>&1"
-          : "git push 2>&1";
+        let cmd = "git push";
+        if (setUpstream) cmd += " --set-upstream origin HEAD";
+        if (force) cmd += " --force-with-lease";
+        cmd += " 2>&1";
         const stdout = execSync(cmd, {
           cwd: resolvedCwd,
           encoding: "utf-8",
@@ -1337,6 +1359,71 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, { success: true, message: "Merge aborted" });
       } catch (err) {
         return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+      }
+    }
+
+    // POST /api/git-cherry-pick  { cwd, hashes }
+    if (url.pathname === "/api/git-cherry-pick" && req.method === "POST") {
+      const { cwd, hashes } = await readBody(req);
+      if (!cwd || !Array.isArray(hashes) || hashes.length === 0)
+        return jsonResponse(req, res, { success: false, message: "Missing cwd or hashes" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const { spawnSync } = await import("child_process");
+        const result = spawnSync("git", ["cherry-pick", ...hashes], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        const stdout = result.stdout || "";
+        const stderr = result.stderr || "";
+        const combined = stdout + stderr;
+        const hasConflicts = combined.includes("CONFLICT") || combined.includes("conflict");
+        const success = result.status === 0;
+        return jsonResponse(req, res, {
+          success,
+          conflicts: hasConflicts,
+          message: success ? stdout.trim() : (stderr.trim() || stdout.trim() || "Cherry-pick failed"),
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { success: false, message: err.message || "Cherry-pick failed" });
+      }
+    }
+
+    // POST /api/git-cherry-pick-abort  { cwd }
+    if (url.pathname === "/api/git-cherry-pick-abort" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        execSync("git cherry-pick --abort 2>&1", { cwd: resolvedCwd, encoding: "utf-8", shell: true });
+        return jsonResponse(req, res, { success: true, message: "Cherry-pick aborted" });
+      } catch (err) {
+        return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+      }
+    }
+
+    // POST /api/git-cherry-pick-continue  { cwd }
+    if (url.pathname === "/api/git-cherry-pick-continue" && req.method === "POST") {
+      const { cwd } = await readBody(req);
+      if (!cwd) return jsonResponse(req, res, { success: false, message: "Missing cwd" }, 400);
+      try {
+        const resolvedCwd = resolve(cwd);
+        const stdout = execSync("git cherry-pick --continue 2>&1", {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+          shell: true,
+          env: { ...process.env, GIT_EDITOR: "true" },
+        });
+        const hasConflicts = stdout.includes("CONFLICT") || stdout.includes("conflict");
+        return jsonResponse(req, res, { success: !hasConflicts, conflicts: hasConflicts, message: stdout.trim() });
+      } catch (err) {
+        const combined = ((err.stderr || "") + (err.stdout || "")).toString();
+        const hasConflicts = combined.includes("CONFLICT") || combined.includes("conflict");
+        return jsonResponse(req, res, {
+          success: false,
+          conflicts: hasConflicts,
+          message: (err.stderr || err.stdout || err.message || "").toString().trim(),
+        });
       }
     }
 
@@ -1666,14 +1753,25 @@ async function handleRequest(req, res) {
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const format = "%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)";
+        const mainName = (() => {
+          for (const name of ["main", "master", "origin/main", "origin/master"]) {
+            try {
+              execSync(`git rev-parse --verify ${name}`, { cwd: resolvedCwd, stdio: "ignore" });
+              return name;
+            } catch { /* next */ }
+          }
+          return "main";
+        })();
+
+        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:${mainName})`;
         const stdout = execSync(`git branch -a --format="${format}"`, {
           cwd: resolvedCwd,
           encoding: "utf-8",
           shell: true,
         });
 
-        const branches = [];
+        const mainCounts = new Map();
+        const rawBranches = [];
         for (const line of stdout.split("\n")) {
           const trimmed = line.trim();
           if (!trimmed) continue;
@@ -1688,6 +1786,7 @@ async function handleRequest(req, res) {
           const trackInfo = parts[2] || "";
           const lastCommit = parts[3] || "";
           const lastCommitDate = parts[4] || "";
+          const mainCount = parseInt((parts[5] || "0").split(/\s+/)[0], 10) || 0;
 
           if (name.includes("HEAD ->") || name === "origin/HEAD") continue;
 
@@ -1698,9 +1797,33 @@ async function handleRequest(req, res) {
           }
 
           const isRemote = name.startsWith("origin/") || name.startsWith("remotes/");
+          const cleanName = name.startsWith("remotes/") ? name.slice(8) : name;
 
-          branches.push({ name, isCurrent, isRemote, upstream, ahead, behind, lastCommit, lastCommitDate });
+          mainCounts.set(cleanName, mainCount);
+
+          rawBranches.push({
+            name: cleanName,
+            isCurrent,
+            isRemote,
+            upstream,
+            ahead,
+            behind,
+            mainCommitCount: 0,
+            lastCommit,
+            lastCommitDate,
+          });
         }
+
+        const branches = rawBranches.map((b) => {
+          if (b.isRemote) {
+            b.mainCommitCount = mainCounts.get(b.name) || 0;
+          } else if (b.upstream) {
+            b.mainCommitCount = mainCounts.get(b.upstream) || 0;
+          } else {
+            b.mainCommitCount = 0;
+          }
+          return b;
+        });
 
         return jsonResponse(req, res, branches);
       } catch (err) {
@@ -3980,6 +4103,19 @@ async function handleRequest(req, res) {
           ? ["tag", "-a", name, sha, "-m", message.trim()]
           : ["tag", name, sha];
         execFileSync(GIT, args, { cwd: resolve(cwd) });
+
+        // Auto-push to remote directly as requested (v2.16)
+        // We try 'origin' first, then fall back to the first available remote.
+        try {
+          const remotes = execFileSync(GIT, ["remote"], { cwd: resolve(cwd) }).toString().trim().split("\n").filter(Boolean);
+          const remote = remotes.includes("origin") ? "origin" : remotes[0];
+          if (remote) {
+            execFileSync(GIT, ["push", remote, `refs/tags/${name}`], { cwd: resolve(cwd) });
+          }
+        } catch {
+          // Ignore push errors (missing remote, offline, etc.)
+        }
+
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
@@ -4074,7 +4210,7 @@ async function handleRequest(req, res) {
       const { cwd, remote, name } = await readBody(req);
       if (!cwd || !remote || !name) return jsonResponse(req, res, { error: "Missing cwd, remote, or name" }, 400);
       try {
-        execFileSync(GIT, ["push", remote, "--delete", name], { cwd: resolve(cwd) });
+        execFileSync(GIT, ["push", remote, "--delete", `refs/tags/${name}`], { cwd: resolve(cwd) });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);

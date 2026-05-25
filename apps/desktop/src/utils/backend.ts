@@ -309,6 +309,7 @@ export interface GitStatus {
   remote: string | null;
   ahead: number;
   behind: number;
+  mainCommitCount: number;
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   pushRemote: string | null;
   /** Commits ahead of the push remote (relevant when pushRemote differs from remote). */
@@ -329,6 +330,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: string | null;
       ahead: number;
       behind: number;
+      main_commit_count: number;
       push_remote: string | null;
       ahead_push: number;
       staged: Array<{ path: string; status: string; old_path?: string }>;
@@ -342,6 +344,7 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       remote: raw.remote,
       ahead: raw.ahead,
       behind: raw.behind,
+      mainCommitCount: raw.main_commit_count,
       pushRemote: raw.push_remote ?? null,
       aheadPush: raw.ahead_push ?? 0,
       staged: raw.staged.map((f) => ({
@@ -357,14 +360,13 @@ export async function getGitStatus(cwd: string): Promise<GitStatus> {
       untracked: raw.untracked,
       conflicted: raw.conflicted,
     };
-  }
+    }
 
-  const res = await devFetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
-  if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
-  const data = await res.json();
-  // dev-server doesn't compute push remote — fill defaults
-  return { pushRemote: null, aheadPush: 0, ...data };
-}
+    const res = await devFetch(`${DEV_SERVER}/api/git-status?cwd=${encodeURIComponent(cwd)}`);
+    if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
+    const data = await res.json();
+    // dev-server doesn't compute push remote — fill defaults
+    return { pushRemote: null, aheadPush: 0, mainCommitCount: 1, ...data };}
 
 // ─── Git diff ──────────────────────────────────────────────
 
@@ -513,6 +515,7 @@ export async function getGitLog(
   all?: boolean,
   author?: string,
   offset?: number,
+  branch?: string,
 ): Promise<GitLogEntry[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
@@ -527,7 +530,7 @@ export async function getGitLog(
         parents: string[];
         refs: string;
       }>
-    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0 });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0, branch: branch ?? null });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -542,7 +545,7 @@ export async function getGitLog(
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}${branch ? `&branch=${encodeURIComponent(branch)}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();
@@ -723,14 +726,15 @@ export interface GitPushPullResult {
 export async function gitPush(
   cwd: string,
   setUpstream: boolean = false,
+  force: boolean = false,
 ): Promise<GitPushPullResult> {
   if (isTauri()) {
-    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream }, IPC_TIMEOUT.NETWORK);
+    return tauriInvoke<GitPushPullResult>("git_push", { cwd, setUpstream, force }, IPC_TIMEOUT.NETWORK);
   }
   const res = await devFetch(`${DEV_SERVER}/api/git-push`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, setUpstream }),
+    body: JSON.stringify({ cwd, setUpstream, force }),
   });
   return res.json();
 }
@@ -1108,6 +1112,7 @@ export interface GitBranch {
   upstream: string | null;
   ahead: number;
   behind: number;
+  mainCommitCount: number;
   lastCommit: string;
   lastCommitDate: string;
 }
@@ -1125,6 +1130,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
         upstream: string | null;
         ahead: number;
         behind: number;
+        main_commit_count: number;
         last_commit: string;
         last_commit_date: string;
       }>
@@ -1137,6 +1143,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
       upstream: b.upstream,
       ahead: b.ahead,
       behind: b.behind,
+      mainCommitCount: b.main_commit_count,
       lastCommit: b.last_commit,
       lastCommitDate: b.last_commit_date ?? "",
     }));
@@ -1530,6 +1537,16 @@ export async function gitRetagTo(
   const result = await gitExec(cwd, args);
   if (result.exitCode !== 0) {
     throw new Error(result.stderr?.trim() || `git tag -f failed (exit ${result.exitCode})`);
+  }
+
+  // Auto-push to remote as requested (v2.16)
+  // We use --force because retagging overwrites an existing tag.
+  try {
+    const remoteInfo = await gitRemoteInfo(cwd);
+    const remote = remoteInfo?.name || "origin";
+    await gitExec(cwd, ["push", "--force", remote, `refs/tags/${name}`]);
+  } catch {
+    // Ignore push errors (missing remote, offline, etc.)
   }
 }
 

@@ -45,10 +45,7 @@ async function loadCommits() {
   loading.value = true;
   selectedHashes.value = new Set();
   try {
-    // Get commits from the selected branch (top 30)
-    // We use git log with the branch name to get its commits
-    commits.value = await getGitLog(props.cwd, 30);
-    // Filter: we re-fetch with branch context — for now show all recent
+    commits.value = await getGitLog(props.cwd, 30, false, undefined, undefined, selectedBranch.value);
   } catch (err: any) {
     error.value = err.message;
   } finally {

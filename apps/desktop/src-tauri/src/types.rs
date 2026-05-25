@@ -61,6 +61,7 @@ pub struct GitStatus {
     pub remote: Option<String>,
     pub ahead: i32,
     pub behind: i32,
+    pub main_commit_count: i32,
     pub push_remote: Option<String>,
     pub ahead_push: i32,
     pub staged: Vec<FileChange>,
@@ -201,7 +202,6 @@ pub struct RepoOperationState {
 }
 
 // ─── Git branch ────────────────────────────────────────────────────
-
 #[derive(Serialize)]
 pub struct GitBranch {
     pub name: String,
@@ -210,6 +210,7 @@ pub struct GitBranch {
     pub upstream: Option<String>,
     pub ahead: i32,
     pub behind: i32,
+    pub main_commit_count: i32,
     pub last_commit: String,
     pub last_commit_date: String,
 }

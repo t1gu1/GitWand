@@ -116,10 +116,12 @@ const ptBR: Locale = {
     pushOne: "Pushear 1 commit",
     pullN: "Pullear {0} commits",
     pullOne: "Pullear 1 commit",
+    pull: "Pullear",
     publish: "Publicar branch",
     fetch: "Fetch",
     rebaseOntoRemote: "Rebase sobre o remoto",
     mergeRemote: "Merge do remoto",
+    forcePush: "Forçar push",
     upToDate: "Atualizado",
     tooltipClean: "Atualizado \u2014 clique para fetch",
     forkBadgeTooltip: "Commits à frente do seu fork ({0}) — push para sincronizar",
@@ -131,7 +133,9 @@ const ptBR: Locale = {
   branchMenu: {
     title: "Ações",
     mergeInto: "Merge na atual\u2026",
+    mergeBranchIntoCurrent: "Merge \u00ab {0} \u00bb into current",
     rebaseOnto: "Rebase da atual sobre\u2026",
+    rebaseCurrentOntoBranch: "Rebase current onto \u00ab {0} \u00bb",
     rename: "Renomear branch\u2026",
     deleteLabel: "Excluir branch\u2026",
     rewind: "Retroceder\u2026",
@@ -179,6 +183,7 @@ const ptBR: Locale = {
     stageAll: "Stage em tudo",
     unstageAll: "Tirar tudo do stage",
     discardAll: "Descartar tudo",
+    discardAllHint: "Discard all uncommitted changes",
     discardAllConfirm: "Descartar {0} arquivo(s)? Esta ação não pode ser desfeita.",
     stage: "Stage",
     unstage: "Tirar do stage",
@@ -232,6 +237,7 @@ const ptBR: Locale = {
     ctxAddToGitignore: "Adicionar ao .gitignore",
     footerDashboard: "Dashboard",
     footerStash: "Stash",
+    stashHint: "Stash all changes",
     quickStash: "Stash rápido",
     quickStashAi: "Stash rápido IA",
     footerTags: "Tags",
@@ -416,7 +422,7 @@ const ptBR: Locale = {
     summaryPlaceholder: "Resumo (obrigatório)",
     description: "Descrição",
     descriptionPlaceholder: "Descrição (opcional)",
-    templatePicker: "Templates", // TODO: translate
+    templatePicker: "Modelos",
     identityDefault: "Config global",
   },
 
@@ -461,11 +467,16 @@ const ptBR: Locale = {
     aiHint: "Sugerir um nome com IA (a partir da sua descrição ou do diff atual)",
     switchRefusedDirty: "Troca recusada: há alterações não commitadas.",
     switchConfirmDirty: "Alterações não commitadas serão perdidas. Continuar mesmo assim?",
+    switchConfirmDirtyTitle: "Descartar alterações?",
     switchStashTitle: "Fazer stash antes de trocar de branch",
     switchStashHint: "Suas alterações serão guardadas no stash e restauradas após trocar para « {0} ». Dê um rótulo para encontrá-las depois.",
     switchStashPlaceholder: "Mensagem opcional (vazio = rótulo padrão)",
     switchStashConfirm: "Stash e trocar",
-    pullAfterCheckout: "This branch is behind its remote. Pull the latest changes?", // TODO: translate
+    pullAfterCheckout: "Este branch está atrás do seu remoto. Deseja fazer pull das últimas alterações?",
+    pullAfterCheckoutTitle: "Fazer pull das alterações?",
+    reset: "Redefinir",
+    resetToOriginConfirm: "Seu branch local \u00ab {0} \u00bb tem alterações não enviadas. Deseja redefinir para \u00ab {1} \u00bb?",
+    resetToOriginTitle: "Redefinir para a origem?",
   },
 
   // ─── Merge Preview ──────────────────────────────────────
@@ -553,7 +564,7 @@ const ptBR: Locale = {
   // ─── Commit context menu (v1.9) ─────────────────────────
   commitCtx: {
     checkout: "Checkout deste commit…",
-    checkoutBranch: "Checkout branch…", // TODO: translate
+    checkoutBranch: "Checkout da branch…",
     checkoutHint: "Alternar para este commit (HEAD desanexado)",
     checkoutHeadDisabled: "Já está neste commit",
     checkoutDesc: "Checkout do commit {0}",
@@ -1286,6 +1297,7 @@ const ptBR: Locale = {
   // ─── Undo ───────────────────────────────────────────────
   undoStack: {
     title: "Histórico de operações",
+    undoTitle: "Desfazer operação?",
     undoButton: "Voltar atrás",
     undoTooltip: "Voltar atrás na última operação Git",
     noHistory: "Sem operações recentes",
@@ -1375,6 +1387,7 @@ const ptBR: Locale = {
     dropAllButton: "Descartar tudo",
     dropAllTooltip: "Descartar todos os stashes",
     dropAllConfirm: "Descartar todos os stashes? Esta ação não pode ser desfeita.",
+    dropAllTitle: "Descartar todos os stashes?", // TODO: translate
     loading: "Carregando stashes…",
     empty: "Sem stashes. Use",
     emptyAction: "+ Stash",

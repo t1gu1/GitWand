@@ -25,7 +25,8 @@ export type SyncAction =
   | "sync"              // pull-then-push
   | "fetch"             // fetch only (no local changes)
   | "rebaseOntoRemote"  // rebase current branch onto its remote counterpart
-  | "mergeRemote";      // merge remote counterpart into current
+  | "mergeRemote"       // merge remote counterpart into current
+  | "forcePush";        // force-push local commits (overwrites remote)
 
 export interface SyncActionItem {
   /** Machine-readable action identifier — maps to a handler in the parent. */
@@ -48,10 +49,16 @@ export interface SyncActionInput {
   aheadCount: number;
   behindCount: number;
   needsPublish: boolean;
+  /**
+   * Hint from the UI that the user likely wants to overwrite the remote
+   * (e.g. just finished a local rebase or reset/undo).
+   */
+  forcePushPreferred?: boolean;
 }
 
 const FETCH_ITEM: SyncActionItem = { id: "fetch", labelKey: "syncAction.fetch" };
 const SYNC_ITEM: SyncActionItem = { id: "sync", labelKey: "syncAction.sync" };
+const PULL_ITEM: SyncActionItem = { id: "pull", labelKey: "syncAction.pull" };
 const REBASE_ONTO_REMOTE_ITEM: SyncActionItem = {
   id: "rebaseOntoRemote",
   labelKey: "syncAction.rebaseOntoRemote",
@@ -59,6 +66,10 @@ const REBASE_ONTO_REMOTE_ITEM: SyncActionItem = {
 const MERGE_REMOTE_ITEM: SyncActionItem = {
   id: "mergeRemote",
   labelKey: "syncAction.mergeRemote",
+};
+const FORCE_PUSH_ITEM: SyncActionItem = {
+  id: "forcePush",
+  labelKey: "syncAction.forcePush",
 };
 
 export function computeSyncAction(input: SyncActionInput): SyncActionResult {
@@ -102,9 +113,17 @@ export function computeSyncAction(input: SyncActionInput): SyncActionResult {
     };
   }
 
-  // 4. Behind only: primary pulls N commits. Dropdown offers Sync, rebase-onto-remote
-  //    (for people who prefer to rebase rather than merge incoming), and Fetch.
+  // 4. Behind only: primary pulls N commits.
+  //    If forcePushPreferred is true (e.g. after a local reset), primary is Force Push.
   if (ahead === 0 && behind > 0) {
+    if (input.forcePushPreferred) {
+      return {
+        state: "behind",
+        primary: { id: "forcePush", labelKey: "syncAction.forcePush" },
+        dropdown: [PULL_ITEM, REBASE_ONTO_REMOTE_ITEM, FETCH_ITEM],
+      };
+    }
+
     return {
       state: "behind",
       primary: {
@@ -116,11 +135,20 @@ export function computeSyncAction(input: SyncActionInput): SyncActionResult {
     };
   }
 
-  // 5. Diverged: both sides moved. Primary is "Sync" (pull-then-push).
-  //    Dropdown surfaces explicit rebase / merge choices plus Fetch.
+  // 5. Diverged: both sides moved.
+  //    If forcePushPreferred is true (e.g. after a rebase), primary is Force Push.
+  //    Otherwise primary is "Sync" (pull-then-push).
+  if (input.forcePushPreferred) {
+    return {
+      state: "diverged",
+      primary: { id: "forcePush", labelKey: "syncAction.forcePush" },
+      dropdown: [SYNC_ITEM, REBASE_ONTO_REMOTE_ITEM, MERGE_REMOTE_ITEM, FETCH_ITEM],
+    };
+  }
+
   return {
     state: "diverged",
     primary: { id: "sync", labelKey: "syncAction.sync" },
-    dropdown: [REBASE_ONTO_REMOTE_ITEM, MERGE_REMOTE_ITEM, FETCH_ITEM],
+    dropdown: [FORCE_PUSH_ITEM, REBASE_ONTO_REMOTE_ITEM, MERGE_REMOTE_ITEM, FETCH_ITEM],
   };
 }

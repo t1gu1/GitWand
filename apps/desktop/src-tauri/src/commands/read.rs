@@ -81,11 +81,14 @@ pub(crate) fn git_status_libgit2(cwd: &str) -> Result<GitStatus, String> {
     let (push_remote, ahead_push) =
         compute_push_remote_via_cli(cwd, remote.as_deref());
 
+    let main_commit_count = compute_main_commit_count(cwd, &branch);
+
     Ok(GitStatus {
         branch,
         remote,
         ahead,
         behind,
+        main_commit_count,
         push_remote,
         ahead_push,
         staged,
@@ -488,11 +491,14 @@ pub(crate) fn git_status_cli(cwd: String) -> Result<GitStatus, String> {
         }
     }
 
+    let main_commit_count = compute_main_commit_count(&cwd, &branch);
+
     Ok(GitStatus {
         branch,
         remote,
         ahead,
         behind,
+        main_commit_count,
         push_remote,
         ahead_push,
         staged,
@@ -500,6 +506,32 @@ pub(crate) fn git_status_cli(cwd: String) -> Result<GitStatus, String> {
         untracked,
         conflicted,
     })
+}
+
+/// Helper to compute the number of commits the *remote-tracking* branch
+/// (origin/branch) is ahead of the "main" branch. Used to disable
+/// merge/rebase actions when the branch is fresh/empty (v2.15).
+///
+/// Checks in order: main, master, origin/main, origin/master.
+fn compute_main_commit_count(cwd: &str, branch: &str) -> i32 {
+    let remote_ref = format!("origin/{}", branch);
+    for base in ["main", "master", "origin/main", "origin/master"] {
+        if let Ok(output) = git_cmd()
+            .args(["rev-list", "--count", &format!("{}..{}", base, remote_ref)])
+            .current_dir(cwd)
+            .output()
+        {
+            if output.status.success() {
+                let s = String::from_utf8_lossy(&output.stdout);
+                if let Ok(count) = s.trim().parse::<i32>() {
+                    return count;
+                }
+            }
+        }
+    }
+    // Default to 1 so we don't accidentally disable actions if we can't
+    // find a base branch to compare against, or if the remote branch doesn't exist yet.
+    1
 }
 
 // ─── Git diff ────────────────────────────────────────────────
@@ -577,6 +609,7 @@ pub(crate) fn git_log(
     all: Option<bool>,
     author: Option<String>,
     offset: Option<i32>,
+    branch: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
     let limit = count.unwrap_or(100);
     let skip  = offset.unwrap_or(0).max(0);
@@ -599,6 +632,11 @@ pub(crate) fn git_log(
         args.push(format!("--skip={}", skip));
     }
     args.push(format!("-n{}", limit));
+    if let Some(ref b) = branch {
+        if !b.is_empty() {
+            args.push(b.clone());
+        }
+    }
     args.push(format!("--format={}", format));
 
     // stash@{1+} are only in the reflog, not reachable via --all alone.

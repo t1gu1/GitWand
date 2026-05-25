@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-05-22
+
+v2.15 makes the Git Tree the primary history view and removes the flat commit log panel entirely. All branch, stash, tag, and commit operations are now accessible directly from the graph. PR #23 — 59 commits, author t1gu1.
+
+### Added
+
+- **Git Tree as primary view** — the Git Tree replaces the commit log as the main history panel. The DAG renders the full multi-branch topology as an SVG with trunk-pinning, per-lane cooldown counters, and automatic WIP node injection (uncommitted changes appear as a live node at the HEAD of the active branch).
+- **Unified context menus on commits** — right-click any node to checkout, reset (soft/mixed/hard), revert, create branch, create tag, or cherry-pick without leaving the graph.
+- **Unified context menus on branches** — right-click any ref label to checkout, merge, rebase, rename, delete, push, or pull the branch; stash management accessible from the same menu.
+- **In-graph stash management** — stash nodes visible directly in the DAG; apply, pop, drop, or inspect from the context menu.
+- **In-graph tag management** — tag nodes rendered inline; create, push, delete from the context menu.
+- **Search bar in the Git Tree** — live fuzzy search across commits (message, SHA prefix, author); matching nodes highlighted; `Escape` clears.
+- **DAG trunk-pinning** — the default branch (main/master) always occupies the leftmost lane, regardless of merge order.
+- **Lane cooldown system** — vacated lanes are reused after a configurable number of commits to prevent unbounded lane sprawl on long-running feature branches.
+
+### Changed
+
+- **Log/History panel removed** — the flat commit list that previously showed `git log` output has been replaced by the Git Tree. File-level history is opened via a dedicated "File history" button in the diff header.
+- **Branch list relocated** — the branch picker is a dropdown triggered from the header branch chip; the standalone Branches sidebar panel is removed.
+
+### Technical
+
+- `GitTreeView.vue` promoted from secondary panel to primary view; `HistoryView.vue` removed; `CommitLog.vue` kept as a lightweight embedded component for file history.
+- Rust command `git_log_graph` extended with `--all` by default and a `branches[]` filter for scoped views; new command `git_wip_status` returns the WIP pseudo-commit shape.
+- `useGitTree.ts` — new composable owning DAG layout (trunk-pinning + lane assignment + cooldown bookkeeping); extracted from the former `useBranchGraph.ts`.
+
 ## [2.14.0] - 2026-05-19
 
 v2.14 closes the remaining `ForgeNotImplementedError` gaps on GitLab and Bitbucket and makes all three intelligence methods (conflict preview, hotspots, file history) forge-agnostic.
@@ -887,13 +913,31 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v2.4.1...HEAD
-[2.4.1]: https://github.com/devlint/GitWand/releases/tag/v2.4.1
-[2.3.0]: https://github.com/devlint/GitWand/releases/tag/v2.3.0
-[2.0.1]: https://github.com/devlint/GitWand/releases/tag/v2.0.1
-[2.0.0]: https://github.com/devlint/GitWand/releases/tag/v2.0.0
-[1.4.0]: https://github.com/devlint/GitWand/releases/tag/v1.4.0
-[1.2.0]: https://github.com/devlint/GitWand/releases/tag/v1.2.0
-[1.1.0]: https://github.com/devlint/GitWand/releases/tag/v1.1.0
+[Unreleased]: https://github.com/devlint/GitWand/compare/v2.15.0...HEAD
+[2.15.0]: https://github.com/devlint/GitWand/compare/v2.14.0...v2.15.0
+[2.14.0]: https://github.com/devlint/GitWand/compare/v2.13.0...v2.14.0
+[2.13.0]: https://github.com/devlint/GitWand/compare/v2.12.0...v2.13.0
+[2.12.0]: https://github.com/devlint/GitWand/compare/v2.11.0...v2.12.0
+[2.11.0]: https://github.com/devlint/GitWand/compare/v2.10.0...v2.11.0
+[2.10.0]: https://github.com/devlint/GitWand/compare/v2.9.0...v2.10.0
+[2.9.0]: https://github.com/devlint/GitWand/compare/v2.8.2...v2.9.0
+[2.8.2]: https://github.com/devlint/GitWand/compare/v2.8.0...v2.8.2
+[2.8.0]: https://github.com/devlint/GitWand/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/devlint/GitWand/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/devlint/GitWand/compare/v2.5.0...v2.6.0
+[2.5.0]: https://github.com/devlint/GitWand/compare/v2.4.1...v2.5.0
+[2.4.1]: https://github.com/devlint/GitWand/compare/v2.3.0...v2.4.1
+[2.3.0]: https://github.com/devlint/GitWand/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/devlint/GitWand/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/devlint/GitWand/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/devlint/GitWand/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/devlint/GitWand/compare/v1.8.0...v1.9.0
+[1.8.0]: https://github.com/devlint/GitWand/compare/v1.7.0...v1.8.0
+[1.7.0]: https://github.com/devlint/GitWand/compare/v1.6.0...v1.7.0
+[1.6.0]: https://github.com/devlint/GitWand/compare/v1.5.0...v1.6.0
+[1.5.0]: https://github.com/devlint/GitWand/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/devlint/GitWand/compare/v1.3.0...v1.4.0
+[1.3.0]: https://github.com/devlint/GitWand/compare/v1.2.0...v1.3.0
+[1.2.0]: https://github.com/devlint/GitWand/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/devlint/GitWand/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/devlint/GitWand/releases/tag/v1.0.0
-[0.0.1]: https://github.com/devlint/GitWand/releases/tag/v0.0.1
