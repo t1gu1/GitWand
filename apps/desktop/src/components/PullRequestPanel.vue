@@ -942,8 +942,38 @@ watch(() => props.cwd, () => {
   background: var(--color-bg-tertiary);
 }
 .pr-merge-dialog p { margin: 0 0 8px; font-size: 13px; }
-.pr-merge-options { display: flex; gap: 16px; margin-bottom: 10px; }
-.pr-merge-options label { font-size: 12px; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.pr-merge-options {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.pr-merge-options label {
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  transition: all var(--transition-base);
+  flex: 1;
+  font-weight: var(--font-weight-medium);
+}
+.pr-merge-options label:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+.pr-merge-options label:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+.pr-merge-options input {
+  display: none;
+}
 .pr-merge-actions { display: flex; gap: 6px; }
 
 /* ─── Body: two columns ───────────────────────────────── */

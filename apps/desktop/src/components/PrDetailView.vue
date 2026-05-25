@@ -557,7 +557,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
 }
 .pdv-merge-options {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-4);
   margin-bottom: var(--space-4);
   flex-wrap: wrap;
 }
@@ -567,12 +567,27 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   gap: var(--space-3);
   font-size: var(--font-size-base);
   cursor: pointer;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  transition: all var(--transition-base);
+  flex: 1;
+  min-width: 140px;
+  justify-content: center;
+  font-weight: var(--font-weight-medium);
 }
 .pdv-merge-opt:hover {
-  background: var(--color-bg-tertiary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+.pdv-merge-opt:has(input:checked) {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+.pdv-merge-opt input {
+  display: none;
 }
 .pdv-merge-actions {
   display: flex;
