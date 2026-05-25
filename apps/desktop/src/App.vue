@@ -341,6 +341,7 @@ const {
   openTab,
   closeTab,
   switchTab,
+  reorderTabs,
 } = useRepoTabs();
 
 // When tab changes, load that repo into the single useGitRepo instance.
@@ -2015,6 +2016,7 @@ onUnmounted(() => {
       :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
       :is-switching-branch="isSwitchingBranch" :is-merging="isMerging" :tabs="repoTabs" :active-tab-id="activeTabId"
       @open-folder="handleOpenFolder" @open-repo="handleOpenPath" @switch-tab="switchTab" @close-tab="closeTab"
+      @reorder-tabs="reorderTabs"
       @new-tab="handleOpenFolder" @open-clone="showCloneModal = true" @open-fork="showForkModal = true"
       @toggle-theme="toggleTheme" @push="handlePush" @pull="() => doPull(pullMode === 'rebase')" @fetch="doFetch"
       @sync="doSync" @publish="doPublish" @rebase-onto-remote="doRebaseOntoRemote" @merge-remote="doMergeRemote"

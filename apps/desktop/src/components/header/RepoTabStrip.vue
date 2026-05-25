@@ -46,7 +46,42 @@ const emit = defineEmits<{
   openFork: [];
   openRecent: [path: string];
   closeOtherTabs: [tabId: number];
+  reorderTabs: [oldIndex: number, newIndex: number];
 }>();
+
+// ─── Drag and Drop (v2.15) ──────────────────────────────
+const draggedIndex = ref<number | null>(null);
+const hoveredIndex = ref<number | null>(null);
+
+function onDragStart(e: DragEvent, index: number) {
+  draggedIndex.value = index;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    // Required for some browsers to initiate drag
+    e.dataTransfer.setData("text/plain", index.toString());
+  }
+}
+
+function onDragOver(e: DragEvent, index: number) {
+  e.preventDefault(); // Required to allow drop
+  if (draggedIndex.value !== null && draggedIndex.value !== index) {
+    hoveredIndex.value = index;
+  }
+}
+
+function onDrop(e: DragEvent, index: number) {
+  e.preventDefault();
+  if (draggedIndex.value !== null && draggedIndex.value !== index) {
+    emit("reorderTabs", draggedIndex.value, index);
+  }
+  draggedIndex.value = null;
+  hoveredIndex.value = null;
+}
+
+function onDragEnd() {
+  draggedIndex.value = null;
+  hoveredIndex.value = null;
+}
 
 // Pinned and recent repos shown in the + dropdown (excludes repos already
 // open in a tab). Capped at 8 combined entries so the menu stays compact;
@@ -176,16 +211,27 @@ function onCloseClick(e: MouseEvent, tabId: number) {
     <!-- Tabs — rendered only when there are multiple repos -->
     <template v-if="showTabs">
       <button
-        v-for="tab in tabs"
+        v-for="(tab, index) in tabs"
         :key="tab.id"
         type="button"
         role="tab"
         class="repo-tab"
-        :class="{ 'repo-tab--active': tab.id === activeTabId }"
+        :class="{
+          'repo-tab--active': tab.id === activeTabId,
+          'repo-tab--dragging': draggedIndex === index,
+          'repo-tab--drag-over-left': hoveredIndex === index && draggedIndex !== null && draggedIndex > index,
+          'repo-tab--drag-over-right': hoveredIndex === index && draggedIndex !== null && draggedIndex < index
+        }"
         :aria-selected="tab.id === activeTabId ? 'true' : 'false'"
         :title="tab.path"
+        draggable="true"
         @click="emit('switchTab', tab.id)"
         @mousedown="(e) => onMiddleClick(e, tab.id)"
+        @dragstart="(e) => onDragStart(e, index)"
+        @dragover="(e) => onDragOver(e, index)"
+        @dragleave="hoveredIndex = null"
+        @drop="(e) => onDrop(e, index)"
+        @dragend="onDragEnd"
       >
         <svg class="repo-tab__icon" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 3.5A1.5 1.5 0 013.5 2h3.586a1.5 1.5 0 011.06.44l.915.914a1 1 0 00.707.293H12.5A1.5 1.5 0 0114 5.147V12.5A1.5 1.5 0 0112.5 14h-9A1.5 1.5 0 012 12.5v-9z" stroke="currentColor" stroke-width="1.2" />
@@ -354,6 +400,7 @@ function onCloseClick(e: MouseEvent, tabId: number) {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
+  padding: 0 4px;
 }
 
 /* Tabs are pills, matching the rest of the header's chip vocabulary
@@ -389,6 +436,38 @@ function onCloseClick(e: MouseEvent, tabId: number) {
 .repo-tab--active {
   color: var(--color-accent);
   background: var(--color-accent-soft);
+}
+
+.repo-tab--dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.repo-tab--drag-over-left,
+.repo-tab--drag-over-right {
+  position: relative;
+}
+
+.repo-tab--drag-over-left::before,
+.repo-tab--drag-over-right::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 24px;
+  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.repo-tab--drag-over-left::before {
+  left: -3px;
+}
+
+.repo-tab--drag-over-right::after {
+  right: -3px;
 }
 
 .repo-tab__icon {
