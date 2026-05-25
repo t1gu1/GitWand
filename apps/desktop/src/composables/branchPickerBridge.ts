@@ -26,3 +26,6 @@ export const LOG_FOCUS_SEARCH_KEY: InjectionKey<Ref<number>> = Symbol("logFocusS
 
 /** Open Launchpad view (View menu → Open Launchpad, ⌘L). */
 export const LAUNCHPAD_OPEN_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("launchpadOpenRequest");
+
+/** Toggle the commit-graph git-tree panel (double-click on any file in Changes or Diff). */
+export const TOGGLE_GIT_TREE_KEY: InjectionKey<() => void> = Symbol("toggleGitTree");

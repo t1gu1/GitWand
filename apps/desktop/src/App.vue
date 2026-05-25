@@ -83,6 +83,7 @@ import {
   UNDO_POPOVER_REQUEST_KEY,
   LOG_FOCUS_SEARCH_KEY,
   LAUNCHPAD_OPEN_REQUEST_KEY,
+  TOGGLE_GIT_TREE_KEY,
 } from "./composables/branchPickerBridge";
 import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
@@ -320,6 +321,7 @@ provide(MERGE_POPOVER_REQUEST_KEY, mergePopoverRequest);
 provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
 provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
 provide(LAUNCHPAD_OPEN_REQUEST_KEY, launchpadOpenRequest);
+provide(TOGGLE_GIT_TREE_KEY, () => { showGitTree.value = !showGitTree.value; });
 provide("askConfirm", askConfirm);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, nextTick, onMounted, onUnmounted, watch } from "vue";
+import { computed, ref, nextTick, onMounted, onUnmounted, watch, inject } from "vue";
+import { TOGGLE_GIT_TREE_KEY } from "../composables/branchPickerBridge";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
 import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser, type GitDiff } from "../utils/backend";
 import PrListSidebar from "./PrListSidebar.vue";
@@ -84,6 +85,12 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale } = useI18n();
+
+const toggleGitTree = inject(TOGGLE_GIT_TREE_KEY, () => {});
+function onFileItemDblClick() {
+  toggleGitTree();
+  window.getSelection()?.removeAllRanges();
+}
 
 function getFileStatus(diff: GitDiff): { label: string; color: string; icon: string } {
   if (diff.status === 'renamed') return { label: 'Renamed', color: 'var(--color-info)', icon: 'R' };
@@ -855,6 +862,7 @@ function formatActivityDate(dateStr: string): string {
             :aria-selected="idx === visibleFileIdx"
             tabindex="0"
             @click="emit('scrollToFile', idx)"
+            @dblclick="onFileItemDblClick"
             @keydown.enter="emit('scrollToFile', idx)"
             @keydown.space.prevent="emit('scrollToFile', idx)"
           >
@@ -943,6 +951,7 @@ function formatActivityDate(dateStr: string): string {
                 :aria-selected="selectedFile === file.path"
                 tabindex="0"
                 @click="emit('select', file.path, file.section === 'staged')"
+                @dblclick="onFileItemDblClick"
                 @keydown.enter="emit('select', file.path, file.section === 'staged')"
                 @keydown.space.prevent="emit('select', file.path, file.section === 'staged')"
                 @contextmenu.prevent.stop="openContextMenu($event, file)"
@@ -984,6 +993,7 @@ function formatActivityDate(dateStr: string): string {
                 role="option"
                 tabindex="0"
                 @click.stop="emit('select-dir-file', subFile)"
+                @dblclick.stop="onFileItemDblClick"
                 @keydown.enter.stop="emit('select-dir-file', subFile)"
               >
                 <span class="file-status-badge mono file-status-badge--added">A</span>
