@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, inject } from "vue";
 import {
   gitStashList,
   gitStash,
@@ -37,6 +37,8 @@ const { isGenerating: isGeneratingMessage, generate: generateStashMessage } =
   useStashMessage();
 const ai = useAIProvider();
 const { locale, t } = useI18n();
+
+const askConfirm = inject<(options: any) => Promise<boolean>>("askConfirm");
 
 async function loadStashes() {
   if (!props.cwd) return;
@@ -125,7 +127,16 @@ async function dropStash(index: number) {
 
 async function dropAllStashes() {
   if (!props.cwd || stashes.value.length === 0) return;
-  if (!window.confirm(t('stash.dropAllConfirm'))) return;
+  if (askConfirm) {
+    if (!await askConfirm({
+      title: t('stash.dropAllTitle'),
+      message: t('stash.dropAllConfirm'),
+      confirmLabel: t('stash.dropAllButton'),
+      danger: true
+    })) return;
+  } else {
+    if (!window.confirm(t('stash.dropAllConfirm'))) return;
+  }
   try {
     await gitStashClear(props.cwd);
     expandedIndex.value = null;

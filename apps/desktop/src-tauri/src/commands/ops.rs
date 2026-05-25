@@ -346,10 +346,13 @@ pub(crate) fn git_split_commit(
 // ─── Git push / pull / merge ─────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>) -> Result<GitPushPullResult, String> {
+pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>, force: Option<bool>) -> Result<GitPushPullResult, String> {
     let mut args: Vec<&str> = vec!["push"];
     if set_upstream.unwrap_or(false) {
         args.extend(["--set-upstream", "origin", "HEAD"]);
+    }
+    if force.unwrap_or(false) {
+        args.push("--force-with-lease");
     }
     let _t0 = Instant::now();
     let output = git_cmd()
@@ -563,10 +566,11 @@ pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> R
 
 #[tauri::command]
 pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+    let main_name = get_main_branch_name(&cwd);
     let output = git_cmd()
         .args([
             "branch", "-a",
-            "--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)",
+            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:{})", main_name),
         ])
         .current_dir(&cwd)
         .output()
@@ -578,7 +582,8 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut branches: Vec<GitBranch> = Vec::new();
+    let mut branches_raw: Vec<(GitBranch, Option<String>)> = Vec::new();
+    let mut main_counts: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
 
     for line in stdout.lines() {
         let line = line.trim();
@@ -609,23 +614,67 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
         let last_commit = if parts.len() > 3 { parts[3].to_string() } else { String::new() };
         let last_commit_date = if parts.len() > 4 { parts[4].trim().to_string() } else { String::new() };
 
+        let main_count = if parts.len() > 5 {
+            let ab = parts[5].split_whitespace().next().unwrap_or("0");
+            ab.parse::<i32>().unwrap_or(0)
+        } else {
+            0
+        };
+
         if name.contains("HEAD ->") || name == "origin/HEAD" { continue; }
 
         let is_remote = name.starts_with("origin/") || name.starts_with("remotes/");
+        let clean_name = if name.starts_with("remotes/") {
+            name.strip_prefix("remotes/").unwrap_or(&name).to_string()
+        } else {
+            name.clone()
+        };
 
-        branches.push(GitBranch {
-            name,
+        main_counts.insert(clean_name.clone(), main_count);
+
+        branches_raw.push((GitBranch {
+            name: clean_name,
             is_current,
             is_remote,
-            upstream,
+            upstream: upstream.clone(),
             ahead,
             behind,
+            main_commit_count: 0, // Fill later
             last_commit,
             last_commit_date,
-        });
+        }, upstream));
+    }
+
+    let mut branches = Vec::new();
+    for (mut b, upstream) in branches_raw {
+        if b.is_remote {
+            b.main_commit_count = *main_counts.get(&b.name).unwrap_or(&0);
+        } else if let Some(ref u) = upstream {
+            // For local branches, use the count of their upstream
+            b.main_commit_count = *main_counts.get(u).unwrap_or(&0);
+        } else {
+            // No upstream -> 0 pushed commits
+            b.main_commit_count = 0;
+        }
+        branches.push(b);
     }
 
     Ok(branches)
+}
+
+fn get_main_branch_name(cwd: &str) -> String {
+    for name in ["main", "master", "origin/main", "origin/master"] {
+        if let Ok(output) = git_cmd()
+            .args(["rev-parse", "--verify", name])
+            .current_dir(cwd)
+            .output()
+        {
+            if output.status.success() {
+                return name.to_string();
+            }
+        }
+    }
+    "main".to_string()
 }
 
 #[tauri::command]
@@ -1027,6 +1076,7 @@ pub(crate) fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>)
 
 #[tauri::command]
 pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String>) -> Result<(), String> {
+    let tag_name = name.clone();
     let trimmed = message.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let args: Vec<String> = if let Some(m) = trimmed {
         vec!["tag".into(), "-a".into(), name, sha, "-m".into(), m.to_string()]
@@ -1044,6 +1094,30 @@ pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Op
             String::from_utf8_lossy(&output.stderr)
         ));
     }
+
+    // Auto-push to remote directly as requested (v2.16)
+    // We try 'origin' first, then fall back to the first available remote.
+    let remote = match git_cmd().args(["remote"]).current_dir(&cwd).output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let remotes: Vec<&str> = stdout.lines().collect();
+            if remotes.contains(&"origin") {
+                Some("origin".to_string())
+            } else {
+                remotes.first().map(|s| s.to_string())
+            }
+        }
+        _ => None,
+    };
+
+    if let Some(r) = remote {
+        // We ignore push failure if we're offline, as the local tag was already successfully created.
+        let _ = git_cmd()
+            .args(["push", &r, &format!("refs/tags/{}", tag_name)])
+            .current_dir(&cwd)
+            .output();
+    }
+
     Ok(())
 }
 
@@ -1166,7 +1240,7 @@ pub(crate) fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<Strin
 #[tauri::command]
 pub(crate) fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
     let output = git_cmd()
-        .args(["push", &remote, "--delete", &name])
+        .args(["push", &remote, "--delete", &format!("refs/tags/{}", name)])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to delete remote tag: {}", e))?;

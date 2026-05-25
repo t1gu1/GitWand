@@ -74,6 +74,29 @@ export function useGitRepo() {
   const error = ref<string | null>(null);
   const successMessage = ref<string | null>(null);
   const viewMode = ref<ViewMode>("dashboard");
+  const forcePushPreferred = ref(false);
+
+  function forcePushKey(): string | null {
+    const path = folderPath.value;
+    const branch = status.value?.branch;
+    if (!path || !branch) return null;
+    return `gitwand:fpp:${path}:${branch}`;
+  }
+
+  // Persist forcePushPreferred to localStorage so it survives app reloads.
+  watch(forcePushPreferred, (val) => {
+    const key = forcePushKey();
+    if (!key) return;
+    if (val) localStorage.setItem(key, "1");
+    else localStorage.removeItem(key);
+  });
+
+  // Restore from localStorage when status (and thus branch) becomes known.
+  watch(() => status.value?.branch, (branch) => {
+    if (!branch) return;
+    const key = forcePushKey();
+    forcePushPreferred.value = key ? localStorage.getItem(key) === "1" : false;
+  });
 
   // Commit editor state
   const COMMIT_SIGNATURE = "\u{1FA84} Commit via GitWand";
@@ -235,6 +258,7 @@ export function useGitRepo() {
   /** How many commits ahead / behind the remote tracking branch. */
   const aheadCount = computed(() => status.value?.ahead ?? 0);
   const behindCount = computed(() => status.value?.behind ?? 0);
+  const mainCommitCount = computed(() => status.value?.mainCommitCount ?? 1);
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   const pushRemote = computed(() => status.value?.pushRemote ?? null);
   /** Commits ahead of the push remote (fork setup only). */
@@ -626,18 +650,19 @@ export function useGitRepo() {
 
   // ─── Push / Pull ────────────────────────────────────────
 
-  async function push() {
+  async function push(force: boolean = false) {
     if (!folderPath.value) return;
     if (!requireOnline("push")) return;
     isPushing.value = true;
     try {
       // If the current branch has no upstream, publish it with --set-upstream.
       const publish = needsPublish.value;
-      const result = await gitPush(folderPath.value, publish);
+      const result = await gitPush(folderPath.value, publish, force);
       if (!result.success) {
         error.value = `push: ${result.message}`;
       } else {
         successMessage.value = "push-done";
+        forcePushPreferred.value = false;
       }
       await refresh();
     } catch (err: any) {
@@ -665,6 +690,7 @@ export function useGitRepo() {
         } else {
           successMessage.value = "sync-done";
         }
+        forcePushPreferred.value = false;
       }
       await refresh();
     } catch (err: any) {
@@ -913,6 +939,7 @@ export function useGitRepo() {
     isSwitchingBranch.value = true;
     try {
       await gitSwitchBranch(folderPath.value, name);
+      forcePushPreferred.value = false;
       await refresh();
       await loadBranches();
     } catch (err: any) {
@@ -1019,6 +1046,7 @@ export function useGitRepo() {
     error,
     successMessage,
     viewMode,
+    forcePushPreferred,
     isCommitting,
     isPushing,
     isPulling,
@@ -1046,6 +1074,7 @@ export function useGitRepo() {
     needsPublish,
     aheadCount,
     behindCount,
+    mainCommitCount,
     pushRemote,
     aheadPushCount,
     // Actions

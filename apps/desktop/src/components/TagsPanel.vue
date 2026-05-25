@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, type GitTag } from "../utils/backend";
+import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, gitUnpushedTags, type GitTag } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import BaseModal from "./BaseModal.vue";
 
@@ -11,18 +11,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "create-tag"): void;  // ask host to open the tag creation flow
+  (e: "refresh"): void;     // ask host to refresh repo data (v2.12 bug fix)
 }>();
 
 const { t } = useI18n();
 
 // ─── State ──────────────────────────────────────────────
 const tags = ref<GitTag[]>([]);
+const unpushedTagNames = ref<string[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 const remoteName = ref("origin");
 const busyTag = ref<string | null>(null);   // name of tag currently being acted on
 const busyPushAll = ref(false);
-const confirmDelete = ref<{ name: string; withRemote: boolean } | null>(null);
 const retagDialog = ref<{
   name: string;
   isAnnotated: boolean;
@@ -42,6 +43,11 @@ async function load() {
     ]);
     tags.value = tagList;
     if (remoteInfo?.name) remoteName.value = remoteInfo.name;
+
+    // Load unpushed tags (v2.16)
+    if (remoteName.value) {
+      unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
+    }
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -53,6 +59,7 @@ onMounted(load);
 
 // ─── Computed ────────────────────────────────────────────
 const hasRemote = computed(() => !!remoteName.value);
+const hasUnpushed = computed(() => unpushedTagNames.value.length > 0);
 
 function relativeDate(iso: string): string {
   if (!iso) return "";
@@ -67,24 +74,28 @@ function relativeDate(iso: string): string {
 }
 
 // ─── Actions ─────────────────────────────────────────────
-function askDelete(name: string) {
-  confirmDelete.value = { name, withRemote: false };
-}
-
-async function confirmDeleteTag() {
-  if (!confirmDelete.value) return;
-  const { name, withRemote } = confirmDelete.value;
+async function askDelete(name: string) {
+  // Direct deletion as requested (v2.16)
+  // No modal. Always both local & remote (best effort).
   busyTag.value = name;
   error.value = null;
   try {
-    await gitDeleteTag(props.cwd, name);
-    if (withRemote && hasRemote.value) {
-      await gitDeleteRemoteTag(props.cwd, remoteName.value, name).catch(() => {
-        // Remote delete failure is non-fatal — tag is gone locally
-      });
-    }
-    confirmDelete.value = null;
+    // 1. Determine remote
+    let rName = remoteName.value || "origin";
+    try {
+      const info = await gitRemoteInfo(props.cwd);
+      if (info.name) rName = info.name;
+    } catch { /* ignore */ }
+
+    // 2. Local delete (best effort)
+    await gitDeleteTag(props.cwd, name).catch(() => {});
+
+    // 3. Remote delete (best effort)
+    await gitDeleteRemoteTag(props.cwd, rName, name).catch(() => {});
+
+    // 4. Reload local UI + tell host to refresh
     await load();
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -98,6 +109,9 @@ async function pushTag(name: string) {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "single", name);
+    // Refresh unpushed list (v2.16)
+    unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -127,6 +141,7 @@ async function confirmRetag() {
     }
     retagDialog.value = null;
     await load();
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -140,6 +155,9 @@ async function pushAllTags() {
   error.value = null;
   try {
     await gitPushTags(props.cwd, remoteName.value, "all");
+    // Refresh unpushed list (v2.16)
+    unpushedTagNames.value = await gitUnpushedTags(props.cwd, remoteName.value).catch(() => []);
+    emit("refresh");
   } catch (err: any) {
     error.value = err?.message ?? String(err);
   } finally {
@@ -165,7 +183,7 @@ async function pushAllTags() {
           {{ t('tags.newTag') }}
         </button>
         <button
-          v-if="hasRemote"
+          v-if="hasRemote && hasUnpushed"
           class="bm-btn bm-btn--ghost tp-btn-sm"
           :disabled="busyPushAll || tags.length === 0"
           @click="pushAllTags"
@@ -232,7 +250,7 @@ async function pushAllTags() {
             </svg>
           </button>
           <button
-            v-if="hasRemote"
+            v-if="hasRemote && unpushedTagNames.includes(tag.name)"
             class="tp-action-btn"
             :disabled="busyTag === tag.name"
             v-tooltip="t('tags.pushTag', remoteName)"
@@ -250,7 +268,7 @@ async function pushAllTags() {
             @click="askDelete(tag.name)"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M3 4h10M6 4V2h4v2M5 4v9a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
         </div>
@@ -299,27 +317,6 @@ async function pushAllTags() {
           @click="confirmRetag"
         >
           {{ busyTag === retagDialog.name ? t('common.loading') : t('tags.retagConfirm') }}
-        </button>
-      </template>
-    </BaseModal>
-
-    <!-- Delete confirmation sub-modal -->
-    <BaseModal
-      v-if="confirmDelete"
-      :title="t('tags.deleteConfirmTitle')"
-      :subtitle="confirmDelete.name"
-      size="sm"
-      role="alertdialog"
-      @close="confirmDelete = null"
-    >
-      <label v-if="hasRemote" class="tp-check-label">
-        <input type="checkbox" v-model="confirmDelete.withRemote" />
-        <span>{{ t('tags.deleteAlsoRemote', remoteName) }}</span>
-      </label>
-      <template #footer>
-        <button class="bm-btn bm-btn--ghost" @click="confirmDelete = null">{{ t('common.cancel') }}</button>
-        <button class="bm-btn bm-btn--danger" :disabled="busyTag === confirmDelete.name" @click="confirmDeleteTag">
-          {{ busyTag === confirmDelete.name ? t('common.loading') : t('tags.deleteConfirm') }}
         </button>
       </template>
     </BaseModal>

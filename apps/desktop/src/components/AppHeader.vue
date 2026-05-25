@@ -47,6 +47,7 @@ import SearchTrigger from "./header/SearchTrigger.vue";
 import type { RepoTab } from "../composables/useRepoTabs";
 
 const { t } = useI18n();
+const askConfirm = inject<(options: any) => Promise<boolean>>("askConfirm");
 
 const props = defineProps<{
   hasFiles: boolean;
@@ -62,12 +63,16 @@ const props = defineProps<{
   needsPublish?: boolean;
   aheadCount: number;
   behindCount: number;
+  /** Number of commits current HEAD is ahead of main (for action gating). */
+  mainCommitCount?: number;
   /** Push remote when it differs from upstream (fork / triangular workflow). */
   pushRemote?: string | null;
   /** Commits ahead of the push remote (fork setup). */
   aheadPushCount?: number;
   isPushing: boolean;
   isPulling: boolean;
+  /** Whether a rebase or reset just happened — makes Force Push primary. */
+  forcePushPreferred: boolean;
   /** Whether a fetch is in flight (drives the sync-split spinner). */
   isFetching?: boolean;
   /** True when the device has no network connectivity. */
@@ -105,6 +110,7 @@ const emit = defineEmits<{
   publish: [];
   rebaseOntoRemote: [];
   mergeRemote: [];
+  forcePush: [];
   // ── Branch actions ───────────────────────────────────────────
   switchBranch: [name: string];
   createBranch: [name: string];
@@ -135,6 +141,7 @@ const emit = defineEmits<{
   openTags: [];
   openWorkspace: [];
   openAgents: [];
+  discardAll: [];
   changeView: [mode: 'dashboard' | 'changes' | 'history' | 'prs' | 'launchpad'];
 }>();
 
@@ -222,8 +229,19 @@ async function handleUndo(entry: UndoEntry) {
   const msg = isHardUndo(entry)
     ? t("undoStack.undoHardConfirm")
     : t("undoStack.undoConfirm");
-  // eslint-disable-next-line no-alert
-  if (!confirm(msg)) return;
+  
+  if (askConfirm) {
+    if (!await askConfirm({
+      title: t("undoStack.undoTitle"),
+      message: msg,
+      confirmLabel: t("undoStack.undoButton"),
+      danger: isHardUndo(entry),
+    })) return;
+  } else {
+    // eslint-disable-next-line no-alert
+    if (!confirm(msg)) return;
+  }
+
   try {
     await undoStack.undo(props.cwd, entry);
     closeUndoPopover();
@@ -459,6 +477,8 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           <BranchMenu
             :current-branch="branchDisplay"
             :disabled="isMerging || isSwitchingBranch"
+            :has-changes="hasFiles"
+            :main-commit-count="mainCommitCount"
             @open-merge-picker="onBranchMenuMerge"
             @open-rebase-picker="onBranchMenuRebase"
             @open-rename-modal="onBranchMenuRename"
@@ -466,6 +486,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-rewind="onBranchMenuRewind"
             @open-worktrees="onBranchMenuWorktrees"
             @open-submodules="onBranchMenuSubmodules"
+            @discard-all="emit('discardAll')"
           />
 
           <SyncSplitButton
@@ -476,6 +497,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :needs-publish="needsPublish ?? false"
             :is-pushing="isPushing"
             :is-pulling="isPulling"
+            :force-push-preferred="forcePushPreferred"
             :is-fetching="isFetching ?? false"
             :can-push="canPush"
             :can-pull="canPull"
@@ -487,6 +509,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @publish="emit('publish')"
             @rebase-onto-remote="emit('rebaseOntoRemote')"
             @merge-remote="emit('mergeRemote')"
+            @force-push="emit('forcePush')"
           />
 
           <!-- Stash button -->

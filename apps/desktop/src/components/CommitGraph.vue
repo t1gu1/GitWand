@@ -40,6 +40,8 @@ type CommitEvent =
   | "cherry-pick-commit"
   | "view-on-forge"
   | "delete-tag"
+  | "merge-into-current"
+  | "rebase-onto-current"
   | "apply-stash"
   | "pop-stash"
   | "drop-stash";
@@ -50,7 +52,7 @@ const emit = defineEmits<{
   "edit-commit": [entry: GitLogEntry];
   "split-commit": [entry: GitLogEntry];
   "checkout-commit": [entry: GitLogEntry];
-  "checkout-branch": [name: string];
+  "checkout-branch": [name: string, isRemote?: boolean];
   "reset-to-commit": [entry: GitLogEntry, mode?: "soft" | "mixed" | "hard"];
   "revert-commit": [entry: GitLogEntry];
   "create-branch-from-commit": [entry: GitLogEntry];
@@ -59,6 +61,8 @@ const emit = defineEmits<{
   "view-on-forge": [entry: GitLogEntry];
   "delete-branch": [name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string];
   "delete-tag": [name: string, hasLocal: boolean, hasRemote: boolean];
+  "merge-into-current": [name: string];
+  "rebase-onto-current": [name: string];
   "apply-stash": [index: number];
   "pop-stash": [index: number];
   "drop-stash": [index: number];
@@ -208,7 +212,7 @@ function onBranchDblClick(branch: { name: string, type: string }) {
   const name = branch.type === 'remote'
     ? branch.name.slice(branch.name.indexOf('/') + 1)
     : branch.name;
-  emit('checkout-branch', name);
+  emit('checkout-branch', name, branch.type === 'remote');
 }
 
 function onRowDblClick(entry: GitLogEntry) {
@@ -309,6 +313,22 @@ function onCtxDeleteBranch() {
 const tagToDelete = computed(() => {
   if (!ctxMenu.value.clickedTag) return null;
   return { name: ctxMenu.value.clickedTag, hasLocal: true, hasRemote: true };
+});
+
+const clickedBranchData = computed(() => {
+  if (!ctxMenu.value.clickedBranch || !props.branches) return null;
+  const name = ctxMenu.value.clickedBranch;
+  return props.branches.find((b) => b.name === name) || null;
+});
+
+const isClickedBranchEmpty = computed(() => {
+  return clickedBranchData.value?.mainCommitCount === 0;
+});
+
+const isCurrentBranchEmpty = computed(() => {
+  if (!props.currentBranch || !props.branches) return false;
+  const current = props.branches.find((b) => b.name === props.currentBranch);
+  return current?.mainCommitCount === 0;
 });
 
 function onCtxDeleteTag() {
@@ -1100,6 +1120,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               <span v-if="props.repoStats.modified > 0" class="wip-stat wip-stat--modified">~{{ props.repoStats.modified }}</span>
               <span v-if="props.repoStats.deleted > 0" class="wip-stat wip-stat--deleted">-{{ props.repoStats.deleted }}</span>
               <span v-if="props.repoStats.renamed > 0" class="wip-stat wip-stat--renamed">→{{ props.repoStats.renamed }}</span>
+              <button
+                class="wip-discard-inline"
+                :title="t('sidebar.discardAll')"
+                @click.stop="emit('wip-discard-all')"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
             </span>
           </template>
           <template v-else>
@@ -1190,7 +1219,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           :class="{ 'commit-ctx-menu-item--disabled': isCheckoutDisabled }"
           role="menuitem"
           :title="isCheckoutDisabled ? t('commitCtx.checkoutHeadDisabled') : t('commitCtx.checkoutHint')"
-          @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
+          @click="!isCheckoutDisabled && (ctxMenu.clickedBranch ? (emit('checkout-branch', ctxMenu.clickedBranchType === 'remote' ? ctxMenu.clickedBranch.slice(ctxMenu.clickedBranch.indexOf('/') + 1) : ctxMenu.clickedBranch, ctxMenu.clickedBranchType === 'remote'), closeCommitContextMenu()) : onCtxEmit('checkout-commit'))"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.4"/>
@@ -1213,6 +1242,35 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           </svg>
           <span>{{ t('commitCtx.checkout') }}</span>
         </li>
+
+        <template v-if="ctxMenu.clickedBranch && ctxMenu.clickedBranch !== props.currentBranch">
+          <li class="commit-ctx-menu-sep" role="separator"></li>
+          <li
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isCurrentBranchEmpty }"
+            role="menuitem"
+            @click="!isCurrentBranchEmpty && (emit('merge-into-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.3" />
+              <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3" />
+              <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
+              <path d="M5 6v4M10 8H7c-1.1 0-2-.9-2-2" stroke="currentColor" stroke-width="1.3" />
+            </svg>
+            <span>{{ t('branchMenu.mergeBranchIntoCurrent', ctxMenu.clickedBranch!) }}</span>
+          </li>
+          <li
+            class="commit-ctx-menu-item"
+            :class="{ 'commit-ctx-menu-item--disabled': isCurrentBranchEmpty }"
+            role="menuitem"
+            @click="!isCurrentBranchEmpty && (emit('rebase-onto-current', ctxMenu.clickedBranch!), closeCommitContextMenu())"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 3v6a3 3 0 003 3h5M9 9l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branchMenu.rebaseCurrentOntoBranch', ctxMenu.clickedBranch!) }}</span>
+          </li>
+        </template>
 
       <li class="commit-ctx-menu-sep" role="separator"></li>
 
@@ -1303,7 +1361,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           @click="onCtxDeleteBranch"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span>{{ t('branchMenu.deleteLabel') }}</span>
         </li>
@@ -1318,7 +1376,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
           @click="onCtxDeleteTag"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           <span>{{ t('tags.deleteTag') }}</span>
         </li>
@@ -1486,7 +1544,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         @click="emit('wip-discard-all'); closeWipContextMenu()"
       >
         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v5M10 7v5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>{{ t('sidebar.discardAll') }}</span>
       </li>
@@ -1767,6 +1825,29 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.wip-discard-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: transparent;
+  border: 0;
+  color: var(--color-danger);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all var(--transition-fast);
+  margin-left: auto;
+  margin-right: -5px;
+}
+
+.wip-discard-inline:hover {
+  background: var(--color-danger-soft);
+  transform: scale(1.1);
+  opacity: 1;
 }
 
 .wip-stat {
