@@ -5,6 +5,26 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.15.0 — May 2026
+
+### Git Tree as the primary view
+
+The flat commit log is gone. In its place, the Git Tree is now the main way to navigate your repository's history — a full multi-branch DAG that shows every branch, merge, and tag in their actual topology rather than a linearised list. Trunk-pinning keeps your default branch in the leftmost lane; a lane-cooldown algorithm prevents the graph from growing unboundedly wide on long-running projects; and an automatic WIP node shows your uncommitted changes as a live node at HEAD so you always know where you stand relative to the rest of the graph.
+
+### Everything from the graph
+
+The Git Tree is not just for browsing. Right-click any commit node to checkout, reset (soft, mixed, or hard), revert, branch off, tag, or cherry-pick — without visiting a separate panel. Right-click any branch or tag label to merge, rebase, rename, delete, push, or pull it. Stash nodes appear inline in the DAG; apply, pop, or drop them from the same context menu.
+
+### Commit and branch search
+
+A search bar at the top of the Git Tree panel filters commits live by message, SHA prefix, or author name. Matching nodes are highlighted in place; the graph doesn't jump or collapse, so you keep the spatial context while narrowing down.
+
+### Log panel removed
+
+The flat history sidebar that previously lived alongside the graph has been removed — it was redundant once the Git Tree became the primary view. If you want the history of a specific file, a **File history** button in the diff header opens a compact inline list without displacing the graph.
+
+---
+
 ## v2.14.0 — May 2026
 
 ### GitLab diff-line discussions
