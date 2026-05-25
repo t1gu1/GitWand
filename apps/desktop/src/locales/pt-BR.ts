@@ -586,7 +586,6 @@ const ptBR: Locale = {
     createBranchDesc: "Nova branch a partir do commit {0}",
     branchNamePlaceholder: "nome-da-branch",
     createBranchConfirm: "Criar e alternar",
-    branchAiHint: "A IA pode sugerir um nome de branch a partir do seu diff.",
     tag: "Etiquetar este commit…",
     tagDesc: "Criar uma tag no commit {0}",
     tagNamePlaceholder: "v1.0.0",

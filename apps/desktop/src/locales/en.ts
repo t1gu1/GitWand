@@ -599,7 +599,6 @@ const en = {
     createBranchDesc: "New branch starting at commit {0}",
     branchNamePlaceholder: "branch-name",
     createBranchConfirm: "Create & checkout",
-    branchAiHint: "AI can suggest a branch name from your diff.",
     tag: "Tag this commit\u2026",
     tagDesc: "Create a tag at commit {0}",
     tagNamePlaceholder: "v1.0.0",

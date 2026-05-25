@@ -592,7 +592,6 @@ const fr: Locale = {
     createBranchDesc: "Nouvelle branche depuis le commit {0}",
     branchNamePlaceholder: "nom-de-branche",
     createBranchConfirm: "Créer et basculer",
-    branchAiHint: "L'IA peut suggérer un nom de branche depuis votre diff.",
     tag: "Taguer ce commit…",
     tagDesc: "Créer un tag sur le commit {0}",
     tagNamePlaceholder: "v1.0.0",

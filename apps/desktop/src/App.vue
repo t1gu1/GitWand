@@ -2477,7 +2477,7 @@ onUnmounted(() => {
       <div style="display: flex; flex-direction: column; gap: var(--space-3);">
         <!-- AI suggestion strip (v2.12) -->
         <div v-if="isAIAvailable" class="tag-ai-row">
-          <span class="tag-ai-hint">{{ t('commitCtx.branchAiHint') }}</span>
+          <span class="tag-ai-hint" v-html="t('branches.aiHint').replace(' (', '<br/>(')"></span>
           <button class="bm-btn btn--ai tag-ai-btn" :disabled="commitActionModal.busy || isBranchNameAISuggesting"
             @click="suggestBranchNameWithAI">
             <AiSparkle :size="13" :animated="isBranchNameAISuggesting" />
