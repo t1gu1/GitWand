@@ -585,6 +585,7 @@ const es: Locale = {
     createBranchDesc: "Nueva rama desde el commit {0}",
     branchNamePlaceholder: "nombre-de-rama",
     createBranchConfirm: "Crear y cambiar",
+    branchAiHint: "La IA puede sugerir un nombre de rama a partir de tu diff.",
     tag: "Etiquetar este commit…",
     tagDesc: "Crear una etiqueta en el commit {0}",
     tagNamePlaceholder: "v1.0.0",

@@ -579,6 +579,7 @@ const zhCN: Locale = {
     createBranchDesc: "从提交 {0} 新建分支",
     branchNamePlaceholder: "分支名称",
     createBranchConfirm: "创建并切换",
+    branchAiHint: "AI 可以根据您的差异建议分支名称。",
     tag: "标记此提交…",
     tagDesc: "在提交 {0} 处创建标签",
     tagNamePlaceholder: "v1.0.0",
