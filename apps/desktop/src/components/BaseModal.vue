@@ -194,9 +194,9 @@ onUnmounted(() => {
 /* ─── Header ───────────────────────────────────────── */
 .base-modal__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: var(--space-4);
-  padding: var(--space-6) var(--space-7) var(--space-5);
+  padding: var(--space-5) var(--space-7);
   border-bottom: 1px solid var(--color-border);
 }
 
