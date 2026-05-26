@@ -32,6 +32,8 @@ const worktrees = ref<WorktreeEntry[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
+const currentBranchName = computed(() => props.branches.find(b => b.isCurrent)?.name);
+
 // ── Status per worktree ──────────────────────────────────
 const statuses = ref<WorkspaceRepoStatus[]>([]);
 const statusLoading = ref(false);
@@ -53,9 +55,7 @@ async function loadStatuses() {
 
 // ── New worktree form ────────────────────────────────────
 const showForm = ref(false);
-const formPath = ref("");
 const formBranch = ref("");
-const formNewBranch = ref("");
 const creating = ref(false);
 
 // ── Quick-create form ────────────────────────────────────
@@ -63,12 +63,18 @@ const showQuickCreate = ref(false);
 const quickName = ref("");
 const quickCreating = ref(false);
 
+function getQuickBranch(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "";
+  return trimmed.includes("/") ? trimmed : `task/${trimmed}`;
+}
+
 /** Derive the new worktree path from the main worktree path + task name. */
 function deriveQuickPath(name: string): string {
   const main = worktrees.value.find((w) => w.is_main);
   const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
-  const slug = name.trim().replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/-+/g, "-").replace(/^[-/]+|[-/]+$/g, "");
-  return `${base}-${slug}`;
+  const branch = getQuickBranch(name);
+  return `${base}/.git/worktrees/${branch}`;
 }
 
 async function quickCreate() {
@@ -77,8 +83,8 @@ async function quickCreate() {
   quickCreating.value = true;
   error.value = null;
   try {
+    const branch = getQuickBranch(name);
     const path = deriveQuickPath(name);
-    const branch = name.includes("/") ? name : `task/${name}`;
     await gitWorktreeAdd(props.cwd, path, "", branch);
     quickName.value = "";
     showQuickCreate.value = false;
@@ -111,19 +117,21 @@ async function loadWorktrees() {
 }
 
 async function createWorktree() {
-  if (!formPath.value.trim() || !formBranch.value.trim()) return;
+  if (!formBranch.value.trim()) return;
   creating.value = true;
   error.value = null;
   try {
+    const branchName = formBranch.value.trim();
+    const main = worktrees.value.find((w) => w.is_main);
+    const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
+    const path = `${base}/.git/worktrees/${branchName}`;
+
     await gitWorktreeAdd(
       props.cwd,
-      formPath.value.trim(),
-      formBranch.value.trim(),
-      formNewBranch.value.trim() || undefined,
+      path,
+      branchName,
     );
-    formPath.value = "";
-    formBranch.value = "";
-    formNewBranch.value = "";
+    formBranch.value = currentBranchName.value || "";
     showForm.value = false;
     await loadWorktrees();
   } catch (err: any) {
@@ -169,8 +177,8 @@ watch(worktrees, () => { loadStatuses(); }, { immediate: false });
 
 onMounted(async () => {
   await loadWorktrees();
+  formBranch.value = props.suggestedBranch || currentBranchName.value || "";
   if (props.suggestedBranch) {
-    formBranch.value = props.suggestedBranch;
     showForm.value = true;
   }
   if (props.openQuickCreate) {
@@ -243,23 +251,13 @@ onMounted(async () => {
         <p v-if="quickName.trim()" class="wt-quick-preview">
           → {{ deriveQuickPath(quickName) }}
           <span class="wt-quick-branch">
-            ({{ quickName.includes("/") ? quickName.trim() : `task/${quickName.trim()}` }})
+            ({{ getQuickBranch(quickName) }})
           </span>
         </p>
       </div>
 
       <!-- ── New worktree form ───────────────────────────── -->
       <div v-if="showForm" class="wt-form">
-        <div class="wt-form-row">
-          <label class="wt-label" for="wt-form-path">{{ t("worktree.formPath") }}</label>
-          <input
-            id="wt-form-path"
-            v-model="formPath"
-            class="wt-input"
-            :placeholder="t('worktree.formPathPlaceholder')"
-            @keydown.enter="createWorktree"
-          />
-        </div>
         <div class="wt-form-row">
           <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
           <select id="wt-form-branch" v-model="formBranch" class="wt-select">
@@ -271,20 +269,10 @@ onMounted(async () => {
             >{{ b.name }}</option>
           </select>
         </div>
-        <div class="wt-form-row">
-          <label class="wt-label" for="wt-form-new-branch">{{ t("worktree.formNewBranch") }}</label>
-          <input
-            id="wt-form-new-branch"
-            v-model="formNewBranch"
-            class="wt-input"
-            :placeholder="t('worktree.formNewBranchPlaceholder')"
-            @keydown.enter="createWorktree"
-          />
-        </div>
         <div class="wt-form-actions">
           <button
             class="bm-btn bm-btn--primary"
-            :disabled="creating || !formPath.trim() || !formBranch.trim()"
+            :disabled="creating || !formBranch.trim()"
             @click="createWorktree"
           >
             {{ creating ? t("worktree.creating") : t("worktree.create") }}
