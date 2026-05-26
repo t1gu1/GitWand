@@ -1747,7 +1747,7 @@ const fr: Locale = {
       title: "Workflow Git",
       intro: "GitWand supporte un workflow Git complet depuis une seule fenêtre.",
       branchTitle: "Branches",
-      branch: "Créez, changez, renommez et supprimez des branches depuis le sélecteur de branche dans le header. Le menu branche (≡) donne accès aux opérations merge, rebase et worktrees.",
+      branch: "Créez, changez, renommez et supprimez des branches depuis le sélecteur de branche dans le header. Utilisez le menu branche (≡) pour le merge et le rebase, et les boutons Worktrees et Submodules pour la gestion avancée du dépôt.",
       stageTitle: "Indexation",
       stage: "Indexez des fichiers individuels, des répertoires entiers ou des hunks spécifiques. Faites un clic droit sur un fichier pour les options contextuelles (annuler, ajouter au .gitignore, etc.).",
       historyTitle: "Historique",
