@@ -97,43 +97,6 @@ const confirmRemovePath = ref<string | null>(null);
 const forceRemove = ref(false);
 const removing = ref(false);
 
-// ── Cleanup (merged worktrees) ───────────────────────────
-const showCleanup = ref(false);
-const cleanupSelected = ref<Set<string>>(new Set());
-const cleaningUp = ref(false);
-
-/** Non-main, non-locked worktrees with ahead === 0 (safe to discard). */
-const cleanupCandidates = computed(() =>
-  worktrees.value.filter((wt) => {
-    if (wt.is_main || wt.is_locked) return false;
-    const st = statusFor(wt.path);
-    return st ? st.ahead === 0 : false;
-  })
-);
-
-function toggleCleanup(path: string) {
-  const s = new Set(cleanupSelected.value);
-  s.has(path) ? s.delete(path) : s.add(path);
-  cleanupSelected.value = s;
-}
-
-async function doCleanup() {
-  if (cleanupSelected.value.size === 0) return;
-  cleaningUp.value = true;
-  error.value = null;
-  for (const path of cleanupSelected.value) {
-    try {
-      await gitWorktreeRemove(props.cwd, path, false);
-    } catch (err: any) {
-      error.value = t("worktree.errorRemove").replace("{0}", String(err?.message ?? err));
-    }
-  }
-  cleanupSelected.value = new Set();
-  showCleanup.value = false;
-  cleaningUp.value = false;
-  await loadWorktrees();
-}
-
 // ── Core actions ─────────────────────────────────────────
 
 async function loadWorktrees() {
@@ -197,16 +160,6 @@ async function confirmRemove() {
   }
 }
 
-async function prune() {
-  error.value = null;
-  try {
-    await gitWorktreePrune(props.cwd);
-    await loadWorktrees();
-  } catch (err: any) {
-    error.value = t("worktree.errorPrune").replace("{0}", String(err?.message ?? err));
-  }
-}
-
 function shortPath(path: string): string {
   const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
   return parts.length <= 2 ? path : "…/" + parts.slice(-2).join("/");
@@ -252,35 +205,11 @@ onMounted(async () => {
       <button
         type="button"
         class="bm-btn bm-btn--ghost"
-        :title="t('worktree.cleanupTitle')"
-        :class="{ 'bm-btn--active': showCleanup }"
-        @click="showCleanup = !showCleanup; showForm = false; showQuickCreate = false;"
-      >
-        {{ t("worktree.cleanupAction") }}
-      </button>
-      <button
-        type="button"
-        class="bm-btn bm-btn--ghost"
-        :title="t('worktree.pruneTooltip')"
-        @click="prune"
-      >
-        {{ t("worktree.prune") }}
-      </button>
-      <button
-        type="button"
-        class="bm-btn bm-btn--ghost"
         :title="t('worktree.quickCreateTooltip')"
         :class="{ 'bm-btn--active': showQuickCreate }"
-        @click="showQuickCreate = !showQuickCreate; showForm = false; showCleanup = false;"
+        @click="showQuickCreate = !showQuickCreate; showForm = false;"
       >
         ⚡ {{ t("worktree.quickCreate") }}
-      </button>
-      <button
-        type="button"
-        class="bm-btn bm-btn--primary"
-        @click="showForm = !showForm; showQuickCreate = false; showCleanup = false;"
-      >
-        + {{ t("worktree.newWorktree") }}
       </button>
     </template>
 
@@ -367,47 +296,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- ── Cleanup panel ───────────────────────────────── -->
-      <div v-if="showCleanup" class="wt-cleanup">
-        <div class="wt-cleanup-header">
-          <span class="wt-cleanup-title">{{ t("worktree.cleanupTitle") }}</span>
-          <span class="wt-cleanup-hint">{{ t("worktree.cleanupEmpty") }}</span>
-        </div>
-        <div v-if="cleanupCandidates.length === 0" class="wt-cleanup-empty">
-          {{ t("worktree.cleanupEmpty") }}
-        </div>
-        <div v-else>
-          <label
-            v-for="wt in cleanupCandidates"
-            :key="wt.path"
-            class="wt-cleanup-row"
-          >
-            <input
-              type="checkbox"
-              :checked="cleanupSelected.has(wt.path)"
-              @change="toggleCleanup(wt.path)"
-            />
-            <span class="wt-cleanup-branch">{{ wt.branch || t("worktree.detached") }}</span>
-            <span class="wt-cleanup-path">{{ shortPath(wt.path) }}</span>
-            <span v-if="statusFor(wt.path)" class="wt-status-pill wt-pill-muted">
-              ↓{{ statusFor(wt.path)!.behind }}
-            </span>
-          </label>
-          <div class="wt-cleanup-actions">
-            <button
-              class="bm-btn bm-btn--danger"
-              :disabled="cleanupSelected.size === 0 || cleaningUp"
-              @click="doCleanup"
-            >
-              {{ t("worktree.cleanupConfirm").replace("{0}", String(cleanupSelected.size)) }}
-            </button>
-            <button class="bm-btn bm-btn--ghost" @click="showCleanup = false; cleanupSelected = new Set()">
-              {{ t("common.cancel") }}
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- ── Error ───────────────────────────────────────── -->
       <div v-if="error" class="wt-error">{{ error }}</div>
 
@@ -491,6 +379,18 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
+    <!-- Footer action -->
+    <template #footer>
+      <button
+        type="button"
+        class="wt-footer-add-btn"
+        @click="showForm = !showForm; showQuickCreate = false; showCleanup = false;"
+      >
+        <span class="wt-footer-add-btn__icon">+</span>
+        <span>{{ t("worktree.newWorktree") }}</span>
+      </button>
+    </template>
   </BaseModal>
 </template>
 
@@ -833,5 +733,36 @@ onMounted(async () => {
   background: var(--color-accent-soft);
   color: var(--color-accent);
   border-color: var(--color-accent);
+}
+
+.wt-footer-add-btn {
+  width: 100%;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-base), transform var(--transition-fast);
+}
+
+.wt-footer-add-btn:hover {
+  background: var(--color-accent-hover);
+}
+
+.wt-footer-add-btn:active {
+  transform: translateY(1px);
+}
+
+.wt-footer-add-btn__icon {
+  font-size: 16px;
+  font-weight: var(--font-weight-medium);
+  margin-top: -1px;
 }
 </style>
