@@ -1774,7 +1774,7 @@ const en = {
       title: "Git workflow",
       intro: "GitWand supports a full Git workflow from a single window.",
       branchTitle: "Branches",
-      branch: "Create, switch, rename and delete branches from the branch chip in the header. The branch menu (\u2261) gives access to merge, rebase, and worktrees.",
+      branch: "Create, switch, rename and delete branches from the branch chip in the header. Use the branch menu (\u2261) for merge and rebase, and the standalone Worktrees and Submodules buttons for advanced repository management.",
       stageTitle: "Staging",
       stage: "Stage individual files, entire directories, or specific hunks. Right-click a file for contextual options including discard and add to .gitignore.",
       historyTitle: "History",

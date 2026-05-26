@@ -3,7 +3,7 @@
  * BranchMenu — secondary "Branch" dropdown in the header.
  *
  * Groups all branch-level operations that used to live as individual header
- * buttons (merge, worktrees, submodules, rebase, rewind) plus two new ones
+ * buttons (merge, rebase, rewind) plus two new ones
  * (rename, delete) behind a single dropdown. Keeps the header uncluttered
  * and gives each action a full label instead of a mystery icon.
  *
@@ -16,9 +16,6 @@
  *    BranchMenu just signals intent and closes. We used to do an inline
  *    rename panel + window.confirm for delete, but both were pulled out
  *    for a consistent modal UX with a type-the-name guard on delete.
- *  - "Advanced" expands to reveal Worktrees + Submodules. We avoid a real
- *    submenu (flyout positioning is fiddly with overflow) and just
- *    disclose inline, accordion-style.
  *
  * All labels come from the `branchMenu.*` locale group.
  */
@@ -44,8 +41,6 @@ const emit = defineEmits<{
   /** User clicked "Delete…" — parent should pop the delete modal. */
   openDeleteModal: [];
   openRewind: [];
-  openWorktrees: [];
-  openSubmodules: [];
   discardAll: [];
 }>();
 
@@ -53,21 +48,16 @@ const { t } = useI18n();
 
 // ─── Menu open/close ───────────────────────────────────────────────
 const showMenu = ref(false);
-const showAdvanced = ref(false);
 
 const wrapperRef = ref<HTMLElement | null>(null);
 
 function toggleMenu() {
   if (props.disabled) return;
   showMenu.value = !showMenu.value;
-  if (!showMenu.value) {
-    showAdvanced.value = false;
-  }
 }
 
 function closeMenu() {
   showMenu.value = false;
-  showAdvanced.value = false;
 }
 
 function onDocClick(ev: MouseEvent) {
@@ -80,12 +70,6 @@ function onDocClick(ev: MouseEvent) {
 
 function onEsc(ev: KeyboardEvent) {
   if (ev.key !== "Escape" || !showMenu.value) return;
-  // Escape unwinds one level at a time: if the Advanced accordion is
-  // open, close it first; next Escape closes the whole menu.
-  if (showAdvanced.value) {
-    showAdvanced.value = false;
-    return;
-  }
   closeMenu();
 }
 
@@ -113,16 +97,6 @@ function onRebaseOnto() {
 function onRewind() {
   closeMenu();
   emit("openRewind");
-}
-
-function onWorktrees() {
-  closeMenu();
-  emit("openWorktrees");
-}
-
-function onSubmodules() {
-  closeMenu();
-  emit("openSubmodules");
 }
 
 function onRenameClick() {
@@ -253,53 +227,6 @@ const hasBranch = computed(() => !!props.currentBranch);
         </svg>
         <span>{{ t('branchMenu.rewind') }}</span>
       </button>
-
-      <!-- ── Advanced (disclosure) ───────────────────────────── -->
-      <button
-        type="button"
-        role="menuitem"
-        class="branch-menu__item branch-menu__item--toggle"
-        :aria-expanded="showAdvanced ? 'true' : 'false'"
-        @click="showAdvanced = !showAdvanced"
-      >
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
-          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-        </svg>
-        <span>{{ t('branchMenu.advanced') }}</span>
-        <svg class="branch-menu__item-chevron" :class="{ 'branch-menu__item-chevron--open': showAdvanced }" width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
-
-      <div v-if="showAdvanced" class="branch-menu__nested">
-        <button
-          type="button"
-          role="menuitem"
-          class="branch-menu__item branch-menu__item--nested"
-          @click="onWorktrees"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
-            <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
-            <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
-            <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-          </svg>
-          <span>{{ t('worktree.title') }}</span>
-        </button>
-        <button
-          type="button"
-          role="menuitem"
-          class="branch-menu__item branch-menu__item--nested"
-          @click="onSubmodules"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none" />
-            <rect x="6" y="6" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none" />
-          </svg>
-          <span>{{ t('submodule.title') }}</span>
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -386,31 +313,5 @@ const hasBranch = computed(() => !!props.currentBranch);
   height: 1px;
   background: var(--color-border);
   margin: var(--space-2) var(--space-3);
-}
-
-.branch-menu__item--toggle {
-  justify-content: flex-start;
-}
-
-.branch-menu__item-chevron {
-  margin-left: auto;
-  transition: transform var(--transition-base);
-  opacity: 0.7;
-}
-.branch-menu__item-chevron--open {
-  transform: rotate(180deg);
-}
-
-.branch-menu__nested {
-  display: flex;
-  flex-direction: column;
-  padding-left: var(--space-3);
-  margin-top: var(--space-1);
-  border-left: 1px solid var(--color-border);
-  margin-left: var(--space-4);
-}
-
-.branch-menu__item--nested {
-  padding: var(--space-2) var(--space-4);
 }
 </style>
