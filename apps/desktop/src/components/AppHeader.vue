@@ -21,7 +21,7 @@
  *   - SyncSplitButton   — primary sync action (publish / push / pull /
  *                         sync / up-to-date) with a state-aware dropdown
  *   - BranchMenu        — secondary branch-op menu (merge, rebase,
- *                         rename, delete, rewind, worktrees, submodules)
+ *                         rename, delete, rewind)
  *
  * Anything still inline here is coupled specifically to the header
  * layout rather than a reusable slice: the merge-into picker (triggered
@@ -295,12 +295,6 @@ function onBranchMenuDelete() {
 function onBranchMenuRewind() {
   openUndoPopover();
 }
-function onBranchMenuWorktrees() {
-  emit("openWorktrees");
-}
-function onBranchMenuSubmodules() {
-  emit("openSubmodules");
-}
 
 // ─── Close popovers on click outside ──────────────────────────────
 // BranchSelector owns its own click-outside handling now; we only need
@@ -489,8 +483,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-rename-modal="onBranchMenuRename"
             @open-delete-modal="onBranchMenuDelete"
             @open-rewind="onBranchMenuRewind"
-            @open-worktrees="onBranchMenuWorktrees"
-            @open-submodules="onBranchMenuSubmodules"
             @discard-all="emit('discardAll')"
           />
 
@@ -546,6 +538,36 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
               <circle cx="5.5" cy="5.5" r="1.2" fill="currentColor"/>
             </svg>
             <span>{{ t('tags.title') }}</span>
+          </button>
+
+          <!-- Worktrees button -->
+          <button
+            class="btn btn--secondary header-action-btn"
+            :title="t('worktree.title')"
+            :aria-label="t('worktree.title')"
+            @click="emit('openWorktrees')"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+            <span>{{ t('worktree.title') }}</span>
+          </button>
+
+          <!-- Submodules button -->
+          <button
+            class="btn btn--secondary header-action-btn"
+            :title="t('submodule.title')"
+            :aria-label="t('submodule.title')"
+            @click="emit('openSubmodules')"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="6" y="6" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+            </svg>
+            <span>{{ t('submodule.title') }}</span>
           </button>
 
           <!-- Merge-into picker (triggered by BranchMenu → onBranchMenuMerge) -->
