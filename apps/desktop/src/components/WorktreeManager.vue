@@ -4,7 +4,6 @@ import {
   gitWorktreeList,
   gitWorktreeAdd,
   gitWorktreeRemove,
-  gitWorktreePrune,
   gitWorktreeStatusAll,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
@@ -385,7 +384,7 @@ onMounted(async () => {
       <button
         type="button"
         class="wt-footer-add-btn"
-        @click="showForm = !showForm; showQuickCreate = false; showCleanup = false;"
+        @click="showForm = !showForm; showQuickCreate = false;"
       >
         <span class="wt-footer-add-btn__icon">+</span>
         <span>{{ t("worktree.newWorktree") }}</span>
@@ -497,73 +496,6 @@ onMounted(async () => {
 .wt-form-actions {
   display: flex;
   gap: var(--space-3);
-}
-
-/* ── Cleanup panel ──────────────────────────────────────── */
-.wt-cleanup {
-  padding: var(--space-4) var(--space-7);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-tertiary);
-  flex-shrink: 0;
-}
-
-.wt-cleanup-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
-.wt-cleanup-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-
-.wt-cleanup-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  display: none; /* only shown via slot when empty */
-}
-
-.wt-cleanup-empty {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  padding: var(--space-3) 0;
-}
-
-.wt-cleanup-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.wt-cleanup-row:last-of-type {
-  border-bottom: none;
-}
-
-.wt-cleanup-branch {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
-
-.wt-cleanup-path {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  flex: 1;
-}
-
-.wt-cleanup-actions {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
 }
 
 /* ── Error ──────────────────────────────────────────────── */
