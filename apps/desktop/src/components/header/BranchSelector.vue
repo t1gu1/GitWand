@@ -25,7 +25,7 @@
  * either the trigger OR the popover count as "inside".
  */
 import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "vue";
-import type { GitBranch } from "../../utils/backend";
+import { gitWorktreeList, type GitBranch, type WorktreeEntry } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview } from "../../composables/useMergePreview";
@@ -54,7 +54,26 @@ const emit = defineEmits<{
   openWorktrees: [branch?: string];
   loadBranches: [];
   changeView: [mode: 'changes'];
+  openTab: [path: string];
 }>();
+
+const worktrees = ref<WorktreeEntry[]>([]);
+const worktreesLoading = ref(false);
+
+async function loadWorktrees() {
+  worktreesLoading.value = true;
+  try {
+    worktrees.value = await gitWorktreeList(props.cwd);
+  } catch {
+    // ignore
+  } finally {
+    worktreesLoading.value = false;
+  }
+}
+
+function worktreeFor(branchName: string): WorktreeEntry | undefined {
+  return worktrees.value.find((w) => w.branch === branchName);
+}
 
 // Whether the working tree has anything worth reporting — drives the
 // stats line inside the trigger. Conflicts count as "stats" too since
@@ -124,6 +143,7 @@ function togglePopover() {
   if (showPopover.value) {
     branchFilter.value = "";
     emit("loadBranches");
+    loadWorktrees();
   }
 }
 
@@ -165,7 +185,12 @@ const remoteBranches = computed(() =>
 );
 
 function handleBranchSwitch(name: string) {
-  emit("switchBranch", name);
+  const wt = worktreeFor(name);
+  if (wt && !wt.is_main) {
+    emit("openTab", wt.path);
+  } else {
+    emit("switchBranch", name);
+  }
   closePopover();
 }
 

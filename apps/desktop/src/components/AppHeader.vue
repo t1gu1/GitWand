@@ -131,6 +131,7 @@ const emit = defineEmits<{
   // ── Other overlays ───────────────────────────────────────────
   openRebase: [];
   openWorktrees: [branch?: string];
+  openTab: [path: string];
   openSubmodules: [];
   openSettings: [];
   openLogs: [];
@@ -464,6 +465,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-worktrees="(branch) => emit('openWorktrees', branch)"
             @load-branches="emit('loadBranches')"
             @change-view="(mode) => emit('changeView', mode)"
+            @open-tab="(path) => emit('openTab', path)"
           />
 
           <!-- BranchMenu + its two piggy-backed popovers.

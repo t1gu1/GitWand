@@ -5,6 +5,7 @@ import {
   gitWorktreeAdd,
   gitWorktreeRemove,
   gitWorktreeStatusAll,
+  gitSwitchBranch,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
 } from "../utils/backend";
@@ -85,6 +86,14 @@ async function quickCreate() {
   try {
     const branch = getQuickBranch(name);
     const path = deriveQuickPath(name);
+
+    // Same "promotion" logic as createWorktree: if main is using this branch, move it.
+    const main = worktrees.value.find((w) => w.is_main);
+    if (main && branch === main.branch && branch !== "(detached HEAD)") {
+      const other = props.branches.find(b => !b.isRemote && b.name !== branch);
+      if (other) await gitSwitchBranch(props.cwd, other.name);
+    }
+
     await gitWorktreeAdd(props.cwd, path, "", branch);
     quickName.value = "";
     showQuickCreate.value = false;
@@ -126,6 +135,19 @@ async function createWorktree() {
     const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
     const path = `${base}/.git/worktrees/${branchName}`;
 
+    // If the branch is currently checked out in the main worktree, we must switch the main
+    // worktree to something else first, otherwise git-worktree-add fails with "already used".
+    if (main && branchName === main.branch && branchName !== "(detached HEAD)") {
+      // Find a safe branch to switch to: the first local branch that isn't the one we're promoting.
+      const other = props.branches.find(b => !b.isRemote && b.name !== branchName);
+      if (other) {
+        // We call the raw switchBranch from parent if available, but here we can't easily.
+        // Instead, we just use the backend directly to switch the main worktree.
+        // (Assuming props.cwd is the main worktree if main is found at main.path === props.cwd)
+        await gitSwitchBranch(props.cwd, other.name);
+      }
+    }
+
     await gitWorktreeAdd(
       props.cwd,
       path,
@@ -134,6 +156,7 @@ async function createWorktree() {
     formBranch.value = currentBranchName.value || "";
     showForm.value = false;
     await loadWorktrees();
+    emit("open-tab", path);
   } catch (err: any) {
     error.value = t("worktree.errorCreate").replace("{0}", String(err?.message ?? err));
   } finally {

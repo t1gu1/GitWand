@@ -2029,6 +2029,7 @@ onUnmounted(() => {
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="onUndoPerformed"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
+      @open-tab="(path) => openTab(path)"
       @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
       @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
