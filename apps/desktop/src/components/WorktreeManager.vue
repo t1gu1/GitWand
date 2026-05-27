@@ -6,6 +6,7 @@ import {
   gitWorktreeRemove,
   gitWorktreeStatusAll,
   gitSwitchBranch,
+  gitCreateBranch,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
 } from "../utils/backend";
@@ -87,14 +88,24 @@ async function quickCreate() {
     const branch = getQuickBranch(name);
     const path = deriveQuickPath(name);
 
-    // Same "promotion" logic as createWorktree: if main is using this branch, move it.
+    // 2. Determine if the branch already exists
+    const branchExists = props.branches.some(b => b.name === branch);
+
+    // 3. If the branch is currently checked out in the main worktree, we must switch the main
+    // worktree to something else first, otherwise git-worktree-add fails with "already used".
+    // We use a temporary branch to ensure we can always free up the target branch.
     const main = worktrees.value.find((w) => w.is_main);
     if (main && branch === main.branch && branch !== "(detached HEAD)") {
-      const other = props.branches.find(b => !b.isRemote && b.name !== branch);
-      if (other) await gitSwitchBranch(props.cwd, other.name);
+      const tempBranch = `gitwand-temp-${Date.now()}`;
+      await gitCreateBranch(props.cwd, tempBranch, true);
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    await gitWorktreeAdd(props.cwd, path, "", branch);
+    if (branchExists) {
+      await gitWorktreeAdd(props.cwd, path, branch);
+    } else {
+      await gitWorktreeAdd(props.cwd, path, currentBranchName.value || "HEAD", branch);
+    }
     quickName.value = "";
     showQuickCreate.value = false;
     await loadWorktrees();
@@ -135,24 +146,28 @@ async function createWorktree() {
     const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
     const path = `${base}/.git/worktrees-wand/${branchName}`;
 
-    // If the branch is currently checked out in the main worktree, we must switch the main
+    // 2. Determine if the branch already exists
+    const branchExists = props.branches.some(b => b.name === branchName);
+
+    // 3. If the branch is currently checked out in the main worktree, we must switch the main
     // worktree to something else first, otherwise git-worktree-add fails with "already used".
+    // We use a temporary branch to ensure we can always free up the target branch.
     if (main && branchName === main.branch && branchName !== "(detached HEAD)") {
-      // Find a safe branch to switch to: the first local branch that isn't the one we're promoting.
-      const other = props.branches.find(b => !b.isRemote && b.name !== branchName);
-      if (other) {
-        // We call the raw switchBranch from parent if available, but here we can't easily.
-        // Instead, we just use the backend directly to switch the main worktree.
-        // (Assuming props.cwd is the main worktree if main is found at main.path === props.cwd)
-        await gitSwitchBranch(props.cwd, other.name);
-      }
+      const tempBranch = `gitwand-temp-${Date.now()}`;
+      await gitCreateBranch(props.cwd, tempBranch, true);
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    await gitWorktreeAdd(
-      props.cwd,
-      path,
-      branchName,
-    );
+    if (branchExists) {
+      await gitWorktreeAdd(props.cwd, path, branchName);
+    } else {
+      await gitWorktreeAdd(
+        props.cwd,
+        path,
+        currentBranchName.value || "HEAD",
+        branchName,
+      );
+    }
     formBranch.value = currentBranchName.value || "";
     showForm.value = false;
     await loadWorktrees();
