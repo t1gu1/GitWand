@@ -40,7 +40,9 @@ import {
   type GitPushPullResult,
   type GitBranch,
   type StashEntry,
+  type WorktreeEntry,
   gitAddToGitignore,
+  gitWorktreeList,
 } from "../utils/backend";
 import { requireOnline } from "../utils/networkGuard";
 
@@ -122,6 +124,21 @@ export function useGitRepo() {
   // Branch state
   const branches = ref<GitBranch[]>([]);
   const branchesLoading = ref(false);
+
+  const worktrees = ref<WorktreeEntry[]>([]);
+  const worktreesLoading = ref(false);
+
+  async function loadWorktrees() {
+    if (!folderPath.value) return;
+    worktreesLoading.value = true;
+    try {
+      worktrees.value = await gitWorktreeList(folderPath.value);
+    } catch {
+      // ignore
+    } finally {
+      worktreesLoading.value = false;
+    }
+  }
   const isSwitchingBranch = ref(false);
   const isMerging = ref(false);
 
@@ -347,11 +364,15 @@ export function useGitRepo() {
     commitDiffs.value = [];
     log.value = [];
     branches.value = [];        // ← reset so the palette doesn't show stale branches from the previous repo
+    worktrees.value = [];
     selectedFilePath.value = null;
     diff.value = null;
 
     try {
-      await loadStatus(path);
+      await Promise.all([
+        loadStatus(path),
+        loadWorktrees(),
+      ]);
     } catch (err: any) {
       error.value = err.message;
     } finally {
@@ -397,6 +418,7 @@ export function useGitRepo() {
     await Promise.all([
       loadStatus(folderPath.value),
       loadLog(),
+      loadWorktrees(),
     ]);
     // Also refresh diff if a file is selected
     if (selectedFilePath.value) {
@@ -1110,6 +1132,10 @@ export function useGitRepo() {
     deleteTag,
     deleteRemoteTag,
     renameBranch,
+    // Worktree state
+    worktrees,
+    worktreesLoading,
+    loadWorktrees,
     // Cherry-pick (Phase 8.2)
     isCherryPicking,
     cherryPick,

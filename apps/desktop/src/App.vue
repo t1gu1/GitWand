@@ -212,6 +212,8 @@ const {
   addToGitignore,
   branches,
   branchesLoading,
+  worktrees,
+  loadWorktrees,
   isSwitchingBranch,
   isMerging,
   selectedCommitHash,
@@ -2059,7 +2061,7 @@ onUnmounted(() => {
       :main-commit-count="mainCommitCount" :push-remote="pushRemote"
       :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling"
       :force-push-preferred="forcePushPreferred" :is-fetching="isFetching"
-      :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
+      :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading" :worktrees="worktrees"
       :is-switching-branch="isSwitchingBranch" :is-merging="isMerging" :tabs="repoTabs" :active-tab-id="activeTabId"
       @open-folder="handleOpenFolder" @open-repo="handleOpenPath" @switch-tab="switchTab" @close-tab="closeTab"
       @reorder-tabs="reorderTabs"
@@ -2225,7 +2227,7 @@ onUnmounted(() => {
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktrees="worktrees" :stashes="stashes"
             :has-more="logHasMore" :loading-more="logLoadingMore"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange"

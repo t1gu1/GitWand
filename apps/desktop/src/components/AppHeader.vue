@@ -31,7 +31,7 @@
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, type Ref } from "vue";
 import type { Theme } from "../composables/useTheme";
-import type { GitBranch } from "../utils/backend";
+import type { GitBranch, WorktreeEntry } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useUndoStack, type UndoEntry, type UndoOpType } from "../composables/useUndoStack";
 import {
@@ -80,6 +80,7 @@ const props = defineProps<{
   // Branch popover
   branches: GitBranch[];
   branchesLoading: boolean;
+  worktrees?: WorktreeEntry[];
   isSwitchingBranch: boolean;
   isMerging: boolean;
   /** Path to the current repository (for merge preview). */
@@ -456,6 +457,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :repo-stats="repoStats"
             :branches="branches"
             :branches-loading="branchesLoading"
+            :worktrees="worktrees"
             :is-switching-branch="isSwitchingBranch"
             :cwd="cwd"
             @switch-branch="(name) => emit('switchBranch', name)"

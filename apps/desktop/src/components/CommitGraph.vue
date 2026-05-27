@@ -21,6 +21,7 @@ const props = defineProps<{
   forkPointSha?: string;
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches?: GitBranch[];
+  worktrees?: any[];
   stashes?: any[];
   hasMore?: boolean;
   loadingMore?: boolean;
@@ -673,7 +674,12 @@ function edgePath(e: { fromIndex: number; fromLane: number; toIndex: number; toL
 // ─── Helpers ─────────────────────────────────────────
 function truncate(str: string, limit = 20) {
   if (str.length <= limit) return str;
-  return str.slice(0, limit - 1) + "…";
+  return str.slice(0, limit - 3) + "...";
+}
+
+function worktreeFor(branchName: string): any | undefined {
+  if (!props.worktrees) return undefined;
+  return props.worktrees.find((w) => w.branch === branchName && w.path.includes(".git/worktrees-wand/"));
 }
 
 /** Deterministic hue for an avatar from a string (same author → same color). */
@@ -1143,7 +1149,17 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
                 :title="r.name"
                 @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
                 @dblclick.stop="onBranchDblClick(r)"
-              >{{ branchList.length > 1 ? truncate(r.name) : r.name }}</span>
+              >
+                <span v-if="r.type === 'branch' && worktreeFor(r.name)" class="cg-ref-wt-icon">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 22v-8" />
+                    <path d="M5 12c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                    <path d="M19 12c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                    <path d="M12 8c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                  </svg>
+                </span>
+                {{ branchList.length > 1 ? truncate(r.name, 15) : r.name }}
+              </span>
             </template>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>
@@ -1873,12 +1889,25 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 
 .cg-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   padding: 1px 6px;
   font-size: 10px;
   font-weight: 600;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   line-height: 1.5;
+}
+
+.cg-ref-wt-icon {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  margin-right: -1px;
+}
+.cg-ref-wt-icon svg {
+  display: block;
 }
 
 .cg-ref--branch {

@@ -42,6 +42,7 @@ const props = defineProps<{
   repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches: GitBranch[];
   branchesLoading: boolean;
+  worktrees?: WorktreeEntry[];
   isSwitchingBranch: boolean;
   /** Path to the current repository (needed by the merge-preview composable). */
   cwd: string;
@@ -56,22 +57,9 @@ const emit = defineEmits<{
   changeView: [mode: 'changes'];
 }>();
 
-const worktrees = ref<WorktreeEntry[]>([]);
-const worktreesLoading = ref(false);
-
-async function loadWorktrees() {
-  worktreesLoading.value = true;
-  try {
-    worktrees.value = await gitWorktreeList(props.cwd);
-  } catch {
-    // ignore
-  } finally {
-    worktreesLoading.value = false;
-  }
-}
-
 function worktreeFor(branchName: string): WorktreeEntry | undefined {
-  return worktrees.value.find((w) => w.branch === branchName);
+  if (!props.worktrees) return undefined;
+  return props.worktrees.find((w) => w.branch === branchName && w.path.includes(".git/worktrees-wand/"));
 }
 
 // Whether the working tree has anything worth reporting — drives the
@@ -142,7 +130,6 @@ function togglePopover() {
   if (showPopover.value) {
     branchFilter.value = "";
     emit("loadBranches");
-    loadWorktrees();
   }
 }
 
@@ -375,7 +362,17 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                 @click="!branch.isCurrent && handleBranchSwitch(branch.name)"
               >
                 <span v-if="branch.isCurrent" class="bp-current-dot"></span>
-                <span class="bp-item-name mono">{{ branch.name }}</span>
+                <span class="bp-item-name mono">
+                  {{ branch.name }}
+                  <span v-if="worktreeFor(branch.name)" class="bp-wt-indicator" :title="t('worktree.title')">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 22v-8" />
+                      <path d="M5 12c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                      <path d="M19 12c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                      <path d="M12 8c-2 0-3-1-3-3s1-3 3-3 3 1 3 3-1 3-3 3z" />
+                    </svg>
+                  </span>
+                </span>
                 <span v-if="branch.ahead > 0 || branch.behind > 0" class="bp-item-meta muted">
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
                   <span v-if="branch.behind > 0">&darr;{{ branch.behind }}</span>
@@ -736,14 +733,29 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   background: var(--color-accent);
   flex-shrink: 0;
 }
-
 .bp-item-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: var(--font-weight-medium);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
+
+.bp-wt-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-accent);
+  opacity: 0.8;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.bp-wt-indicator svg {
+  display: block;
+}
+...
 .bp-item--remote .bp-item-name { opacity: 0.7; }
 
 .bp-item-meta {
