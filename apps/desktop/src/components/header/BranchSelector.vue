@@ -357,8 +357,8 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
               >
                 <span v-if="branch.isCurrent" class="bp-current-dot"></span>
                 <div class="bp-item-main">
-                  <svg v-if="branch.hasWorktree" class="bp-worktree-indicator" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+                  <svg v-if="branch.hasWorktree" class="bp-worktree-indicator" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+                    <path d="M8 15V7M8 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM4.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM11.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" fill="currentColor" />
                   </svg>
                   <span class="bp-item-name mono">{{ branch.name }}</span>
                 </div>

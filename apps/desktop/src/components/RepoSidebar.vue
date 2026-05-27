@@ -1319,8 +1319,8 @@ function formatActivityDate(dateStr: string): string {
             @contextmenu="openBranchCtx($event, b.name)"
             :title="b.name"
           >
-            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M8 15V7M8 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM4.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM11.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" fill="currentColor" />
             </svg>
             <span class="branch-name mono">{{ b.name }}</span>
             <span class="branch-badges">
@@ -1364,8 +1364,8 @@ function formatActivityDate(dateStr: string): string {
             @contextmenu="openBranchCtx($event, b.name)"
             :title="b.name"
             >
-            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-             <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="M8 15V7M8 2a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM4.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3zM11.5 5.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" fill="currentColor" />
             </svg>            <span class="branch-name mono">{{ b.name }}</span>            <span class="branch-badges">
               <span v-if="isMergedBranch(b.name)" class="branch-badge branch-badge--merged">{{ t('branch.merged') }}</span>
               <span v-else-if="isInactiveBranch(b)" class="branch-badge branch-badge--inactive">{{ t('branch.inactive') }}</span>
