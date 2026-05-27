@@ -24,7 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "open-tab", path: string): void;
+  (e: "open-worktree", path: string): void;
 }>();
 
 const { t } = useI18n();
@@ -98,7 +98,7 @@ async function quickCreate() {
     quickName.value = "";
     showQuickCreate.value = false;
     await loadWorktrees();
-    emit("open-tab", path);
+    emit("open-worktree", path);
   } catch (err: any) {
     error.value = t("worktree.errorCreate").replace("{0}", String(err?.message ?? err));
   } finally {
@@ -156,7 +156,7 @@ async function createWorktree() {
     formBranch.value = currentBranchName.value || "";
     showForm.value = false;
     await loadWorktrees();
-    emit("open-tab", path);
+    emit("open-worktree", path);
   } catch (err: any) {
     error.value = t("worktree.errorCreate").replace("{0}", String(err?.message ?? err));
   } finally {
@@ -374,7 +374,7 @@ onMounted(async () => {
           <div class="wt-item-actions">
             <button
               class="bm-btn bm-btn--ghost"
-              @click="emit('open-tab', wt.path)"
+              @click="emit('open-worktree', wt.path)"
             >
               {{ t("worktree.openInTab") }}
             </button>

@@ -2326,11 +2326,17 @@ onUnmounted(() => {
     <TagsPanel v-if="showTags && repoFolderPath" :cwd="repoFolderPath" @close="showTags = false"
       @refresh="repoRefresh()"
       @create-tag="showTags = false; handleTagCommit(repoLog[0] ?? null)" />
-    <!-- Worktree manager (uses BaseModal internally → own Teleport + backdrop) -->
     <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
       :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
       @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
-      @open-tab="(path) => { handleOpenPath(path); if (activeTabId) updateCurrentPath(activeTabId, path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
+      @open-worktree="async (path) => { 
+        if (activeTabId) updateCurrentPath(activeTabId, path); 
+        await openRepo(path); 
+        if (viewMode === 'history' || showGitTree) await loadLog();
+        showWorktrees = false; 
+        pendingWorktreeBranch = undefined; 
+        pendingQuickCreate = false; 
+      }" />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
     <SubmodulePanel v-if="showSubmodules && repoFolderPath" :cwd="repoFolderPath" @close="showSubmodules = false"
