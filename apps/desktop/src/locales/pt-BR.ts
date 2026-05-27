@@ -1430,6 +1430,7 @@ const ptBR: Locale = {
     removing: "Removendo\u2026",
     openInWorktreeTab: "Abrir em nova aba worktree",
     openInWorktreeTabTooltip: "Criar um worktree para este ramo e abri-lo em uma nova aba",
+    hasWorktreeTooltip: "Este ramo está em um worktree",
     errorCreate: "Falha ao criar worktree: {0}",
     errorRemove: "Falha ao remover worktree: {0}",
     errorPrune: "Falha ao limpar worktrees: {0}",

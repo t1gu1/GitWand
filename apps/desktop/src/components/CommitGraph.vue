@@ -738,7 +738,11 @@ function commitRefs(entry: GitLogEntry) {
     if (r.type === 'branch' || r.type === 'remote') {
       const match = props.branches?.find(b => b.name === r.name);
       if (match) {
-        return { ...r, type: (match.isRemote ? 'remote' : 'branch') as 'remote' | 'branch' };
+        return {
+          ...r,
+          type: (match.isRemote ? 'remote' : 'branch') as 'remote' | 'branch',
+          hasWorktree: match.hasWorktree
+        };
       }
     }
     return r;
@@ -1143,7 +1147,12 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
                 :title="r.name"
                 @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
                 @dblclick.stop="onBranchDblClick(r)"
-              >{{ branchList.length > 1 ? truncate(r.name) : r.name }}</span>
+              >
+                <svg v-if="(r as any).hasWorktree" class="cg-ref-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+                </svg>
+                {{ branchList.length > 1 ? truncate(r.name) : r.name }}
+              </span>
             </template>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>
@@ -1873,12 +1882,21 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
 
 
 .cg-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   padding: 1px 6px;
   font-size: 10px;
   font-weight: 600;
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   line-height: 1.5;
+}
+
+.cg-ref-worktree-icon {
+  flex-shrink: 0;
+  color: inherit;
+  opacity: 0.85;
 }
 
 .cg-ref--branch {

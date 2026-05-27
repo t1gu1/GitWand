@@ -1115,6 +1115,7 @@ export interface GitBranch {
   mainCommitCount: number;
   lastCommit: string;
   lastCommitDate: string;
+  hasWorktree: boolean;
 }
 
 /**
@@ -1133,6 +1134,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
         main_commit_count: number;
         last_commit: string;
         last_commit_date: string;
+        has_worktree: boolean;
       }>
     >("git_branches", { cwd });
 
@@ -1146,6 +1148,7 @@ export async function getGitBranches(cwd: string): Promise<GitBranch[]> {
       mainCommitCount: b.main_commit_count,
       lastCommit: b.last_commit,
       lastCommitDate: b.last_commit_date ?? "",
+      hasWorktree: b.has_worktree,
     }));
   }
 

@@ -570,7 +570,7 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     let output = git_cmd()
         .args([
             "branch", "-a",
-            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:{})", main_name),
+            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:{})\x1f%(worktreepath)", main_name),
         ])
         .current_dir(&cwd)
         .output()
@@ -621,6 +621,30 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
             0
         };
 
+        let worktree_path = if parts.len() > 6 { parts[6].trim().to_string() } else { String::new() };
+        
+        // Refined worktree detection (P2.7): 
+        // 1. Must have a worktree path.
+        // 2. Must be a subdirectory of the current repo (to exclude the main repo itself).
+        // 3. Must be in a designated "worktrees" folder (.git/worktrees, .worktrees, or worktrees/).
+        let has_worktree = if worktree_path.is_empty() {
+            false
+        } else {
+            // Canonicalize both for reliable comparison (handles /private/tmp on macOS, etc.)
+            let cwd_abs = std::fs::canonicalize(&cwd).unwrap_or_else(|_| std::path::PathBuf::from(&cwd));
+            let wt_abs = std::fs::canonicalize(&worktree_path).unwrap_or_else(|_| std::path::PathBuf::from(&worktree_path));
+
+            let cwd_norm = cwd_abs.to_string_lossy().replace("\\", "/").trim_end_matches('/').to_string();
+            let wt_norm = wt_abs.to_string_lossy().replace("\\", "/").trim_end_matches('/').to_string();
+            
+            wt_norm.starts_with(&cwd_norm) && wt_norm.len() > cwd_norm.len() && (
+                wt_norm.contains("/.worktrees/") || 
+                wt_norm.contains("/worktrees/") ||
+                wt_norm.contains(".worktrees") ||
+                wt_norm.contains("worktrees")
+            )
+        };
+
         if name.contains("HEAD ->") || name == "origin/HEAD" { continue; }
 
         let is_remote = name.starts_with("origin/") || name.starts_with("remotes/");
@@ -642,6 +666,7 @@ pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
             main_commit_count: 0, // Fill later
             last_commit,
             last_commit_date,
+            has_worktree,
         }, upstream));
     }
 

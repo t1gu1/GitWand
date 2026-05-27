@@ -142,6 +142,23 @@ export function fixtureBranches() {
 }
 
 /**
+ * Fixture « worktrees » : main + branche checked out dans un worktree.
+ */
+export function fixtureWorktrees() {
+  const cwd = mkTempRepo("gw-worktrees-");
+  commitFile(cwd, "README.md", "# Parity\n", "initial commit", 0);
+
+  // Créer une branche
+  execFileSync("git", ["-C", cwd, "branch", "feature/wt", "--quiet"]);
+
+  // Créer un worktree pour cette branche
+  const wtPath = join(cwd, "..", "feature-wt-dir");
+  execFileSync("git", ["-C", cwd, "worktree", "add", wtPath, "feature/wt", "--quiet"]);
+
+  return cwd;
+}
+
+/**
  * Fixture « stash » : 2 commits + 2 stashes.
  *
  * Couvre git_stash_list.

@@ -1415,6 +1415,7 @@ const zhCN: Locale = {
     removing: "删除中\u2026",
     openInWorktreeTab: "在新工作树标签页中打开",
     openInWorktreeTabTooltip: "为此分支创建工作树并在新标签页中打开",
+    hasWorktreeTooltip: "此分支已在工作树中检出",
     errorCreate: "创建工作树失败：{0}",
     errorRemove: "删除工作树失败：{0}",
     errorPrune: "清理工作树失败：{0}",

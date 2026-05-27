@@ -18,7 +18,7 @@
 import { describe, it, beforeAll, afterAll } from "vitest";
 import { startDevServer } from "./dev-server-runner.mjs";
 import { assertParity } from "./harness.mjs";
-import { fixtureBranches } from "./fixtures.mjs";
+import { fixtureBranches, fixtureWorktrees } from "./fixtures.mjs";
 
 describe("parity: git-branches", () => {
   /** @type {Awaited<ReturnType<typeof startDevServer>>} */
@@ -34,6 +34,15 @@ describe("parity: git-branches", () => {
 
   it("fixtureBranches → main (courant) + feature/alpha + feature/beta", async () => {
     const cwd = fixtureBranches();
+    await assertParity(dev, {
+      command: "git-branches",
+      args: { cwd },
+      httpPath: `/api/git-branches?cwd=${encodeURIComponent(cwd)}`,
+    });
+  });
+
+  it("fixtureWorktrees → main (courant) + feature/wt (with worktree)", async () => {
+    const cwd = fixtureWorktrees();
     await assertParity(dev, {
       command: "git-branches",
       args: { cwd },

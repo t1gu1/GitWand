@@ -213,6 +213,7 @@ pub struct GitBranch {
     pub main_commit_count: i32,
     pub last_commit: String,
     pub last_commit_date: String,
+    pub has_worktree: bool,
 }
 
 // ─── Blame types ───────────────────────────────────────────────────

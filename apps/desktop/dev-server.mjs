@@ -1763,7 +1763,7 @@ async function handleRequest(req, res) {
           return "main";
         })();
 
-        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:${mainName})`;
+        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:${mainName})\x1f%(worktreepath)`;
         const stdout = execSync(`git branch -a --format="${format}"`, {
           cwd: resolvedCwd,
           encoding: "utf-8",
@@ -1787,6 +1787,28 @@ async function handleRequest(req, res) {
           const lastCommit = parts[3] || "";
           const lastCommitDate = parts[4] || "";
           const mainCount = parseInt((parts[5] || "0").split(/\s+/)[0], 10) || 0;
+          const worktreePath = (parts[6] || "").trim();
+          
+          let hasWorktree = false;
+          if (worktreePath) {
+            try {
+              const cwdNorm = fs.realpathSync(resolvedCwd).replace(/\\/g, "/").replace(/\/+$/, "");
+              const wtNorm = fs.realpathSync(worktreePath).replace(/\\/g, "/").replace(/\/+$/, "");
+              
+              hasWorktree = wtNorm.startsWith(cwdNorm) && wtNorm.length > cwdNorm.length && (
+                wtNorm.includes(".worktrees") || 
+                wtNorm.includes("worktrees")
+              );
+            } catch {
+              // Fallback to non-canonical if path doesn't exist
+              const cwdNorm = resolvedCwd.replace(/\\/g, "/").replace(/\/+$/, "");
+              const wtNorm = worktreePath.replace(/\\/g, "/").replace(/\/+$/, "");
+              hasWorktree = wtNorm.startsWith(cwdNorm) && wtNorm.length > cwdNorm.length && (
+                wtNorm.includes(".worktrees") || 
+                wtNorm.includes("worktrees")
+              );
+            }
+          }
 
           if (name.includes("HEAD ->") || name === "origin/HEAD") continue;
 
@@ -1811,6 +1833,7 @@ async function handleRequest(req, res) {
             mainCommitCount: 0,
             lastCommit,
             lastCommitDate,
+            hasWorktree,
           });
         }
 

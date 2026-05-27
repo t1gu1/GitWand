@@ -1442,6 +1442,7 @@ const fr: Locale = {
     removing: "Suppression\u2026",
     openInWorktreeTab: "Ouvrir dans un onglet worktree",
     openInWorktreeTabTooltip: "Cr\u00e9er un worktree pour cette branche et l\u2019ouvrir dans un nouvel onglet",
+    hasWorktreeTooltip: "Cette branche est extraite dans un worktree",
     errorCreate: "\u00c9chec de la cr\u00e9ation du worktree\u00a0: {0}",
     errorRemove: "\u00c9chec de la suppression du worktree\u00a0: {0}",
     errorPrune: "\u00c9chec du nettoyage des worktrees\u00a0: {0}",

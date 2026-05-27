@@ -1472,6 +1472,7 @@ const en = {
     removing: "Removing\u2026",
     openInWorktreeTab: "Open in new worktree tab",
     openInWorktreeTabTooltip: "Create a worktree for this branch and open it in a new tab",
+    hasWorktreeTooltip: "This branch is checked out in a worktree",
     errorCreate: "Failed to create worktree: {0}",
     errorRemove: "Failed to remove worktree: {0}",
     errorPrune: "Failed to prune worktrees: {0}",

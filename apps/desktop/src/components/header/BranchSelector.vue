@@ -356,7 +356,12 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                 @click="!branch.isCurrent && handleBranchSwitch(branch.name)"
               >
                 <span v-if="branch.isCurrent" class="bp-current-dot"></span>
-                <span class="bp-item-name mono">{{ branch.name }}</span>
+                <div class="bp-item-main">
+                  <svg v-if="branch.hasWorktree" class="bp-worktree-indicator" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+                  </svg>
+                  <span class="bp-item-name mono">{{ branch.name }}</span>
+                </div>
                 <span v-if="branch.ahead > 0 || branch.behind > 0" class="bp-item-meta muted">
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
                   <span v-if="branch.behind > 0">&darr;{{ branch.behind }}</span>
@@ -718,12 +723,30 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   flex-shrink: 0;
 }
 
-.bp-item-name {
+.bp-item-main {
   flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.bp-item-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-weight: var(--font-weight-medium);
+}
+
+.bp-worktree-indicator {
+  flex-shrink: 0;
+  opacity: 0.5;
+  color: var(--color-text-muted);
+}
+.bp-item:hover .bp-worktree-indicator,
+.bp-item--current .bp-worktree-indicator {
+  opacity: 0.8;
+  color: var(--color-accent);
 }
 .bp-item--remote .bp-item-name { opacity: 0.7; }
 

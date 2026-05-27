@@ -1430,6 +1430,7 @@ const es: Locale = {
     removing: "Eliminando\u2026",
     openInWorktreeTab: "Abrir en nueva pestaña worktree",
     openInWorktreeTabTooltip: "Crear un worktree para esta rama y abrirlo en una nueva pestaña",
+    hasWorktreeTooltip: "Esta rama está en un worktree",
     errorCreate: "Error al crear worktree: {0}",
     errorRemove: "Error al eliminar worktree: {0}",
     errorPrune: "Error al limpiar worktrees: {0}",

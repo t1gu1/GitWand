@@ -1319,6 +1319,9 @@ function formatActivityDate(dateStr: string): string {
             @contextmenu="openBranchCtx($event, b.name)"
             :title="b.name"
           >
+            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+            </svg>
             <span class="branch-name mono">{{ b.name }}</span>
             <span class="branch-badges">
               <span v-if="isMergedBranch(b.name) && !b.isCurrent" class="branch-badge branch-badge--merged">{{ t('branch.merged') }}</span>
@@ -1360,9 +1363,10 @@ function formatActivityDate(dateStr: string): string {
             class="branch-item branch-item--archived"
             @contextmenu="openBranchCtx($event, b.name)"
             :title="b.name"
-          >
-            <span class="branch-name mono">{{ b.name }}</span>
-            <span class="branch-badges">
+            >
+            <svg v-if="b.hasWorktree" class="branch-worktree-icon" :title="t('worktree.hasWorktreeTooltip')" width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+             <path d="M8 2l3 4H5l3-4zM8 5l4 5H4l4-5zM8 9l5 6H3l5-6z" fill="currentColor" />
+            </svg>            <span class="branch-name mono">{{ b.name }}</span>            <span class="branch-badges">
               <span v-if="isMergedBranch(b.name)" class="branch-badge branch-badge--merged">{{ t('branch.merged') }}</span>
               <span v-else-if="isInactiveBranch(b)" class="branch-badge branch-badge--inactive">{{ t('branch.inactive') }}</span>
             </span>
@@ -2454,7 +2458,7 @@ function formatActivityDate(dateStr: string): string {
 .branch-item {
   position: relative;
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: auto 1fr auto auto auto;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-4) var(--space-5);
@@ -2466,6 +2470,18 @@ function formatActivityDate(dateStr: string): string {
   text-align: left;
   font-size: var(--font-size-sm);
   transition: background var(--transition-hover), transform var(--transition-hover);
+}
+
+.branch-worktree-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+}
+
+.branch-item:hover .branch-worktree-icon,
+.branch-item--current .branch-worktree-icon {
+  color: var(--color-accent);
+  opacity: 1;
 }
 
 .branch-item:hover {
