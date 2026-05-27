@@ -1407,7 +1407,7 @@ const zhCN: Locale = {
     formPath: "文件夹路径",
     formPathPlaceholder: "/路径/到/新工作树",
     formBranch: "分支",
-    formBranchPlaceholder: "选择已有分支\u2026",
+    formBranchPlaceholder: "选择可用分支\u2026",
     formNewBranch: "新分支名称（可选）",
     formNewBranchPlaceholder: "留空则检出所选分支",
     create: "创建工作树",

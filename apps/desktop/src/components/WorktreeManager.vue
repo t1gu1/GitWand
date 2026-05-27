@@ -131,7 +131,7 @@ async function createWorktree() {
       path,
       branchName,
     );
-    formBranch.value = currentBranchName.value || "";
+    formBranch.value = "";
     showForm.value = false;
     await loadWorktrees();
   } catch (err: any) {
@@ -177,7 +177,7 @@ watch(worktrees, () => { loadStatuses(); }, { immediate: false });
 
 onMounted(async () => {
   await loadWorktrees();
-  formBranch.value = props.suggestedBranch || currentBranchName.value || "";
+  formBranch.value = props.suggestedBranch || "";
   if (props.suggestedBranch) {
     showForm.value = true;
   }
@@ -260,15 +260,19 @@ onMounted(async () => {
       <div v-if="showForm" class="wt-form">
         <div class="wt-form-row">
           <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
-          <select id="wt-form-branch" v-model="formBranch" class="wt-select">
+          <select
+            id="wt-form-branch"
+            v-model="formBranch"
+            class="wt-select"
+            :class="{ 'wt-select--placeholder': !formBranch }"
+          >
             <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
             <option
-              v-for="b in branches.filter(b => !b.isRemote)"
+              v-for="b in branches.filter(b => !b.isRemote && !b.hasWorktree && !b.isCurrent)"
               :key="b.name"
               :value="b.name"
             >{{ b.name }}</option>
-          </select>
-        </div>
+          </select>        </div>
         <div class="wt-form-actions">
           <button
             class="bm-btn bm-btn--primary"
@@ -473,6 +477,10 @@ onMounted(async () => {
   padding: 0 var(--space-4);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.wt-select--placeholder {
+  color: var(--color-text-muted);
 }
 
 .wt-input:focus,

@@ -1422,7 +1422,7 @@ const es: Locale = {
     formPath: "Ruta de la carpeta",
     formPathPlaceholder: "/ruta/al/nuevo-worktree",
     formBranch: "Rama",
-    formBranchPlaceholder: "Seleccionar una rama existente\u2026",
+    formBranchPlaceholder: "Seleccionar una rama disponible\u2026",
     formNewBranch: "Nombre de nueva rama (opcional)",
     formNewBranchPlaceholder: "Dejar vacío para hacer checkout de la rama seleccionada",
     create: "Crear worktree",

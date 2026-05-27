@@ -1422,7 +1422,7 @@ const ptBR: Locale = {
     formPath: "Caminho da pasta",
     formPathPlaceholder: "/caminho/para/novo-worktree",
     formBranch: "Ramo",
-    formBranchPlaceholder: "Selecionar um ramo existente\u2026",
+    formBranchPlaceholder: "Selecionar um ramo dispon\u00edvel\u2026",
     formNewBranch: "Nome do novo ramo (opcional)",
     formNewBranchPlaceholder: "Deixar vazio para fazer checkout do ramo selecionado",
     create: "Criar worktree",

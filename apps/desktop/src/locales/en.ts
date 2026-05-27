@@ -1464,7 +1464,7 @@ const en = {
     formPath: "Folder path",
     formPathPlaceholder: "/path/to/new-worktree",
     formBranch: "Branch",
-    formBranchPlaceholder: "Select an existing branch\u2026",
+    formBranchPlaceholder: "Select an available branch\u2026",
     formNewBranch: "New branch name (optional)",
     formNewBranchPlaceholder: "Leave empty to check out the selected branch",
     create: "Create worktree",
