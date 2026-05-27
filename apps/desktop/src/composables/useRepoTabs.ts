@@ -11,8 +11,10 @@ let nextTabId = 1;
 export interface RepoTab {
   /** Unique numeric ID for this tab (memory-only, resets on reload). */
   id: number;
-  /** Path to the repository. */
+  /** Path to the repository anchor (main worktree). */
   path: string;
+  /** Currently viewed path (might be a worktree). */
+  currentPath: string;
   /** Display name (last path segment). */
   name: string;
 }
@@ -28,6 +30,8 @@ const MAX_TABS = 10;
  */
 interface PersistedTabs {
   paths: string[];
+  /** Map of anchor path -> last viewed currentPath (worktree). */
+  currentPaths?: Record<string, string>;
   activePath: string | null;
 }
 
@@ -41,8 +45,15 @@ function nameFromPath(path: string): string {
 function save(entries: RepoTab[], activeId: number | null) {
   try {
     const active = entries.find((t) => t.id === activeId);
+    const currentPaths: Record<string, string> = {};
+    for (const t of entries) {
+      if (t.currentPath !== t.path) {
+        currentPaths[t.path] = t.currentPath;
+      }
+    }
     const payload: PersistedTabs = {
       paths: entries.map((t) => t.path),
+      currentPaths,
       activePath: active?.path ?? null,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -92,6 +103,7 @@ const tabs = ref<RepoTab[]>(
   persisted.paths.map((path) => ({
     id: nextTabId++,
     path,
+    currentPath: persisted.currentPaths?.[path] || path,
     name: nameFromPath(path),
   })),
 );
@@ -143,7 +155,12 @@ export function useRepoTabs() {
     }
 
     const id = nextTabId++;
-    const tab: RepoTab = { id, path: normalized, name: nameFromPath(normalized) };
+    const tab: RepoTab = {
+      id,
+      path: normalized,
+      currentPath: normalized,
+      name: nameFromPath(normalized)
+    };
 
     tabs.value.push(tab);
     activeTabId.value = id;
@@ -151,6 +168,17 @@ export function useRepoTabs() {
     addToHistory(normalized);
     save(tabs.value, activeTabId.value);
     return tab;
+  }
+
+  /**
+   * Update the current path for the active tab.
+   */
+  function updateCurrentPath(tabId: number, currentPath: string) {
+    const tab = tabs.value.find((t) => t.id === tabId);
+    if (tab) {
+      tab.currentPath = currentPath;
+      save(tabs.value, activeTabId.value);
+    }
   }
 
   /**
@@ -202,6 +230,7 @@ export function useRepoTabs() {
     tabs,
     activeTabId,
     openTab,
+    updateCurrentPath,
     closeTab,
     switchTab,
     reorderTabs,

@@ -75,7 +75,7 @@ function deriveQuickPath(name: string): string {
   const main = worktrees.value.find((w) => w.is_main);
   const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
   const branch = getQuickBranch(name);
-  return `${base}/.git/worktrees/${branch}`;
+  return `${base}/.git/worktrees-wand/${branch}`;
 }
 
 async function quickCreate() {
@@ -133,7 +133,7 @@ async function createWorktree() {
     const branchName = formBranch.value.trim();
     const main = worktrees.value.find((w) => w.is_main);
     const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
-    const path = `${base}/.git/worktrees/${branchName}`;
+    const path = `${base}/.git/worktrees-wand/${branchName}`;
 
     // If the branch is currently checked out in the main worktree, we must switch the main
     // worktree to something else first, otherwise git-worktree-add fails with "already used".

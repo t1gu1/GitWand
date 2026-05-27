@@ -85,7 +85,25 @@ import {
   LAUNCHPAD_OPEN_REQUEST_KEY,
   TOGGLE_GIT_TREE_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
+import {
+  gitStash,
+  gitStashPop,
+  gitStashList,
+  openInEditor,
+  setGitConfig,
+  gitDiscard,
+  gitAddToGitignore,
+  gitDeleteBranch,
+  gitDeleteRemoteTag,
+  gitRemoteInfo,
+  gitUnpushedTags,
+  gitPushTags,
+  workspaceRead,
+  gitMergeBase,
+  gitResetToCommit,
+  gitWorktreeList,
+  type WorktreeEntry,
+} from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -339,6 +357,7 @@ const {
   tabs: repoTabs,
   activeTabId,
   openTab,
+  updateCurrentPath,
   closeTab,
   switchTab,
   reorderTabs,
@@ -371,10 +390,13 @@ watch(
       return;
     }
     const tab = repoTabs.value.find((t) => t.id === id);
-    if (tab && tab.path !== repoFolderPath.value) {
-      await openRepo(tab.path);
-      if (viewMode.value === "history" || showGitTree.value) {
-        await loadLog();
+    if (tab) {
+      const targetPath = tab.currentPath || tab.path;
+      if (targetPath !== repoFolderPath.value) {
+        await openRepo(targetPath);
+        if (viewMode.value === "history" || showGitTree.value) {
+          await loadLog();
+        }
       }
     }
   },
@@ -809,6 +831,30 @@ async function handleSwitchBranch(name: string, isRemote = false) {
 
   if (!dirty || behavior === "ask" && !dirty) {
     // Clean tree — just switch
+    // --- MAGIC REDIRECT ---
+    try {
+      const wts = await gitWorktreeList(repoFolderPath.value);
+      const mainWt = wts.find((w: WorktreeEntry) => w.is_main);
+      const targetWt = wts.find((w: WorktreeEntry) => w.branch === name);
+
+      if (targetWt) {
+        // Transparently switch the current tab to use the dedicated worktree
+        if (repoFolderPath.value !== targetWt.path) {
+          await openRepo(targetWt.path);
+          if (activeTabId.value) updateCurrentPath(activeTabId.value, targetWt.path);
+        }
+        return;
+      } else if (mainWt && repoFolderPath.value !== mainWt.path) {
+        // No worktree for this branch? Go back to the main repository
+        await openRepo(mainWt.path);
+        if (activeTabId.value) updateCurrentPath(activeTabId.value, mainWt.path);
+        // Now on main, proceed with regular switch
+      }
+    } catch {
+      // Ignore worktree errors, fallback to regular switch
+    }
+    // --- END MAGIC ---
+
     await switchBranch(name);
     await promptPullIfBehind();
     return;
@@ -2029,7 +2075,6 @@ onUnmounted(() => {
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="onUndoPerformed"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
-      @open-tab="(path) => openTab(path)"
       @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
       @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
@@ -2285,7 +2330,7 @@ onUnmounted(() => {
     <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
       :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
       @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
-      @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
+      @open-tab="(path) => { handleOpenPath(path); if (activeTabId) updateCurrentPath(activeTabId, path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
     <SubmodulePanel v-if="showSubmodules && repoFolderPath" :cwd="repoFolderPath" @close="showSubmodules = false"

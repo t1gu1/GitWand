@@ -54,7 +54,6 @@ const emit = defineEmits<{
   openWorktrees: [branch?: string];
   loadBranches: [];
   changeView: [mode: 'changes'];
-  openTab: [path: string];
 }>();
 
 const worktrees = ref<WorktreeEntry[]>([]);
@@ -185,12 +184,7 @@ const remoteBranches = computed(() =>
 );
 
 function handleBranchSwitch(name: string) {
-  const wt = worktreeFor(name);
-  if (wt && !wt.is_main) {
-    emit("openTab", wt.path);
-  } else {
-    emit("switchBranch", name);
-  }
+  emit("switchBranch", name);
   closePopover();
 }
 
