@@ -11,3 +11,5 @@ allowBuilds:
 # pnpm 10+ reads overrides here instead of package.json's "pnpm.overrides"
 overrides:
   hono: "^4.12.14"
+  # Security: force tmp >= 0.2.6 (CVE fix). @vscode/vsce pins it lower (0.2.5).
+  tmp: "^0.2.7"
