@@ -742,12 +742,12 @@ async function handleRequest(req, res) {
             if (stagedChar !== ".") {
               const status =
                 { A: "added", M: "modified", D: "deleted", R: "renamed" }[stagedChar] || "modified";
-              staged.push({ path, status, oldPath: undefined });
+              staged.push({ path, status, oldPath: null });
             }
 
             if (unstagedChar !== ".") {
               const status = { M: "modified", D: "deleted" }[unstagedChar] || "modified";
-              unstaged.push({ path, status, oldPath: undefined });
+              unstaged.push({ path, status, oldPath: null });
             }
           } else if (line.startsWith("2 ")) {
             // renamed/copied entry — porcelain v2 format:
@@ -759,7 +759,7 @@ async function handleRequest(req, res) {
             if (fields.length < 10) continue;
             const xy = fields[1];
             const path = fields.slice(9).join(" ");
-            const origPath = tabIdx >= 0 ? line.substring(tabIdx + 1) : undefined;
+            const origPath = tabIdx >= 0 ? line.substring(tabIdx + 1) : null;
 
             if (xy.length < 2) continue;
             const stagedChar = xy[0];
@@ -796,6 +796,30 @@ async function handleRequest(req, res) {
           }
         }
 
+        // ── Triangular / fork workflow ─────────────────────────────────────
+        // Mirror git_status_cli: resolve @{push}; only report a separate push
+        // remote (+ ahead count) when it differs from the upstream.
+        let pushRemote = null;
+        let aheadPush = 0;
+        try {
+          const pr = spawnSync(GIT, ["rev-parse", "--abbrev-ref", "@{push}"], {
+            cwd: resolvedCwd, encoding: "utf-8",
+          });
+          if (pr.status === 0) {
+            const pushRef = (pr.stdout || "").trim();
+            const upstreamRef = remote || "";
+            if (pushRef && pushRef !== upstreamRef) {
+              const rl = spawnSync(GIT, ["rev-list", "--count", `${pushRef}..HEAD`], {
+                cwd: resolvedCwd, encoding: "utf-8",
+              });
+              if (rl.status === 0) aheadPush = parseInt((rl.stdout || "").trim(), 10) || 0;
+              pushRemote = pushRef;
+            }
+          }
+        } catch {
+          // no push remote configured — leave (null, 0)
+        }
+
         let mainCommitCount = 1;
         const remoteRef = `origin/${branch}`;
         for (const base of ["main", "master", "origin/main", "origin/master"]) {
@@ -814,7 +838,7 @@ async function handleRequest(req, res) {
           }
         }
 
-        return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, staged, unstaged, untracked, conflicted });
+        return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, pushRemote, aheadPush, staged, unstaged, untracked, conflicted });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }
@@ -1945,26 +1969,39 @@ async function handleRequest(req, res) {
           ["stash", "list", "--format=%H%x09%gd%x09%gs%x09%ct"],
           { cwd: resolvedCwd, encoding: "utf-8" },
         );
-        const entries = out
+        // Mirror git_stash_list (Rust) parsing exactly so the parity test holds:
+        //   - "On <branch>: <custom-message>"           → branch, custom message
+        //   - "WIP on <branch>: <sha> <commit-subject>" → branch, subject (sha dropped)
+        //   - "untracked files on <branch>: …"          → skipped (internal commit)
+        const entries = [];
+        out
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean)
-          .map((line) => {
-            const [hash, ref, message, ts] = line.split("\t");
-            const indexMatch = /stash@\{(\d+)\}/.exec(ref ?? "");
+          .forEach((line, i) => {
+            const [hash, , subjectRaw, ts] = line.split("\t");
+            const subject = subjectRaw ?? "";
+            if (subject.startsWith("untracked files on ")) return;
             const date = ts ? new Date(parseInt(ts, 10) * 1000).toISOString() : "";
-            // `message` looks like "WIP on <branch>: <subject>" or
-            // "On <branch>: <subject>" when the user gave a custom label.
-            const onMatch = /^(?:WIP )?on ([^:]+):\s*(.*)$/.exec(message ?? "");
-            const branch = onMatch ? onMatch[1] : "";
-            const subject = onMatch ? onMatch[2] : (message ?? "");
-            return {
-              index: indexMatch ? parseInt(indexMatch[1], 10) : 0,
-              hash,
-              message: subject,
-              branch,
-              date,
-            };
+            let branch = "";
+            let message = subject;
+            if (subject.startsWith("On ")) {
+              const colon = subject.indexOf(": ");
+              if (colon !== -1) {
+                branch = subject.slice(3, colon);
+                message = subject.slice(colon + 2);
+              }
+            } else if (subject.startsWith("WIP on ")) {
+              const colon = subject.indexOf(": ");
+              if (colon !== -1) {
+                branch = subject.slice(7, colon);
+                const rest = subject.slice(colon + 2);
+                // drop the leading "<sha> " from the commit message portion
+                const sp = rest.indexOf(" ");
+                message = sp !== -1 ? rest.slice(sp + 1) : rest;
+              }
+            }
+            entries.push({ index: i, hash, message, branch, date });
           });
         return jsonResponse(req, res, entries);
       } catch (err) {
@@ -3974,6 +4011,86 @@ async function handleRequest(req, res) {
         const { cwd, url: smUrl, path: smPath } = await readBody(req);
         execSync(`git submodule add "${smUrl}" "${smPath}"`, { cwd: resolve(cwd), encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // GET /api/git-submodule-branches?cwd=<path>&path=<submodulePath>
+    // Mirrors the Tauri `git_submodule_branches` command (v2.15.1).
+    if (url.pathname === "/api/git-submodule-branches" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const subPath = url.searchParams.get("path") || "";
+        const subDir = join(cwd, subPath);
+        if (!existsSync(subDir)) return jsonResponse(req, res, []);
+        // spawnSync (no shell) — the `%(HEAD)` format token contains parens
+        // that break /bin/sh if passed through execSync's string form.
+        const r = spawnSync(GIT, ["branch", "--format=%(HEAD)%(refname:short)"], { cwd: subDir, encoding: "utf-8" });
+        if (r.status !== 0) {
+          return jsonResponse(req, res, { error: (r.stderr || "git branch failed").trim() }, 500);
+        }
+        const raw = r.stdout || "";
+        const branches = [];
+        for (const line of raw.split("\n")) {
+          const trimmed = line.replace(/\s+$/, "");
+          if (!trimmed) continue;
+          const isCurrent = trimmed.startsWith("*");
+          const name = trimmed.replace(/^\*/, "").trim();
+          if (!name) continue;
+          branches.push({ name, isCurrent });
+        }
+        return jsonResponse(req, res, branches);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // GET /api/git-commit-submodule-changes?cwd=<path>
+    // Mirrors the Tauri `git_commit_submodule_changes` command (v2.15.1).
+    if (url.pathname === "/api/git-commit-submodule-changes" && req.method === "GET") {
+      try {
+        const cwd = resolve(url.searchParams.get("cwd") || "");
+        const gitmodulesPath = join(cwd, ".gitmodules");
+        if (!existsSync(gitmodulesPath)) return jsonResponse(req, res, {});
+
+        let cfgRaw = "";
+        try { cfgRaw = execSync("git config --file .gitmodules --get-regexp path", { cwd, encoding: "utf-8" }); } catch { /* none */ }
+        const subPaths = [];
+        for (const line of cfgRaw.split("\n")) {
+          const sp = line.indexOf(" ");
+          if (sp === -1) continue;
+          const p = line.slice(sp + 1).trim();
+          if (p) subPaths.push(p);
+        }
+        if (subPaths.length === 0) return jsonResponse(req, res, {});
+
+        const pathArgs = subPaths.map((p) => `"${p}"`).join(" ");
+        const raw = execSync(
+          `git log --format=GWCOMMIT:%H --raw --no-abbrev --no-renames -- ${pathArgs}`,
+          { cwd, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 },
+        );
+        const map = {};
+        let current = null;
+        for (const line of raw.split("\n")) {
+          if (line.startsWith("GWCOMMIT:")) {
+            current = line.slice("GWCOMMIT:".length);
+            continue;
+          }
+          if (!line.startsWith(":")) continue;
+          const tab = line.indexOf("\t");
+          if (tab === -1) continue;
+          const meta = line.slice(1, tab);
+          const path = line.slice(tab + 1);
+          const fields = meta.split(/\s+/);
+          if (fields.length < 4) continue;
+          const [srcMode, dstMode, , newSha] = fields;
+          if (srcMode !== "160000" && dstMode !== "160000") continue;
+          if (/^0+$/.test(newSha)) continue;
+          if (!current) continue;
+          (map[current] ||= []).push({ path, pointedSha: newSha });
+        }
+        return jsonResponse(req, res, map);
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }

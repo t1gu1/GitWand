@@ -1,6 +1,6 @@
 {
   "name": "@gitwand/cli",
-  "version": "2.15.0",
+  "version": "2.15.1",
   "description": "GitWand CLI — resolve Git conflicts from your terminal or CI pipeline",
   "type": "module",
   "main": "dist/index.js",

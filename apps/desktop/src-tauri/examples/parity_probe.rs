@@ -33,7 +33,9 @@
 // proc-macro de Tauri génère une aide `__cmd__<name>` qui entre en conflit si
 // la fn elle-même est `pub`. Voir le bloc "Parity probe re-exports" dans lib.rs.
 use gitwand_desktop_lib::{
-    git_branches_parity, git_log_parity, git_status_libgit2_parity, git_status_parity,
+    git_branches_parity, git_commit_submodule_changes_parity, git_log_parity,
+    git_stash_list_parity, git_status_libgit2_parity, git_status_parity,
+    git_submodule_branches_parity,
 };
 use serde_json::{json, Value};
 use std::io::{self, Read};
@@ -43,7 +45,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
         eprintln!("usage: parity-probe <command>");
-        eprintln!("commands: git-status, git-status-fast, git-log, git-branches");
+        eprintln!("commands: git-status, git-status-fast, git-log, git-branches, git-stash-list, git-submodule-branches, git-commit-submodule-changes");
         return ExitCode::from(2);
     }
 
@@ -117,6 +119,31 @@ fn main() -> ExitCode {
                 Err(code) => return code,
             };
             to_json(git_branches_parity(cwd))
+        }
+        "git-stash-list" => {
+            let cwd = match must_str("cwd") {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            to_json(git_stash_list_parity(cwd))
+        }
+        "git-submodule-branches" => {
+            let cwd = match must_str("cwd") {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            let path = match must_str("path") {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            to_json(git_submodule_branches_parity(cwd, path))
+        }
+        "git-commit-submodule-changes" => {
+            let cwd = match must_str("cwd") {
+                Ok(v) => v,
+                Err(code) => return code,
+            };
+            to_json(git_commit_submodule_changes_parity(cwd))
         }
         other => {
             eprintln!("unknown command: {}", other);

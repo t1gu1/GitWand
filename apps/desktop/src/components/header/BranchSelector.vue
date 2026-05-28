@@ -25,7 +25,7 @@
  * either the trigger OR the popover count as "inside".
  */
 import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "vue";
-import type { GitBranch } from "../../utils/backend";
+import { gitSubmoduleList, gitSubmoduleBranches, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview } from "../../composables/useMergePreview";
@@ -54,6 +54,8 @@ const emit = defineEmits<{
   openWorktrees: [branch?: string];
   loadBranches: [];
   changeView: [mode: 'changes'];
+  /** Navigate the Git Tree into a submodule (v2.15.1). Payload is the submodule path relative to cwd. */
+  openSubmodule: [path: string];
 }>();
 
 // Whether the working tree has anything worth reporting — drives the
@@ -124,6 +126,7 @@ function togglePopover() {
   if (showPopover.value) {
     branchFilter.value = "";
     emit("loadBranches");
+    void loadSubmodules();
   }
 }
 
@@ -131,6 +134,40 @@ function closePopover() {
   showPopover.value = false;
   showCreate.value = false;
   newBranchName.value = "";
+}
+
+// ─── Submodules section (v2.15.1) ────────────────────────────────
+const submodules = ref<SubmoduleEntry[]>([]);
+const showSubmodules = ref(false);
+const expandedSubmodule = ref<string | null>(null);
+const submoduleBranches = ref<Record<string, SubmoduleBranch[]>>({});
+
+async function loadSubmodules() {
+  try {
+    submodules.value = await gitSubmoduleList(props.cwd);
+  } catch {
+    submodules.value = [];
+  }
+}
+
+async function toggleSubmoduleExpand(path: string) {
+  if (expandedSubmodule.value === path) {
+    expandedSubmodule.value = null;
+    return;
+  }
+  expandedSubmodule.value = path;
+  if (!submoduleBranches.value[path]) {
+    try {
+      submoduleBranches.value[path] = await gitSubmoduleBranches(props.cwd, path);
+    } catch {
+      submoduleBranches.value[path] = [];
+    }
+  }
+}
+
+function openSubmoduleTree(path: string) {
+  emit("openSubmodule", path);
+  closePopover();
 }
 
 const mainNames = ["main", "master"];
@@ -425,6 +462,51 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         </div>
         <div v-if="localBranches.length === 0 && remoteBranches.length === 0" class="bp-empty">
           <span class="muted">{{ t('branches.noBranch') }}</span>
+        </div>
+
+        <!-- Submodules section (v2.15.1) — only rendered when the repo declares submodules -->
+        <div v-if="submodules.length > 0" class="bp-section bp-section--submodules">
+          <button class="bp-section-toggle" :aria-expanded="showSubmodules ? 'true' : 'false'" @click.stop="showSubmodules = !showSubmodules">
+            <svg class="bp-section-toggle__chevron" :class="{ 'bp-section-toggle__chevron--open': showSubmodules }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('submodule.title') }}</span>
+            <span class="bp-section-toggle__count">{{ submodules.length }}</span>
+          </button>
+
+          <ul v-if="showSubmodules" class="bp-list">
+            <template v-for="sub in submodules" :key="sub.path">
+              <li class="bp-item bp-item--submodule" @click="toggleSubmoduleExpand(sub.path)">
+                <svg class="bp-sub-chevron" :class="{ 'bp-sub-chevron--open': expandedSubmodule === sub.path }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M6 3l5 5-5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="bp-item-name mono">{{ sub.path }}</span>
+                <button
+                  class="bp-item-preview"
+                  :title="t('submodule.viewTree')"
+                  @click.stop="openSubmoduleTree(sub.path)"
+                >
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5" />
+                    <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.5" />
+                    <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.5" />
+                    <path d="M5 6v4M10 8H7c-1.1 0-2-.9-2-2" stroke="currentColor" stroke-width="1.5" />
+                  </svg>
+                </button>
+              </li>
+              <li v-if="expandedSubmodule === sub.path" class="bp-sub-branches">
+                <span
+                  v-for="b in (submoduleBranches[sub.path] ?? [])"
+                  :key="b.name"
+                  class="bp-sub-branch mono"
+                  :class="{ 'bp-sub-branch--current': b.isCurrent }"
+                >
+                  <span v-if="b.isCurrent" class="bp-current-dot"></span>{{ b.name }}
+                </span>
+                <span v-if="(submoduleBranches[sub.path] ?? []).length === 0" class="muted bp-sub-empty">{{ t('submodule.noBranches') }}</span>
+              </li>
+            </template>
+          </ul>
         </div>
       </div>
     </div>
@@ -757,6 +839,71 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 .bp-preview-row {
   list-style: none;
   padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+/* ─── Submodules section (v2.15.1) ──────────────────────── */
+.bp-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.bp-section-toggle:hover { color: var(--color-text); }
+
+.bp-section-toggle__chevron {
+  transition: transform var(--transition-base);
+  opacity: 0.6;
+}
+.bp-section-toggle__chevron--open { transform: rotate(0deg); }
+.bp-section-toggle__chevron:not(.bp-section-toggle__chevron--open) { transform: rotate(-90deg); }
+
+.bp-section-toggle__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.bp-item--submodule { cursor: pointer; }
+
+.bp-sub-chevron {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: transform var(--transition-base);
+}
+.bp-sub-chevron--open { transform: rotate(90deg); }
+
+.bp-sub-branches {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-5) var(--space-3) calc(var(--space-5) + 16px);
+}
+
+.bp-sub-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: 1px 6px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+}
+.bp-sub-branch--current { color: var(--color-text); font-weight: var(--font-weight-medium); }
+
+.bp-sub-empty {
+  font-size: var(--font-size-xs);
 }
 
 .bp-empty {

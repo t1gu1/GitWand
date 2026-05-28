@@ -1405,6 +1405,7 @@ const en = {
   // ─── Stash manager ──────────────────────────────────────
   stash: {
     title: "Stash Manager",
+    pendingBadge: "{0} stash pending",
     composerPlaceholder: "Optional message \u2014 leave empty for the default label",
     aiSuggestTooltip: "Suggest a message with AI",
     aiButton: "AI",
@@ -1554,6 +1555,10 @@ const en = {
   submodule: {
     title: "Submodules",
     empty: "No submodules in this repository.",
+    viewTree: "View submodule's Git Tree",
+    noBranches: "No branches",
+    backToParent: "Back to parent repository",
+    viewingSubmodule: "Submodule: {0}",
     openInTab: "Open in tab",
     initUpdate: "Init \u0026 Update",
     initUpdateAll: "Init \u0026 Update all",
@@ -1814,6 +1819,12 @@ const en = {
       withoutTags: "Push without tags",
       more: "more…",
     },
+  },
+  forcePushConfirm: {
+    title: "Force push?",
+    desc: "Force push will overwrite the remote history of « {0} » with your local commits.",
+    protectedWarn: "« {0} » is a protected branch (main/master). Make sure this is intentional.",
+    divergedWarn: "The remote has {0} commit(s) you don't have locally — they will be lost.",
   },
   error: {
     viewLogs: "View logs",

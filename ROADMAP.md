@@ -6,29 +6,6 @@
 
 ## What's Next
 
-### v2.15.x — Git Tree polish & quick actions
-
-_Direct follow-up to PR #23 — addresses the daily friction points identified by t1gu1._
-
-**Force push**
-
-- "Force push" button in the branch context menu and as an option on the Push button in the header
-- Explicit confirmation with a warning if the branch has a shared remote (ahead/behind detected)
-- Guard: disabled on `main`/`master` without an additional confirmation
-
-**Quick Stash**
-
-- `⌘⇧,` shortcut from the commit area: instant stash with no modal — message auto-generated from unstaged files (reuses `useStashMessage.ts`)
-- Subtle badge count in the commit area when stashes are pending
-
-**Submodules in the Git Tree**
-
-- "Submodules" section in the branch picker: lists each submodule's branches
-- In the Git Tree, a commit that touches a submodule shows a badge with the pointed SHA
-- Click → switches the view to the submodule's Git Tree; back button to return to the parent repo
-
----
-
 ### v2.16.0 — PR Activity Notifications
 
 Native OS notifications for PR events — review request, new comment, CI flip, mention — without leaving GitWand. The infrastructure is nearly ready (`useRepoPoller`, `useLaunchpadPrs`, `useConnectivity`); only the diff-snapshot layer and OS emission are missing.
@@ -189,6 +166,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.15.1** | Git Tree polish & quick actions — Force push (branch context menu + protected-trunk/diverged-remote guard), Quick Stash `⌘⇧,` (instant, AI label) + pending badge in the commit area, Submodules in the Git Tree (branch-picker section, per-commit pointed-SHA badge, click-to-navigate) |
 | **v2.15.0** | Git Tree multi-branch — Git Tree as primary view, Log panel removed, unified context menus, stash/branch/tag management from the graph, DAG trunk-pinning, WIP node, search bar |
 | **v2.14.0** | Forge completeness — GitLab `updateComment`/`deleteComment`/CI checks, complete Bitbucket stubs, forge-agnostic `getConflictPreview`/`getHotspots`, multi-account provider |
 | **v2.13.0** | AI & Review — custom AI prompt presets, GitHub-native inline code suggestions in PRs |

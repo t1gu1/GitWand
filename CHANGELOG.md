@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] - 2026-05-29
+
+v2.15.1 closes the "Git Tree polish & quick actions" lot — the daily-friction follow-ups to PR #23 (Force push, Quick Stash, Submodules in the Git Tree).
+
+### Added
+
+- **Force push from the branch context menu** — right-click the current branch in the Git Tree to force push when it has an upstream and local commits ahead (rewritten history after a reset/rebase). Routes through the same `--force-with-lease` path as the header sync button.
+- **Force-push guard** — a confirmation modal now gates force push when the target is a protected trunk (`main`/`master`) and/or the remote has diverged (commits you don't have locally would be lost). Clean ahead-only pushes skip the modal.
+- **Quick Stash (`⌘⇧,`)** — instant stash from anywhere with no modal; the label is AI-generated from the working-tree diff (reuses `useStashMessage`). No-ops with a toast when the working tree is clean.
+- **Pending-stash badge in the commit area** — the WIP node in the Git Tree shows a subtle count badge when stashes are pending.
+- **Submodules section in the branch picker** — lists each declared submodule; expand one to see its local branches (lazy-loaded).
+- **Submodule pointer badges in the Git Tree** — a commit that moves a submodule pointer shows a `path@<sha>` badge; clicking it navigates the Git Tree into that submodule (opened as its own repo tab).
+
+### Technical
+
+- New Rust commands `git_submodule_branches` (lists a submodule's local branches) and `git_commit_submodule_changes` (maps each commit to the submodule gitlinks it touches, scoped to declared submodule paths so the scan stays cheap). Both mirrored across the three layers: `ops.rs`, `dev-server.mjs`, and the `backend.ts` wrapper.
+- New types `SubmoduleBranch` and `CommitSubmoduleChange`; both registered in the Tauri invoke handler and re-exported as `*_parity` wrappers for the parity probe.
+- Parity tests added for both new commands with a dedicated `fixtureSubmodule` (parent repo embedding `libs/inner`).
+- i18n: new `forcePushConfirm.*`, `stash.pendingBadge`, and `submodule.{viewTree,noBranches,backToParent,viewingSubmodule}` keys across all five locales (en, fr, es, pt-BR, zh-CN).
+
 ## [2.15.0] - 2026-05-22
 
 v2.15 makes the Git Tree the primary history view and removes the flat commit log panel entirely. All branch, stash, tag, and commit operations are now accessible directly from the graph. PR #23 — 59 commits, author t1gu1.

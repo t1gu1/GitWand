@@ -1441,6 +1441,155 @@ pub(crate) fn git_submodule_add(cwd: String, url: String, path: String) -> Resul
     Ok(())
 }
 
+/// List the local branches of a submodule. `submodule_path` is relative to `cwd`.
+/// Used by the branch picker's "Submodules" section (v2.15.1).
+#[tauri::command]
+pub(crate) fn git_submodule_branches(
+    cwd: String,
+    submodule_path: String,
+) -> Result<Vec<SubmoduleBranch>, String> {
+    let sub_dir = std::path::Path::new(&cwd).join(&submodule_path);
+    if !sub_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let output = git_cmd()
+        .args(["branch", "--format=%(HEAD)%(refname:short)"])
+        .current_dir(&sub_dir)
+        .output()
+        .map_err(|e| format!("Failed to list submodule branches: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git branch (submodule) failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let mut branches: Vec<SubmoduleBranch> = Vec::new();
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        // `%(HEAD)` emits "*" for the current branch, a space otherwise.
+        let is_current = line.starts_with('*');
+        let name = line.trim_start_matches('*').trim().to_string();
+        if name.is_empty() {
+            continue;
+        }
+        branches.push(SubmoduleBranch { name, is_current });
+    }
+
+    Ok(branches)
+}
+
+/// Map of commit SHA → submodule pointer changes introduced by that commit.
+/// Only commits that touch a declared submodule path are returned, so the
+/// scan stays cheap even on large histories (v2.15.1). Used to badge commits
+/// in the Git Tree with the submodule SHA they point to.
+#[tauri::command]
+pub(crate) fn git_commit_submodule_changes(
+    cwd: String,
+) -> Result<HashMap<String, Vec<CommitSubmoduleChange>>, String> {
+    let gitmodules = std::path::Path::new(&cwd).join(".gitmodules");
+    if !gitmodules.exists() {
+        return Ok(HashMap::new());
+    }
+
+    // Collect declared submodule paths from .gitmodules.
+    let cfg_out = git_cmd()
+        .args(["config", "--file", ".gitmodules", "--get-regexp", "path"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to read .gitmodules: {}", e))?;
+
+    let mut sub_paths: Vec<String> = Vec::new();
+    if cfg_out.status.success() {
+        for line in String::from_utf8_lossy(&cfg_out.stdout).lines() {
+            // "submodule.<name>.path <path>"
+            if let Some((_, path)) = line.split_once(' ') {
+                let p = path.trim().to_string();
+                if !p.is_empty() {
+                    sub_paths.push(p);
+                }
+            }
+        }
+    }
+    if sub_paths.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    // `git log --raw --no-abbrev -- <paths>` emits, per commit, a header line
+    // we control via --format, then raw diff lines. Gitlink changes look like:
+    //   :160000 160000 <oldsha> <newsha> M\t<path>
+    let mut args: Vec<String> = vec![
+        "log".into(),
+        "--format=GWCOMMIT:%H".into(),
+        "--raw".into(),
+        "--no-abbrev".into(),
+        "--no-renames".into(),
+    ];
+    args.push("--".into());
+    for p in &sub_paths {
+        args.push(p.clone());
+    }
+
+    let out = git_cmd()
+        .args(&args)
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to scan submodule changes: {}", e))?;
+
+    if !out.status.success() {
+        return Err(format!(
+            "git log (submodule changes) failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ));
+    }
+
+    let mut map: HashMap<String, Vec<CommitSubmoduleChange>> = HashMap::new();
+    let mut current: Option<String> = None;
+
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        if let Some(sha) = line.strip_prefix("GWCOMMIT:") {
+            current = Some(sha.to_string());
+            continue;
+        }
+        if !line.starts_with(':') {
+            continue;
+        }
+        // ":160000 160000 <old> <new> M\t<path>"
+        let (meta, path) = match line.split_once('\t') {
+            Some((m, p)) => (m, p.to_string()),
+            None => continue,
+        };
+        let fields: Vec<&str> = meta.trim_start_matches(':').split_whitespace().collect();
+        if fields.len() < 4 {
+            continue;
+        }
+        let src_mode = fields[0];
+        let dst_mode = fields[1];
+        // A submodule (gitlink) has mode 160000 on either side.
+        if src_mode != "160000" && dst_mode != "160000" {
+            continue;
+        }
+        let new_sha = fields[3];
+        // Skip deletions (all-zero destination SHA).
+        if new_sha.chars().all(|c| c == '0') {
+            continue;
+        }
+        if let Some(ref sha) = current {
+            map.entry(sha.clone()).or_default().push(CommitSubmoduleChange {
+                path,
+                pointed_sha: new_sha.to_string(),
+            });
+        }
+    }
+
+    Ok(map)
+}
+
 // ─── Worktrees ────────────────────────────────────────────────
 
 #[tauri::command]

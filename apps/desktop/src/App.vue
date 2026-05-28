@@ -85,7 +85,7 @@ import {
   LAUNCHPAD_OPEN_REQUEST_KEY,
   TOGGLE_GIT_TREE_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
+import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -689,6 +689,40 @@ const {
   deleteRemoteTag,
 });
 
+// ─── Submodule Git Tree navigation (v2.15.1) ─────────────
+// `submoduleChanges` powers the per-commit badge in the Git Tree. It is a
+// cheap one-shot scan (only commits touching a declared submodule), reloaded
+// whenever the active repo path changes — never polled.
+const submoduleChanges = ref<Record<string, CommitSubmoduleChange[]>>({});
+
+async function loadSubmoduleChanges() {
+  const cwd = repoFolderPath.value;
+  if (!cwd) {
+    submoduleChanges.value = {};
+    return;
+  }
+  try {
+    submoduleChanges.value = await gitCommitSubmoduleChanges(cwd);
+  } catch {
+    submoduleChanges.value = {};
+  }
+}
+
+watch(repoFolderPath, () => { void loadSubmoduleChanges(); }, { immediate: true });
+
+/**
+ * Navigate the Git Tree into a submodule. Opens the submodule's working
+ * directory as its own repo tab — the tab strip provides the natural
+ * "return to parent" affordance, and the tab lifecycle already resets the
+ * poller and per-repo composables on the path swap.
+ */
+function handleOpenSubmodule(path: string) {
+  const parent = repoFolderPath.value;
+  if (!parent) return;
+  const abs = `${parent.replace(/\/+$/, "")}/${path}`;
+  openTab(abs);
+}
+
 // ─── Folder opening ─────────────────────────────────────
 async function handleOpenFolder() {
   const path = await pickFolder();
@@ -889,9 +923,35 @@ async function doPublish() {
   await handlePush();
 }
 
-/** Explicit force push from the sync split button. */
-async function doForcePush() {
+// ─── Force push guard (v2.15.1) ──────────────────────────
+// Force push can overwrite remote history, so we gate it behind a
+// confirmation when (a) the current branch is a protected trunk
+// (main/master), or (b) the remote has diverged (behind > 0 — someone
+// else may have pushed). A clean ahead-only force push (e.g. after a
+// local rebase with no remote divergence) skips the modal.
+const forcePushConfirm = ref<{ branch: string; behind: number; protected: boolean } | null>(null);
+
+const PROTECTED_TRUNKS = new Set(["main", "master"]);
+
+/** Entry point for every force-push trigger (split button + branch context menu). */
+function doForcePush() {
+  const branch = repoStatus.value?.branch ?? "";
+  const isProtected = PROTECTED_TRUNKS.has(branch);
+  const behind = behindCount.value;
+  if (isProtected || behind > 0) {
+    forcePushConfirm.value = { branch, behind, protected: isProtected };
+    return;
+  }
+  void handlePush(true);
+}
+
+async function confirmForcePush() {
+  forcePushConfirm.value = null;
   await handlePush(true);
+}
+
+function cancelForcePush() {
+  forcePushConfirm.value = null;
 }
 
 /** Dropdown "Rebase onto origin" — explicit rebase pull. */
@@ -1527,6 +1587,20 @@ async function handleWipQuickStashAi() {
   }
 }
 
+/**
+ * ⌘⇧, — instant Quick Stash with no modal. Generates an AI label from the
+ * current working-tree diff and stashes immediately. No-op (with a toast) when
+ * the working tree is clean, so the shortcut is always safe to press.
+ */
+async function quickStashShortcut() {
+  if (!repoFolderPath.value) return;
+  if (!isDirty()) {
+    repoError.value = t("errors.noChangesToStash");
+    return;
+  }
+  await handleWipQuickStashAi();
+}
+
 async function suggestSwitchStashMessage() {
   if (!repoFolderPath.value) return;
   try {
@@ -1735,6 +1809,12 @@ function onKeyDown(e: KeyboardEvent) {
       e.preventDefault();
       pendingQuickCreate.value = true;
       showWorktrees.value = true;
+    }
+  } else if (mod && e.shiftKey && e.key === ",") {
+    // Cmd/Ctrl+Shift+, — instant Quick Stash (no modal, AI-generated label)
+    if (hasRepo.value) {
+      e.preventDefault();
+      quickStashShortcut();
     }
   } else if (mod && e.key >= "1" && e.key <= "9") {
     // Cmd+1..9 — switch to tab by position
@@ -2047,7 +2127,7 @@ onUnmounted(() => {
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="onUndoPerformed"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
-      @open-submodules="showSubmodules = true" @open-search="handleOpenSearch" @open-help="showHelp = true"
+      @open-submodules="showSubmodules = true" @open-submodule="handleOpenSubmodule" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
       @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
 
@@ -2198,6 +2278,7 @@ onUnmounted(() => {
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
             :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
+            :submodule-changes="submoduleChanges"
             :has-more="logHasMore" :loading-more="logLoadingMore"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
             @change-view="onViewModeChange"
@@ -2215,6 +2296,8 @@ onUnmounted(() => {
             @delete-tag="handleDeleteTagRequest"
             @merge-into-current="doMerge"
             @rebase-onto-current="handleRebaseOntoCurrent"
+            @force-push-branch="doForcePush"
+            @view-submodule="handleOpenSubmodule"
             @apply-stash="applyStash"
             @pop-stash="popStash"
             @drop-stash="dropStash"
@@ -2348,6 +2431,32 @@ onUnmounted(() => {
           }}</button>
         <button class="bm-btn bm-btn--primary" @click="confirmPushWithTags">{{ t('push.tagsConfirm.withTags')
           }}</button>
+      </template>
+    </BaseModal>
+
+    <!-- Force-push confirmation modal (v2.15.1) — protected trunk and/or diverged remote -->
+    <BaseModal v-if="forcePushConfirm" :title="t('forcePushConfirm.title')" size="sm" role="alertdialog"
+      @close="cancelForcePush">
+      <template #title-icon>
+        <div class="ptc-icon ptc-icon--danger">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          </svg>
+        </div>
+      </template>
+
+      <p class="ptc-desc">{{ t('forcePushConfirm.desc', forcePushConfirm.branch) }}</p>
+      <p v-if="forcePushConfirm.protected" class="ptc-desc ptc-desc--warn">
+        {{ t('forcePushConfirm.protectedWarn', forcePushConfirm.branch) }}
+      </p>
+      <p v-if="forcePushConfirm.behind > 0" class="ptc-desc ptc-desc--warn">
+        {{ t('forcePushConfirm.divergedWarn', forcePushConfirm.behind) }}
+      </p>
+
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="cancelForcePush">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--danger" @click="confirmForcePush">{{ t('syncAction.forcePush') }}</button>
       </template>
     </BaseModal>
 
@@ -2960,11 +3069,21 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.ptc-icon--danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
 .ptc-desc {
   margin: 0 0 var(--space-4);
   font-size: var(--font-size-md);
   color: var(--color-text);
   line-height: var(--line-height-snug);
+}
+
+.ptc-desc--warn {
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
 }
 
 .ptc-tag-list {

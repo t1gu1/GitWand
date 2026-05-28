@@ -132,6 +132,8 @@ const emit = defineEmits<{
   openRebase: [];
   openWorktrees: [branch?: string];
   openSubmodules: [];
+  /** Navigate the Git Tree into a submodule (v2.15.1). */
+  openSubmodule: [path: string];
   openSettings: [];
   openLogs: [];
   openSearch: [];
@@ -470,6 +472,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-worktrees="(branch) => emit('openWorktrees', branch)"
             @load-branches="emit('loadBranches')"
             @change-view="(mode) => emit('changeView', mode)"
+            @open-submodule="(path) => emit('openSubmodule', path)"
           />
 
           <!-- BranchMenu + its two piggy-backed popovers.

@@ -5,6 +5,22 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.15.1 — May 2026
+
+### Force push, with guardrails
+
+Force push is now available directly from the branch context menu in the Git Tree, alongside the header sync button. It uses `--force-with-lease` so you never silently clobber commits you haven't seen. When the target is a protected trunk (`main`/`master`) or the remote has diverged, a confirmation modal spells out exactly what's at stake; a clean push of local-only commits goes through without ceremony.
+
+### Quick Stash — `⌘⇧,`
+
+Stash your work in progress instantly from anywhere, no dialog. The label is written for you from the current diff, so your `git stash list` stays readable. A subtle badge on the WIP node shows when stashes are pending.
+
+### Submodules in the Git Tree
+
+The branch picker now has a Submodules section listing each submodule and its branches. In the graph, any commit that moves a submodule pointer carries a `path@sha` badge — click it to navigate straight into that submodule's own Git Tree.
+
+---
+
 ## v2.15.0 — May 2026
 
 ### Git Tree as the primary view

@@ -2597,6 +2597,58 @@ export async function gitSubmoduleAdd(cwd: string, url: string, path: string): P
   if (!res.ok) throw new Error(`Failed to add submodule: ${res.status}`);
 }
 
+export interface SubmoduleBranch {
+  name: string;
+  isCurrent: boolean;
+}
+
+/** List the local branches of a submodule (v2.15.1). `path` is relative to `cwd`. */
+export async function gitSubmoduleBranches(cwd: string, path: string): Promise<SubmoduleBranch[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ name: string; is_current: boolean }>>(
+      "git_submodule_branches",
+      { cwd, submodulePath: path },
+    );
+    return raw.map((b) => ({ name: b.name, isCurrent: b.is_current }));
+  }
+  const res = await devFetch(
+    `${DEV_SERVER}/api/git-submodule-branches?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(path)}`,
+  );
+  if (!res.ok) throw new Error(`Failed to list submodule branches: ${res.status}`);
+  return res.json();
+}
+
+export interface CommitSubmoduleChange {
+  path: string;
+  pointedSha: string;
+}
+
+/**
+ * Map of commit SHA → submodule pointer changes (v2.15.1). Only commits that
+ * touch a declared submodule appear in the map. Used to badge commits in the
+ * Git Tree with the submodule SHA they point to.
+ */
+export async function gitCommitSubmoduleChanges(
+  cwd: string,
+): Promise<Record<string, CommitSubmoduleChange[]>> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Record<string, Array<{ path: string; pointed_sha: string }>>>(
+      "git_commit_submodule_changes",
+      { cwd },
+    );
+    const out: Record<string, CommitSubmoduleChange[]> = {};
+    for (const [sha, changes] of Object.entries(raw)) {
+      out[sha] = changes.map((c) => ({ path: c.path, pointedSha: c.pointed_sha }));
+    }
+    return out;
+  }
+  const res = await devFetch(
+    `${DEV_SERVER}/api/git-commit-submodule-changes?cwd=${encodeURIComponent(cwd)}`,
+  );
+  if (!res.ok) throw new Error(`Failed to scan submodule changes: ${res.status}`);
+  return res.json();
+}
+
 // ─── Updater ────────────────────────────────────────────
 
 export interface UpdateInfo {

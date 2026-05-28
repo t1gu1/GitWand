@@ -1371,6 +1371,7 @@ const es: Locale = {
   // ─── Stash manager ──────────────────────────────────────
   stash: {
     title: "Gestor de stash",
+    pendingBadge: "{0} stash pendiente(s)",
     composerPlaceholder: "Mensaje opcional — deja vacío para la etiqueta por defecto",
     aiSuggestTooltip: "Sugerir un mensaje con IA",
     aiButton: "IA",
@@ -1514,6 +1515,10 @@ const es: Locale = {
   submodule: {
     title: "Submódulos",
     empty: "No hay submódulos en este repositorio.",
+    viewTree: "Ver el Git Tree del submódulo",
+    noBranches: "Sin ramas",
+    backToParent: "Volver al repositorio padre",
+    viewingSubmodule: "Submódulo: {0}",
     openInTab: "Abrir en pestaña",
     initUpdate: "Init & Update",
     initUpdateAll: "Init & Update todos",
@@ -1774,6 +1779,12 @@ const es: Locale = {
       withoutTags: "Enviar sin tags",
       more: "más…",
     },
+  },
+  forcePushConfirm: {
+    title: "¿Forzar el push?",
+    desc: "El force push sobrescribirá el historial remoto de « {0} » con tus commits locales.",
+    protectedWarn: "« {0} » es una rama protegida (main/master). Asegúrate de que es intencional.",
+    divergedWarn: "El remoto tiene {0} commit(s) que no tienes localmente — se perderán.",
   },
   error: {
     viewLogs: "Ver registros",

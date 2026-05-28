@@ -1356,6 +1356,7 @@ const zhCN: Locale = {
   // ─── Stash manager ──────────────────────────────────────
   stash: {
     title: "储藏管理器",
+    pendingBadge: "{0} 个待处理储藏",
     composerPlaceholder: "可选留言 — 留空则使用默认标签",
     aiSuggestTooltip: "让 AI 建议一条留言",
     aiButton: "AI",
@@ -1499,6 +1500,10 @@ const zhCN: Locale = {
   submodule: {
     title: "子模块",
     empty: "此仓库中没有子模块。",
+    viewTree: "查看子模块的 Git Tree",
+    noBranches: "没有分支",
+    backToParent: "返回父仓库",
+    viewingSubmodule: "子模块：{0}",
     openInTab: "在标签页中打开",
     initUpdate: "初始化 & 更新",
     initUpdateAll: "初始化 & 更新全部",
@@ -1759,6 +1764,12 @@ const zhCN: Locale = {
       withoutTags: "不推送标签",
       more: "更多…",
     },
+  },
+  forcePushConfirm: {
+    title: "强制推送？",
+    desc: "强制推送将用你的本地提交覆盖« {0} »的远端历史。",
+    protectedWarn: "« {0} »是受保护的分支（main/master）。请确认这是有意为之。",
+    divergedWarn: "远端有 {0} 个你本地没有的提交 — 它们将会丢失。",
   },
   error: {
     viewLogs: "查看日志",

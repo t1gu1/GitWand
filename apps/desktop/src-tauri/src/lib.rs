@@ -207,6 +207,23 @@ pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String>
     commands::ops::git_branches(cwd)
 }
 
+pub fn git_stash_list_parity(cwd: String) -> Result<Vec<types::StashEntry>, String> {
+    commands::ops::git_stash_list(cwd)
+}
+
+pub fn git_submodule_branches_parity(
+    cwd: String,
+    submodule_path: String,
+) -> Result<Vec<types::SubmoduleBranch>, String> {
+    commands::ops::git_submodule_branches(cwd, submodule_path)
+}
+
+pub fn git_commit_submodule_changes_parity(
+    cwd: String,
+) -> Result<std::collections::HashMap<String, Vec<types::CommitSubmoduleChange>>, String> {
+    commands::ops::git_commit_submodule_changes(cwd)
+}
+
 // ─── Tauri entry point ─────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -337,6 +354,8 @@ pub fn run() {
             commands::ops::git_submodule_init,
             commands::ops::git_submodule_update,
             commands::ops::git_submodule_add,
+            commands::ops::git_submodule_branches,
+            commands::ops::git_commit_submodule_changes,
             commands::read::git_file_log,
             commands::read::git_file_log_pickaxe,
             commands::read::git_file_log_range,

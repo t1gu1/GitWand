@@ -22,6 +22,8 @@ const props = defineProps<{
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches?: GitBranch[];
   stashes?: any[];
+  /** Map of commit SHA → submodule pointer changes, for the Git Tree badge (v2.15.1). */
+  submoduleChanges?: Record<string, Array<{ path: string; pointedSha: string }>>;
   hasMore?: boolean;
   loadingMore?: boolean;
 }>();
@@ -42,6 +44,8 @@ type CommitEvent =
   | "delete-tag"
   | "merge-into-current"
   | "rebase-onto-current"
+  | "force-push-branch"
+  | "view-submodule"
   | "apply-stash"
   | "pop-stash"
   | "drop-stash";
@@ -63,6 +67,8 @@ const emit = defineEmits<{
   "delete-tag": [name: string, hasLocal: boolean, hasRemote: boolean];
   "merge-into-current": [name: string];
   "rebase-onto-current": [name: string];
+  "force-push-branch": [];
+  "view-submodule": [path: string];
   "apply-stash": [index: number];
   "pop-stash": [index: number];
   "drop-stash": [index: number];
@@ -330,6 +336,23 @@ const isCurrentBranchEmpty = computed(() => {
   const current = props.branches.find((b) => b.name === props.currentBranch);
   return current?.mainCommitCount === 0;
 });
+
+/**
+ * Force push is offered only for the current branch when it has an upstream
+ * and local commits to push (ahead > 0). The typical trigger is a rewritten
+ * history after a reset/rebase, where a plain push is rejected (non-fast-forward).
+ */
+const clickedBranchForcePushable = computed(() => {
+  if (!ctxMenu.value.clickedBranch || ctxMenu.value.clickedBranchType === "remote") return false;
+  if (ctxMenu.value.clickedBranch !== props.currentBranch) return false;
+  const b = clickedBranchData.value;
+  return !!b && !!b.upstream && b.ahead > 0;
+});
+
+/** Submodule pointer changes introduced by a given commit (v2.15.1). */
+function submoduleChangesFor(sha: string): Array<{ path: string; pointedSha: string }> {
+  return props.submoduleChanges?.[sha] ?? [];
+}
 
 function onCtxDeleteTag() {
   const t = tagToDelete.value;
@@ -1082,6 +1105,16 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
                   <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
+              <span
+                v-if="(props.stashes?.length ?? 0) > 0"
+                class="wip-stash-badge"
+                :title="t('stash.pendingBadge', props.stashes!.length)"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                </svg>
+                {{ props.stashes!.length }}
+              </span>
             </span>
           </template>
           <template v-else>
@@ -1098,6 +1131,20 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
                 @dblclick.stop="onBranchDblClick(r)"
               >{{ branchList.length > 1 ? truncate(r.name) : r.name }}</span>
             </template>
+            <!-- Submodule pointer badges (v2.15.1) — click navigates into the submodule's Git Tree -->
+            <button
+              v-for="sc in submoduleChangesFor(vc.entry.hashFull)"
+              :key="sc.path"
+              class="cg-submodule-badge"
+              :title="t('submodule.viewTree')"
+              @click.stop="emit('view-submodule', sc.path)"
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+                <rect x="6" y="6" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+              </svg>
+              {{ sc.path }}@{{ sc.pointedSha.slice(0, 7) }}
+            </button>
             <!-- Message -->
             <span class="cg-msg">{{ vc.entry.message }}</span>
             <!-- Author + date -->
@@ -1222,6 +1269,22 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
               <path d="M4 3v6a3 3 0 003 3h5M9 9l3 3-3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
             <span>{{ t('branchMenu.rebaseCurrentOntoBranch', ctxMenu.clickedBranch!) }}</span>
+          </li>
+        </template>
+
+        <!-- Force push (v2.15.1) — current branch with upstream & local commits ahead -->
+        <template v-if="clickedBranchForcePushable">
+          <li class="commit-ctx-menu-sep" role="separator"></li>
+          <li
+            class="commit-ctx-menu-item commit-ctx-menu-item--danger"
+            role="menuitem"
+            @click="emit('force-push-branch'); closeCommitContextMenu()"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 13V4M8 4L4.5 7.5M8 4l3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 2.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+            <span>{{ t('syncAction.forcePush') }}</span>
           </li>
         </template>
 
@@ -1803,6 +1866,19 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   opacity: 1;
 }
 
+.wip-stash-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  opacity: 0.75;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: var(--color-bg-subtle, rgba(127, 127, 127, 0.12));
+}
+
 .wip-stat {
   font-weight: 700;
   font-size: 11px;
@@ -1832,6 +1908,28 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
   border-radius: var(--radius-sm);
   flex-shrink: 0;
   line-height: 1.5;
+}
+
+.cg-submodule-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  border-radius: var(--radius-sm);
+  border: 1.2px dashed var(--color-border-strong, var(--color-border));
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.cg-submodule-badge:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .cg-ref--branch {

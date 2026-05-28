@@ -1383,6 +1383,7 @@ const fr: Locale = {
   // ─── Stash manager ──────────────────────────────────────
   stash: {
     title: "Gestionnaire de stash",
+    pendingBadge: "{0} stash en attente",
     composerPlaceholder: "Message optionnel \u2014 laisse vide pour le label par d\u00e9faut",
     aiSuggestTooltip: "Sugg\u00e9rer un message avec l'IA",
     aiButton: "IA",
@@ -1526,6 +1527,10 @@ const fr: Locale = {
   submodule: {
     title: "Submodules",
     empty: "Aucun submodule dans ce d\u00e9p\u00f4t.",
+    viewTree: "Voir le Git Tree du submodule",
+    noBranches: "Aucune branche",
+    backToParent: "Retour au d\u00e9p\u00f4t parent",
+    viewingSubmodule: "Submodule : {0}",
     openInTab: "Ouvrir dans un onglet",
     initUpdate: "Init \u0026 Update",
     initUpdateAll: "Init \u0026 Update tout",
@@ -1787,6 +1792,12 @@ const fr: Locale = {
       withoutTags: "Pousser sans les tags",
       more: "de plus…",
     },
+  },
+  forcePushConfirm: {
+    title: "Forcer le push ?",
+    desc: "Le force push va écraser l'historique distant de « {0} » avec vos commits locaux.",
+    protectedWarn: "« {0} » est une branche protégée (main/master). Assurez-vous que c'est intentionnel.",
+    divergedWarn: "Le distant a {0} commit(s) que vous n'avez pas localement — ils seront perdus.",
   },
   error: {
     viewLogs: "Voir les journaux",

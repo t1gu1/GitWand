@@ -165,3 +165,35 @@ export function fixtureStash() {
 
   return cwd;
 }
+
+/**
+ * Fixture « submodule » : un dépôt parent qui embarque un submodule `libs/inner`.
+ *
+ * Couvre `git_submodule_branches` (les branches du sous-dépôt) et
+ * `git_commit_submodule_changes` (le commit du parent qui pose le gitlink).
+ * La parité ne dépend pas du déterminisme des SHAs : Rust et Node lisent le
+ * MÊME repo sur disque, donc leurs sorties doivent coïncider quoi qu'il arrive.
+ *
+ * @returns {{ cwd: string, subPath: string }} chemin du parent + chemin relatif du submodule
+ */
+export function fixtureSubmodule() {
+  // 1. Sous-dépôt autonome avec un commit.
+  const subRepo = mkTempRepo("gw-sub-inner-");
+  commitFile(subRepo, "lib.txt", "lib v1\n", "sub: initial", 0);
+
+  // 2. Dépôt parent.
+  const cwd = mkTempRepo("gw-sub-parent-");
+  commitFile(cwd, "README.md", "# Parent\n", "initial commit", 0);
+
+  // 3. Ajout du submodule. `protocol.file.allow=always` est requis depuis les
+  //    versions récentes de git pour cloner via un chemin local (file://).
+  const env = { ...process.env, ...commitEnv(1) };
+  execFileSync(
+    "git",
+    ["-C", cwd, "-c", "protocol.file.allow=always", "submodule", "add", subRepo, "libs/inner"],
+    { env },
+  );
+  execFileSync("git", ["-C", cwd, "commit", "-m", "add submodule libs/inner", "--quiet"], { env });
+
+  return { cwd, subPath: "libs/inner" };
+}

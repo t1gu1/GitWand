@@ -690,6 +690,18 @@ pub struct SubmoduleEntry {
     pub status: String,
 }
 
+#[derive(Serialize, Clone)]
+pub struct SubmoduleBranch {
+    pub name: String,
+    pub is_current: bool,
+}
+
+#[derive(Serialize, Clone)]
+pub struct CommitSubmoduleChange {
+    pub path: String,
+    pub pointed_sha: String,
+}
+
 // ─── Shortlog types ────────────────────────────────────────────────
 
 #[derive(Serialize)]
