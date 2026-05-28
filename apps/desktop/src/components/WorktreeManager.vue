@@ -5,6 +5,7 @@ import {
   gitWorktreeAdd,
   gitWorktreeRemove,
   gitWorktreePrune,
+  gitWorktreeRepair,
   gitWorktreeStatusAll,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
@@ -193,6 +194,9 @@ function shortPath(path: string): string {
 watch(worktrees, () => { loadStatuses(); }, { immediate: false });
 
 onMounted(async () => {
+  // Répare silencieusement les liens administratifs cassés (idempotent,
+  // < 5 ms si tout va bien). Couvre le cas "repo déplacé manuellement".
+  try { await gitWorktreeRepair(props.cwd); } catch { /* best-effort */ }
   await loadWorktrees();
   if (props.suggestedBranch) {
     formBranch.value = props.suggestedBranch;
