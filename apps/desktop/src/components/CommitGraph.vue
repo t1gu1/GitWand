@@ -453,12 +453,6 @@ let _pinHeadHash = "";
 let _pinTrunkHash: string | undefined = undefined;
 let _pinSecondaryHashes: string[] = [];
 
-function isReleaseBranch(name: string): boolean {
-  // Strip remote prefix (e.g. "origin/release/…" → "release/…") before testing.
-  const base = name.includes("/") ? name.slice(name.indexOf("/") + 1) : name;
-  return base.startsWith("release");
-}
-
 const layout = computed<DagLayout>(() => {
   const commits = displayCommits.value;
   const n = commits.length;
@@ -482,8 +476,6 @@ const layout = computed<DagLayout>(() => {
 
     // Trunk = the lineage to pin on lane 0 (far left).
     // Priority 1: main / master (local or remote) — always lane 0 regardless of current branch.
-    // Priority 2: current HEAD branch (if no main/master in view).
-    // Priority 3: WIP (edge case: detached HEAD with no trunk branch).
     let trunkHash: string | undefined;
     for (const commit of commits) {
       const refs = parseRefs(commit.refs);
@@ -495,47 +487,8 @@ const layout = computed<DagLayout>(() => {
         break;
       }
     }
-    if (!trunkHash) {
-      for (const commit of commits) {
-        const refs = parseRefs(commit.refs);
-        if (props.currentBranch && refs.some((r) => (r.type === "branch" || r.type === "head") && r.name === props.currentBranch)) {
-          trunkHash = commit.hashFull;
-          break;
-        }
-      }
-    }
-    if (!trunkHash && hasChanges.value) trunkHash = "WIP";
     _pinTrunkHash = trunkHash;
-
-    // Release branches: pinned to lanes 1, 2, … (immediately after trunk).
-    // Collect one head commit per release branch, in order of appearance
-    // (newest first). Deduplicate by hash — multiple refs on the same commit
-    // (local + remote tracking) should count as one lane.
-    const releaseHashes: string[] = [];
-    const seenReleaseHashes = new Set<string>();
-    for (const commit of commits) {
-      if (seenReleaseHashes.has(commit.hashFull)) continue;
-      const refs = parseRefs(commit.refs);
-      if (refs.some((r) => (r.type === "branch" || r.type === "remote") && isReleaseBranch(r.name))) {
-        releaseHashes.push(commit.hashFull);
-        seenReleaseHashes.add(commit.hashFull);
-      }
-    }
-
-    // develop branch: pinned immediately after release/* branches.
-    const developCommit = commits.find((commit) => {
-      if (seenReleaseHashes.has(commit.hashFull)) return false;
-      const refs = parseRefs(commit.refs);
-      return refs.some((r) =>
-        (r.type === "branch" || r.type === "remote") &&
-        (r.name === "develop" || r.name.endsWith("/develop"))
-      );
-    });
-
-    _pinSecondaryHashes = [
-      ...releaseHashes,
-      ...(developCommit ? [developCommit.hashFull] : []),
-    ];
+    _pinSecondaryHashes = [];
   }
   // When only more commits are appended (infinite scroll), _pinTrunkHash and
   // _pinSecondaryHashes are reused unchanged so lanesAllocated stays constant

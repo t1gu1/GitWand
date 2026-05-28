@@ -10,8 +10,7 @@
  *
  * Lane priority:
  *   0          — main / master (trunk)
- *   1, 2, …    — release/* branches (one lane each, in appearance order)
- *   next slots — all other branches, allocated on demand
+ *   next slots — all other branches, allocated on demand (greedy)
  */
 
 export interface DagNode {
@@ -48,7 +47,7 @@ export interface DagLayout {
  * Commits must be in reverse chronological order (newest first).
  *
  * @param trunkHash     Head of main/master — pinned to lane 0.
- * @param secondaryHashes Heads of release/* branches — pinned to lanes 1, 2, …
+ * @param secondaryHashes Heads of other branches to pin to lanes 1, 2, …
  *                        in the order supplied. Commits on their first-parent
  *                        chains are kept on those lanes throughout the graph.
  */
