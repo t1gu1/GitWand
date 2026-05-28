@@ -1496,6 +1496,16 @@ const en = {
     cleanupConfirm: "Remove {0} merged worktree(s)?",
     cleanupAction: "Clean up",
     statusTitle: "Worktree status",
+    pruning: "Pruning…",
+    prunable: "Stale",
+    prunableTooltip: "This worktree's directory no longer exists on disk",
+    prunableAlert: "Some worktrees have stale metadata. Prune them to clean up.",
+    noUpstream: "No remote configured for this branch",
+    noUpstreamShort: "no remote",
+    conflicted: "Files in conflict",
+    localBranches: "Local branches",
+    remoteBranches: "Remote tracking branches",
+    onlyMainHint: "No additional worktrees yet. Use ⚡ New task to work on another branch in parallel without switching.",
   },
 
   // ─── Automations (v2.8) ──────────────────────────────────
