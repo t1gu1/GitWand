@@ -2157,7 +2157,9 @@ export interface WorkspaceRepoStatus {
   branch: string;
   ahead: number;
   behind: number;
+  has_upstream: boolean;
   modified: number;
+  conflicted: number;
   error: string | null;
 }
 
@@ -2425,7 +2427,10 @@ export interface WorktreeEntry {
   head: string;
   is_main: boolean;
   is_locked: boolean;
+  lock_reason: string | null;
   is_bare: boolean;
+  is_prunable: boolean;
+  prunable_reason: string | null;
 }
 
 /** List all git worktrees for the given repo. */
@@ -2488,6 +2493,20 @@ export async function gitWorktreePrune(cwd: string): Promise<void> {
     body: JSON.stringify({ cwd }),
   });
   if (!res.ok) throw new Error(`Failed to prune worktrees: ${res.status}`);
+}
+
+/** Repair worktree administrative files after a manual move or copy of the repo. */
+export async function gitWorktreeRepair(cwd: string, paths?: string[]): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("git_worktree_repair", { cwd, paths: paths ?? [] });
+    return;
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/git-worktree-repair`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, paths: paths ?? [] }),
+  });
+  if (!res.ok) throw new Error(`Failed to repair worktrees: ${res.status}`);
 }
 
 // ─── Agent Sessions ───────────────────────────────────────

@@ -559,7 +559,9 @@ pub struct WorkspaceRepoStatus {
     pub branch: String,
     pub ahead: u32,
     pub behind: u32,
+    pub has_upstream: bool,
     pub modified: u32,
+    pub conflicted: u32,
     pub error: Option<String>,
 }
 
@@ -663,7 +665,10 @@ pub struct WorktreeEntry {
     pub head: String,
     pub is_main: bool,
     pub is_locked: bool,
+    pub lock_reason: Option<String>,
     pub is_bare: bool,
+    pub is_prunable: bool,
+    pub prunable_reason: Option<String>,
 }
 
 // ─── Agent session types ──────────────────────────────────────────

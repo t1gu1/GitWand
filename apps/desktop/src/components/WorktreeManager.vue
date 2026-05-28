@@ -4,6 +4,7 @@ import {
   gitWorktreeList,
   gitWorktreeAdd,
   gitWorktreeRemove,
+  gitWorktreePrune,
   gitWorktreeStatusAll,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
@@ -90,6 +91,30 @@ async function quickCreate() {
     quickCreating.value = false;
   }
 }
+
+// ── Prune stale worktrees ────────────────────────────────
+const pruning = ref(false);
+
+const hasPrunableWorktrees = computed(() =>
+  worktrees.value.some((wt) => wt.is_prunable)
+);
+
+async function prune() {
+  pruning.value = true;
+  error.value = null;
+  try {
+    await gitWorktreePrune(props.cwd);
+    await loadWorktrees();
+  } catch (err: any) {
+    error.value = t("worktree.errorPrune").replace("{0}", String(err?.message ?? err));
+  } finally {
+    pruning.value = false;
+  }
+}
+
+// ── Branch lists for the add form ───────────────────────
+const localBranches = computed(() => props.branches.filter((b) => !b.isRemote));
+const remoteBranches = computed(() => props.branches.filter((b) => b.isRemote));
 
 // ── Remove confirmation ──────────────────────────────────
 const confirmRemovePath = ref<string | null>(null);
@@ -210,6 +235,15 @@ onMounted(async () => {
       >
         ⚡ {{ t("worktree.quickCreate") }}
       </button>
+      <button
+        type="button"
+        class="bm-btn bm-btn--ghost"
+        :title="t('worktree.pruneTooltip')"
+        :disabled="!hasPrunableWorktrees || pruning"
+        @click="prune"
+      >
+        {{ pruning ? t("worktree.pruning") : t("worktree.prune") }}
+      </button>
     </template>
 
     <!-- Body -->
@@ -264,11 +298,12 @@ onMounted(async () => {
           <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
           <select id="wt-form-branch" v-model="formBranch" class="wt-select">
             <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
-            <option
-              v-for="b in branches.filter(b => !b.isRemote)"
-              :key="b.name"
-              :value="b.name"
-            >{{ b.name }}</option>
+            <optgroup :label="t('worktree.localBranches')">
+              <option v-for="b in localBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
+            </optgroup>
+            <optgroup v-if="remoteBranches.length" :label="t('worktree.remoteBranches')">
+              <option v-for="b in remoteBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
+            </optgroup>
           </select>
         </div>
         <div class="wt-form-row">
@@ -293,6 +328,14 @@ onMounted(async () => {
             {{ t("common.cancel") }}
           </button>
         </div>
+      </div>
+
+      <!-- ── Prunable alert ─────────────────────────────── -->
+      <div v-if="hasPrunableWorktrees" class="wt-alert">
+        {{ t("worktree.prunableAlert") }}
+        <button class="bm-btn bm-btn--ghost bm-btn--sm" :disabled="pruning" @click="prune">
+          {{ t("worktree.prune") }}
+        </button>
       </div>
 
       <!-- ── Error ───────────────────────────────────────── -->
@@ -332,12 +375,21 @@ onMounted(async () => {
           {{ t("worktree.statusTitle") }}…
         </div>
 
-        <div v-for="wt in worktrees" :key="wt.path" class="wt-item">
+        <div v-for="wt in worktrees" :key="wt.path" class="wt-item" :class="{ 'wt-item--main': wt.is_main }">
           <div class="wt-item-info">
             <div class="wt-item-badges">
               <span v-if="wt.is_main" class="badge badge-main">{{ t("worktree.main") }}</span>
-              <span v-if="wt.is_locked" class="badge badge-locked">{{ t("worktree.locked") }}</span>
+              <span
+                v-if="wt.is_locked"
+                class="badge badge-locked"
+                :title="wt.lock_reason ? `${t('worktree.locked')}: ${wt.lock_reason}` : t('worktree.locked')"
+              >🔒 {{ t("worktree.locked") }}</span>
               <span v-if="wt.is_bare" class="badge badge-bare">{{ t("worktree.bare") }}</span>
+              <span
+                v-if="wt.is_prunable"
+                class="badge badge-prunable"
+                :title="wt.prunable_reason ?? t('worktree.prunableTooltip')"
+              >{{ t("worktree.prunable") }}</span>
             </div>
             <div class="wt-item-branch">
               <svg class="wt-branch-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -350,10 +402,18 @@ onMounted(async () => {
 
               <!-- Status pills -->
               <template v-for="st in [statusFor(wt.path)].filter(Boolean)" :key="wt.path + '-status'">
-                <span v-if="st!.ahead > 0" class="wt-status-pill wt-pill-ahead">↑{{ st!.ahead }}</span>
-                <span v-if="st!.behind > 0" class="wt-status-pill wt-pill-behind">↓{{ st!.behind }}</span>
+                <!-- Conflits : priorité visuelle maximale -->
+                <span v-if="st!.conflicted > 0" class="wt-status-pill wt-pill-conflict" :title="t('worktree.conflicted')">⚠ {{ st!.conflicted }}</span>
+                <!-- Ahead / behind : uniquement si upstream configuré -->
+                <template v-if="st!.has_upstream">
+                  <span v-if="st!.ahead > 0" class="wt-status-pill wt-pill-ahead">↑{{ st!.ahead }}</span>
+                  <span v-if="st!.behind > 0" class="wt-status-pill wt-pill-behind">↓{{ st!.behind }}</span>
+                </template>
+                <span v-else class="wt-status-pill wt-pill-muted" :title="t('worktree.noUpstream')">{{ t("worktree.noUpstreamShort") }}</span>
+                <!-- Fichiers modifiés (hors conflits) -->
                 <span v-if="st!.modified > 0" class="wt-status-pill wt-pill-modified">~{{ st!.modified }}</span>
-                <span v-if="!st!.error && st!.ahead === 0 && st!.behind === 0 && st!.modified === 0" class="wt-status-pill wt-pill-clean">✓</span>
+                <!-- Synchro totale -->
+                <span v-if="!st!.error && st!.has_upstream && st!.ahead === 0 && st!.behind === 0 && st!.modified === 0 && st!.conflicted === 0" class="wt-status-pill wt-pill-clean">✓</span>
                 <span v-if="st!.error" class="wt-status-pill wt-pill-error" :title="st!.error!">⚠</span>
               </template>
             </div>
@@ -362,6 +422,7 @@ onMounted(async () => {
           </div>
           <div class="wt-item-actions">
             <button
+              v-if="!wt.is_main"
               class="bm-btn bm-btn--ghost"
               @click="emit('open-tab', wt.path)"
             >
@@ -375,6 +436,14 @@ onMounted(async () => {
               {{ t("worktree.remove") }}
             </button>
           </div>
+        </div>
+
+        <!-- ── Only-main hint ─────────────────────────── -->
+        <div
+          v-if="worktrees.length === 1 && worktrees[0].is_main"
+          class="wt-only-main-hint"
+        >
+          {{ t("worktree.onlyMainHint") }}
         </div>
       </div>
     </div>
@@ -554,6 +623,18 @@ onMounted(async () => {
   font-style: italic;
 }
 
+.wt-only-main-hint {
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface-raised, var(--color-bg-subtle));
+  border: 1px dashed var(--color-border-muted, var(--color-border));
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
 /* ── List ───────────────────────────────────────────────── */
 .wt-list {
   flex: 1;
@@ -659,6 +740,7 @@ onMounted(async () => {
 .wt-pill-clean    { background: rgba(72, 187, 120, 0.15); color: #48bb78; }
 .wt-pill-muted    { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
 .wt-pill-error    { background: var(--color-danger-soft); color: var(--color-danger); cursor: help; }
+.wt-pill-conflict { background: var(--color-danger-soft); color: var(--color-danger); font-weight: var(--font-weight-semibold); }
 
 /* ── Active ghost button state ──────────────────────────── */
 .bm-btn--active {
@@ -667,9 +749,35 @@ onMounted(async () => {
   border-color: var(--color-accent);
 }
 
+/* ── Prunable alert banner ──────────────────────────────── */
+.wt-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-7);
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.1));
+  color: var(--color-warning, #f59e0b);
+  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── Prunable badge ─────────────────────────────────────── */
+.badge-prunable {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  cursor: help;
+}
+
+/* ── Footer add button ──────────────────────────────────── */
 .wt-footer-add-btn {
   width: 100%;
-  height: 40px;
+  height: var(--space-10);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -693,7 +801,7 @@ onMounted(async () => {
 }
 
 .wt-footer-add-btn__icon {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-medium);
   margin-top: -1px;
 }

@@ -1430,6 +1430,16 @@ const zhCN: Locale = {
     cleanupConfirm: "移除 {0} 个已合并的 worktree？",
     cleanupAction: "清理",
     statusTitle: "Worktree 状态",
+    pruning: "清理中…",
+    prunable: "已过期",
+    prunableTooltip: "此 worktree 的目录在磁盘上已不存在",
+    prunableAlert: "部分 worktree 存在过期元数据，请执行清理。",
+    noUpstream: "此分支未配置远程跟踪",
+    noUpstreamShort: "无远程",
+    conflicted: "存在冲突文件",
+    localBranches: "本地分支",
+    remoteBranches: "远程跟踪分支",
+    onlyMainHint: "暂无其他工作树。使用 ⚡ 新建任务在不切换上下文的情况下并行处理其他分支。",
   },
 
 

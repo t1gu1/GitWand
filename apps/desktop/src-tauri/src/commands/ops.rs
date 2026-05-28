@@ -1461,7 +1461,6 @@ pub(crate) fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, Strin
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut entries: Vec<WorktreeEntry> = Vec::new();
     let mut current: Option<WorktreeEntry> = None;
-    let mut is_first = true;
 
     for line in stdout.lines() {
         if line.starts_with("worktree ") {
@@ -1473,13 +1472,18 @@ pub(crate) fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, Strin
                 path,
                 branch: String::new(),
                 head: String::new(),
-                is_main: is_first,
+                is_main: false,
                 is_locked: false,
+                lock_reason: None,
                 is_bare: false,
+                is_prunable: false,
+                prunable_reason: None,
             });
-            is_first = false;
         } else if let Some(ref mut e) = current {
-            if line.starts_with("HEAD ") {
+            if line == "main" {
+                // Attribut explicite depuis git 2.36
+                e.is_main = true;
+            } else if line.starts_with("HEAD ") {
                 e.head = line["HEAD ".len()..].to_string();
             } else if line.starts_with("branch ") {
                 let full = &line["branch ".len()..];
@@ -1488,13 +1492,30 @@ pub(crate) fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, Strin
                 e.is_bare = true;
             } else if line.starts_with("locked") {
                 e.is_locked = true;
+                // Format : "locked" seul ou "locked <raison>" avec raison inline
+                let reason = line["locked".len()..].trim();
+                if !reason.is_empty() {
+                    e.lock_reason = Some(reason.to_string());
+                }
+            } else if line.starts_with("prunable") {
+                e.is_prunable = true;
+                let reason = line["prunable".len()..].trim();
+                if !reason.is_empty() {
+                    e.prunable_reason = Some(reason.to_string());
+                }
             } else if line == "detached" {
                 e.branch = "(detached HEAD)".to_string();
             }
         }
     }
-    if let Some(e) = current {
+    if let Some(e) = current.take() {
         entries.push(e);
+    }
+
+    // Fallback pour git < 2.36 : l'attribut "main" n'existait pas.
+    // Si aucune entrée n'est marquée is_main, on marque la première.
+    if !entries.is_empty() && entries.iter().all(|e| !e.is_main) {
+        entries[0].is_main = true;
     }
 
     Ok(entries)
@@ -1529,13 +1550,28 @@ pub(crate) fn git_worktree_add(
     }
 
     let resolved_branch = new_branch.as_deref().unwrap_or(&branch).to_string();
+
+    // Récupérer le SHA HEAD réel depuis le nouveau worktree
+    let head = git_cmd()
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&path)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default();
+
     Ok(WorktreeEntry {
         path,
         branch: resolved_branch,
-        head: String::new(),
+        head,
         is_main: false,
         is_locked: false,
+        lock_reason: None,
         is_bare: false,
+        is_prunable: false,
+        prunable_reason: None,
     })
 }
 
@@ -1597,12 +1633,16 @@ pub(crate) fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoSt
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
 
-        let (ahead, behind) = git_cmd()
+        // Upstream : détecter si une remote est configurée, et extraire ahead/behind
+        let upstream_out = git_cmd()
             .args(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"])
             .current_dir(&path)
             .output()
             .ok()
-            .filter(|o| o.status.success())
+            .filter(|o| o.status.success());
+
+        let has_upstream = upstream_out.is_some();
+        let (ahead, behind) = upstream_out
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .and_then(|s| {
                 let parts: Vec<&str> = s.trim().split_whitespace().collect();
@@ -1612,20 +1652,51 @@ pub(crate) fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoSt
             })
             .unwrap_or((0, 0));
 
-        let modified = git_cmd()
+        // Status : séparer les fichiers en conflit (UU/AA/DD/AU/UA/DU/UD) des simples modifiés
+        let status_out = git_cmd()
             .args(["status", "--porcelain", "--untracked-files=no"])
             .current_dir(&path)
             .output()
             .ok()
             .filter(|o| o.status.success())
             .and_then(|o| String::from_utf8(o.stdout).ok())
-            .map(|s| s.lines().filter(|l| !l.is_empty()).count() as u32)
-            .unwrap_or(0);
+            .unwrap_or_default();
 
-        WorkspaceRepoStatus { path, name, branch, ahead, behind, modified, error: None }
+        const CONFLICT_CODES: &[&str] = &["UU", "AA", "DD", "AU", "UA", "DU", "UD"];
+        let conflicted = status_out
+            .lines()
+            .filter(|l| l.len() >= 2 && CONFLICT_CODES.contains(&&l[..2]))
+            .count() as u32;
+        let modified = status_out
+            .lines()
+            .filter(|l| l.len() >= 2 && !CONFLICT_CODES.contains(&&l[..2]))
+            .count() as u32;
+
+        WorkspaceRepoStatus { path, name, branch, ahead, behind, has_upstream, modified, conflicted, error: None }
     }).collect();
 
     Ok(statuses)
+}
+
+#[tauri::command]
+pub(crate) fn git_worktree_repair(cwd: String, paths: Vec<String>) -> Result<(), String> {
+    let mut cmd = git_cmd();
+    cmd.args(["worktree", "repair"]);
+    for p in &paths {
+        cmd.arg(p);
+    }
+    let output = cmd
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("Failed to repair worktrees: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git worktree repair failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    Ok(())
 }
 
 // ─── Git clone / fork ─────────────────────────────────────────

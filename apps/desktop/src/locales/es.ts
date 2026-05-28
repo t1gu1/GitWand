@@ -1445,6 +1445,16 @@ const es: Locale = {
     cleanupConfirm: "¿Eliminar {0} worktree(s) fusionado(s)?",
     cleanupAction: "Limpiar",
     statusTitle: "Estado de los worktrees",
+    pruning: "Limpiando…",
+    prunable: "Obsoleto",
+    prunableTooltip: "El directorio de este worktree ya no existe en el disco",
+    prunableAlert: "Algunos worktrees tienen metadatos obsoletos. Límpialos.",
+    noUpstream: "Sin remoto configurado para esta rama",
+    noUpstreamShort: "sin remoto",
+    conflicted: "Archivos en conflicto",
+    localBranches: "Ramas locales",
+    remoteBranches: "Ramas de seguimiento remoto",
+    onlyMainHint: "Aún no hay worktrees adicionales. Usa ⚡ Nueva tarea para trabajar en otra rama en paralelo sin cambiar de contexto.",
   },
 
 

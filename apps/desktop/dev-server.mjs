@@ -3738,18 +3738,22 @@ async function handleRequest(req, res) {
         }
         if (cur) worktrees.push(cur);
 
+        const CONFLICT_CODES = new Set(["UU", "AA", "DD", "AU", "UA", "DU", "UD"]);
         const statuses = worktrees.map(wt => {
           try {
             const branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: wt.path, encoding: "utf-8" }).trim();
-            let ahead = 0, behind = 0;
+            let ahead = 0, behind = 0, has_upstream = false;
             try {
               const ab = execSync("git rev-list --left-right --count HEAD...@{upstream}", { cwd: wt.path, encoding: "utf-8" }).trim().split(/\s+/);
               ahead = parseInt(ab[0]) || 0; behind = parseInt(ab[1]) || 0;
+              has_upstream = true;
             } catch {}
-            const modified = execSync("git status --porcelain --untracked-files=no", { cwd: wt.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean).length;
-            return { path: wt.path, name: wt.branch || branch, branch, ahead, behind, modified, error: null };
+            const statusLines = execSync("git status --porcelain --untracked-files=no", { cwd: wt.path, encoding: "utf-8" }).trim().split("\n").filter(Boolean);
+            const conflicted = statusLines.filter(l => l.length >= 2 && CONFLICT_CODES.has(l.slice(0, 2))).length;
+            const modified = statusLines.filter(l => l.length >= 2 && !CONFLICT_CODES.has(l.slice(0, 2))).length;
+            return { path: wt.path, name: wt.branch || branch, branch, ahead, behind, has_upstream, modified, conflicted, error: null };
           } catch (e) {
-            return { path: wt.path, name: wt.branch || "", branch: "", ahead: 0, behind: 0, modified: 0, error: e.message };
+            return { path: wt.path, name: wt.branch || "", branch: "", ahead: 0, behind: 0, has_upstream: false, modified: 0, conflicted: 0, error: e.message };
           }
         });
         return jsonResponse(req, res, statuses);
@@ -3767,23 +3771,31 @@ async function handleRequest(req, res) {
         const raw = execSync("git worktree list --porcelain", { cwd, encoding: "utf-8" });
         const entries = [];
         let current = null;
-        let isFirst = true;
         for (const line of raw.split("\n")) {
           if (line.startsWith("worktree ")) {
             if (current) entries.push(current);
-            current = { path: line.slice("worktree ".length), branch: "", head: "", is_main: isFirst, is_locked: false, is_bare: false };
-            isFirst = false;
+            current = { path: line.slice("worktree ".length), branch: "", head: "", is_main: false, is_locked: false, lock_reason: null, is_bare: false, is_prunable: false, prunable_reason: null };
           } else if (current) {
-            if (line.startsWith("HEAD ")) current.head = line.slice("HEAD ".length);
+            if (line === "main") current.is_main = true;
+            else if (line.startsWith("HEAD ")) current.head = line.slice("HEAD ".length);
             else if (line.startsWith("branch ")) {
               const full = line.slice("branch ".length);
               current.branch = full.startsWith("refs/heads/") ? full.slice("refs/heads/".length) : full;
             } else if (line === "bare") current.is_bare = true;
-            else if (line.startsWith("locked")) current.is_locked = true;
-            else if (line === "detached") current.branch = "(detached HEAD)";
+            else if (line.startsWith("locked")) {
+              current.is_locked = true;
+              const reason = line.slice("locked".length).trim();
+              if (reason) current.lock_reason = reason;
+            } else if (line.startsWith("prunable")) {
+              current.is_prunable = true;
+              const reason = line.slice("prunable".length).trim();
+              if (reason) current.prunable_reason = reason;
+            } else if (line === "detached") current.branch = "(detached HEAD)";
           }
         }
         if (current) entries.push(current);
+        // Fallback git < 2.36 : marquer le premier comme main si aucun ne l'est
+        if (entries.length && entries.every(e => !e.is_main)) entries[0].is_main = true;
         return jsonResponse(req, res, entries);
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
@@ -3800,7 +3812,9 @@ async function handleRequest(req, res) {
         else cmd += ` "${branch}"`;
         execSync(cmd, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         const resolvedBranch = new_branch || branch;
-        return jsonResponse(req, res, { path: wtPath, branch: resolvedBranch, head: "", is_main: false, is_locked: false, is_bare: false });
+        let head = "";
+        try { head = execSync("git rev-parse HEAD", { cwd: wtPath, encoding: "utf-8" }).trim(); } catch {}
+        return jsonResponse(req, res, { path: wtPath, branch: resolvedBranch, head, is_main: false, is_locked: false, lock_reason: null, is_bare: false, is_prunable: false, prunable_reason: null });
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);
       }
@@ -3824,6 +3838,18 @@ async function handleRequest(req, res) {
       try {
         const { cwd } = await readBody(req);
         execSync("git worktree prune", { cwd: resolve(cwd), encoding: "utf-8" });
+        return jsonResponse(req, res, {});
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.message }, 500);
+      }
+    }
+
+    // POST /api/git-worktree-repair  { cwd, paths? }
+    if (url.pathname === "/api/git-worktree-repair" && req.method === "POST") {
+      try {
+        const { cwd, paths = [] } = await readBody(req);
+        const extraPaths = paths.map(p => `"${p}"`).join(" ");
+        execSync(`git worktree repair ${extraPaths}`.trim(), { cwd: resolve(cwd), encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
       } catch (err) {
         return jsonResponse(req, res, { error: err.message }, 500);

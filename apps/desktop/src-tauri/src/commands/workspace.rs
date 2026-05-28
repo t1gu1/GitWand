@@ -53,10 +53,20 @@ pub(crate) fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRe
         let path = repo.path.clone();
         let name = repo.name.clone();
 
-        let (branch, ahead, behind, _no_upstream) = libgit2_branch_ab(&path);
+        let (branch, ahead, behind, no_upstream) = libgit2_branch_ab(&path);
         let modified = libgit2_modified_count(&path);
 
-        WorkspaceRepoStatus { path, name, branch, ahead, behind, modified, error: None }
+        WorkspaceRepoStatus {
+            path,
+            name,
+            branch,
+            ahead,
+            behind,
+            has_upstream: !no_upstream,
+            modified,
+            conflicted: 0, // non calculé dans la vue workspace (libgit2 ne distingue pas les conflits ici)
+            error: None,
+        }
     }).collect()
 }
 

@@ -1445,6 +1445,16 @@ const ptBR: Locale = {
     cleanupConfirm: "Remover {0} worktree(s) mesclado(s)?",
     cleanupAction: "Limpar",
     statusTitle: "Status dos worktrees",
+    pruning: "Limpando…",
+    prunable: "Obsoleto",
+    prunableTooltip: "O diretório deste worktree não existe mais no disco",
+    prunableAlert: "Alguns worktrees possuem metadados obsoletos. Limpe-os.",
+    noUpstream: "Sem remoto configurado para este branch",
+    noUpstreamShort: "sem remoto",
+    conflicted: "Arquivos em conflito",
+    localBranches: "Branches locais",
+    remoteBranches: "Branches de rastreamento remoto",
+    onlyMainHint: "Nenhum worktree adicional ainda. Use ⚡ Nova tarefa para trabalhar em outro branch em paralelo sem trocar de contexto.",
   },
 
 
