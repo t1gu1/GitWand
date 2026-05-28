@@ -85,7 +85,7 @@ import {
   LAUNCHPAD_OPEN_REQUEST_KEY,
   TOGGLE_GIT_TREE_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
+import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -1469,6 +1469,22 @@ async function confirmPushWithoutTags() {
   await doPush(force);
 }
 
+async function deleteTagInModal(tagName: string) {
+  const cwd = repoFolderPath.value;
+  if (!cwd) return;
+  try {
+    await gitDeleteTag(cwd, tagName);
+    pendingUnpushedTags.value = pendingUnpushedTags.value.filter(t => t !== tagName);
+    if (pendingUnpushedTags.value.length === 0) {
+      pushTagsConfirm.value = false;
+      await doPush(pendingPushForce.value);
+      pendingPushForce.value = false;
+    }
+  } catch (err: any) {
+    repoError.value = `delete tag: ${err?.message ?? err}`;
+  }
+}
+
 // ─── Stash-and-switch modal (Phase 1.3.3) ──────────────
 const pendingSwitchBranch = ref<string | null>(null);
 const switchStashMessage = ref("");
@@ -2308,12 +2324,19 @@ onUnmounted(() => {
       <p class="ptc-desc">{{ t('push.tagsConfirm.desc', pendingUnpushedTags.length) }}</p>
       <ul class="ptc-tag-list">
         <li v-for="tag in pendingUnpushedTags.slice(0, 8)" :key="tag" class="ptc-tag">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 2h6l6 6-6 6-6-6V2z" />
-            <circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none" />
-          </svg>
-          {{ tag }}
+          <div class="ptc-tag-main">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 2h6l6 6-6 6-6-6V2z" />
+              <circle cx="5.5" cy="5.5" r="1" fill="currentColor" stroke="none" />
+            </svg>
+            <span class="ptc-tag-name">{{ tag }}</span>
+          </div>
+          <button class="ptc-tag-delete" @click.stop="deleteTagInModal(tag)" :title="t('tags.deleteTag')">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4M6 7v4M10 7v4" />
+            </svg>
+          </button>
         </li>
         <li v-if="pendingUnpushedTags.length > 8" class="ptc-tag ptc-tag--more">
           +{{ pendingUnpushedTags.length - 8 }} {{ t('push.tagsConfirm.more') }}
@@ -2321,7 +2344,6 @@ onUnmounted(() => {
       </ul>
 
       <template #footer>
-        <button class="bm-btn bm-btn--ghost" @click="pushTagsConfirm = false">{{ t('common.cancel') }}</button>
         <button class="bm-btn bm-btn--ghost" @click="confirmPushWithoutTags">{{ t('push.tagsConfirm.withoutTags')
           }}</button>
         <button class="bm-btn bm-btn--primary" @click="confirmPushWithTags">{{ t('push.tagsConfirm.withTags')
@@ -2964,6 +2986,41 @@ onUnmounted(() => {
   background: var(--color-accent-soft);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
+}
+
+.ptc-tag-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.ptc-tag-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ptc-tag-delete {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all var(--transition-fast);
+}
+
+.ptc-tag-delete:hover {
+  opacity: 1;
+  background: var(--color-danger-soft, rgba(208, 58, 58, 0.1));
 }
 
 .ptc-tag--more {
