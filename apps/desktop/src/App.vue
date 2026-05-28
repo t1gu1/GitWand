@@ -669,6 +669,8 @@ const {
   confirmDeleteBranch,
   suggestTagWithAI,
   isTagAISuggesting,
+  suggestBranchNameWithAI,
+  isBranchNameAISuggesting,
   isAIAvailable,
 } = useCommitActions({
   repoFolderPath,
@@ -2472,10 +2474,21 @@ onUnmounted(() => {
     <BaseModal v-if="commitActionModal.type === 'createBranch'" :title="t('commitCtx.createBranch')"
       :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')" size="sm"
       @close="closeCommitActionModal">
-      <input v-model="commitActionModal.branchName" type="text" class="cam-input"
-        :placeholder="t('commitCtx.branchNamePlaceholder')" maxlength="100" autofocus
-        @keydown.enter.prevent="confirmCreateBranchFromCommit" />
-      <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      <div style="display: flex; flex-direction: column; gap: var(--space-3);">
+        <!-- AI suggestion strip (v2.12) -->
+        <div v-if="isAIAvailable" class="tag-ai-row">
+          <span class="tag-ai-hint" v-html="t('branches.aiHint').replace(' (', '<br/>(')"></span>
+          <button class="bm-btn btn--ai tag-ai-btn" :disabled="commitActionModal.busy || isBranchNameAISuggesting"
+            @click="suggestBranchNameWithAI">
+            <AiSparkle :size="13" :animated="isBranchNameAISuggesting" />
+            {{ isBranchNameAISuggesting ? t('common.loading') : t('commitCtx.tagAiSuggest') }}
+          </button>
+        </div>
+        <input v-model="commitActionModal.branchName" type="text" class="cam-input"
+          :placeholder="t('commitCtx.branchNamePlaceholder')" maxlength="100" autofocus
+          @keydown.enter.prevent="confirmCreateBranchFromCommit" />
+        <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
+      </div>
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
         <button class="bm-btn bm-btn--primary"

@@ -26,6 +26,7 @@ import {
 import { useI18n } from "./useI18n";
 import { useTagSuggestion } from "./useTagSuggestion";
 import { useAIProvider } from "./useAIProvider";
+import { useBranchName } from "./useBranchName";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export function useCommitActions(deps: Deps) {
     deleteRemoteTag,
   } = deps;
   const tagAI = useTagSuggestion();
+  const branchAI = useBranchName();
   const ai = useAIProvider();
 
   // ── Modal state ────────────────────────────────────────
@@ -288,6 +290,21 @@ export function useCommitActions(deps: Deps) {
     }
   }
 
+  async function suggestBranchNameWithAI() {
+    const cwd = repoFolderPath.value;
+    if (!cwd) return;
+    modal.value.busy = true;
+    modal.value.error = "";
+    try {
+      const suggestion = await branchAI.suggest(cwd, modal.value.branchName);
+      modal.value.branchName = suggestion;
+    } catch (err: any) {
+      modal.value.error = err?.message ?? String(err);
+    } finally {
+      modal.value.busy = false;
+    }
+  }
+
   // ── Tag commit ─────────────────────────────────────────
 
   function handleTagCommit(entry: GitLogEntry) {
@@ -383,6 +400,8 @@ export function useCommitActions(deps: Deps) {
     // AI
     suggestTagWithAI,
     isTagAISuggesting: tagAI.isGenerating,
+    suggestBranchNameWithAI,
+    isBranchNameAISuggesting: branchAI.isGenerating,
     isAIAvailable: ai.isAvailable,
   };
 }
