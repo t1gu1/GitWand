@@ -1677,6 +1677,15 @@ pub(crate) fn git_worktree_add(
     branch: String,
     new_branch: Option<String>,
 ) -> Result<WorktreeEntry, String> {
+    // Note, create folders if they dont exist.
+    let target_path = std::path::Path::new(&path);
+    if let Some(parent) = target_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create worktree base directory: {}", e))?;
+        }
+    }
+
     let mut cmd = git_cmd();
     cmd.arg("worktree").arg("add").arg(&path);
 

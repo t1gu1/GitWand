@@ -3845,6 +3845,13 @@ async function handleRequest(req, res) {
       try {
         const { cwd, path: wtPath, branch, new_branch } = await readBody(req);
         const resolvedCwd = resolve(cwd);
+
+        // Ensure parent directories exist
+        const parentDir = dirname(wtPath);
+        if (!existsSync(parentDir)) {
+          mkdirSync(parentDir, { recursive: true });
+        }
+
         let cmd = `git worktree add "${wtPath}"`;
         if (new_branch) cmd += ` -b "${new_branch}" "${branch}"`;
         else cmd += ` "${branch}"`;
