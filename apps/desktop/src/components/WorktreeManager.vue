@@ -293,7 +293,7 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="quickName.trim()" class="wt-quick-preview">
-          → {{ deriveQuickPath(quickName) }}
+          → {{ derivePath(quickName) }}
           <span class="wt-quick-branch">
             ({{ quickName.includes("/") ? quickName.trim() : `task/${quickName.trim()}` }})
           </span>
