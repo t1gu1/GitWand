@@ -37,6 +37,7 @@ export interface PaletteAction {
 
 const props = defineProps<{
   branches: GitBranch[];
+  worktreeBranches?: Set<string>;
   commits: GitLogEntry[];
   actions: PaletteAction[];
 }>();
@@ -238,6 +239,12 @@ function formatDate(d: string): string {
             <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3" />
             <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
             <path d="M5 6v4M7 4h3c1.1 0 2 .9 2 2v0" stroke="currentColor" stroke-width="1.3" />
+          </svg>
+          <svg v-if="props.worktreeBranches?.has(branch.name)" class="branch-wt-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-left: 2px; color: var(--color-success); flex-shrink: 0;">
+            <circle cx="8" cy="4.5" r="2.5" />
+            <circle cx="4.5" cy="8.5" r="2.5" />
+            <circle cx="11.5" cy="8.5" r="2.5" />
+            <rect x="7.5" y="8" width="1" height="6" />
           </svg>
           <span class="palette-item-label mono">{{ branch.name }}</span>
           <span v-if="branch.isRemote" class="palette-item-tag">remote</span>

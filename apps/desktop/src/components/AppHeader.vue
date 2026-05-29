@@ -79,6 +79,7 @@ const props = defineProps<{
   isOffline?: boolean;
   // Branch popover
   branches: GitBranch[];
+  worktreeBranches?: Set<string>;
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
   isMerging: boolean;
@@ -457,6 +458,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :branch-display="branchDisplay"
             :repo-stats="repoStats"
             :branches="branches"
+            :worktree-branches="worktreeBranches"
             :branches-loading="branchesLoading"
             :is-switching-branch="isSwitchingBranch"
             :cwd="cwd"
@@ -599,6 +601,12 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                       <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3" />
                       <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
                       <path d="M5 6v4M10 8H7c-1.1 0-2-.9-2-2" stroke="currentColor" stroke-width="1.3" />
+                    </svg>
+                    <svg v-if="props.worktreeBranches?.has(branch.name)" class="branch-wt-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-left: 2px; color: var(--color-success); flex-shrink: 0;">
+                      <circle cx="8" cy="4.5" r="2.5" />
+                      <circle cx="4.5" cy="8.5" r="2.5" />
+                      <circle cx="11.5" cy="8.5" r="2.5" />
+                      <rect x="7.5" y="8" width="1" height="6" />
                     </svg>
                     <span class="mp-item-name mono">{{ branch.name }}</span>
                     <span v-if="branch.isRemote" class="mp-item-tag">remote</span>

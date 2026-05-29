@@ -21,6 +21,7 @@ const props = defineProps<{
   forkPointSha?: string;
   repoStats?: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches?: GitBranch[];
+  worktreeBranches?: Set<string>;
   stashes?: any[];
   /** Map of commit SHA → submodule pointer changes, for the Git Tree badge (v2.15.1). */
   submoduleChanges?: Record<string, Array<{ path: string; pointedSha: string }>>;
@@ -1129,7 +1130,15 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
                 :title="r.name"
                 @contextmenu.stop="openCommitContextMenu($event, vc.entry, vc.index, r.name, r.type)"
                 @dblclick.stop="onBranchDblClick(r)"
-              >{{ branchList.length > 1 ? truncate(r.name) : r.name }}</span>
+              >
+                <svg v-if="r.type === 'branch' && props.worktreeBranches?.has(r.name)" class="branch-wt-icon" width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 3px; vertical-align: middle; margin-top: -2px;">
+                  <circle cx="8" cy="4.5" r="2.5" />
+                  <circle cx="4.5" cy="8.5" r="2.5" />
+                  <circle cx="11.5" cy="8.5" r="2.5" />
+                  <rect x="7.5" y="8" width="1" height="6" />
+                </svg>
+                {{ branchList.length > 1 ? truncate(r.name) : r.name }}
+              </span>
             </template>
             <!-- Submodule pointer badges (v2.15.1) — click navigates into the submodule's Git Tree -->
             <button

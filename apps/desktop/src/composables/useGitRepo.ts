@@ -32,6 +32,7 @@ import {
   gitStashList,
   gitStashApply,
   gitStashDrop,
+  gitWorktreeList,
   type GitStatus,
   type GitDiff,
   type GitLogEntry,
@@ -40,6 +41,7 @@ import {
   type GitPushPullResult,
   type GitBranch,
   type StashEntry,
+  type WorktreeEntry,
   gitAddToGitignore,
 } from "../utils/backend";
 import { requireOnline } from "../utils/networkGuard";
@@ -124,6 +126,16 @@ export function useGitRepo() {
   const branchesLoading = ref(false);
   const isSwitchingBranch = ref(false);
   const isMerging = ref(false);
+
+  // Worktree state
+  const worktrees = ref<WorktreeEntry[]>([]);
+  const worktreeBranches = computed(() => {
+    const set = new Set<string>();
+    for (const wt of worktrees.value) {
+      if (wt.branch && !wt.is_main) set.add(wt.branch);
+    }
+    return set;
+  });
 
   // Commit diff state (for history view)
   const selectedCommitHash = ref<string | null>(null);
@@ -360,6 +372,7 @@ export function useGitRepo() {
 
     // Background fetch then refresh status — awaited so UI updates before user interacts
     fetchRemote();
+    loadWorktrees();
   }
 
   /**
@@ -380,6 +393,7 @@ export function useGitRepo() {
     selectedCommitHash.value = null;
     commitDiffs.value = [];
     branches.value = [];
+    worktrees.value = [];
     error.value = null;
     successMessage.value = null;
     // Don't reset commit draft / viewMode — keeping them lets the user
@@ -923,6 +937,15 @@ export function useGitRepo() {
     }
   }
 
+  async function loadWorktrees() {
+    if (!folderPath.value) return;
+    try {
+      worktrees.value = await gitWorktreeList(folderPath.value);
+    } catch {
+      // Ignore errors for worktrees
+    }
+  }
+
   async function createBranch(name: string) {
     if (!folderPath.value) return;
     try {
@@ -942,6 +965,7 @@ export function useGitRepo() {
       forcePushPreferred.value = false;
       await refresh();
       await loadBranches();
+      await loadWorktrees();
     } catch (err: any) {
       error.value = `switch branch: ${err.message}`;
     } finally {
@@ -1056,6 +1080,7 @@ export function useGitRepo() {
     branchesLoading,
     isSwitchingBranch,
     isMerging,
+    worktreeBranches,
     selectedCommitHash,
     commitDiffs,
     // Computed
@@ -1103,6 +1128,7 @@ export function useGitRepo() {
     addToGitignore,
     selectCommit,
     loadBranches,
+    loadWorktrees,
     createBranch,
     switchBranch,
     deleteBranch,

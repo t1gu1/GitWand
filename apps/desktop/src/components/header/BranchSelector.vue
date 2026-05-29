@@ -41,14 +41,23 @@ const props = defineProps<{
   branchDisplay: string;
   repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   branches: GitBranch[];
+  worktreeBranches?: Set<string>;
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
-  /** Path to the current repository (needed by the merge-preview composable). */
+  /** Path to the current repository (for merge preview). */
   cwd: string;
-}>();
+  }>();
 
-const emit = defineEmits<{
-  switchBranch: [name: string];
+  const currentBranchName = computed(() => {
+  return props.branches.find((b) => b.isCurrent)?.name;
+  });
+
+  const isCurrentBranchWorktree = computed(() => {
+  const name = currentBranchName.value;
+  return name && props.worktreeBranches ? props.worktreeBranches.has(name) : false;
+  });
+
+  const emit = defineEmits<{  switchBranch: [name: string];
   createBranch: [name: string];
   deleteBranch: [name: string];
   openWorktrees: [branch?: string];
@@ -300,6 +309,12 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
       <span class="branch-trigger__body">
         <div class="branch-trigger__name-row">
+          <svg v-if="isCurrentBranchWorktree" class="branch-wt-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 4px; color: var(--color-success);">
+            <circle cx="8" cy="4.5" r="2.5" />
+            <circle cx="4.5" cy="8.5" r="2.5" />
+            <circle cx="11.5" cy="8.5" r="2.5" />
+            <rect x="7.5" y="8" width="1" height="6" />
+          </svg>
           <span class="branch-trigger__name mono">{{ branchDisplay }}</span>
           <span
             v-if="hasRepoStats"
@@ -393,6 +408,12 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                 @click="!branch.isCurrent && handleBranchSwitch(branch.name)"
               >
                 <span v-if="branch.isCurrent" class="bp-current-dot"></span>
+                <svg v-if="props.worktreeBranches?.has(branch.name)" class="branch-wt-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-right: 6px; color: var(--color-success); flex-shrink: 0;">
+                  <circle cx="8" cy="4.5" r="2.5" />
+                  <circle cx="4.5" cy="8.5" r="2.5" />
+                  <circle cx="11.5" cy="8.5" r="2.5" />
+                  <rect x="7.5" y="8" width="1" height="6" />
+                </svg>
                 <span class="bp-item-name mono">{{ branch.name }}</span>
                 <span v-if="branch.ahead > 0 || branch.behind > 0" class="bp-item-meta muted">
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
