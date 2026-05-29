@@ -124,6 +124,19 @@ async function prune() {
 const localBranches = computed(() => props.branches.filter((b) => !b.isRemote));
 const remoteBranches = computed(() => props.branches.filter((b) => b.isRemote));
 
+/** Set of branch names that already have a worktree. */
+const usedBranches = computed(() => {
+  const set = new Set<string>();
+  for (const wt of worktrees.value) {
+    if (wt.branch) set.add(wt.branch);
+  }
+  return set;
+});
+
+function isBranchUsed(name: string): boolean {
+  return usedBranches.value.has(name);
+}
+
 // ── Remove confirmation ──────────────────────────────────
 const confirmRemovePath = ref<string | null>(null);
 const forceRemove = ref(false);
@@ -309,10 +322,14 @@ onMounted(async () => {
           <select id="wt-form-branch" v-model="formBranch" class="wt-select">
             <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
             <optgroup :label="t('worktree.localBranches')">
-              <option v-for="b in localBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
+              <option v-for="b in localBranches" :key="b.name" :value="b.name" :disabled="isBranchUsed(b.name)">
+                {{ b.name }}{{ isBranchUsed(b.name) ? ` ${t("worktree.formBranchAlreadyUsed")}` : "" }}
+              </option>
             </optgroup>
             <optgroup v-if="remoteBranches.length" :label="t('worktree.remoteBranches')">
-              <option v-for="b in remoteBranches" :key="b.name" :value="b.name">{{ b.name }}</option>
+              <option v-for="b in remoteBranches" :key="b.name" :value="b.name" :disabled="isBranchUsed(b.name)">
+                {{ b.name }}{{ isBranchUsed(b.name) ? ` ${t("worktree.formBranchAlreadyUsed")}` : "" }}
+              </option>
             </optgroup>
           </select>
         </div>
@@ -333,16 +350,6 @@ onMounted(async () => {
             v-model="formNewBranch"
             class="wt-input"
             :placeholder="t('worktree.formNewBranchPlaceholder')"
-            @keydown.enter="createWorktree"
-          />
-        </div>
-        <div class="wt-form-row">
-          <label class="wt-label" for="wt-form-path">{{ t("worktree.formPath") }}</label>
-          <input
-            id="wt-form-path"
-            v-model="formPath"
-            class="wt-input"
-            :placeholder="t('worktree.formPathPlaceholder')"
             @keydown.enter="createWorktree"
           />
         </div>

@@ -1444,6 +1444,7 @@ const fr: Locale = {
     formPathPlaceholder: "/chemin/vers/nouveau-worktree",
     formBranch: "Branche",
     formBranchPlaceholder: "S\u00e9lectionner une branche existante\u2026",
+    formBranchAlreadyUsed: "(d\u00e9j\u00e0 utilis\u00e9e)",
     formNewBranch: "Nom de la nouvelle branche (optionnel)",
     formNewBranchPlaceholder: "Laisser vide pour checkout la branche s\u00e9lectionn\u00e9e",
     create: "Cr\u00e9er le worktree",
