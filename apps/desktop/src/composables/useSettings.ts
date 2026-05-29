@@ -19,6 +19,8 @@ import type { AIProvider } from "./useAIProvider";
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
 export type LaunchpadTab = "wip" | "prs" | "issues" | "team";
+/** Granularity of PR-activity OS notifications (v2.16). */
+export type NotificationLevel = "all" | "reviews" | "ci" | "none";
 
 /** Named committer identity — stored in AppSettings, selected per-commit or per-repo (v2.12). */
 export interface IdentityProfile {
@@ -79,6 +81,10 @@ export interface AppSettings {
   fontSize: number;
   tabSize: number;
   notifications: boolean;
+  /** Granularity of PR-activity OS notifications (v2.16). "none" disables them. */
+  notificationLevel: NotificationLevel;
+  /** When true, suppress PR-activity events authored by bots (Actions, Dependabot, Renovate). */
+  notificationsByPeople: boolean;
   /** Diff algorithm used for git blame. "histogram" gives the best blame results for most codebases. */
   blameAlgorithm: BlameAlgorithm;
   /** Auto-update channel (v2.0). "stable" = Tauri plugin auto-install; "beta" = manual fetch + browser-open. */
@@ -188,6 +194,8 @@ export const defaultAppSettings: AppSettings = {
   fontSize: 12,
   tabSize: 4,
   notifications: true,
+  notificationLevel: "all",
+  notificationsByPeople: true,
   blameAlgorithm: "histogram",
   updateChannel: "stable",
   commitMessageLang: "",

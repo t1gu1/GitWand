@@ -285,6 +285,7 @@ pub(crate) fn gh_create_pr(
         review_decision: String::new(),
         merge_state_status: String::new(),
         checks_rollup: String::new(),
+        comment_count: 0,
     })
 }
 

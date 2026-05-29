@@ -243,6 +243,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // Register Cmd+Shift+G (macOS) / Ctrl+Shift+G (Linux/Windows)
             // to bring GitWand to the foreground from anywhere.

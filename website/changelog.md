@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.16.0 — May 2026
+
+### PR activity notifications
+
+GitWand now tells you when something happens on your pull requests — a review request lands, someone comments, CI flips from green to red, or a PR gets merged or closed — with a native OS notification, even when the app is in the background. A dedicated background poller watches your whole workspace and a snapshot-diff layer figures out exactly what changed between two ticks, with no extra network calls beyond the Launchpad refresh you already had.
+
+### You decide how much
+
+Settings → Notifications lets you dial the granularity: all activity, reviews & comments only, CI failures only, or off. A "by people" toggle hides the noise from bots like GitHub Actions, Dependabot and Renovate. Notifications fire only while GitWand is in the background — when you're looking at the app, the Launchpad just updates in place. Everything is also logged in the Logs tab.
+
+---
+
 ## v2.15.1 — May 2026
 
 ### Force push, with guardrails

@@ -3669,13 +3669,13 @@ async function handleRequest(req, res) {
         const { repos } = await readBody(req);
         const results = repos.map(repo => {
           try {
-            // v2.8.5 boot-perf: dropped heavy fields (statusCheckRollup,
-            // mergeStateStatus, reviewRequests, reviewDecision, additions,
-            // deletions) — each triggers a per-PR roundtrip in `gh` internals
-            // and HTTP 502s on busy repos like dendreo at high --limit.
-            // Mirror of the Rust change in `commands/workspace.rs`.
+            // v2.16: re-enriched with CI / review / comment fields so the
+            // Launchpad notification diff (useLaunchpadNotifications) can detect
+            // CI flips, review requests and new comments. Mirror of the Rust
+            // change in `commands/workspace.rs`. This runs on the background
+            // Launchpad poller (~60 s), so the extra cost is acceptable.
             const raw = execSync(
-              "gh pr list --state open --json number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees --limit 10",
+              "gh pr list --state open --json number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup,comments --limit 10",
               { cwd: repo.path, encoding: "utf-8" }
             );
             const ghPrs = JSON.parse(raw || "[]");
@@ -3702,6 +3702,7 @@ async function handleRequest(req, res) {
               checks_rollup: (pr.statusCheckRollup ?? [])
                 .map(c => c.conclusion)
                 .find(c => !!c) ?? "",
+              comment_count: (pr.comments ?? []).length,
             }));
             return { repo_path: repo.path, repo_name: repo.name, prs, error: null };
           } catch (e) {

@@ -377,6 +377,7 @@ pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
         .filter_map(|c| c.conclusion)
         .next()
         .unwrap_or_default();
+    let comment_count = r.comments.len() as i64;
     let author = r
         .author
         .and_then(|a| a.login)
@@ -404,6 +405,7 @@ pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
         review_decision: r.review_decision.unwrap_or_default(),
         merge_state_status: r.merge_state_status.unwrap_or_default(),
         checks_rollup,
+        comment_count,
     }
 }
 

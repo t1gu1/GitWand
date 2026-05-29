@@ -138,17 +138,18 @@ pub(crate) fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoP
         let repo_name = repo.name.clone();
 
         // GH_TOKEN propagation: centralized in `hidden_cmd` (cf. git/cmd.rs).
-        // v2.8.5 boot-perf: limit 50 → 10 + dropped heavy fields
-        // (statusCheckRollup, mergeStateStatus, reviewRequests/Decision,
-        // additions/deletions). For multi-repo workspaces, those heavy
-        // fields cost a per-PR roundtrip × N repos at boot — multiplicative
-        // explosion. See `gh_list_prs` for the matching change.
-        // TODO Phase 2 (v2.9): cursor-based pagination + lazy enrichment.
+        // v2.16: the Launchpad notification diff (useLaunchpadNotifications)
+        // needs CI / review / comment fields to detect flips, review requests
+        // and new comments. We re-enrich the workspace PR list here — unlike
+        // the sidebar `gh_list_prs` (kept light for boot perf), this path runs
+        // on the background Launchpad poller (~60 s), so the extra cost is
+        // acceptable. `statusCheckRollup`/`reviewDecision`/`reviewRequests`/
+        // `comments` are exactly the diff inputs.
         let output = hidden_cmd("gh")
             .args([
                 "pr", "list",
                 "--state", "open",
-                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
+                "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees,reviewRequests,reviewDecision,mergeStateStatus,statusCheckRollup,comments",
                 "--limit", "10",
             ])
             .current_dir(&repo_path)

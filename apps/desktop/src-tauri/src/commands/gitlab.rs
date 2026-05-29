@@ -124,6 +124,7 @@ fn gl_mr_to_pr(mr: &serde_json::Value) -> PullRequest {
         review_decision: String::new(),
         merge_state_status: js(mr, "merge_status"),
         checks_rollup: String::new(),
+        comment_count: ji(mr, "user_notes_count"),
     }
 }
 

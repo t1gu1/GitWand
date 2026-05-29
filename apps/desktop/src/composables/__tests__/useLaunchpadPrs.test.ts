@@ -24,6 +24,7 @@ const MOCK_PR: PullRequest = {
   additions: 10, deletions: 3,
   labels: ["enhancement"], assignees: [], reviewRequested: ["bob"],
   reviewDecision: "REVIEW_REQUIRED", mergeStateStatus: "CLEAN", checksRollup: "SUCCESS",
+  commentCount: 0,
 };
 
 const MOCK_DATA: WorkspaceRepoPrs[] = [

@@ -331,6 +331,7 @@ fn bb_pr_to_pr(pr: &serde_json::Value) -> PullRequest {
         review_decision: String::new(),
         merge_state_status: String::new(),
         checks_rollup: String::new(),
+        comment_count: ji(pr, "comment_count"),
     }
 }
 

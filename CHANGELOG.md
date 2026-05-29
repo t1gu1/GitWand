@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-05-29
+
+v2.16 adds native OS notifications for pull-request activity — review requests, new comments, CI pass/fail flips, and merge/close — surfaced while GitWand is in the background, with zero extra network requests beyond the existing Launchpad poll.
+
+### Added
+
+- **Background Launchpad poller** (`useLaunchpadPoller`) — a dedicated ~60 s poll loop, independent of `useRepoPoller` (which pauses when the window is hidden). It keeps refreshing PR state in the background so notifications fire without GitWand in the foreground. Gated on workspace presence, notification settings, and connectivity.
+- **Snapshot diff layer** (`useLaunchpadNotifications`) — a module-level singleton that compares successive PR snapshots and emits typed events: `new-pr`, `ci-flip`, `review-requested`, `review-decided`, `new-comment`, `closed` (merged/closed). Zero additional network requests — it consumes the data the poller already fetched. The first pass only seeds the snapshot, so reopening the app never fires a burst of stale notifications.
+- **Native OS notifications** via `tauri-plugin-notification` (macOS Notification Center, Linux libnotify, Windows toast). Emitted only when the window is in the background (`document.hidden`); in the foreground the Launchpad updates visually instead. Every event is also pushed to `useLogs` (traceable in the Logs tab).
+- **Notification settings** (Settings → Notifications) — granularity selector: All activity · Reviews & comments · CI failures only · None; plus a "by people" toggle that suppresses events authored by bots (GitHub Actions, Dependabot, Renovate).
+
+### Changed
+
+- **`workspace_prs_all` re-enriched** — the Launchpad PR list again carries `statusCheckRollup`, `reviewDecision`, `reviewRequests` and a new `comment_count`, which the notification diff needs. The light sidebar list (`gh_list_prs`) stays unenriched for boot performance; only the background Launchpad path pays the heavier `gh pr list --json` cost.
+
+### Technical
+
+- New `PullRequest.comment_count` field threaded across the three layers (`types.rs`/`gh.rs`/`gitlab.rs`/`bitbucket.rs`, `dev-server.mjs`, `backend.ts` + `backend-pr.ts`).
+- `tauri-plugin-notification` added to Cargo + initialised in `lib.rs`; `notification:*` permissions declared in `capabilities/default.json`. The TS wrapper (`useOsNotification`) calls the plugin's IPC commands directly so the type-check and `dev:web` builds don't depend on the native JS package.
+- Unit tests for the diff layer (every transition → correct event, terminal-only CI flips, bot detection, no boot burst).
+- i18n: `settings.notification*` and `notify.*` keys across all five locales.
+
 ## [2.15.1] - 2026-05-29
 
 v2.15.1 closes the "Git Tree polish & quick actions" lot — the daily-friction follow-ups to PR #23 (Force push, Quick Stash, Submodules in the Git Tree).

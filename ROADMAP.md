@@ -6,30 +6,6 @@
 
 ## What's Next
 
-### v2.16.0 — PR Activity Notifications
-
-Native OS notifications for PR events — review request, new comment, CI flip, mention — without leaving GitWand. The infrastructure is nearly ready (`useRepoPoller`, `useLaunchpadPrs`, `useConnectivity`); only the diff-snapshot layer and OS emission are missing.
-
-**Launchpad diff-snapshot**
-
-- Between two poller ticks, compare the previous snapshot with the new one: new comments, CI status changes (pass/fail flip), incoming review requests, PR merge/close
-- `useLaunchpadNotifications.ts`: module-level singleton, compares by `updatedAt` / `commentCount` / `ciStatus` — zero additional network requests
-
-**Native notifications via `tauri-plugin-notification`**
-
-- OS notification (macOS Notification Center, Linux libnotify, Windows toast) with title, body, and action (open the Launchpad on the relevant PR)
-- Configurable granularity in Settings > Notifications: All activity · Reviews & comments · CI failures only · None
-- "By people" mode: filter events identified as bots (GitHub Actions, Dependabot, Renovate)
-- Gating: notifications only when the GitWand window is in the background (`visibilitychange`)
-
-**Implementation**
-
-- `tauri-plugin-notification` already in the Tauri 2 ecosystem
-- macOS TCC permissions declared in `tauri.conf.json` (`allow-notification` capability)
-- Notifications are pushed to `useLogs` — traceable in the Logs tab
-
----
-
 ### v2.17.0 — Inline CI Check Annotations
 
 Overlay check-run annotations in the diff — the exact line that failed the linter or typecheck, right where you need it in the review.
@@ -166,6 +142,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.16.0** | PR Activity Notifications — background Launchpad poller, zero-network snapshot diff (`useLaunchpadNotifications`) for CI flips / review requests / new comments / merge-close, native OS notifications via `tauri-plugin-notification` (background-only), Settings granularity (All · Reviews & comments · CI failures only · None) + "by people" bot filter, enriched `workspace_prs_all` (CI/review/comment fields) |
 | **v2.15.1** | Git Tree polish & quick actions — Force push (branch context menu + protected-trunk/diverged-remote guard), Quick Stash `⌘⇧,` (instant, AI label) + pending badge in the commit area, Submodules in the Git Tree (branch-picker section, per-commit pointed-SHA badge, click-to-navigate) |
 | **v2.15.0** | Git Tree multi-branch — Git Tree as primary view, Log panel removed, unified context menus, stash/branch/tag management from the graph, DAG trunk-pinning, WIP node, search bar |
 | **v2.14.0** | Forge completeness — GitLab `updateComment`/`deleteComment`/CI checks, complete Bitbucket stubs, forge-agnostic `getConflictPreview`/`getHotspots`, multi-account provider |

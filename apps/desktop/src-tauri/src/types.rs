@@ -322,6 +322,12 @@ pub struct PullRequest {
     pub review_decision: String,
     pub merge_state_status: String,
     pub checks_rollup: String,
+    /// Number of issue-comments on the PR. Populated by the enriched
+    /// workspace_prs_all path (v2.16) for the Launchpad notification diff;
+    /// 0 on the light sidebar list path. `#[serde(default)]` so the
+    /// Deserialize impl tolerates older payloads that omit it.
+    #[serde(default)]
+    pub comment_count: i64,
 }
 
 #[derive(Deserialize)]
@@ -437,6 +443,10 @@ pub struct GhPrRaw {
     pub merge_state_status: Option<String>,
     #[serde(rename = "statusCheckRollup", default)]
     pub status_check_rollup: Vec<GhPrStatusCheck>,
+    /// Issue-comments array — only requested by the enriched workspace_prs_all
+    /// path (v2.16). Empty on the light sidebar list. We only need its length.
+    #[serde(default)]
+    pub comments: Vec<serde_json::Value>,
 }
 
 // ─── Pull Request Detail ───────────────────────────────────────────

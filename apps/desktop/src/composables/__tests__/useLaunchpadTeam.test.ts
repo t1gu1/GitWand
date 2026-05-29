@@ -41,6 +41,7 @@ const BASE_PR = {
   reviewDecision: "",
   mergeStateStatus: "CLEAN",
   checksRollup: "SUCCESS",
+  commentCount: 0,
 };
 
 const EMPTY_WIP = [

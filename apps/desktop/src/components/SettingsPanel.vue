@@ -58,6 +58,7 @@ async function runUpdateCheck() {
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
+export type NotificationLevel = "all" | "reviews" | "ci" | "none";
 // Single source of truth for the provider union — re-export so other files
 // importing from SettingsPanel don't break, but the canonical declaration
 // lives in `useAIProvider`.
@@ -112,6 +113,8 @@ interface Settings {
   fontSize: number;
   tabSize: number;
   notifications: boolean;
+  notificationLevel: NotificationLevel;
+  notificationsByPeople: boolean;
   blameAlgorithm: BlameAlgorithm;
   // Auto-update channel (v2.0)
   updateChannel: "stable" | "beta";
@@ -159,6 +162,8 @@ const defaultSettings: Settings = {
   fontSize: 12,
   tabSize: 4,
   notifications: true,
+  notificationLevel: "all",
+  notificationsByPeople: true,
   updateChannel: "stable",
   // AI defaults
   aiEnabled: false,
@@ -369,6 +374,14 @@ function onSwitchBehaviorChange(val: SwitchBehavior) {
 function onNotificationsChange(e: Event) {
   const checked = (e.target as HTMLInputElement).checked;
   updateSetting("notifications", checked);
+}
+
+function onNotificationLevelChange(e: Event) {
+  updateSetting("notificationLevel", (e.target as HTMLSelectElement).value as NotificationLevel);
+}
+
+function onNotificationsByPeopleChange(e: Event) {
+  updateSetting("notificationsByPeople", (e.target as HTMLInputElement).checked);
 }
 
 // ─── AI Provider ──────────────────────────────────────
@@ -1044,6 +1057,28 @@ function savePresetForm() {
               <span>{{ t('settings.notifications') }}</span>
             </label>
             <span class="sp-hint">{{ t('settings.notificationsHint') }}</span>
+          </div>
+
+          <!-- PR activity notification granularity (v2.16) -->
+          <div class="sp-row" v-if="settings.notifications">
+            <label for="setting-notification-level">{{ t('settings.notificationLevel') }}</label>
+            <select id="setting-notification-level" class="sp-select"
+              :value="settings.notificationLevel" @change="onNotificationLevelChange">
+              <option value="all">{{ t('settings.notificationLevelAll') }}</option>
+              <option value="reviews">{{ t('settings.notificationLevelReviews') }}</option>
+              <option value="ci">{{ t('settings.notificationLevelCi') }}</option>
+              <option value="none">{{ t('settings.notificationLevelNone') }}</option>
+            </select>
+            <span class="sp-hint">{{ t('settings.notificationLevelHint') }}</span>
+          </div>
+
+          <div class="sp-row sp-row--checkbox" v-if="settings.notifications && settings.notificationLevel !== 'none'">
+            <label class="sp-checkbox-label" for="setting-notifications-by-people">
+              <input id="setting-notifications-by-people" type="checkbox" class="sp-checkbox"
+                :checked="settings.notificationsByPeople" @change="onNotificationsByPeopleChange" />
+              <span>{{ t('settings.notificationsByPeople') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.notificationsByPeopleHint') }}</span>
           </div>
 
           <!-- Auto-update channel (v2.0) -->

@@ -2339,6 +2339,7 @@ function mapRawPr(pr: Record<string, unknown>): PullRequest {
     reviewDecision: (pr.review_decision as string) ?? "",
     mergeStateStatus: (pr.merge_state_status as string) ?? "",
     checksRollup: (pr.checks_rollup as string) ?? "",
+    commentCount: (pr.comment_count as number) ?? 0,
   };
 }
 

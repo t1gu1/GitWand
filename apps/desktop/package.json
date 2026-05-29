@@ -1,6 +1,6 @@
 {
   "name": "@gitwand/desktop",
-  "version": "2.15.1",
+  "version": "2.16.0",
   "private": true,
   "description": "GitWand Desktop — lightweight Git client with smart conflict resolution (Tauri + Vue 3)",
   "type": "module",
@@ -25,6 +25,7 @@
     "@gitwand/core": "workspace:*",
     "@tanstack/vue-virtual": "^3.13.24",
     "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-notification": "^2.0.0",
     "@tauri-apps/plugin-process": "^2.0.0",
     "@tauri-apps/plugin-updater": "^2.0.0",
     "dompurify": "^3.2.0",

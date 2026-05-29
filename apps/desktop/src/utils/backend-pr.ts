@@ -63,6 +63,11 @@ export interface PullRequest {
   mergeStateStatus: string;
   /** Overall CI rollup: "SUCCESS" | "FAILURE" | "PENDING" | "" */
   checksRollup: string;
+  /**
+   * Number of issue-comments. Populated by the enriched workspace_prs_all
+   * path (v2.16, Launchpad notification diff); 0 on the light sidebar list.
+   */
+  commentCount: number;
 }
 
 /**
@@ -108,6 +113,7 @@ export async function ghListPrs(
         review_decision: string;
         merge_state_status: string;
         checks_rollup: string;
+        comment_count: number;
       }>
     >("gh_list_prs", { cwd, state, limit, offset });
     return raw.map((pr) => ({
@@ -129,6 +135,7 @@ export async function ghListPrs(
       reviewDecision: pr.review_decision ?? "",
       mergeStateStatus: pr.merge_state_status ?? "",
       checksRollup: pr.checks_rollup ?? "",
+      commentCount: pr.comment_count ?? 0,
     }));
   }
   // Browser dev mode — call dev server. The dev-server endpoint doesn't
@@ -158,6 +165,7 @@ export async function ghListPrs(
     reviewDecision: pr.review_decision ?? "",
     mergeStateStatus: pr.merge_state_status ?? "",
     checksRollup: pr.checks_rollup ?? "",
+    commentCount: pr.comment_count ?? 0,
   }));
 }
 
@@ -247,6 +255,7 @@ export async function ghCreatePr(
       reviewDecision: raw.review_decision ?? "",
       mergeStateStatus: raw.merge_state_status ?? "",
       checksRollup: raw.checks_rollup ?? "",
+      commentCount: 0,
     };
   }
   // Browser dev mode — call dev server (uses GitHub REST API directly)
@@ -278,6 +287,7 @@ export async function ghCreatePr(
     reviewDecision: raw.review_decision ?? "",
     mergeStateStatus: raw.merge_state_status ?? "",
     checksRollup: raw.checks_rollup ?? "",
+    commentCount: raw.comment_count ?? 0,
   };
 }
 

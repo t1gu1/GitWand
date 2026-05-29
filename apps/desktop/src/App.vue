@@ -73,6 +73,10 @@ import { useNetworkStatus } from "./composables/useNetworkStatus";
 import { useConnectivity } from "./composables/useConnectivity";
 import { useScheduler } from "./composables/useScheduler";
 import { useRepoPoller } from "./composables/useRepoPoller";
+import { useLaunchpadPoller } from "./composables/useLaunchpadPoller";
+import { useLaunchpadPrs } from "./composables/useLaunchpadPrs";
+import { diffLaunchpad, isBotAuthor, type LaunchpadEvent } from "./composables/useLaunchpadNotifications";
+import { osNotify } from "./composables/useOsNotification";
 import { useReleaseNotes } from "./composables/useReleaseNotes";
 import { useFolderHistory } from "./composables/useFolderHistory";
 import { useAppMenu } from "./composables/useAppMenu";
@@ -1373,6 +1377,80 @@ async function handleLaunchpadShortcut(): Promise<void> {
 watch(launchpadOpenRequest, () => {
   void handleLaunchpadShortcut();
 });
+
+// ─── PR Activity Notifications (v2.16) ───────────────────
+// Background poll → snapshot diff → native OS notification. A dedicated
+// poller (not useRepoPoller, which pauses when hidden) keeps running in the
+// background so the user is notified about PR activity without GitWand in the
+// foreground. Notifications are emitted only when the window is hidden; in the
+// foreground the Launchpad updates visually and we just advance the snapshot.
+const { allPrs: notifyPrs, refresh: refreshNotifyPrs } = useLaunchpadPrs();
+
+/** Resolve workspace repos for the poll — uses the open Launchpad's list, else
+ *  the persisted workspace (so notifications work even before opening it). */
+async function resolveNotifyRepos(): Promise<WorkspaceRepo[]> {
+  if (launchpadRepos.value.length > 0) return launchpadRepos.value;
+  const savedDir = localStorage.getItem("gitwand-workspace-dir");
+  if (!savedDir) return [];
+  try {
+    const cfg = await workspaceRead(savedDir);
+    return cfg.repos;
+  } catch {
+    return [];
+  }
+}
+
+/** Granularity + "by people" gate for a single event. */
+function notifyEventAllowed(ev: LaunchpadEvent): boolean {
+  const level = settings.value.notificationLevel;
+  if (level === "none") return false;
+  if (settings.value.notificationsByPeople && isBotAuthor(ev.author)) return false;
+  if (level === "all") return true;
+  if (level === "reviews") {
+    return ev.kind === "review-requested" || ev.kind === "review-decided" || ev.kind === "new-comment";
+  }
+  if (level === "ci") {
+    return ev.kind === "ci-flip" && ev.detail === "FAILURE";
+  }
+  return false;
+}
+
+/** Localised one-line body for an event. */
+function notifyBody(ev: LaunchpadEvent): string {
+  switch (ev.kind) {
+    case "new-pr": return t("notify.newPr", ev.prNumber, ev.prTitle);
+    case "closed": return t("notify.closed", ev.prNumber, ev.prTitle);
+    case "ci-flip": return t("notify.ciFlip", ev.detail ?? "", ev.prNumber, ev.prTitle);
+    case "review-requested": return t("notify.reviewRequested", ev.prNumber, ev.prTitle);
+    case "review-decided": return t("notify.reviewDecided", ev.detail ?? "", ev.prNumber, ev.prTitle);
+    case "new-comment": return t("notify.newComment", ev.prNumber, ev.prTitle);
+  }
+  return ev.prTitle;
+}
+
+const launchpadPoller = useLaunchpadPoller({
+  isEnabled: () =>
+    settings.value.notifications &&
+    settings.value.notificationLevel !== "none" &&
+    !isOffline.value,
+  onTick: async () => {
+    const repos = await resolveNotifyRepos();
+    if (repos.length === 0) return;
+    await refreshNotifyPrs(repos);
+    const events = diffLaunchpad(notifyPrs.value);
+    if (events.length === 0) return;
+    // Emit OS notifications only when the window is in the background.
+    const hidden = typeof document !== "undefined" && document.hidden;
+    for (const ev of events) {
+      if (!notifyEventAllowed(ev)) continue;
+      const body = notifyBody(ev);
+      pushLogEntry("info", `${ev.repoName}: ${body}`, "notifications");
+      if (hidden) void osNotify(ev.repoName, body);
+    }
+  },
+});
+
+onMounted(() => launchpadPoller.start());
 
 // ─── Worktree manager panel ──────────────────────────────
 const showWorktrees = ref(false);
