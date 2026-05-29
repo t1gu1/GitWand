@@ -6,7 +6,26 @@
 
 ## What's Next
 
-### v2.17.0 — Inline CI Check Annotations
+### v2.17.0 — opencode provider + per-CLI model picker
+
+_Round out the agent-CLI lineup and let each one expose its own models._
+
+**opencode as a first-class AI provider**
+
+- Add `opencode-cli` to the `AIProvider` union (`useAIProvider.ts`) alongside `claude-code-cli` and `codex-cli`
+- Detection + launch plumbing mirroring the existing CLI providers (binary discovery, `shell_env` login-shell env so the agent finds its auth)
+- Settings → AI: opencode appears in the provider select with the same enable/disable + status pattern
+
+**Per-provider model selection (second select list)**
+
+- For the three CLI agents — Claude Code, Codex, opencode — surface a **second select list** under the provider picker to choose the model, replacing the current free-text `aiModel` field for these providers
+- Each provider advertises its own model list (e.g. Claude Code → Claude models; Codex → OpenAI models; opencode → its configured catalog); the list is provider-scoped and resets to that provider's default on switch
+- `aiModel` persists per provider so switching back restores the previous choice; `SettingsPanel.vue` + `useSettings.ts` AppSettings kept in sync (duplicate-interfaces guard)
+- Graceful fallback to free text when a provider can't enumerate its models
+
+---
+
+### v2.18.0 — Inline CI Check Annotations
 
 Overlay check-run annotations in the diff — the exact line that failed the linter or typecheck, right where you need it in the review.
 
@@ -25,7 +44,7 @@ Overlay check-run annotations in the diff — the exact line that failed the lin
 
 ---
 
-### v2.18.0 — Scratch worktree + extended Conflict Predictor
+### v2.19.0 — Scratch worktree + extended Conflict Predictor
 
 _Inspired by GitSquid. A natural extension of the GitWand engine and Worktree first-class (v2.7)._
 
@@ -42,7 +61,7 @@ _Inspired by GitSquid. A natural extension of the GitWand engine and Worktree fi
 
 ---
 
-### v2.19.0 — Monorepo Scope
+### v2.20.0 — Monorepo Scope
 
 _Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, Nx…)._
 
@@ -53,7 +72,7 @@ _Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, 
 
 ---
 
-### v2.20.0 — Safety Bundle: pre-commit secrets scanner
+### v2.21.0 — Safety Bundle: pre-commit secrets scanner
 
 _Inspired by GitSquid. A "safety" feature with zero network dependency — everything local._
 
@@ -65,7 +84,7 @@ _Inspired by GitSquid. A "safety" feature with zero network dependency — every
 
 ---
 
-### v2.21.0 — Stacked Branches (native)
+### v2.22.0 — Stacked Branches (native)
 
 _A differentiating feature: stacked PRs workflow without an external CLI (Graphite, ghstack…)._
 
@@ -83,7 +102,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.22.0 — Voice Input (experimental)
+### v2.23.0 — Voice Input (experimental)
 
 - **Local dictation**: microphone button in the commit panel — transcription via embedded Whisper (`whisper-rs` Rust) — zero cloud
 - **Optional AI enrichment**: pass dictated text through `useAIProvider` for conventional commit formatting
@@ -93,7 +112,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.23.0 — Terminal tabs & AI workspace
+### v2.24.0 — Terminal tabs & AI workspace
 
 _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand as a native AI workspace._
 
@@ -107,7 +126,18 @@ _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand 
 
 - "New AI task" button: opens a blank worktree + launches a Claude Code (or Codex CLI) session in a dedicated terminal tab — the worktree diff displays live in GitWand
 - Vision: GitWand as the command center for coding with AI — see what the agent changes, stage what you want, commit — without leaving the app
-- User feedback expected to shape v2.24+
+- User feedback expected to shape v2.25+
+
+---
+
+### Chore — CI: OIDC trusted publishing (token-less npm)
+
+_Remove the long-lived `NPM_TOKEN` secret once trusted publishing is proven._
+
+- Configure a Trusted Publisher on npmjs.org for each package (`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp`): GitHub Actions, repo `devlint/GitWand`, workflow `publish.yml`
+- Once verified, drop `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` from the three publish steps and let pnpm's OIDC exchange authenticate (keeps `--provenance`, which already needs `id-token: write`)
+- Delete the `NPM_TOKEN` repo secret after a successful token-less release
+- Net effect: no rotating secret to maintain, provenance attestations still emitted
 
 ---
 
