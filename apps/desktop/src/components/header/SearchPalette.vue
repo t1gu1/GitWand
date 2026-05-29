@@ -46,6 +46,8 @@ const emit = defineEmits<{
   switchBranch: [name: string];
   selectCommit: [hash: string];
   runAction: [id: string];
+  "load-branches": [];
+  "load-log": [];
 }>();
 
 const query = ref("");
@@ -172,6 +174,8 @@ function scrollSelectedIntoView() {
 }
 
 onMounted(() => {
+  emit("load-branches");
+  emit("load-log");
   nextTick(() => inputEl.value?.focus());
   document.addEventListener("keydown", onKeydown);
 });

@@ -2463,6 +2463,7 @@ onUnmounted(() => {
     <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
       :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
       @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
+      @load-branches="loadBranches"
       @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
@@ -2586,8 +2587,9 @@ onUnmounted(() => {
          in the template tree is cosmetic. Mounted conditionally so the
          input gets fresh autofocus each time it opens. -->
     <SearchPalette v-if="showSearchPalette" :branches="branches" :commits="repoLog" :actions="paletteActions"
-      @close="showSearchPalette = false" @switch-branch="onPaletteSwitchBranch" @select-commit="onPaletteSelectCommit"
-      @run-action="onPaletteAction" />
+      @close="showSearchPalette = false" @switch-branch="onPaletteSwitchBranch"
+      @select-commit="onPaletteSelectCommit" @run-action="onPaletteAction"
+      @load-branches="loadBranches" @load-log="loadLog" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
          Both teleport to body and guard against `repoStatus?.branch` going

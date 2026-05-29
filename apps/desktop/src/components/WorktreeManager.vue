@@ -26,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "open-tab", path: string): void;
+  (e: "load-branches"): void;
 }>();
 
 const { t } = useI18n();
@@ -212,6 +213,7 @@ onMounted(async () => {
   // < 5 ms si tout va bien). Couvre le cas "repo déplacé manuellement".
   try { await gitWorktreeRepair(props.cwd); } catch { /* best-effort */ }
   await loadWorktrees();
+  emit("load-branches");
   if (props.suggestedBranch) {
     formBranch.value = props.suggestedBranch;
     showForm.value = true;
