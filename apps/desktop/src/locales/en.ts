@@ -481,6 +481,7 @@ const en = {
     switchRefusedDirty: "Switch refused: uncommitted changes are present.",
     switchConfirmDirty: "Uncommitted changes will be lost. Continue anyway?",
     switchConfirmDirtyTitle: "Discard changes?",
+    switchWorktree: "This branch is already checked out in another worktree. Use the Worktree hub to open it.",
     switchStashTitle: "Stash before switching branch",
     switchStashHint: "Your changes will be stashed, then restored after switching to \u00ab {0} \u00bb. Give it a label to find it later.",
     switchStashPlaceholder: "Optional message (empty = default label)",

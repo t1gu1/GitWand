@@ -468,6 +468,7 @@ const ptBR: Locale = {
     switchRefusedDirty: "Troca recusada: há alterações não commitadas.",
     switchConfirmDirty: "Alterações não commitadas serão perdidas. Continuar mesmo assim?",
     switchConfirmDirtyTitle: "Descartar alterações?",
+    switchWorktree: "Este branch já está extraído em outro worktree. Use o Hub de Worktree para abri-lo.",
     switchStashTitle: "Fazer stash antes de trocar de branch",
     switchStashHint: "Suas alterações serão guardadas no stash e restauradas após trocar para « {0} ». Dê um rótulo para encontrá-las depois.",
     switchStashPlaceholder: "Mensagem opcional (vazio = rótulo padrão)",

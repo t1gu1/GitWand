@@ -840,7 +840,7 @@ async function handleRequest(req, res) {
 
         return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, pushRemote, aheadPush, staged, unstaged, untracked, conflicted });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -943,7 +943,7 @@ async function handleRequest(req, res) {
 
         return jsonResponse(req, res, { path, hunks });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1019,7 +1019,7 @@ async function handleRequest(req, res) {
 
         return jsonResponse(req, res, entries.filter((e) => !e.message.startsWith("index on ") && !e.message.startsWith("untracked files on ")));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1075,7 +1075,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1092,7 +1092,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1112,7 +1112,7 @@ async function handleRequest(req, res) {
         }).trim();
         return jsonResponse(req, res, { hash });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1132,7 +1132,7 @@ async function handleRequest(req, res) {
         }).trim();
         return jsonResponse(req, res, { hash });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1523,7 +1523,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, { state: "clean", hasConflict: false, operationHead: null, targetBranch: null, step: 0, total: 0 });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1660,7 +1660,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1767,7 +1767,7 @@ async function handleRequest(req, res) {
 
         return jsonResponse(req, res, diffs);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1851,7 +1851,7 @@ async function handleRequest(req, res) {
 
         return jsonResponse(req, res, branches);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1882,7 +1882,7 @@ async function handleRequest(req, res) {
         execSync(`git checkout "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1896,7 +1896,7 @@ async function handleRequest(req, res) {
         execSync(`git branch ${flag} "${name}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1909,7 +1909,7 @@ async function handleRequest(req, res) {
         execFileSync("git", ["push", remote, "--delete", name], { cwd: resolvedCwd, encoding: "utf-8" });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1922,7 +1922,7 @@ async function handleRequest(req, res) {
         execSync(`git branch -m "${oldName}" "${newName}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1940,7 +1940,7 @@ async function handleRequest(req, res) {
         execFileSync("git", args, { cwd: resolvedCwd, encoding: "utf-8" });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -1953,7 +1953,7 @@ async function handleRequest(req, res) {
         execSync("git stash pop", { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2005,7 +2005,7 @@ async function handleRequest(req, res) {
           });
         return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2023,7 +2023,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2041,7 +2041,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2059,7 +2059,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2079,7 +2079,7 @@ async function handleRequest(req, res) {
         );
         return jsonResponse(req, res, { diff: out });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2119,7 +2119,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, blameLines);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2136,7 +2136,7 @@ async function handleRequest(req, res) {
           { cwd: resolvedCwd, encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
         return jsonResponse(req, res, parseFileLog(out.stdout || ""));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2153,7 +2153,7 @@ async function handleRequest(req, res) {
           { cwd: resolve(cwd), encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
         return jsonResponse(req, res, parseFileLog(out.stdout || ""));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2171,7 +2171,7 @@ async function handleRequest(req, res) {
           { cwd: resolve(cwd), encoding: "utf-8", maxBuffer: 10 * 1024 * 1024 });
         return jsonResponse(req, res, parseFileLog(out.stdout || ""));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2191,7 +2191,7 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, data.login ?? "");
       } catch (err) {
         console.error("[gh-current-user]", err.message);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2243,7 +2243,7 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, prs);
       } catch (err) {
         console.error("[gh-list-prs]", err.message);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2401,7 +2401,7 @@ async function handleRequest(req, res) {
         });
       } catch (err) {
         console.error("[gh-create-pr]", err.message);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2438,7 +2438,7 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, all);
       } catch (err) {
         console.error("[gh-reviewer-candidates]", err.message);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2479,7 +2479,7 @@ async function handleRequest(req, res) {
           checks_status: "",
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2498,7 +2498,7 @@ async function handleRequest(req, res) {
         const diff = await resp.text();
         return jsonResponse(req, res, { diff });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2529,7 +2529,7 @@ async function handleRequest(req, res) {
           details_url: c.html_url ?? "",
         })));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2566,7 +2566,7 @@ async function handleRequest(req, res) {
           url: c.html_url ?? "",
         })));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2613,7 +2613,7 @@ async function handleRequest(req, res) {
           in_reply_to_id: c.in_reply_to_id ?? null, diff_hunk: c.diff_hunk ?? "", url: c.html_url ?? "",
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2643,7 +2643,7 @@ async function handleRequest(req, res) {
         const c = await resp.json();
         return jsonResponse(req, res, { id: c.id, body: c.body, updated_at: c.updated_at });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2668,7 +2668,7 @@ async function handleRequest(req, res) {
         if (!resp.ok && resp.status !== 204) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2689,7 +2689,7 @@ async function handleRequest(req, res) {
         const reviews = await resp.json();
         return jsonResponse(req, res, reviews);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2746,7 +2746,7 @@ async function handleRequest(req, res) {
         const review = await resp.json();
         return jsonResponse(req, res, review);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2856,7 +2856,7 @@ async function handleRequest(req, res) {
             : `✅ Pas de conflit détecté`,
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2901,7 +2901,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, hotspots);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2915,7 +2915,7 @@ async function handleRequest(req, res) {
         const count = (r.stdout || "").trim().split("\n").filter(Boolean).length;
         return jsonResponse(req, res, { count });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -2955,7 +2955,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, result);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3041,7 +3041,7 @@ async function handleRequest(req, res) {
           detail,
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3066,7 +3066,7 @@ async function handleRequest(req, res) {
         }
         return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3133,7 +3133,7 @@ async function handleRequest(req, res) {
           detail,
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3156,7 +3156,7 @@ async function handleRequest(req, res) {
         }
         return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3193,7 +3193,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3215,7 +3215,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3289,7 +3289,7 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
         console.error("[rebase] Error:", err);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3313,7 +3313,7 @@ async function handleRequest(req, res) {
           exitCode: r.status ?? -1,
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3350,7 +3350,7 @@ async function handleRequest(req, res) {
         // Not found — return empty string (same as Rust backend)
         return res.writeHead(200, { "Content-Type": "text/plain" }).end("");
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3380,7 +3380,7 @@ async function handleRequest(req, res) {
         writeFileSync(target, content, "utf-8");
         return jsonResponse(req, res, { ok: true });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3424,7 +3424,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3442,7 +3442,7 @@ async function handleRequest(req, res) {
         else if (!enabled && existsSync(enabledPath)) renameSync(enabledPath, disabledPath);
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3459,7 +3459,7 @@ async function handleRequest(req, res) {
         writeFileSync(join(hooksDir, name), script, { mode: 0o755 });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3477,7 +3477,7 @@ async function handleRequest(req, res) {
         if (existsSync(disabledPath)) unlinkSync(disabledPath);
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3491,7 +3491,7 @@ async function handleRequest(req, res) {
         if (!existsSync(file)) return jsonResponse(req, res, { error: "No workspace file found" }, 404);
         return jsonResponse(req, res, JSON.parse(readFileSync(file, "utf-8")));
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3503,7 +3503,7 @@ async function handleRequest(req, res) {
         writeFileSync(file, JSON.stringify(workspace, null, 2));
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3527,7 +3527,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, statuses);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3555,7 +3555,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, statuses);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3582,7 +3582,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, statuses);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3659,7 +3659,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, items);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3715,7 +3715,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, results);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3753,7 +3753,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, results);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3796,7 +3796,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, statuses);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3836,7 +3836,7 @@ async function handleRequest(req, res) {
         if (entries.length && entries.every(e => !e.is_main)) entries[0].is_main = true;
         return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3861,7 +3861,7 @@ async function handleRequest(req, res) {
         try { head = execSync("git rev-parse HEAD", { cwd: wtPath, encoding: "utf-8" }).trim(); } catch {}
         return jsonResponse(req, res, { path: wtPath, branch: resolvedBranch, head, is_main: false, is_locked: false, lock_reason: null, is_bare: false, is_prunable: false, prunable_reason: null });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3874,7 +3874,7 @@ async function handleRequest(req, res) {
         execSync(`git worktree remove ${forceFlag}"${wtPath}"`, { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3885,7 +3885,7 @@ async function handleRequest(req, res) {
         execSync("git worktree prune", { cwd: resolve(cwd), encoding: "utf-8" });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3897,7 +3897,7 @@ async function handleRequest(req, res) {
         execSync(`git worktree repair ${extraPaths}`.trim(), { cwd: resolve(cwd), encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3949,7 +3949,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, sessions);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -3961,7 +3961,7 @@ async function handleRequest(req, res) {
         spawn(binary, [], { cwd: resolve(cwd), detached: true, stdio: "ignore" }).unref();
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4010,7 +4010,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, entries);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4021,7 +4021,7 @@ async function handleRequest(req, res) {
         execSync("git submodule init", { cwd: resolve(cwd), encoding: "utf-8" });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4035,7 +4035,7 @@ async function handleRequest(req, res) {
         execSync(cmd, { cwd: resolve(cwd), encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4046,7 +4046,7 @@ async function handleRequest(req, res) {
         execSync(`git submodule add "${smUrl}" "${smPath}"`, { cwd: resolve(cwd), encoding: "utf-8", shell: true });
         return jsonResponse(req, res, {});
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4178,7 +4178,7 @@ async function handleRequest(req, res) {
         }
         return jsonResponse(req, res, { name, url: remoteUrl, provider, owner, repo });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4241,7 +4241,7 @@ async function handleRequest(req, res) {
           conflicts: hasConflicts,
         });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4296,7 +4296,7 @@ async function handleRequest(req, res) {
         }).filter(Boolean);
         return jsonResponse(req, res, tags);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4324,7 +4324,7 @@ async function handleRequest(req, res) {
         const unpushed = [...localTags].filter(t => !remoteTags.has(t)).sort();
         return jsonResponse(req, res, unpushed);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4464,7 +4464,7 @@ async function handleRequest(req, res) {
         return jsonResponse(req, res, JSON.parse(raw.trim() || "[]"));
       } catch (err) {
         console.error("[pr-files]", err.message);
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4481,7 +4481,7 @@ async function handleRequest(req, res) {
         if (result.status !== 0) return jsonResponse(req, res, { sha: "" });
         return jsonResponse(req, res, { sha: result.stdout.trim() });
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 
@@ -4509,7 +4509,7 @@ async function handleRequest(req, res) {
           .filter((b) => b && b !== defaultBranch && b !== current);
         return jsonResponse(req, res, merged);
       } catch (err) {
-        return jsonResponse(req, res, { error: err.message }, 500);
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
     }
 

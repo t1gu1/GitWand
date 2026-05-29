@@ -1172,7 +1172,10 @@ export async function gitCreateBranch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, checkout, startPoint }),
   });
-  if (!res.ok) throw new Error(`Failed to create branch: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to create branch: ${res.status}`);
+  }
 }
 
 /**
@@ -1188,7 +1191,10 @@ export async function gitSwitchBranch(cwd: string, name: string): Promise<void> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name }),
   });
-  if (!res.ok) throw new Error(`Failed to switch branch: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to switch branch: ${res.status}`);
+  }
 }
 
 /**
@@ -1332,7 +1338,10 @@ export async function gitDeleteBranch(cwd: string, name: string, force: boolean 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, name, force }),
   });
-  if (!res.ok) throw new Error(`Failed to delete branch: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to delete branch: ${res.status}`);
+  }
 }
 
 /**
@@ -1348,7 +1357,10 @@ export async function gitDeleteRemoteBranch(cwd: string, remote: string, name: s
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, remote, name }),
   });
-  if (!res.ok) throw new Error(`Failed to delete remote branch: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to delete remote branch: ${res.status}`);
+  }
 }
 
 /**
@@ -1365,7 +1377,10 @@ export async function gitRenameBranch(cwd: string, oldName: string, newName: str
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, oldName, newName }),
   });
-  if (!res.ok) throw new Error(`Failed to rename branch: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to rename branch: ${res.status}`);
+  }
 }
 
 // ─── Conflict Prevention (Phase 8.1) ───────────────────────
@@ -2464,7 +2479,10 @@ export async function gitWorktreeAdd(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path, branch, new_branch: newBranch ?? null }),
   });
-  if (!res.ok) throw new Error(`Failed to add worktree: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to add worktree: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -2479,7 +2497,10 @@ export async function gitWorktreeRemove(cwd: string, path: string, force?: boole
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cwd, path, force: force ?? false }),
   });
-  if (!res.ok) throw new Error(`Failed to remove worktree: ${res.status}`);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Failed to remove worktree: ${res.status}`);
+  }
 }
 
 /** Prune stale worktree administrative files. */

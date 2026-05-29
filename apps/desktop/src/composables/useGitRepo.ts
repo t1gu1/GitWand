@@ -45,6 +45,7 @@ import {
   gitAddToGitignore,
 } from "../utils/backend";
 import { requireOnline } from "../utils/networkGuard";
+import { t } from "./useI18n";
 
 export type ViewMode = "dashboard" | "changes" | "history" | "graph" | "prs" | "launchpad";
 
@@ -967,7 +968,11 @@ export function useGitRepo() {
       await loadBranches();
       await loadWorktrees();
     } catch (err: any) {
-      error.value = `switch branch: ${err.message}`;
+      if (err.message?.includes("already used by worktree")) {
+        error.value = t("branches.switchWorktree");
+      } else {
+        error.value = `switch branch: ${err.message}`;
+      }
     } finally {
       isSwitchingBranch.value = false;
     }

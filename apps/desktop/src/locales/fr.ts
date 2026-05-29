@@ -474,6 +474,7 @@ const fr: Locale = {
     switchRefusedDirty: "Switch refus\u00e9 : des changements non commit\u00e9s sont pr\u00e9sents.",
     switchConfirmDirty: "Des changements non commités seront perdus. Continuer quand même ?",
     switchConfirmDirtyTitle: "Abandonner les changements ?",
+    switchWorktree: "Cette branche est déjà extraite dans un autre worktree. Utilise le Hub Worktree pour l'ouvrir.",
     switchStashTitle: "Stasher avant de changer de branche",
     switchStashHint: "Tes changements seront stashés, puis restaurés après bascule vers \u00ab {0} \u00bb. Donne-lui un label pour le retrouver plus tard.",
     switchStashPlaceholder: "Message optionnel (laisse vide pour le label par défaut)",
