@@ -334,6 +334,16 @@ onMounted(async () => {
             @keydown.enter="createWorktree"
           />
         </div>
+        <div class="wt-form-row">
+          <label class="wt-label" for="wt-form-path">{{ t("worktree.formPath") }}</label>
+          <input
+            id="wt-form-path"
+            v-model="formPath"
+            class="wt-input"
+            :placeholder="t('worktree.formPathPlaceholder')"
+            @keydown.enter="createWorktree"
+          />
+        </div>
         <div class="wt-form-actions">
           <button
             class="bm-btn bm-btn--primary"
