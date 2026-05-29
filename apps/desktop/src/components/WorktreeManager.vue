@@ -65,22 +65,26 @@ const showQuickCreate = ref(false);
 const quickName = ref("");
 const quickCreating = ref(false);
 
+const quickBranchName = computed(() => {
+  const name = quickName.value.trim();
+  if (!name) return "";
+  return name.includes("/") ? name : `task/${name}`;
+});
+
 /** Derive the new worktree path from the main worktree path + task name. */
 function deriveQuickPath(name: string): string {
   const main = worktrees.value.find((w) => w.is_main);
   const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
-  const slug = name.trim().replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/-+/g, "-").replace(/^[-/]+|[-/]+$/g, "");
-  return `${base}-${slug}`;
+  return `${base}/.git/worktrees/${name.trim()}`;
 }
 
 async function quickCreate() {
-  const name = quickName.value.trim();
-  if (!name) return;
+  const branch = quickBranchName.value;
+  if (!branch) return;
   quickCreating.value = true;
   error.value = null;
   try {
-    const path = deriveQuickPath(name);
-    const branch = name.includes("/") ? name : `task/${name}`;
+    const path = deriveQuickPath(branch);
     await gitWorktreeAdd(props.cwd, path, "", branch);
     quickName.value = "";
     showQuickCreate.value = false;
@@ -193,6 +197,18 @@ function shortPath(path: string): string {
 // Reload statuses whenever worktrees change
 watch(worktrees, () => { loadStatuses(); }, { immediate: false });
 
+// Auto-derive path in the full form when branch or new branch name changes
+watch([formBranch, formNewBranch], ([branch, newBranch]) => {
+  if (!showForm.value) return;
+  const name = newBranch.trim() || branch.trim();
+  if (!name) return;
+  // Only auto-fill if empty or looks like a previously auto-derived path
+  const current = formPath.value.trim();
+  if (!current || current.includes("/.git/worktrees/")) {
+    formPath.value = deriveQuickPath(name);
+  }
+});
+
 onMounted(async () => {
   // Répare silencieusement les liens administratifs cassés (idempotent,
   // < 5 ms si tout va bien). Couvre le cas "repo déplacé manuellement".
@@ -279,9 +295,9 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="quickName.trim()" class="wt-quick-preview">
-          → {{ deriveQuickPath(quickName) }}
+          → {{ deriveQuickPath(quickBranchName) }}
           <span class="wt-quick-branch">
-            ({{ quickName.includes("/") ? quickName.trim() : `task/${quickName.trim()}` }})
+            ({{ quickBranchName }})
           </span>
         </p>
       </div>
