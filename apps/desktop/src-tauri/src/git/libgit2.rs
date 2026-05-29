@@ -72,6 +72,10 @@ pub(crate) fn libgit2_wip_status(path: &str) -> (u32, u32, u32, Vec<String>) {
         Err(_) => return (0, 0, 0, Vec::new()),
     };
 
+    let in_metadata_dir = repo.workdir().map_or(false, |w| {
+        w.canonicalize().ok() == repo.path().canonicalize().ok()
+    });
+
     let staged_mask =
         git2::Status::INDEX_NEW | git2::Status::INDEX_MODIFIED | git2::Status::INDEX_DELETED |
         git2::Status::INDEX_RENAMED | git2::Status::INDEX_TYPECHANGE;
@@ -88,7 +92,9 @@ pub(crate) fn libgit2_wip_status(path: &str) -> (u32, u32, u32, Vec<String>) {
         let status = entry.status();
         let path_str = entry.path().unwrap_or("").to_string();
         if status.contains(git2::Status::WT_NEW) {
-            untracked_count += 1;
+            if !super::parse::is_git_internal_file(&path_str, in_metadata_dir) {
+                untracked_count += 1;
+            }
             continue; // don't list untracked in changed_files (parity with old behavior)
         }
         if status.intersects(staged_mask) {

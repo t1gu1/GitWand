@@ -156,6 +156,10 @@ fn libgit2_file_statuses(
         .statuses(Some(&mut opts))
         .map_err(|e| format!("git2 statuses: {}", e))?;
 
+    let in_metadata_dir = repo.workdir().map_or(false, |w| {
+        w.canonicalize().ok() == repo.path().canonicalize().ok()
+    });
+
     let mut staged: Vec<FileChange> = Vec::new();
     let mut unstaged: Vec<FileChange> = Vec::new();
     let mut untracked: Vec<String> = Vec::new();
@@ -178,7 +182,11 @@ fn libgit2_file_statuses(
 
         if s.contains(git2::Status::WT_NEW) {
             // Untracked. CLI also uses a separate bucket here.
-            untracked.push(path);
+            // Defensive: skip Git internal files that might appear as untracked
+            // in some worktree/bare-repo edge cases (e.g. metadata dir opened as workdir).
+            if !is_git_internal_file(&path, in_metadata_dir) {
+                untracked.push(path);
+            }
             continue;
         }
 
@@ -284,6 +292,9 @@ fn compute_push_remote_via_cli(cwd: &str, upstream: Option<&str>) -> (Option<Str
 /// implementation `git_status_libgit2` instead, with this CLI version as a
 /// fallback on libgit2 errors.
 pub(crate) fn git_status_cli(cwd: String) -> Result<GitStatus, String> {
+    let git_dir = resolve_git_dir(&cwd)?;
+    let in_metadata_dir = std::path::Path::new(&cwd).canonicalize().ok() == git_dir.canonicalize().ok();
+
     let output = git_cmd()
         .args(["status", "--porcelain=v2", "--branch"])
         .current_dir(&cwd)
@@ -429,7 +440,7 @@ pub(crate) fn git_status_cli(cwd: String) -> Result<GitStatus, String> {
         } else if line.starts_with("? ") {
             // untracked
             let path = line.strip_prefix("? ").unwrap_or("").to_string();
-            if !path.is_empty() {
+            if !path.is_empty() && !is_git_internal_file(&path, in_metadata_dir) {
                 untracked.push(path);
             }
         }

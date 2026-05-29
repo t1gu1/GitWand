@@ -266,6 +266,38 @@ function jsonResponse(req, res, data, status = 200) {
   res.end(JSON.stringify(data));
 }
 
+function isGitInternalFile(path, inMetadataDir) {
+  if (!inMetadataDir) return false;
+
+  // Only filter files at the very root of the worktree
+  if (path.includes("/")) return false;
+
+  const internalFiles = [
+    "FETCH_HEAD",
+    "HEAD",
+    "ORIG_HEAD",
+    "CHERRY_PICK_HEAD",
+    "REVERT_HEAD",
+    "REBASE_HEAD",
+    "MERGE_HEAD",
+    "commondir",
+    "gitdir",
+    "index",
+    "index.lock",
+    "logs",
+    "config",
+    "description",
+    "hooks",
+    "info",
+    "objects",
+    "refs",
+    "worktrees",
+    "packed-refs",
+    "shallow",
+  ];
+  return internalFiles.includes(path);
+}
+
 function readBody(req) {
   return new Promise((resolve) => {
     let body = "";
@@ -697,6 +729,12 @@ async function handleRequest(req, res) {
           encoding: "utf-8",
         });
 
+        let isMetadataDir = false;
+        try {
+          const gitDir = execSync("git rev-parse --git-dir", { cwd: resolvedCwd, encoding: "utf-8" }).trim();
+          isMetadataDir = resolve(resolvedCwd) === resolve(resolvedCwd, gitDir);
+        } catch { /* ignore */ }
+
         let branch = "unknown";
         let remote = null;
         let ahead = 0;
@@ -777,7 +815,7 @@ async function handleRequest(req, res) {
             }
           } else if (line.startsWith("? ")) {
             const path = line.substring("? ".length);
-            if (path) untracked.push(path);
+            if (path && !isGitInternalFile(path, isMetadataDir)) untracked.push(path);
           }
         }
 

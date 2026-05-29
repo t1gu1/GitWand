@@ -660,3 +660,47 @@ pub(crate) fn has_unresolved_conflicts(cwd: &str) -> bool {
         })
         .unwrap_or(false)
 }
+
+/// Returns true if the given path matches a Git internal metadata file at the root.
+/// Used to filter out administrative files from untracked listings, which
+/// can happen in linked worktrees or bare repos if the metadata directory
+/// is incorrectly identified as the working directory.
+///
+/// SAFETY: This should only be called when `in_metadata_dir` is true (i.e.
+/// the workdir and git-dir are the same), to avoid accidentally ignoring
+/// legitimate project files named "config" or "HEAD" in normal repos.
+pub(crate) fn is_git_internal_file(path: &str, in_metadata_dir: bool) -> bool {
+    if !in_metadata_dir {
+        return false;
+    }
+
+    // Only filter files at the very root of the worktree
+    if path.contains('/') {
+        return false;
+    }
+
+    let internal_files = [
+        "FETCH_HEAD",
+        "HEAD",
+        "ORIG_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+        "REBASE_HEAD",
+        "MERGE_HEAD",
+        "commondir",
+        "gitdir",
+        "index",
+        "index.lock",
+        "logs",
+        "config",
+        "description",
+        "hooks",
+        "info",
+        "objects",
+        "refs",
+        "worktrees",
+        "packed-refs",
+        "shallow",
+    ];
+    internal_files.iter().any(|&f| path == f)
+}
