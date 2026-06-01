@@ -483,14 +483,19 @@ pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, Strin
 }
 
 #[tauri::command]
-pub(crate) fn git_pull(cwd: String) -> Result<GitPushPullResult, String> {
+pub(crate) fn git_pull(cwd: String, rebase: bool) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
+    // Pass the strategy flag EXPLICITLY so the user's pull-mode choice is
+    // authoritative. A bare `git pull` defers to the ambient `pull.rebase`
+    // git config, which means a user with `pull.rebase=true` would silently
+    // get a rebase even when they picked "merge" in GitWand (and vice-versa).
+    let strategy = if rebase { "--rebase" } else { "--no-rebase" };
     let output = git_cmd()
-        .args(["pull"])
+        .args(["pull", strategy])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run git pull: {}", e))?;
-    record_cmd("git pull", &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
+    record_cmd(&format!("git pull {}", strategy), &cwd, _t0.elapsed().as_millis() as u64, output.status.code().unwrap_or(-1));
 
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();

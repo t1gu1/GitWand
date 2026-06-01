@@ -1457,7 +1457,9 @@ async function handleRequest(req, res) {
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
       try {
         const resolvedCwd = resolve(cwd);
-        const cmd = rebase ? "git pull --rebase 2>&1" : "git pull 2>&1";
+        // Explicit strategy flag so the user's pull-mode choice wins over the
+        // ambient `pull.rebase` git config (parity with the Rust git_pull cmd).
+        const cmd = rebase ? "git pull --rebase 2>&1" : "git pull --no-rebase 2>&1";
         const stdout = execSync(cmd, {
           cwd: resolvedCwd,
           encoding: "utf-8",

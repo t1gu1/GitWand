@@ -40,7 +40,7 @@ const HelpView = defineAsyncComponent(() => import("./components/HelpView.vue"))
 const FolderPicker = defineAsyncComponent(() => import("./components/FolderPicker.vue"));
 const MergeSuccessModal = defineAsyncComponent(() => import("./components/MergeSuccessModal.vue"));
 const RebaseEditor = defineAsyncComponent(() => import("./components/RebaseEditor.vue"));
-const RebaseProgressModal = defineAsyncComponent(() => import("./components/RebaseProgressBanner.vue"));
+const RebaseProgressBanner = defineAsyncComponent(() => import("./components/RebaseProgressBanner.vue"));
 const StashManager = defineAsyncComponent(() => import("./components/StashManager.vue"));
 const TagsPanel = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
 const WorktreeManager = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
@@ -2266,8 +2266,15 @@ onUnmounted(() => {
               </div>
             </Transition>
 
-            <!-- Conflict banner (merge or cherry-pick) -->
-            <div v-if="hasConflicts" class="conflict-banner" role="alert">
+            <!-- Plain rebase-in-progress banner (pull --rebase paused on conflicts).
+                 Non-blocking: sits at the top of the view so the resolution area
+                 below stays reachable. -->
+            <RebaseProgressBanner v-if="showRebaseBanner && repoOperationState" :repo-state="repoOperationState"
+              :cwd="repoFolderPath ?? ''" @action-done="onRebaseBannerActionDone" @error="(msg) => { repoError = msg; }" />
+
+            <!-- Conflict banner (merge or cherry-pick) — suppressed during a
+                 paused rebase, which has its own banner + Continue/Skip/Abort. -->
+            <div v-if="hasConflicts && !showRebaseBanner" class="conflict-banner" role="alert">
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
                 <path d="M9 1.5L16.5 15H1.5L9 1.5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
                 <path d="M9 7v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
@@ -2398,10 +2405,6 @@ onUnmounted(() => {
 
     <!-- Edit commit overlay -->
     <EditCommitOverlay :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
-
-    <!-- Plain rebase-in-progress modal (pull --rebase paused on conflicts) -->
-    <RebaseProgressModal v-if="showRebaseBanner && repoOperationState" :repo-state="repoOperationState"
-      :cwd="repoFolderPath ?? ''" @action-done="onRebaseBannerActionDone" @error="(msg) => { repoError = msg; }" />
 
     <!-- Merge success modal -->
     <MergeSuccessModal v-if="showMergeSuccess" :merged-branch="lastMergedBranch ?? undefined"

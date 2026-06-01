@@ -1,17 +1,18 @@
 <script setup lang="ts">
 /**
- * RebaseProgressModal — shown as a centred modal when a plain rebase
+ * RebaseProgressBanner — a NON-blocking top banner shown when a plain rebase
  * (e.g. from `git pull --rebase`) is paused due to conflicts.
  *
  * Distinct from the interactive RebaseEditor: this handles the simpler
  * case where the user just needs Continue / Skip / Abort.
  *
- * Design mirrors MergeSuccessModal (BaseModal sm, hide-header, bm-btn).
+ * Rendered inline at the top of the changes view (mirrors `.conflict-banner`
+ * in App.vue) rather than as a centred modal — so the diff / resolution area
+ * underneath stays fully reachable while conflicts are being resolved.
  */
 import { ref, computed } from "vue";
 import type { RepoOperationState } from "../utils/backend";
 import { t } from "../composables/useI18n";
-import BaseModal from "./BaseModal.vue";
 
 const props = defineProps<{
   repoState: RepoOperationState;
@@ -53,105 +54,110 @@ async function runAction(action: "continue" | "abort" | "skip") {
 </script>
 
 <template>
-  <BaseModal size="sm" hide-header :aria-label="t('rebase.bannerTitle')" @close="runAction('abort')">
-    <div class="rpm-body">
-      <!-- Icon -->
-      <div class="rpm-icon" :class="{ 'rpm-icon--conflict': repoState.hasConflict }">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-          <circle cx="24" cy="24" r="24" />
-          <!-- rebase arrows -->
-          <path d="M17 12v6a4 4 0 0 0 4 4h6m0 0-3-3m3 3-3 3" stroke-width="2.5" stroke-linecap="round"
-            stroke-linejoin="round" />
-          <path d="M31 36v-6a4 4 0 0 0-4-4h-6m0 0 3 3m-3-3 3-3" stroke-width="2.5" stroke-linecap="round"
-            stroke-linejoin="round" />
-        </svg>
-      </div>
+  <div class="rpm-banner" :class="{ 'rpm-banner--ready': !repoState.hasConflict }" role="status">
+    <!-- Icon -->
+    <div class="rpm-icon" :class="{ 'rpm-icon--conflict': repoState.hasConflict }">
+      <svg width="22" height="22" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <circle cx="24" cy="24" r="24" />
+        <!-- rebase arrows -->
+        <path d="M17 12v6a4 4 0 0 0 4 4h6m0 0-3-3m3 3-3 3" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round" />
+        <path d="M31 36v-6a4 4 0 0 0-4-4h-6m0 0 3 3m-3-3 3-3" stroke-width="2.5" stroke-linecap="round"
+          stroke-linejoin="round" />
+      </svg>
+    </div>
 
-      <h2 class="rpm-title">{{ t('rebase.bannerTitle') }}</h2>
-
-      <!-- Meta: commit + step -->
-      <p class="rpm-meta" v-if="shortHead || stepLabel">
+    <!-- Title + meta + hint, all inline -->
+    <div class="rpm-text">
+      <span class="rpm-title">{{ t('rebase.bannerTitle') }}</span>
+      <span class="rpm-meta" v-if="shortHead || stepLabel">
         <code v-if="shortHead">{{ shortHead }}</code>
         <span v-if="repoState.targetBranch">→ <strong>{{ repoState.targetBranch }}</strong></span>
         <span v-if="stepLabel" class="rpm-step">{{ stepLabel }}</span>
-      </p>
-
-      <!-- Status hint -->
-      <p v-if="repoState.hasConflict" class="rpm-hint rpm-hint--conflict">
-        {{ t('rebase.bannerConflictHint') }}
-      </p>
-      <p v-else class="rpm-hint rpm-hint--ready">
-        {{ t('rebase.bannerReadyHint') }}
-      </p>
+      </span>
+      <span class="rpm-hint" :class="repoState.hasConflict ? 'rpm-hint--conflict' : 'rpm-hint--ready'">
+        {{ repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.bannerReadyHint') }}
+      </span>
     </div>
 
-    <template #footer>
-      <!-- Abort (left-aligned ghost-danger) -->
-      <button class="bm-btn bm-btn--ghost bm-btn--danger rpm-btn-abort" :disabled="busy" @click="runAction('abort')">
+    <!-- Actions -->
+    <div class="rpm-actions">
+      <button class="rpm-btn rpm-btn--danger" :disabled="busy" @click="runAction('abort')">
         {{ t('rebase.abort') }}
       </button>
-
-      <!-- Skip -->
-      <button class="bm-btn bm-btn--ghost" :disabled="busy" @click="runAction('skip')">
+      <button class="rpm-btn" :disabled="busy" @click="runAction('skip')">
         {{ t('rebase.skip') }}
       </button>
-
-      <!-- Continue (primary, disabled while conflicts remain) -->
-      <button class="bm-btn bm-btn--primary" :disabled="busy || repoState.hasConflict"
+      <button class="rpm-btn rpm-btn--primary" :disabled="busy || repoState.hasConflict"
         :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
         @click="runAction('continue')">
         <span v-if="busy" class="rpm-spinner" aria-hidden="true" />
         {{ t('rebase.continue') }}
       </button>
-    </template>
-  </BaseModal>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* ── Body ────────────────────────────────────────────────────────────── */
-.rpm-body {
+/* ── Banner ──────────────────────────────────────────────────────────── */
+/* Mirrors `.conflict-banner` in App.vue: a non-blocking, top-of-view strip
+   that keeps the resolution area below fully reachable. */
+.rpm-banner {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-3) var(--space-2);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-warning-bg);
+  border-left: 3px solid var(--color-warning);
+  flex-shrink: 0;
+}
+
+.rpm-banner--ready {
+  background: var(--color-success-soft, rgba(166, 227, 161, 0.12));
+  border-left-color: var(--color-success, #a6e3a1);
 }
 
 /* ── Icon ────────────────────────────────────────────────────────────── */
+.rpm-icon {
+  flex-shrink: 0;
+  line-height: 0;
+}
+
 .rpm-icon svg circle {
-  fill: var(--color-success-soft);
+  fill: transparent;
 }
 
 .rpm-icon svg path {
-  stroke: var(--color-success);
-}
-
-.rpm-icon--conflict svg circle {
-  fill: rgba(243, 139, 168, 0.12);
+  stroke: var(--color-success, #a6e3a1);
 }
 
 .rpm-icon--conflict svg path {
-  stroke: var(--gw-red, #f38ba8);
+  stroke: var(--color-warning);
 }
 
 /* ── Text ────────────────────────────────────────────────────────────── */
+.rpm-text {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+
 .rpm-title {
-  margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text);
 }
 
 .rpm-meta {
-  margin: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   flex-wrap: wrap;
-  justify-content: center;
 }
 
 .rpm-meta code {
@@ -170,24 +176,84 @@ async function runAction(action: "continue" | "abort" | "skip") {
 }
 
 .rpm-hint {
-  margin: 0;
   font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
   line-height: var(--line-height-normal);
 }
 
 .rpm-hint--conflict {
-  color: var(--gw-red, #f38ba8);
+  color: var(--color-warning);
 }
 
 .rpm-hint--ready {
   color: var(--color-success, #a6e3a1);
 }
 
-/* ── Footer overrides ────────────────────────────────────────────────── */
-.rpm-btn-abort {
-  margin-right: auto;
-  /* push skip + continue to the right */
+/* ── Actions ─────────────────────────────────────────────────────────── */
+.rpm-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.rpm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.rpm-btn:hover:not(:disabled) {
+  background: var(--color-border);
+}
+
+.rpm-btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Abort: neutral button with red label, so it reads as destructive
+   without disappearing into the banner like borderless text would. */
+.rpm-btn--danger {
+  color: var(--color-danger, #dc2626);
+}
+
+.rpm-btn--danger:hover:not(:disabled) {
+  background: var(--color-danger, #dc2626);
+  border-color: var(--color-danger, #dc2626);
+  color: #fff;
+}
+
+/* Continue: primary call-to-action — uses the purple accent so it clearly
+   reads as the main action (mirrors .bm-btn--primary in BaseModal). */
+.rpm-btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text, #fff);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), 0 4px 10px rgba(124, 58, 237, 0.22);
+}
+
+.rpm-btn--primary:hover:not(:disabled) {
+  background: var(--color-accent-hover, var(--color-accent));
+  border-color: var(--color-accent-hover, var(--color-accent));
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08), 0 8px 16px rgba(124, 58, 237, 0.28);
+}
+
+/* Disabled primary (conflicts unresolved): muted, no accent — matches BaseModal. */
+.rpm-btn--primary:disabled {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  box-shadow: none;
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────── */
