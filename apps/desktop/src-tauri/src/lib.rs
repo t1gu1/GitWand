@@ -349,6 +349,7 @@ pub fn run() {
             commands::ops::git_worktree_add,
             commands::ops::git_worktree_remove,
             commands::ops::git_worktree_prune,
+            commands::ops::git_worktree_repair,
             commands::ops::agent_session_list,
             commands::ops::agent_session_launch,
             commands::ops::git_submodule_list,

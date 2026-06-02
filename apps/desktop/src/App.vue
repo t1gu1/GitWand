@@ -219,6 +219,7 @@ const {
   applyStash: applyStashRepo,
   popStash: popStashRepo,
   dropStash,
+  worktreeBranches,
 } = useGitRepo();
 
 function switchToChangesWithFirstFile() {
@@ -2189,7 +2190,7 @@ onUnmounted(() => {
       :main-commit-count="mainCommitCount" :push-remote="pushRemote"
       :ahead-push-count="aheadPushCount" :is-pushing="isPushing" :is-pulling="isPulling"
       :force-push-preferred="forcePushPreferred" :is-fetching="isFetching"
-      :cwd="repoFolderPath ?? ''" :branches="branches" :branches-loading="branchesLoading"
+      :cwd="repoFolderPath ?? ''" :branches="branches" :worktree-branches="worktreeBranches" :branches-loading="branchesLoading"
       :is-switching-branch="isSwitchingBranch" :is-merging="isMerging" :tabs="repoTabs" :active-tab-id="activeTabId"
       @open-folder="handleOpenFolder" @open-repo="handleOpenPath" @switch-tab="switchTab" @close-tab="closeTab"
       @reorder-tabs="reorderTabs"
@@ -2362,7 +2363,7 @@ onUnmounted(() => {
         <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
           :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
           <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :stashes="stashes"
+            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktree-branches="worktreeBranches" :stashes="stashes"
             :submodule-changes="submoduleChanges"
             :has-more="logHasMore" :loading-more="logLoadingMore"
             @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
@@ -2466,6 +2467,7 @@ onUnmounted(() => {
     <WorktreeManager v-if="showWorktrees && repoFolderPath" :cwd="repoFolderPath" :branches="branches"
       :suggested-branch="pendingWorktreeBranch" :open-quick-create="pendingQuickCreate"
       @close="showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false;"
+      @load-branches="loadBranches"
       @open-tab="(path) => { openTab(path); showWorktrees = false; pendingWorktreeBranch = undefined; pendingQuickCreate = false; }" />
 
     <!-- Submodule panel (uses BaseModal internally → own Teleport + backdrop) -->
@@ -2588,9 +2590,10 @@ onUnmounted(() => {
     <!-- Command palette (Cmd/Ctrl+K) — teleports to body, so position
          in the template tree is cosmetic. Mounted conditionally so the
          input gets fresh autofocus each time it opens. -->
-    <SearchPalette v-if="showSearchPalette" :branches="branches" :commits="repoLog" :actions="paletteActions"
-      @close="showSearchPalette = false" @switch-branch="onPaletteSwitchBranch" @select-commit="onPaletteSelectCommit"
-      @run-action="onPaletteAction" />
+    <SearchPalette v-if="showSearchPalette" :branches="branches" :worktree-branches="worktreeBranches" :commits="repoLog" :actions="paletteActions"
+      @close="showSearchPalette = false" @switch-branch="onPaletteSwitchBranch"
+      @select-commit="onPaletteSelectCommit" @run-action="onPaletteAction"
+      @load-branches="loadBranches" @load-log="loadLog" />
 
     <!-- Rename / Delete-branch modals, raised from BranchMenu.
          Both teleport to body and guard against `repoStatus?.branch` going

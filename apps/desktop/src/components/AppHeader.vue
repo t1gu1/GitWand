@@ -21,7 +21,7 @@
  *   - SyncSplitButton   — primary sync action (publish / push / pull /
  *                         sync / up-to-date) with a state-aware dropdown
  *   - BranchMenu        — secondary branch-op menu (merge, rebase,
- *                         rename, delete, rewind, worktrees, submodules)
+ *                         rename, delete, rewind)
  *
  * Anything still inline here is coupled specifically to the header
  * layout rather than a reusable slice: the merge-into picker (triggered
@@ -79,6 +79,7 @@ const props = defineProps<{
   isOffline?: boolean;
   // Branch popover
   branches: GitBranch[];
+  worktreeBranches?: Set<string>;
   branchesLoading: boolean;
   isSwitchingBranch: boolean;
   isMerging: boolean;
@@ -295,12 +296,6 @@ function onBranchMenuDelete() {
 function onBranchMenuRewind() {
   openUndoPopover();
 }
-function onBranchMenuWorktrees() {
-  emit("openWorktrees");
-}
-function onBranchMenuSubmodules() {
-  emit("openSubmodules");
-}
 
 // ─── Close popovers on click outside ──────────────────────────────
 // BranchSelector owns its own click-outside handling now; we only need
@@ -463,6 +458,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             :branch-display="branchDisplay"
             :repo-stats="repoStats"
             :branches="branches"
+            :worktree-branches="worktreeBranches"
             :branches-loading="branchesLoading"
             :is-switching-branch="isSwitchingBranch"
             :cwd="cwd"
@@ -489,8 +485,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             @open-rename-modal="onBranchMenuRename"
             @open-delete-modal="onBranchMenuDelete"
             @open-rewind="onBranchMenuRewind"
-            @open-worktrees="onBranchMenuWorktrees"
-            @open-submodules="onBranchMenuSubmodules"
             @discard-all="emit('discardAll')"
           />
 
@@ -548,6 +542,36 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
             <span>{{ t('tags.title') }}</span>
           </button>
 
+          <!-- Worktrees button -->
+          <button
+            class="btn btn--secondary header-action-btn"
+            :title="t('worktree.title')"
+            :aria-label="t('worktree.title')"
+            @click="emit('openWorktrees')"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+            </svg>
+            <span>{{ t('worktree.title') }}</span>
+          </button>
+
+          <!-- Submodules button -->
+          <button
+            class="btn btn--secondary header-action-btn"
+            :title="t('submodule.title')"
+            :aria-label="t('submodule.title')"
+            @click="emit('openSubmodules')"
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="3" y="3" width="10" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+              <rect x="6" y="6" width="4" height="4" rx="0.5" stroke="currentColor" stroke-width="1.3" fill="none" />
+            </svg>
+            <span>{{ t('submodule.title') }}</span>
+          </button>
+
           <!-- Merge-into picker (triggered by BranchMenu → onBranchMenuMerge) -->
           <div v-if="showMergePopover" class="merge-popover-anchor">
             <div class="merge-popover">
@@ -577,6 +601,12 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                       <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3" />
                       <circle cx="12" cy="8" r="2" stroke="currentColor" stroke-width="1.3" />
                       <path d="M5 6v4M10 8H7c-1.1 0-2-.9-2-2" stroke="currentColor" stroke-width="1.3" />
+                    </svg>
+                    <svg v-if="props.worktreeBranches?.has(branch.name)" class="branch-wt-icon" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="margin-left: 2px; color: var(--color-success); flex-shrink: 0;">
+                      <circle cx="8" cy="4.5" r="2.5" />
+                      <circle cx="4.5" cy="8.5" r="2.5" />
+                      <circle cx="11.5" cy="8.5" r="2.5" />
+                      <rect x="7.5" y="8" width="1" height="6" />
                     </svg>
                     <span class="mp-item-name mono">{{ branch.name }}</span>
                     <span v-if="branch.isRemote" class="mp-item-tag">remote</span>

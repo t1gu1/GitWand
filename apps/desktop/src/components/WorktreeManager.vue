@@ -5,6 +5,7 @@ import {
   gitWorktreeAdd,
   gitWorktreeRemove,
   gitWorktreePrune,
+  gitWorktreeRepair,
   gitWorktreeStatusAll,
   type WorktreeEntry,
   type WorkspaceRepoStatus,
@@ -25,6 +26,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "close"): void;
   (e: "open-tab", path: string): void;
+  (e: "load-branches"): void;
 }>();
 
 const { t } = useI18n();
@@ -59,18 +61,24 @@ const formBranch = ref("");
 const formNewBranch = ref("");
 const creating = ref(false);
 
+/** Base directory for worktrees (sibling of the main repo). */
+const worktreeBaseDir = computed(() => {
+  const main = worktrees.value.find((w) => w.is_main);
+  const basePath = main ? main.path : props.cwd;
+  const normalizedBase = basePath.replace(/\\/g, "/").replace(/\/+$/, "");
+  return `${normalizedBase}.worktrees`;
+});
+
+/** Derive a worktree path from a branch name. */
+function derivePath(name: string): string {
+  const slug = name.trim().replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/-+/g, "-").replace(/^[-/]+|[-/]+$/g, "");
+  return `${worktreeBaseDir.value}/${slug}`;
+}
+
 // ── Quick-create form ────────────────────────────────────
 const showQuickCreate = ref(false);
 const quickName = ref("");
 const quickCreating = ref(false);
-
-/** Derive the new worktree path from the main worktree path + task name. */
-function deriveQuickPath(name: string): string {
-  const main = worktrees.value.find((w) => w.is_main);
-  const base = main ? main.path.replace(/\\/g, "/").replace(/\/+$/, "") : props.cwd.replace(/\\/g, "/");
-  const slug = name.trim().replace(/[^a-zA-Z0-9/_-]/g, "-").replace(/-+/g, "-").replace(/^[-/]+|[-/]+$/g, "");
-  return `${base}-${slug}`;
-}
 
 async function quickCreate() {
   const name = quickName.value.trim();
@@ -78,7 +86,7 @@ async function quickCreate() {
   quickCreating.value = true;
   error.value = null;
   try {
-    const path = deriveQuickPath(name);
+    const path = derivePath(name);
     const branch = name.includes("/") ? name : `task/${name}`;
     await gitWorktreeAdd(props.cwd, path, "", branch);
     quickName.value = "";
@@ -92,47 +100,47 @@ async function quickCreate() {
   }
 }
 
+// ── Prune stale worktrees ────────────────────────────────
+const pruning = ref(false);
+
+const hasPrunableWorktrees = computed(() =>
+  worktrees.value.some((wt) => wt.is_prunable)
+);
+
+async function prune() {
+  pruning.value = true;
+  error.value = null;
+  try {
+    await gitWorktreePrune(props.cwd);
+    await loadWorktrees();
+  } catch (err: any) {
+    error.value = t("worktree.errorPrune").replace("{0}", String(err?.message ?? err));
+  } finally {
+    pruning.value = false;
+  }
+}
+
+// ── Branch lists for the add form ───────────────────────
+const localBranches = computed(() => props.branches.filter((b) => !b.isRemote));
+const remoteBranches = computed(() => props.branches.filter((b) => b.isRemote));
+
+/** Set of branch names that already have a worktree. */
+const usedBranches = computed(() => {
+  const set = new Set<string>();
+  for (const wt of worktrees.value) {
+    if (wt.branch) set.add(wt.branch);
+  }
+  return set;
+});
+
+function isBranchUsed(name: string): boolean {
+  return usedBranches.value.has(name);
+}
+
 // ── Remove confirmation ──────────────────────────────────
 const confirmRemovePath = ref<string | null>(null);
 const forceRemove = ref(false);
 const removing = ref(false);
-
-// ── Cleanup (merged worktrees) ───────────────────────────
-const showCleanup = ref(false);
-const cleanupSelected = ref<Set<string>>(new Set());
-const cleaningUp = ref(false);
-
-/** Non-main, non-locked worktrees with ahead === 0 (safe to discard). */
-const cleanupCandidates = computed(() =>
-  worktrees.value.filter((wt) => {
-    if (wt.is_main || wt.is_locked) return false;
-    const st = statusFor(wt.path);
-    return st ? st.ahead === 0 : false;
-  })
-);
-
-function toggleCleanup(path: string) {
-  const s = new Set(cleanupSelected.value);
-  s.has(path) ? s.delete(path) : s.add(path);
-  cleanupSelected.value = s;
-}
-
-async function doCleanup() {
-  if (cleanupSelected.value.size === 0) return;
-  cleaningUp.value = true;
-  error.value = null;
-  for (const path of cleanupSelected.value) {
-    try {
-      await gitWorktreeRemove(props.cwd, path, false);
-    } catch (err: any) {
-      error.value = t("worktree.errorRemove").replace("{0}", String(err?.message ?? err));
-    }
-  }
-  cleanupSelected.value = new Set();
-  showCleanup.value = false;
-  cleaningUp.value = false;
-  await loadWorktrees();
-}
 
 // ── Core actions ─────────────────────────────────────────
 
@@ -197,26 +205,28 @@ async function confirmRemove() {
   }
 }
 
-async function prune() {
-  error.value = null;
-  try {
-    await gitWorktreePrune(props.cwd);
-    await loadWorktrees();
-  } catch (err: any) {
-    error.value = t("worktree.errorPrune").replace("{0}", String(err?.message ?? err));
-  }
-}
-
 function shortPath(path: string): string {
   const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
   return parts.length <= 2 ? path : "…/" + parts.slice(-2).join("/");
 }
 
+// Watch for branch changes to pre-fill the path
+watch([formBranch, formNewBranch], ([branch, newBranch]) => {
+  const target = newBranch.trim() || branch.trim();
+  if (target) {
+    formPath.value = derivePath(target);
+  }
+});
+
 // Reload statuses whenever worktrees change
 watch(worktrees, () => { loadStatuses(); }, { immediate: false });
 
 onMounted(async () => {
+  // Répare silencieusement les liens administratifs cassés (idempotent,
+  // < 5 ms si tout va bien). Couvre le cas "repo déplacé manuellement".
+  try { await gitWorktreeRepair(props.cwd); } catch { /* best-effort */ }
   await loadWorktrees();
+  emit("load-branches");
   if (props.suggestedBranch) {
     formBranch.value = props.suggestedBranch;
     showForm.value = true;
@@ -252,35 +262,20 @@ onMounted(async () => {
       <button
         type="button"
         class="bm-btn bm-btn--ghost"
-        :title="t('worktree.cleanupTitle')"
-        :class="{ 'bm-btn--active': showCleanup }"
-        @click="showCleanup = !showCleanup; showForm = false; showQuickCreate = false;"
-      >
-        {{ t("worktree.cleanupAction") }}
-      </button>
-      <button
-        type="button"
-        class="bm-btn bm-btn--ghost"
-        :title="t('worktree.pruneTooltip')"
-        @click="prune"
-      >
-        {{ t("worktree.prune") }}
-      </button>
-      <button
-        type="button"
-        class="bm-btn bm-btn--ghost"
         :title="t('worktree.quickCreateTooltip')"
         :class="{ 'bm-btn--active': showQuickCreate }"
-        @click="showQuickCreate = !showQuickCreate; showForm = false; showCleanup = false;"
+        @click="showQuickCreate = !showQuickCreate; showForm = false;"
       >
         ⚡ {{ t("worktree.quickCreate") }}
       </button>
       <button
         type="button"
-        class="bm-btn bm-btn--primary"
-        @click="showForm = !showForm; showQuickCreate = false; showCleanup = false;"
+        class="bm-btn bm-btn--ghost"
+        :title="t('worktree.pruneTooltip')"
+        :disabled="!hasPrunableWorktrees || pruning"
+        @click="prune"
       >
-        + {{ t("worktree.newWorktree") }}
+        {{ pruning ? t("worktree.pruning") : t("worktree.prune") }}
       </button>
     </template>
 
@@ -313,7 +308,7 @@ onMounted(async () => {
           </button>
         </div>
         <p v-if="quickName.trim()" class="wt-quick-preview">
-          → {{ deriveQuickPath(quickName) }}
+          → {{ derivePath(quickName) }}
           <span class="wt-quick-branch">
             ({{ quickName.includes("/") ? quickName.trim() : `task/${quickName.trim()}` }})
           </span>
@@ -323,6 +318,22 @@ onMounted(async () => {
       <!-- ── New worktree form ───────────────────────────── -->
       <div v-if="showForm" class="wt-form">
         <div class="wt-form-row">
+          <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
+          <select id="wt-form-branch" v-model="formBranch" class="wt-select">
+            <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
+            <optgroup :label="t('worktree.localBranches')">
+              <option v-for="b in localBranches" :key="b.name" :value="b.name" :disabled="isBranchUsed(b.name)">
+                {{ b.name }}{{ isBranchUsed(b.name) ? ` ${t("worktree.formBranchAlreadyUsed")}` : "" }}
+              </option>
+            </optgroup>
+            <optgroup v-if="remoteBranches.length" :label="t('worktree.remoteBranches')">
+              <option v-for="b in remoteBranches" :key="b.name" :value="b.name" :disabled="isBranchUsed(b.name)">
+                {{ b.name }}{{ isBranchUsed(b.name) ? ` ${t("worktree.formBranchAlreadyUsed")}` : "" }}
+              </option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="wt-form-row">
           <label class="wt-label" for="wt-form-path">{{ t("worktree.formPath") }}</label>
           <input
             id="wt-form-path"
@@ -331,17 +342,6 @@ onMounted(async () => {
             :placeholder="t('worktree.formPathPlaceholder')"
             @keydown.enter="createWorktree"
           />
-        </div>
-        <div class="wt-form-row">
-          <label class="wt-label" for="wt-form-branch">{{ t("worktree.formBranch") }}</label>
-          <select id="wt-form-branch" v-model="formBranch" class="wt-select">
-            <option value="" disabled>{{ t("worktree.formBranchPlaceholder") }}</option>
-            <option
-              v-for="b in branches.filter(b => !b.isRemote)"
-              :key="b.name"
-              :value="b.name"
-            >{{ b.name }}</option>
-          </select>
         </div>
         <div class="wt-form-row">
           <label class="wt-label" for="wt-form-new-branch">{{ t("worktree.formNewBranch") }}</label>
@@ -367,45 +367,12 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- ── Cleanup panel ───────────────────────────────── -->
-      <div v-if="showCleanup" class="wt-cleanup">
-        <div class="wt-cleanup-header">
-          <span class="wt-cleanup-title">{{ t("worktree.cleanupTitle") }}</span>
-          <span class="wt-cleanup-hint">{{ t("worktree.cleanupEmpty") }}</span>
-        </div>
-        <div v-if="cleanupCandidates.length === 0" class="wt-cleanup-empty">
-          {{ t("worktree.cleanupEmpty") }}
-        </div>
-        <div v-else>
-          <label
-            v-for="wt in cleanupCandidates"
-            :key="wt.path"
-            class="wt-cleanup-row"
-          >
-            <input
-              type="checkbox"
-              :checked="cleanupSelected.has(wt.path)"
-              @change="toggleCleanup(wt.path)"
-            />
-            <span class="wt-cleanup-branch">{{ wt.branch || t("worktree.detached") }}</span>
-            <span class="wt-cleanup-path">{{ shortPath(wt.path) }}</span>
-            <span v-if="statusFor(wt.path)" class="wt-status-pill wt-pill-muted">
-              ↓{{ statusFor(wt.path)!.behind }}
-            </span>
-          </label>
-          <div class="wt-cleanup-actions">
-            <button
-              class="bm-btn bm-btn--danger"
-              :disabled="cleanupSelected.size === 0 || cleaningUp"
-              @click="doCleanup"
-            >
-              {{ t("worktree.cleanupConfirm").replace("{0}", String(cleanupSelected.size)) }}
-            </button>
-            <button class="bm-btn bm-btn--ghost" @click="showCleanup = false; cleanupSelected = new Set()">
-              {{ t("common.cancel") }}
-            </button>
-          </div>
-        </div>
+      <!-- ── Prunable alert ─────────────────────────────── -->
+      <div v-if="hasPrunableWorktrees" class="wt-alert">
+        {{ t("worktree.prunableAlert") }}
+        <button class="bm-btn bm-btn--ghost bm-btn--sm" :disabled="pruning" @click="prune">
+          {{ t("worktree.prune") }}
+        </button>
       </div>
 
       <!-- ── Error ───────────────────────────────────────── -->
@@ -445,12 +412,21 @@ onMounted(async () => {
           {{ t("worktree.statusTitle") }}…
         </div>
 
-        <div v-for="wt in worktrees" :key="wt.path" class="wt-item">
+        <div v-for="wt in worktrees" :key="wt.path" class="wt-item" :class="{ 'wt-item--main': wt.is_main }">
           <div class="wt-item-info">
             <div class="wt-item-badges">
               <span v-if="wt.is_main" class="badge badge-main">{{ t("worktree.main") }}</span>
-              <span v-if="wt.is_locked" class="badge badge-locked">{{ t("worktree.locked") }}</span>
+              <span
+                v-if="wt.is_locked"
+                class="badge badge-locked"
+                :title="wt.lock_reason ? `${t('worktree.locked')}: ${wt.lock_reason}` : t('worktree.locked')"
+              >🔒 {{ t("worktree.locked") }}</span>
               <span v-if="wt.is_bare" class="badge badge-bare">{{ t("worktree.bare") }}</span>
+              <span
+                v-if="wt.is_prunable"
+                class="badge badge-prunable"
+                :title="wt.prunable_reason ?? t('worktree.prunableTooltip')"
+              >{{ t("worktree.prunable") }}</span>
             </div>
             <div class="wt-item-branch">
               <svg class="wt-branch-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -463,10 +439,18 @@ onMounted(async () => {
 
               <!-- Status pills -->
               <template v-for="st in [statusFor(wt.path)].filter(Boolean)" :key="wt.path + '-status'">
-                <span v-if="st!.ahead > 0" class="wt-status-pill wt-pill-ahead">↑{{ st!.ahead }}</span>
-                <span v-if="st!.behind > 0" class="wt-status-pill wt-pill-behind">↓{{ st!.behind }}</span>
+                <!-- Conflits : priorité visuelle maximale -->
+                <span v-if="st!.conflicted > 0" class="wt-status-pill wt-pill-conflict" :title="t('worktree.conflicted')">⚠ {{ st!.conflicted }}</span>
+                <!-- Ahead / behind : uniquement si upstream configuré -->
+                <template v-if="st!.has_upstream">
+                  <span v-if="st!.ahead > 0" class="wt-status-pill wt-pill-ahead">↑{{ st!.ahead }}</span>
+                  <span v-if="st!.behind > 0" class="wt-status-pill wt-pill-behind">↓{{ st!.behind }}</span>
+                </template>
+                <span v-else class="wt-status-pill wt-pill-muted" :title="t('worktree.noUpstream')">{{ t("worktree.noUpstreamShort") }}</span>
+                <!-- Fichiers modifiés (hors conflits) -->
                 <span v-if="st!.modified > 0" class="wt-status-pill wt-pill-modified">~{{ st!.modified }}</span>
-                <span v-if="!st!.error && st!.ahead === 0 && st!.behind === 0 && st!.modified === 0" class="wt-status-pill wt-pill-clean">✓</span>
+                <!-- Synchro totale -->
+                <span v-if="!st!.error && st!.has_upstream && st!.ahead === 0 && st!.behind === 0 && st!.modified === 0 && st!.conflicted === 0" class="wt-status-pill wt-pill-clean">✓</span>
                 <span v-if="st!.error" class="wt-status-pill wt-pill-error" :title="st!.error!">⚠</span>
               </template>
             </div>
@@ -475,6 +459,7 @@ onMounted(async () => {
           </div>
           <div class="wt-item-actions">
             <button
+              v-if="!wt.is_main"
               class="bm-btn bm-btn--ghost"
               @click="emit('open-tab', wt.path)"
             >
@@ -489,8 +474,28 @@ onMounted(async () => {
             </button>
           </div>
         </div>
+
+        <!-- ── Only-main hint ─────────────────────────── -->
+        <div
+          v-if="worktrees.length === 1 && worktrees[0].is_main"
+          class="wt-only-main-hint"
+        >
+          {{ t("worktree.onlyMainHint") }}
+        </div>
       </div>
     </div>
+
+    <!-- Footer action -->
+    <template #footer>
+      <button
+        type="button"
+        class="wt-footer-add-btn"
+        @click="showForm = !showForm; showQuickCreate = false;"
+      >
+        <span class="wt-footer-add-btn__icon">+</span>
+        <span>{{ t("worktree.newWorktree") }}</span>
+      </button>
+    </template>
   </BaseModal>
 </template>
 
@@ -599,73 +604,6 @@ onMounted(async () => {
   gap: var(--space-3);
 }
 
-/* ── Cleanup panel ──────────────────────────────────────── */
-.wt-cleanup {
-  padding: var(--space-4) var(--space-7);
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-tertiary);
-  flex-shrink: 0;
-}
-
-.wt-cleanup-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
-.wt-cleanup-title {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-}
-
-.wt-cleanup-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  display: none; /* only shown via slot when empty */
-}
-
-.wt-cleanup-empty {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  padding: var(--space-3) 0;
-}
-
-.wt-cleanup-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.wt-cleanup-row:last-of-type {
-  border-bottom: none;
-}
-
-.wt-cleanup-branch {
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-}
-
-.wt-cleanup-path {
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  flex: 1;
-}
-
-.wt-cleanup-actions {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-}
-
 /* ── Error ──────────────────────────────────────────────── */
 .wt-error {
   margin: var(--space-4) var(--space-7) 0;
@@ -720,6 +658,18 @@ onMounted(async () => {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+.wt-only-main-hint {
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-surface-raised, var(--color-bg-subtle));
+  border: 1px dashed var(--color-border-muted, var(--color-border));
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.5;
 }
 
 /* ── List ───────────────────────────────────────────────── */
@@ -827,11 +777,69 @@ onMounted(async () => {
 .wt-pill-clean    { background: rgba(72, 187, 120, 0.15); color: #48bb78; }
 .wt-pill-muted    { background: var(--color-bg-tertiary); color: var(--color-text-muted); }
 .wt-pill-error    { background: var(--color-danger-soft); color: var(--color-danger); cursor: help; }
+.wt-pill-conflict { background: var(--color-danger-soft); color: var(--color-danger); font-weight: var(--font-weight-semibold); }
 
 /* ── Active ghost button state ──────────────────────────── */
 .bm-btn--active {
   background: var(--color-accent-soft);
   color: var(--color-accent);
   border-color: var(--color-accent);
+}
+
+/* ── Prunable alert banner ──────────────────────────────── */
+.wt-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-7);
+  background: var(--color-warning-soft, rgba(245, 158, 11, 0.1));
+  color: var(--color-warning, #f59e0b);
+  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ── Prunable badge ─────────────────────────────────────── */
+.badge-prunable {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-pill);
+  cursor: help;
+}
+
+/* ── Footer add button ──────────────────────────────────── */
+.wt-footer-add-btn {
+  width: 100%;
+  height: var(--space-10);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background var(--transition-base), transform var(--transition-fast);
+}
+
+.wt-footer-add-btn:hover {
+  background: var(--color-accent-hover);
+}
+
+.wt-footer-add-btn:active {
+  transform: translateY(1px);
+}
+
+.wt-footer-add-btn__icon {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  margin-top: -1px;
 }
 </style>
