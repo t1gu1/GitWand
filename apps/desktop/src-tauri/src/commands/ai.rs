@@ -170,6 +170,7 @@ pub(crate) fn claude_cli_prompt(
     system_prompt: Option<String>,
     cwd: Option<String>,
     output_format: Option<String>,
+    model: Option<String>,
 ) -> Result<String, String> {
     let binary = resolve_claude_binary()
         .ok_or_else(|| "Binaire `claude` introuvable".to_string())?;
@@ -192,6 +193,13 @@ pub(crate) fn claude_cli_prompt(
 
     let mut cmd = hidden_cmd(&binary);
     cmd.args(["-p", &full_prompt, "--output-format", &fmt]);
+    // v2.17 — explicit per-provider model selection. When empty, the CLI
+    // falls back to its own configured default.
+    if let Some(m) = model.as_ref() {
+        if !m.trim().is_empty() {
+            cmd.args(["--model", m.trim()]);
+        }
+    }
     strip_claude_auth_env(&mut cmd);
     if let Some(dir) = cwd {
         if !dir.trim().is_empty() {
@@ -273,6 +281,7 @@ pub(crate) fn codex_cli_prompt(
     prompt: String,
     system_prompt: Option<String>,
     cwd: Option<String>,
+    model: Option<String>,
 ) -> Result<String, String> {
     let binary = resolve_codex_binary()
         .ok_or_else(|| "Binaire `codex` introuvable".to_string())?;
@@ -287,7 +296,15 @@ pub(crate) fn codex_cli_prompt(
     };
 
     let mut cmd = hidden_cmd(&binary);
-    cmd.args(["exec", &full_prompt]);
+    cmd.arg("exec");
+    // v2.17 — explicit model. Flags must precede the positional prompt on
+    // `codex exec`, so push `--model <m>` before the prompt argument.
+    if let Some(m) = model.as_ref() {
+        if !m.trim().is_empty() {
+            cmd.args(["--model", m.trim()]);
+        }
+    }
+    cmd.arg(&full_prompt);
     if let Some(dir) = cwd {
         if !dir.trim().is_empty() {
             cmd.current_dir(dir);
@@ -310,6 +327,172 @@ pub(crate) fn codex_cli_prompt(
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+// ─── opencode CLI provider (v2.17) ───────────────────────────────────────
+//
+// opencode (sst/opencode) is a terminal AI coding agent. Like Claude Code
+// and Codex it has a non-interactive entry point:
+//   - `opencode run [--model provider/model] "<prompt>"` — one-shot run
+//   - `opencode models [provider]`                        — enumerate models
+//   - `opencode auth login`                               — provider auth
+//
+// Models are advertised in `provider/model` form (e.g. `anthropic/claude-…`),
+// which is exactly the string `--model` expects. Auth is provider-scoped and
+// stored by opencode itself, so GitWand just shells out — same trick as the
+// other two CLIs.
+
+fn resolve_opencode_binary() -> Option<String> {
+    // 1) PATH first
+    let which_cmd = if cfg!(windows) { "where" } else { "which" };
+    if let Ok(out) = hidden_cmd(which_cmd).arg("opencode").output() {
+        if out.status.success() {
+            let raw = String::from_utf8_lossy(&out.stdout);
+            let first = raw.lines().next().unwrap_or("").trim();
+            if !first.is_empty() && std::path::Path::new(first).exists() {
+                return Some(first.to_string());
+            }
+        }
+    }
+
+    // 2) Common install locations (curl installer → ~/.opencode/bin, npm global)
+    let home = dirs::home_dir();
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(h) = home.as_ref() {
+        candidates.push(h.join(".opencode/bin/opencode"));
+        candidates.push(h.join(".local/bin/opencode"));
+        candidates.push(h.join(".npm-global/bin/opencode"));
+        candidates.push(h.join("AppData/Roaming/npm/opencode.cmd"));
+        candidates.push(h.join("AppData/Roaming/npm/opencode"));
+    }
+    candidates.push(PathBuf::from("/opt/homebrew/bin/opencode"));
+    candidates.push(PathBuf::from("/usr/local/bin/opencode"));
+    candidates.push(PathBuf::from("/usr/bin/opencode"));
+
+    for c in candidates {
+        if c.exists() {
+            return Some(c.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+/// Detect opencode CLI presence and version. Same privacy stance as the
+/// Claude / Codex detectors: no prompt is sent to verify auth — that is
+/// confirmed implicitly on the first real `opencode_cli_prompt`.
+#[tauri::command]
+pub(crate) fn detect_opencode_cli() -> Result<OpencodeCliInfo, String> {
+    let binary = match resolve_opencode_binary() {
+        Some(b) => b,
+        None => {
+            return Ok(OpencodeCliInfo {
+                found: false,
+                path: String::new(),
+                version: String::new(),
+                logged_in: false,
+                status: "not_found".to_string(),
+                detail: "Binaire `opencode` introuvable. Installez-le avec `npm install -g opencode-ai` ou via `curl -fsSL https://opencode.ai/install | bash`."
+                    .to_string(),
+            });
+        }
+    };
+
+    let version = hidden_cmd(&binary)
+        .arg("--version")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    Ok(OpencodeCliInfo {
+        found: true,
+        path: binary,
+        version,
+        logged_in: false,
+        status: "detected".to_string(),
+        detail: String::new(),
+    })
+}
+
+#[tauri::command]
+pub(crate) fn opencode_cli_prompt(
+    prompt: String,
+    system_prompt: Option<String>,
+    cwd: Option<String>,
+    model: Option<String>,
+) -> Result<String, String> {
+    let binary = resolve_opencode_binary()
+        .ok_or_else(|| "Binaire `opencode` introuvable".to_string())?;
+
+    // opencode run takes the message as a positional arg and has no separate
+    // system channel — prepend the system prompt as a Markdown section, same
+    // shape as the Claude / Codex flows.
+    let full_prompt = match system_prompt {
+        Some(sys) if !sys.trim().is_empty() => {
+            format!("# System\n{}\n\n# User\n{}", sys.trim(), prompt.trim())
+        }
+        _ => prompt,
+    };
+
+    let mut cmd = hidden_cmd(&binary);
+    cmd.arg("run");
+    // Model is `provider/model` form; flags precede the positional message.
+    if let Some(m) = model.as_ref() {
+        if !m.trim().is_empty() {
+            cmd.args(["--model", m.trim()]);
+        }
+    }
+    cmd.arg(&full_prompt);
+    if let Some(dir) = cwd {
+        if !dir.trim().is_empty() {
+            cmd.current_dir(dir);
+        }
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run opencode CLI: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        return Err(if detail.is_empty() {
+            "opencode CLI a échoué sans message".to_string()
+        } else {
+            detail
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+/// Enumerate the models opencode knows about (`opencode models`). Each line
+/// is a `provider/model` identifier. Returns an empty list (not an error)
+/// when the binary is missing or the command fails, so the UI can fall back
+/// to free-text entry gracefully.
+#[tauri::command]
+pub(crate) fn opencode_list_models() -> Result<Vec<String>, String> {
+    let binary = match resolve_opencode_binary() {
+        Some(b) => b,
+        None => return Ok(Vec::new()),
+    };
+
+    let output = match hidden_cmd(&binary).arg("models").output() {
+        Ok(o) => o,
+        Err(_) => return Ok(Vec::new()),
+    };
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let models: Vec<String> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && l.contains('/'))
+        .collect();
+
+    Ok(models)
 }
 
 // ─── Claude OAuth login (opens a native terminal) ────────────────────────

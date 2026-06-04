@@ -989,6 +989,17 @@ const ptBR: Locale = {
     aiCodexCliConnectedHint: "As chamadas usarão sua assinatura do ChatGPT (ou OPENAI_API_KEY).",
     aiCodexCliLoginHint: "Execute `codex login` (assinatura ChatGPT) ou defina OPENAI_API_KEY no seu shell.",
     aiCodexCliInfoBox: "O GitWand executa `codex exec` localmente. Autentique-se uma vez com `codex login` (usa sua assinatura ChatGPT Plus/Pro) ou exporte OPENAI_API_KEY.",
+    // Provedor opencode CLI (v2.17)
+    aiProviderOpencodeCli: "opencode CLI (multiprovedor)",
+    aiProviderOpencodeCliNotFound: " — não detectado",
+    aiOpencodeCliDetectedHint: "A autenticação é gerenciada pelo opencode (`opencode auth login`). Verificada no primeiro uso.",
+    aiOpencodeCliInfoBox: "O GitWand executa `opencode run` localmente. Autentique seu provedor uma vez com `opencode auth login`; escolha um modelo abaixo ou mantenha o padrão.",
+    // Seletor de modelo por provedor para agentes CLI (v2.17)
+    aiModelCliDefault: "Padrão (configuração do CLI)",
+    aiModelCliPlaceholder: "ex. gpt-5-codex",
+    aiModelCliLoading: "Carregando modelos…",
+    aiModelCliHint: "Escolha o modelo usado por este agente CLI, ou mantenha o padrão.",
+    aiModelCliRefresh: "Atualizar",
     aiCompatEndpoint: "Endpoint da API",
     aiCompatEndpointHint: "Compatível com OpenAI, Mistral, Groq, Azure, etc.",
     aiCompatApiKey: "Chave de API",

@@ -67,6 +67,7 @@ export async function claudeCliPrompt(
   systemPrompt?: string,
   cwd?: string,
   outputFormat: "text" | "json" = "text",
+  model?: string,
 ): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("claude_cli_prompt", {
@@ -74,12 +75,13 @@ export async function claudeCliPrompt(
       systemPrompt,
       cwd,
       outputFormat,
+      model,
     }, IPC_TIMEOUT.NONE);
   }
   const res = await devFetch(`${DEV_SERVER}/api/claude-cli-prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, systemPrompt, cwd, outputFormat }),
+    body: JSON.stringify({ prompt, systemPrompt, cwd, outputFormat, model }),
   });
   if (!res.ok) {
     let msg = `claude CLI error ${res.status}`;
@@ -137,18 +139,20 @@ export async function codexCliPrompt(
   prompt: string,
   systemPrompt?: string,
   cwd?: string,
+  model?: string,
 ): Promise<string> {
   if (isTauri()) {
     return tauriInvoke<string>("codex_cli_prompt", {
       prompt,
       systemPrompt,
       cwd,
+      model,
     }, IPC_TIMEOUT.NONE);
   }
   const res = await devFetch(`${DEV_SERVER}/api/codex-cli-prompt`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, systemPrompt, cwd }),
+    body: JSON.stringify({ prompt, systemPrompt, cwd, model }),
   });
   if (!res.ok) {
     let msg = `codex CLI error ${res.status}`;
@@ -159,6 +163,102 @@ export async function codexCliPrompt(
     throw new Error(msg);
   }
   return await res.text();
+}
+
+// ─── opencode CLI provider (v2.17) ─────────────────────────
+// Mirrors the Claude / Codex CLI shape. opencode runs one-shot prompts via
+// `opencode run [--model provider/model] "<prompt>"` and enumerates its
+// configured catalog via `opencode models` (returns `provider/model` lines).
+
+export interface OpencodeCliInfo {
+  found: boolean;
+  path: string;
+  version: string;
+  logged_in: boolean;
+  status: "ok" | "not_found" | "not_logged_in" | "error" | "detected" | string;
+  detail: string;
+}
+
+/**
+ * Detect whether the opencode CLI is installed. Safe to call on app boot.
+ */
+export async function detectOpencodeCli(): Promise<OpencodeCliInfo> {
+  if (isTauri()) {
+    return tauriInvoke<OpencodeCliInfo>("detect_opencode_cli");
+  }
+  try {
+    const res = await devFetch(`${DEV_SERVER}/api/opencode-cli-detect`);
+    if (res.ok) return (await res.json()) as OpencodeCliInfo;
+  } catch {
+    // Dev server unavailable
+  }
+  return {
+    found: false,
+    path: "",
+    version: "",
+    logged_in: false,
+    status: "not_found",
+    detail: "",
+  };
+}
+
+/**
+ * Run a prompt through the local opencode CLI (`opencode run`).
+ * `model` is the `provider/model` identifier (e.g. `anthropic/claude-…`).
+ */
+export async function opencodeCliPrompt(
+  prompt: string,
+  systemPrompt?: string,
+  cwd?: string,
+  model?: string,
+): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("opencode_cli_prompt", {
+      prompt,
+      systemPrompt,
+      cwd,
+      model,
+    }, IPC_TIMEOUT.NONE);
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/opencode-cli-prompt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, systemPrompt, cwd, model }),
+  });
+  if (!res.ok) {
+    let msg = `opencode CLI error ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = body.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  return await res.text();
+}
+
+/**
+ * Enumerate the models opencode knows about (`opencode models`). Returns an
+ * empty array — never throws — when the binary is missing or the command
+ * fails, so callers can fall back to free-text entry.
+ */
+export async function listOpencodeModels(): Promise<string[]> {
+  if (isTauri()) {
+    try {
+      return await tauriInvoke<string[]>("opencode_list_models");
+    } catch {
+      return [];
+    }
+  }
+  try {
+    const res = await devFetch(`${DEV_SERVER}/api/opencode-models`);
+    if (res.ok) {
+      const body = await res.json();
+      return Array.isArray(body?.models) ? body.models : [];
+    }
+  } catch {
+    // Dev server unavailable
+  }
+  return [];
 }
 
 /**

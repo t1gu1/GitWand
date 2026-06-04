@@ -101,6 +101,12 @@ export interface AppSettings {
   aiApiEndpoint: string;
   /** Model name for Claude / OpenAI providers. */
   aiModel: string;
+  /**
+   * Per-provider model selection for the CLI agents — Claude Code, Codex,
+   * opencode (v2.17). Keyed by AIProvider id. Switching providers restores
+   * each one's previous choice; empty/absent means "CLI default".
+   */
+  aiModelByProvider: Partial<Record<AIProvider, string>>;
   /** Ollama base URL. */
   aiOllamaUrl: string;
   /** Ollama model name. */
@@ -204,6 +210,7 @@ export const defaultAppSettings: AppSettings = {
   aiApiKey: "",
   aiApiEndpoint: "https://api.anthropic.com",
   aiModel: "claude-sonnet-4-20250514",
+  aiModelByProvider: {},
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
   launchpadActiveTab: "wip",

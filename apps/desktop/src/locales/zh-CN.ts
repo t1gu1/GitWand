@@ -976,6 +976,17 @@ const zhCN: Locale = {
     aiCodexCliConnectedHint: "调用将使用你的 ChatGPT 订阅（或 OPENAI_API_KEY）。",
     aiCodexCliLoginHint: "运行 `codex login`（ChatGPT 订阅）或在 shell 中设置 OPENAI_API_KEY。",
     aiCodexCliInfoBox: "GitWand 在本地执行 `codex exec`。使用 `codex login` 进行一次认证（使用你的 ChatGPT Plus/Pro 订阅）或导出 OPENAI_API_KEY。",
+    // opencode CLI 提供商 (v2.17)
+    aiProviderOpencodeCli: "opencode CLI（多提供商）",
+    aiProviderOpencodeCliNotFound: " — 未检测到",
+    aiOpencodeCliDetectedHint: "认证由 opencode 管理（`opencode auth login`），首次使用时验证。",
+    aiOpencodeCliInfoBox: "GitWand 在本地执行 `opencode run`。使用 `opencode auth login` 认证你的提供商；在下方选择模型或保留默认。",
+    // CLI 代理的按提供商模型选择器 (v2.17)
+    aiModelCliDefault: "默认（CLI 自身设置）",
+    aiModelCliPlaceholder: "例如 gpt-5-codex",
+    aiModelCliLoading: "正在加载模型…",
+    aiModelCliHint: "选择此 CLI 代理使用的模型，或保留其默认设置。",
+    aiModelCliRefresh: "刷新",
     aiCompatEndpoint: "API 端点",
     aiCompatEndpointHint: "兼容 OpenAI、Mistral、Groq、Azure 等。",
     aiCompatApiKey: "API 密钥",

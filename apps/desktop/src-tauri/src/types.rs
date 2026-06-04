@@ -538,6 +538,18 @@ pub struct CodexCliInfo {
     pub detail: String,
 }
 
+// ─── opencode CLI (v2.17) ──────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct OpencodeCliInfo {
+    pub found: bool,
+    pub path: String,
+    pub version: String,
+    pub logged_in: bool,
+    pub status: String,
+    pub detail: String,
+}
+
 // ─── Git hooks ─────────────────────────────────────────────────────
 
 #[derive(Serialize)]

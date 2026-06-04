@@ -3047,7 +3047,7 @@ async function handleRequest(req, res) {
       }
     }
 
-    // POST /api/claude-cli-prompt  { prompt, systemPrompt?, cwd?, outputFormat? }
+    // POST /api/claude-cli-prompt  { prompt, systemPrompt?, cwd?, outputFormat?, model? }
     if (url.pathname === "/api/claude-cli-prompt" && req.method === "POST") {
       try {
         const body = await readBody(req);
@@ -3056,7 +3056,12 @@ async function handleRequest(req, res) {
           ? `# System\n${body.systemPrompt.trim()}\n\n# User\n${(body.prompt || "").trim()}`
           : (body.prompt || "");
         const fmt = body.outputFormat || "text";
-        const r = spawnSync(CLAUDE, ["-p", fullPrompt, "--output-format", fmt], {
+        // v2.17 — explicit per-provider model selection.
+        const claudeArgs = ["-p", fullPrompt, "--output-format", fmt];
+        if (body.model && String(body.model).trim()) {
+          claudeArgs.push("--model", String(body.model).trim());
+        }
+        const r = spawnSync(CLAUDE, claudeArgs, {
           cwd: body.cwd || undefined,
           encoding: "utf-8",
           maxBuffer: 20 * 1024 * 1024,
@@ -3139,7 +3144,7 @@ async function handleRequest(req, res) {
       }
     }
 
-    // POST /api/codex-cli-prompt  { prompt, systemPrompt?, cwd? }
+    // POST /api/codex-cli-prompt  { prompt, systemPrompt?, cwd?, model? }
     if (url.pathname === "/api/codex-cli-prompt" && req.method === "POST") {
       try {
         const body = await readBody(req);
@@ -3147,7 +3152,13 @@ async function handleRequest(req, res) {
         const fullPrompt = body.systemPrompt && body.systemPrompt.trim()
           ? `# System\n${body.systemPrompt.trim()}\n\n# User\n${(body.prompt || "").trim()}`
           : (body.prompt || "");
-        const r = spawnSync(CODEX, ["exec", fullPrompt], {
+        // v2.17 — model flag precedes the positional prompt on `codex exec`.
+        const codexArgs = ["exec"];
+        if (body.model && String(body.model).trim()) {
+          codexArgs.push("--model", String(body.model).trim());
+        }
+        codexArgs.push(fullPrompt);
+        const r = spawnSync(CODEX, codexArgs, {
           cwd: body.cwd || undefined,
           encoding: "utf-8",
           maxBuffer: 20 * 1024 * 1024,
@@ -3159,6 +3170,100 @@ async function handleRequest(req, res) {
         return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // ─── opencode CLI provider (v2.17) ─────────────────────
+    // GET /api/opencode-cli-detect
+    if (url.pathname === "/api/opencode-cli-detect" && req.method === "GET") {
+      try {
+        const OPENCODE = resolveBin("opencode");
+        const exists = (() => {
+          try { return existsSync(OPENCODE); } catch { return false; }
+        })();
+        let resolved = exists ? OPENCODE : "";
+        if (!resolved) {
+          try {
+            const r = spawnSync(process.platform === "win32" ? "where" : "which", ["opencode"], { encoding: "utf-8" });
+            if (r.status === 0 && r.stdout.trim()) {
+              resolved = r.stdout.split(/\r?\n/)[0].trim();
+            }
+          } catch { /* ignore */ }
+        }
+
+        if (!resolved) {
+          return jsonResponse(req, res, {
+            found: false,
+            path: "",
+            version: "",
+            logged_in: false,
+            status: "not_found",
+            detail: "Binaire `opencode` introuvable. Installez-le avec `npm install -g opencode-ai` ou `curl -fsSL https://opencode.ai/install | bash`.",
+          });
+        }
+
+        let version = "";
+        try {
+          const r = spawnSync(resolved, ["--version"], { encoding: "utf-8" });
+          if (r.status === 0) version = r.stdout.trim();
+        } catch { /* ignore */ }
+
+        return jsonResponse(req, res, {
+          found: true,
+          path: resolved,
+          version,
+          logged_in: false,
+          status: "detected",
+          detail: "",
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/opencode-cli-prompt  { prompt, systemPrompt?, cwd?, model? }
+    if (url.pathname === "/api/opencode-cli-prompt" && req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        const OPENCODE = resolveBin("opencode");
+        const fullPrompt = body.systemPrompt && body.systemPrompt.trim()
+          ? `# System\n${body.systemPrompt.trim()}\n\n# User\n${(body.prompt || "").trim()}`
+          : (body.prompt || "");
+        const ocArgs = ["run"];
+        if (body.model && String(body.model).trim()) {
+          ocArgs.push("--model", String(body.model).trim());
+        }
+        ocArgs.push(fullPrompt);
+        const r = spawnSync(OPENCODE, ocArgs, {
+          cwd: body.cwd || undefined,
+          encoding: "utf-8",
+          maxBuffer: 20 * 1024 * 1024,
+        });
+        if (r.status !== 0) {
+          const detail = (r.stderr || r.stdout || "").trim() || "opencode CLI a échoué sans message";
+          return jsonResponse(req, res, { error: detail }, 500);
+        }
+        return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // GET /api/opencode-models  → { models: string[] }
+    if (url.pathname === "/api/opencode-models" && req.method === "GET") {
+      try {
+        const OPENCODE = resolveBin("opencode");
+        const r = spawnSync(OPENCODE, ["models"], { encoding: "utf-8", maxBuffer: 8 * 1024 * 1024 });
+        if (r.status !== 0) {
+          return jsonResponse(req, res, { models: [] });
+        }
+        const models = (r.stdout || "")
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l && l.includes("/"));
+        return jsonResponse(req, res, { models });
+      } catch {
+        return jsonResponse(req, res, { models: [] });
       }
     }
 

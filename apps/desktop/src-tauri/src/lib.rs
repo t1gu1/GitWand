@@ -94,8 +94,10 @@ use tauri_plugin_global_shortcut::GlobalShortcutExt;
 // `pub(crate) use crate::types::*;`.
 
 // `strip_claude_auth_env` + `resolve_claude_binary` + `resolve_codex_binary`
-// + 5 AI CLI commands (detect_claude_cli, claude_cli_prompt, detect_codex_cli,
-// codex_cli_prompt, claude_cli_login) migrated to `src/commands/ai.rs` (§3.4f).
+// + `resolve_opencode_binary` + 8 AI CLI commands (detect_claude_cli,
+// claude_cli_prompt, detect_codex_cli, codex_cli_prompt, claude_cli_login,
+// detect_opencode_cli, opencode_cli_prompt, opencode_list_models — v2.17)
+// migrated to `src/commands/ai.rs` (§3.4f).
 // Handler entries below route to `commands::ai::*`.
 
 // ─── Workspaces ───────────────────────────────────────────────
@@ -379,6 +381,9 @@ pub fn run() {
             commands::ops::pr_files,
             commands::ai::detect_codex_cli,
             commands::ai::codex_cli_prompt,
+            commands::ai::detect_opencode_cli,
+            commands::ai::opencode_cli_prompt,
+            commands::ai::opencode_list_models,
             commands::network::check_remote_reachable,
             commands::gitlab::detect_glab,
             commands::gitlab::gl_list_mrs,

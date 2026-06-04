@@ -1,6 +1,12 @@
 import { ref, computed } from "vue";
 import type { LlmEndpoint } from "@gitwand/core";
-import { claudeCliPrompt, codexCliPrompt, detectClaudeCli } from "../utils/backend";
+import {
+  claudeCliPrompt,
+  codexCliPrompt,
+  opencodeCliPrompt,
+  listOpencodeModels,
+  detectClaudeCli,
+} from "../utils/backend";
 import { t } from "./useI18n";
 
 /**
@@ -12,6 +18,9 @@ import { t } from "./useI18n";
  * - `codex-cli`      : piggyback on the user's locally-installed OpenAI Codex
  *                     CLI (`codex exec`) — uses their ChatGPT
  *                     subscription via `codex login`, or OPENAI_API_KEY
+ * - `opencode-cli`   : piggyback on the user's locally-installed opencode
+ *                     CLI (`opencode run`) — uses whatever provider they've
+ *                     authenticated via `opencode auth login` (v2.17)
  * - `openai-compat`  : any OpenAI-compatible endpoint
  * - `ollama`         : local Ollama instance
  * - `mcp`            : route the LLM call through a connected MCP agent
@@ -25,9 +34,19 @@ export type AIProvider =
   | "claude"
   | "claude-code-cli"
   | "codex-cli"
+  | "opencode-cli"
   | "openai-compat"
   | "ollama"
   | "mcp";
+
+/** CLI agent providers that support a per-provider model picker (v2.17). */
+export type CliAgentProvider = "claude-code-cli" | "codex-cli" | "opencode-cli";
+
+export const CLI_AGENT_PROVIDERS: CliAgentProvider[] = [
+  "claude-code-cli",
+  "codex-cli",
+  "opencode-cli",
+];
 
 export interface AISettings {
   aiEnabled: boolean;
@@ -37,6 +56,13 @@ export interface AISettings {
   aiModel: string;
   aiOllamaUrl: string;
   aiOllamaModel: string;
+  /**
+   * Per-provider model selection for the CLI agents (v2.17). Keyed by
+   * provider id; the active model for a CLI provider is read from here so
+   * switching providers restores each one's previous choice. An absent /
+   * empty value means "let the CLI use its own configured default".
+   */
+  aiModelByProvider: Partial<Record<AIProvider, string>>;
 }
 
 export interface ConflictContext {
@@ -79,6 +105,7 @@ function loadAISettings(): AISettings {
     aiModel: "claude-sonnet-4-20250514",
     aiOllamaUrl: "http://localhost:11434",
     aiOllamaModel: "codellama",
+    aiModelByProvider: {},
   };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -215,8 +242,9 @@ async function callOpenAICompat(
 async function callClaudeCodeCli(
   systemPrompt: string,
   userPrompt: string,
+  model?: string,
 ): Promise<string> {
-  const result = await claudeCliPrompt(userPrompt, systemPrompt, undefined, "text");
+  const result = await claudeCliPrompt(userPrompt, systemPrompt, undefined, "text", model);
   return result ?? "";
 }
 
@@ -227,9 +255,75 @@ async function callClaudeCodeCli(
 async function callCodexCli(
   systemPrompt: string,
   userPrompt: string,
+  model?: string,
 ): Promise<string> {
-  const result = await codexCliPrompt(userPrompt, systemPrompt, undefined);
+  const result = await codexCliPrompt(userPrompt, systemPrompt, undefined, model);
   return result ?? "";
+}
+
+/**
+ * Call the local opencode CLI (`opencode run`). Uses whatever provider the
+ * user authenticated via `opencode auth login`. `model` is the
+ * `provider/model` identifier (v2.17).
+ */
+async function callOpencodeCli(
+  systemPrompt: string,
+  userPrompt: string,
+  model?: string,
+): Promise<string> {
+  const result = await opencodeCliPrompt(userPrompt, systemPrompt, undefined, model);
+  return result ?? "";
+}
+
+// ─── Per-provider model selection (v2.17) ───────────────
+//
+// The three CLI agents each expose a second model picker. opencode can
+// enumerate its catalog dynamically (`opencode models`); Claude Code accepts
+// stable aliases; Codex model slugs are volatile, so it falls back to
+// free-text entry (empty curated list → the Settings panel renders an input).
+
+/** Stable model aliases accepted by `claude --model`. */
+export const CLAUDE_CODE_MODELS: string[] = ["sonnet", "opus", "haiku"];
+
+/**
+ * Resolve the model string to pass to a CLI provider, or `undefined` to let
+ * the CLI use its own configured default. Only CLI agents are model-scoped
+ * here; the Claude API / OpenAI-compat / Ollama providers carry their model
+ * in their own settings field.
+ */
+export function modelForProvider(
+  s: AISettings,
+  provider: AIProvider,
+): string | undefined {
+  if (
+    provider === "claude-code-cli" ||
+    provider === "codex-cli" ||
+    provider === "opencode-cli"
+  ) {
+    const m = s.aiModelByProvider?.[provider];
+    return m && m.trim() ? m.trim() : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * List the models a CLI agent advertises, for the Settings model picker.
+ * Returns an empty array (→ free-text fallback) when no list is available.
+ */
+export async function listModelsForProvider(
+  provider: AIProvider,
+): Promise<string[]> {
+  switch (provider) {
+    case "opencode-cli":
+      return listOpencodeModels();
+    case "claude-code-cli":
+      return CLAUDE_CODE_MODELS;
+    // Codex slugs change frequently and the CLI has no enumeration command —
+    // fall back to free-text entry.
+    case "codex-cli":
+    default:
+      return [];
+  }
 }
 
 /**
@@ -315,6 +409,7 @@ export function useAIProvider() {
       if (s.aiProvider === "ollama") return true;
       if (s.aiProvider === "claude-code-cli") return true;
       if (s.aiProvider === "codex-cli") return true;
+      if (s.aiProvider === "opencode-cli") return true;
       // misconfigured explicit provider — fall through to CLI auto-detect
     }
     // Auto-fallback: use Claude Code CLI if installed and logged in,
@@ -345,16 +440,20 @@ export function useAIProvider() {
       const provider = misconfigured && _claudeCliAvailable.value
         ? "claude-code-cli"
         : s.aiProvider;
+      const model = modelForProvider(s, provider);
 
       switch (provider) {
         case "claude":
           rawResponse = await callClaude(s, systemPrompt, userPrompt);
           break;
         case "claude-code-cli":
-          rawResponse = await callClaudeCodeCli(systemPrompt, userPrompt);
+          rawResponse = await callClaudeCodeCli(systemPrompt, userPrompt, model);
           break;
         case "codex-cli":
-          rawResponse = await callCodexCli(systemPrompt, userPrompt);
+          rawResponse = await callCodexCli(systemPrompt, userPrompt, model);
+          break;
+        case "opencode-cli":
+          rawResponse = await callOpencodeCli(systemPrompt, userPrompt, model);
           break;
         case "openai-compat":
           rawResponse = await callOpenAICompat(s, systemPrompt, userPrompt);
@@ -395,13 +494,16 @@ export function useAIProvider() {
     const provider = misconfigured && _claudeCliAvailable.value
       ? "claude-code-cli"
       : s.aiProvider;
+    const model = modelForProvider(s, provider);
     switch (provider) {
       case "claude":
         return callClaude(s, systemPrompt, userPrompt);
       case "claude-code-cli":
-        return callClaudeCodeCli(systemPrompt, userPrompt);
+        return callClaudeCodeCli(systemPrompt, userPrompt, model);
       case "codex-cli":
-        return callCodexCli(systemPrompt, userPrompt);
+        return callCodexCli(systemPrompt, userPrompt, model);
+      case "opencode-cli":
+        return callOpencodeCli(systemPrompt, userPrompt, model);
       case "openai-compat":
         return callOpenAICompat(s, systemPrompt, userPrompt);
       case "ollama":

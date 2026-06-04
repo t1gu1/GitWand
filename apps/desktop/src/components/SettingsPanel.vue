@@ -18,6 +18,8 @@ import {
   type ClaudeCliInfo,
   detectCodexCli,
   type CodexCliInfo,
+  detectOpencodeCli,
+  type OpencodeCliInfo,
   readGitwandrc,
   writeGitwandrc,
   checkForUpdates,
@@ -62,7 +64,11 @@ export type NotificationLevel = "all" | "reviews" | "ci" | "none";
 // Single source of truth for the provider union — re-export so other files
 // importing from SettingsPanel don't break, but the canonical declaration
 // lives in `useAIProvider`.
-import type { AIProvider } from "../composables/useAIProvider";
+import {
+  type AIProvider,
+  CLI_AGENT_PROVIDERS,
+  listModelsForProvider,
+} from "../composables/useAIProvider";
 import { useLogs, type LogEntry } from "../composables/useLogs";
 import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
@@ -124,6 +130,8 @@ interface Settings {
   aiApiKey: string;
   aiApiEndpoint: string;
   aiModel: string;
+  // Per-provider model selection for CLI agents (v2.17)
+  aiModelByProvider: Partial<Record<AIProvider, string>>;
   aiOllamaUrl: string;
   aiOllamaModel: string;
   // Launchpad — last active tab persisted between openings (v2.9)
@@ -171,6 +179,7 @@ const defaultSettings: Settings = {
   aiApiKey: "",
   aiApiEndpoint: "https://api.anthropic.com",
   aiModel: "claude-sonnet-4-20250514",
+  aiModelByProvider: {},
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
   blameAlgorithm: "histogram",
@@ -399,8 +408,13 @@ function onAIProviderChange(val: AIProvider) {
   if (val === "claude-code-cli") {
     // Refresh detection when the user picks this provider.
     runClaudeCliDetect();
+    loadCliModels(val);
   } else if (val === "codex-cli") {
     runCodexCliDetect();
+    loadCliModels(val);
+  } else if (val === "opencode-cli") {
+    runOpencodeCliDetect();
+    loadCliModels(val);
   } else if (val === "claude") {
     if (!settings.value.aiApiEndpoint || settings.value.aiApiEndpoint === "https://api.openai.com/v1") {
       updateSetting("aiApiEndpoint", "https://api.anthropic.com");
@@ -545,6 +559,60 @@ async function runCodexCliDetect() {
   }
 }
 
+// ─── opencode CLI detection (v2.17) ─────────────────────
+const opencodeCliInfo = ref<OpencodeCliInfo | null>(null);
+const opencodeCliDetecting = ref(false);
+
+async function runOpencodeCliDetect() {
+  opencodeCliDetecting.value = true;
+  try {
+    opencodeCliInfo.value = await detectOpencodeCli();
+  } catch (e) {
+    opencodeCliInfo.value = {
+      found: false,
+      path: "",
+      version: "",
+      logged_in: false,
+      status: "error",
+      detail: (e as Error).message,
+    };
+  } finally {
+    opencodeCliDetecting.value = false;
+  }
+}
+
+// ─── Per-provider model picker for CLI agents (v2.17) ───
+const cliModelOptions = ref<string[]>([]);
+const cliModelsLoading = ref(false);
+const isCliAgentProvider = computed(() =>
+  (CLI_AGENT_PROVIDERS as readonly string[]).includes(settings.value.aiProvider),
+);
+
+async function loadCliModels(provider: AIProvider = settings.value.aiProvider) {
+  if (!(CLI_AGENT_PROVIDERS as readonly string[]).includes(provider)) {
+    cliModelOptions.value = [];
+    return;
+  }
+  cliModelsLoading.value = true;
+  try {
+    cliModelOptions.value = await listModelsForProvider(provider);
+  } catch {
+    cliModelOptions.value = [];
+  } finally {
+    cliModelsLoading.value = false;
+  }
+}
+
+function currentCliModel(): string {
+  return settings.value.aiModelByProvider?.[settings.value.aiProvider] ?? "";
+}
+
+function onCliModelChange(val: string) {
+  const next = { ...(settings.value.aiModelByProvider ?? {}) };
+  next[settings.value.aiProvider] = val;
+  updateSetting("aiModelByProvider", next);
+}
+
 async function runClaudeCliLogin() {
   claudeCliLoginLoading.value = true;
   try {
@@ -586,6 +654,7 @@ type LlmFallbackProvider =
   | "claude"
   | "claude-code-cli"
   | "codex-cli"
+  | "opencode-cli"
   | "openai-compat"
   | "ollama"
   | "mcp";
@@ -751,6 +820,9 @@ onMounted(() => {
   // Both are fast — just `which` + `--version`.
   runClaudeCliDetect();
   runCodexCliDetect();
+  runOpencodeCliDetect();
+  // Preload the model list when a CLI agent is already the active provider.
+  loadCliModels();
 });
 
 // Reload `.gitwandrc` when the active repo changes (or on first mount
@@ -1405,12 +1477,39 @@ function savePresetForm() {
                   {{ t('settings.aiProviderCodexCli') }}{{ codexCliInfo && !codexCliInfo.found ?
                     t('settings.aiProviderCodexCliNotFound') : '' }}
                 </option>
+                <option value="opencode-cli">
+                  {{ t('settings.aiProviderOpencodeCli') }}{{ opencodeCliInfo && !opencodeCliInfo.found ?
+                    t('settings.aiProviderOpencodeCliNotFound') : '' }}
+                </option>
                 <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                 <option value="ollama" :disabled="!ollamaAvailable">
                   {{ t('settings.aiProviderOllama') }}{{ ollamaAvailable ? '' : t('settings.aiProviderOllamaNotFound')
                   }}
                 </option>
               </select>
+            </div>
+
+            <!-- Per-provider model picker for CLI agents (v2.17). Dynamic
+                 enumeration for opencode (`opencode models`); curated aliases
+                 for Claude Code; free-text fallback for Codex. -->
+            <div v-if="isCliAgentProvider" class="sp-row">
+              <label class="sp-label" for="setting-ai-cli-model">{{ t('settings.aiModelLabel') }}</label>
+              <select v-if="cliModelOptions.length > 0" id="setting-ai-cli-model" class="sp-select"
+                :value="currentCliModel()"
+                @change="onCliModelChange(($event.target as HTMLSelectElement).value)">
+                <option value="">{{ t('settings.aiModelCliDefault') }}</option>
+                <option v-for="m in cliModelOptions" :key="m" :value="m">{{ m }}</option>
+              </select>
+              <input v-else id="setting-ai-cli-model" class="sp-input mono" type="text"
+                :value="currentCliModel()"
+                @input="onCliModelChange(($event.target as HTMLInputElement).value)"
+                :placeholder="t('settings.aiModelCliPlaceholder')" />
+              <span class="sp-hint">
+                {{ cliModelsLoading ? t('settings.aiModelCliLoading') : t('settings.aiModelCliHint') }}
+                <button v-if="settings.aiProvider === 'opencode-cli'" class="sp-text-btn" @click="loadCliModels()">
+                  {{ t('settings.aiModelCliRefresh') }}
+                </button>
+              </span>
             </div>
 
             <!-- Claude provider -->
@@ -1661,6 +1760,51 @@ function savePresetForm() {
               </div>
             </template>
 
+            <!-- opencode CLI provider (v2.17) — same shape as the Codex block -->
+            <template v-if="settings.aiProvider === 'opencode-cli'">
+              <div class="sp-row">
+                <div class="sp-label">{{ t('settings.aiCliStatus') }}</div>
+                <div class="sp-cli-status">
+                  <template v-if="opencodeCliDetecting">
+                    <span class="sp-hint">{{ t('settings.aiCliDetecting') }}</span>
+                  </template>
+                  <template v-else-if="!opencodeCliInfo || !opencodeCliInfo.found">
+                    <div class="sp-connect-error-block">
+                      <div class="sp-connect-error">
+                        {{ t('settings.aiCliNotFound') }} <code>opencode</code> {{ t('settings.aiCliNotFoundSuffix') }}
+                      </div>
+                      <span class="sp-hint">
+                        {{ t('settings.aiCliInstallHint') }}
+                        <code>npm install -g opencode-ai</code>
+                        {{ t('settings.aiCliInstallHintSuffix') }}
+                      </span>
+                      <button class="sp-text-btn" @click="runOpencodeCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <!-- Detected. Auth is provider-scoped inside opencode and
+                         verified implicitly on first use; we don't ping. -->
+                    <div class="sp-connected-badge">
+                      <span class="sp-connected-dot sp-connected-dot--neutral"></span>
+                      <span>{{ t('settings.aiCliDetected', opencodeCliInfo.version || 'opencode') }}</span>
+                      <button class="sp-disconnect-btn" @click="runOpencodeCliDetect">{{ t('settings.aiCliRedetect')
+                      }}</button>
+                    </div>
+                    <span class="sp-hint">{{ t('settings.aiOpencodeCliDetectedHint') }}</span>
+                  </template>
+                </div>
+              </div>
+
+              <div v-if="opencodeCliInfo?.found" class="sp-info-box">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+                  <circle cx="8" cy="8" r="7" />
+                  <path d="M8 7v4" stroke-linecap="round" />
+                  <circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none" />
+                </svg>
+                <p>{{ t('settings.aiOpencodeCliInfoBox') }}</p>
+              </div>
+            </template>
+
             <!-- OpenAI-compatible provider -->
             <template v-if="settings.aiProvider === 'openai-compat'">
               <div class="sp-row">
@@ -1898,6 +2042,7 @@ function savePresetForm() {
                   <option value="claude">{{ t('settings.aiProviderClaude') }}</option>
                   <option value="claude-code-cli">{{ t('settings.aiProviderClaudeCli') }}</option>
                   <option value="codex-cli">{{ t('settings.aiProviderCodexCli') }}</option>
+                  <option value="opencode-cli">{{ t('settings.aiProviderOpencodeCli') }}</option>
                   <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                   <option value="ollama">{{ t('settings.aiProviderOllama') }}</option>
                   <option value="mcp">MCP (Claude Code / Cursor)</option>
