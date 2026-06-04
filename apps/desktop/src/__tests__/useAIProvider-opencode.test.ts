@@ -19,27 +19,37 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ─── Mock the backend CLI wrappers ─────────────────────────────
-const claudeCliPrompt = vi.fn(async () => "ok-claude");
-const codexCliPrompt = vi.fn(async () => "ok-codex");
-const opencodeCliPrompt = vi.fn(async () => "ok-opencode");
-const listOpencodeModels = vi.fn(async () => ["anthropic/claude-x", "openai/gpt-y"]);
-// useAIProvider runs `detectClaudeCli()` once at module load — keep the
-// auto-fallback disabled so it never hijacks the explicit provider.
-const detectClaudeCli = vi.fn(async () => ({
-  found: false,
-  path: "",
-  version: "",
-  logged_in: false,
-  status: "not_found",
-  detail: "",
+// Declared via `vi.hoisted` so the spies exist before the hoisted
+// `vi.mock` factory runs — `useAIProvider` calls `detectClaudeCli()` at
+// module load, which would otherwise hit a TDZ on plain `const` spies.
+const {
+  claudeCliPrompt,
+  codexCliPrompt,
+  opencodeCliPrompt,
+  listOpencodeModels,
+  detectClaudeCli,
+} = vi.hoisted(() => ({
+  claudeCliPrompt: vi.fn(async () => "ok-claude"),
+  codexCliPrompt: vi.fn(async () => "ok-codex"),
+  opencodeCliPrompt: vi.fn(async () => "ok-opencode"),
+  listOpencodeModels: vi.fn(async () => ["anthropic/claude-x", "openai/gpt-y"]),
+  // Keep the auto-fallback disabled so it never hijacks the explicit provider.
+  detectClaudeCli: vi.fn(async () => ({
+    found: false,
+    path: "",
+    version: "",
+    logged_in: false,
+    status: "not_found",
+    detail: "",
+  })),
 }));
 
 vi.mock("../utils/backend", () => ({
-  claudeCliPrompt: (...a: unknown[]) => claudeCliPrompt(...(a as [])),
-  codexCliPrompt: (...a: unknown[]) => codexCliPrompt(...(a as [])),
-  opencodeCliPrompt: (...a: unknown[]) => opencodeCliPrompt(...(a as [])),
-  listOpencodeModels: () => listOpencodeModels(),
-  detectClaudeCli: () => detectClaudeCli(),
+  claudeCliPrompt,
+  codexCliPrompt,
+  opencodeCliPrompt,
+  listOpencodeModels,
+  detectClaudeCli,
 }));
 
 import {
