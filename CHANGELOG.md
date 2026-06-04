@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-06-04
+
+v2.17 rounds out the agent-CLI lineup with **opencode** as a first-class AI provider, and gives every CLI agent its own model picker — a second select under the provider dropdown, scoped per provider so switching back restores the previous choice.
+
+### Added
+
+- **opencode as a first-class AI provider** — `opencode-cli` joins `claude-code-cli` and `codex-cli` in the `AIProvider` union. Detection mirrors the existing CLI providers (binary discovery across PATH + common install locations, login-shell env so the agent finds its auth), and it appears in Settings → AI with the same status/re-detect pattern. Prompts run one-shot via `opencode run`.
+- **Per-provider model selection** — for the three CLI agents (Claude Code, Codex, opencode) a second select appears under the provider picker. opencode enumerates its catalog dynamically (`opencode models`, `provider/model` form, with a Refresh button); Claude Code advertises its stable aliases (`sonnet`/`opus`/`haiku`); Codex falls back to free-text entry. The chosen model is forwarded to each CLI via `--model`.
+- **`aiModelByProvider` setting** — the model is persisted per provider (keyed by provider id), so switching providers restores each one's previous choice. An empty value means "let the CLI use its own configured default".
+
+### Technical
+
+- New Rust commands `detect_opencode_cli`, `opencode_cli_prompt` (`opencode run [--model …]`), and `opencode_list_models` (`opencode models`), plus a `model` argument threaded into `claude_cli_prompt` and `codex_cli_prompt`. `OpencodeCliInfo` type added; commands registered in `lib.rs`. Mirrored across all three layers: `commands/ai.rs`, `dev-server.mjs`, and the `backend-ai.ts` wrapper.
+- `useAIProvider` gains `modelForProvider` / `listModelsForProvider` helpers and dispatches `opencode-cli` in `suggest()` / `rawPrompt()`. `aiModelByProvider` added to both the `useSettings` `AppSettings` and the `SettingsPanel` `Settings` interface.
+- Unit tests for the model-selection helpers and CLI dispatch (`useAIProvider-opencode.test.ts`).
+- i18n: `aiProviderOpencodeCli`, opencode hints, and the `aiModelCli*` model-picker keys across all five locales (en, fr, es, pt-BR, zh-CN).
+
 ## [2.16.0] - 2026-05-29
 
 v2.16 adds native OS notifications for pull-request activity — review requests, new comments, CI pass/fail flips, and merge/close — surfaced while GitWand is in the background, with zero extra network requests beyond the existing Launchpad poll.

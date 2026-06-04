@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.17.0 — June 2026
+
+### opencode joins the lineup
+
+opencode is now a first-class AI provider in GitWand, alongside Claude Code and Codex. Pick it in Settings → AI and GitWand finds your local `opencode` binary, shows its status, and runs your prompts through `opencode run` — using whatever provider you've authenticated with `opencode auth login`. Detection mirrors the other CLI agents, so there's nothing new to learn.
+
+### A model picker for every CLI agent
+
+Each of the three CLI agents now gets its own model selector, a second dropdown right under the provider picker. opencode enumerates its catalogue live (`opencode models`), with a Refresh button when you add a new one; Claude Code offers its stable aliases (Sonnet, Opus, Haiku); Codex takes a free-text model name. Your choice is remembered per provider, so switching back and forth always restores what you had — and leaving it on "default" lets each CLI use its own configured model.
+
+---
+
 ## v2.16.0 — May 2026
 
 ### PR activity notifications

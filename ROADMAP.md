@@ -6,25 +6,6 @@
 
 ## What's Next
 
-### v2.17.0 — opencode provider + per-CLI model picker
-
-_Round out the agent-CLI lineup and let each one expose its own models._
-
-**opencode as a first-class AI provider**
-
-- Add `opencode-cli` to the `AIProvider` union (`useAIProvider.ts`) alongside `claude-code-cli` and `codex-cli`
-- Detection + launch plumbing mirroring the existing CLI providers (binary discovery, `shell_env` login-shell env so the agent finds its auth)
-- Settings → AI: opencode appears in the provider select with the same enable/disable + status pattern
-
-**Per-provider model selection (second select list)**
-
-- For the three CLI agents — Claude Code, Codex, opencode — surface a **second select list** under the provider picker to choose the model, replacing the current free-text `aiModel` field for these providers
-- Each provider advertises its own model list (e.g. Claude Code → Claude models; Codex → OpenAI models; opencode → its configured catalog); the list is provider-scoped and resets to that provider's default on switch
-- `aiModel` persists per provider so switching back restores the previous choice; `SettingsPanel.vue` + `useSettings.ts` AppSettings kept in sync (duplicate-interfaces guard)
-- Graceful fallback to free text when a provider can't enumerate its models
-
----
-
 ### v2.18.0 — Inline CI Check Annotations
 
 Overlay check-run annotations in the diff — the exact line that failed the linter or typecheck, right where you need it in the review.
@@ -172,6 +153,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.17.0** | opencode provider + per-CLI model picker — `opencode-cli` as a first-class AI provider (`opencode run`, binary discovery, Settings status), second model select under the provider picker for the three CLI agents (opencode enumerates via `opencode models`, Claude Code aliases, Codex free-text), `aiModelByProvider` persisted per provider, `--model` threaded through all three CLIs |
 | **v2.16.0** | PR Activity Notifications — background Launchpad poller, zero-network snapshot diff (`useLaunchpadNotifications`) for CI flips / review requests / new comments / merge-close, native OS notifications via `tauri-plugin-notification` (background-only), Settings granularity (All · Reviews & comments · CI failures only · None) + "by people" bot filter, enriched `workspace_prs_all` (CI/review/comment fields) |
 | **v2.15.1** | Git Tree polish & quick actions — Force push (branch context menu + protected-trunk/diverged-remote guard), Quick Stash `⌘⇧,` (instant, AI label) + pending badge in the commit area, Submodules in the Git Tree (branch-picker section, per-commit pointed-SHA badge, click-to-navigate) |
 | **v2.15.0** | Git Tree multi-branch — Git Tree as primary view, Log panel removed, unified context menus, stash/branch/tag management from the graph, DAG trunk-pinning, WIP node, search bar |
