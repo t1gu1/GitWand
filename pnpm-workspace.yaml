@@ -10,6 +10,18 @@ allowBuilds:
 
 # pnpm 10+ reads overrides here instead of package.json's "pnpm.overrides"
 overrides:
-  hono: "^4.12.14"
+  # hono + the express/ajv cluster below are transitive deps of
+  # @modelcontextprotocol/sdk@1.29.0 (the MCP SDK, via packages/mcp). 1.29.0
+  # is the latest SDK, so it can't be bumped to escape them — pin the patched
+  # versions here. The SDK's own ranges (hono ^4.11.4, express ^5.2.1,
+  # ajv ^8.17.1) all accept these.
+  hono: "^4.12.23"                 # bumped from 4.12.14 — clears 5 hono CVEs (#6,#7,#9,#10,#11)
   # Security: force tmp >= 0.2.6 (CVE fix). @vscode/vsce pins it lower (0.2.5).
   tmp: "^0.2.7"
+  # Security (Dependabot): transitive deps their parents cap below the patch.
+  # Scoped by major so other versions in the tree stay untouched.
+  "fast-uri@3": ">=3.1.2"          # CVE-2026-6321, via ajv → MCP SDK (#8, #12)
+  "qs@6": ">=6.15.2"               # via express → MCP SDK (#16)
+  "ip-address@10": ">=10.2.0"      # via express-rate-limit → MCP SDK (#5)
+  "ws@8": ">=8.20.1"               # CVE-2026-45736, via jsdom (#15)
+  "brace-expansion@5": ">=5.0.6"   # CVE-2026-45149, v5 only via minimatch@10 (#14)
