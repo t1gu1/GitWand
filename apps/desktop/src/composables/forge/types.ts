@@ -143,6 +143,12 @@ export interface ForgeProvider {
 
   listComments(cwd: string, prNumber: number): Promise<PrReviewComment[]>;
 
+  /**
+   * Issue-level (conversation) comments — not anchored to a diff line.
+   * Optional: providers that don't expose them simply omit it.
+   */
+  listIssueComments?(cwd: string, prNumber: number): Promise<PrReviewComment[]>;
+
   createComment(cwd: string, prNumber: number, params: CreatePrCommentParams): Promise<PrReviewComment>;
 
   /**

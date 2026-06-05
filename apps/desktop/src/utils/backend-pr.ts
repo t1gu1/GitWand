@@ -569,9 +569,23 @@ export interface CreatePrCommentParams {
 
 /** Fetch all review comments for a PR. */
 export async function ghPrComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
-  // No Tauri implementation — browser only for now
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("gh_pr_comments", { cwd, number: prNumber });
   const res = await devFetch(`${DEV_SERVER}/api/gh-pr-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
   if (!res.ok) throw new Error(`gh pr comments failed: ${res.status}`);
+  const raw = await res.json();
+  if (raw.error) throw new Error(raw.error);
+  return raw as PrReviewComment[];
+}
+
+/**
+ * Issue-level (conversation) comments on a PR — the ones not anchored to a
+ * diff line. Returned in the same {@link PrReviewComment} shape with an empty
+ * `path` so they can be merged with review comments for display.
+ */
+export async function ghPrIssueComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("gh_pr_issue_comments", { cwd, number: prNumber });
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-issue-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
+  if (!res.ok) throw new Error(`gh pr issue comments failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
   return raw as PrReviewComment[];

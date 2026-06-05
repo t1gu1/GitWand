@@ -560,6 +560,53 @@ pub(crate) fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, Str
     Ok(checks)
 }
 
+/// List inline review comments (anchored to diff lines) for a PR.
+/// Token present → REST; otherwise `gh api`.
+#[tauri::command]
+pub(crate) fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_comments(&cwd, number, &tok);
+    }
+    let json = gh_api_json(
+        &cwd,
+        &format!("repos/{{owner}}/{{repo}}/pulls/{}/comments?per_page=100", number),
+    )?;
+    Ok(github_api::map_comments(&json, false))
+}
+
+/// List issue-level (conversation) comments for a PR.
+/// Token present → REST; otherwise `gh api`.
+#[tauri::command]
+pub(crate) fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_issue_comments(&cwd, number, &tok);
+    }
+    let json = gh_api_json(
+        &cwd,
+        &format!("repos/{{owner}}/{{repo}}/issues/{}/comments?per_page=100", number),
+    )?;
+    Ok(github_api::map_comments(&json, true))
+}
+
+/// Run `gh api <path>` in `cwd` and parse stdout as JSON. Shared by the
+/// comment-list fallbacks when no token is configured.
+fn gh_api_json(cwd: &str, path: &str) -> Result<serde_json::Value, String> {
+    let output = hidden_cmd("gh")
+        .args(["api", path])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("gh api: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("gh api failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        return Ok(serde_json::Value::Array(Vec::new()));
+    }
+    serde_json::from_str(trimmed).map_err(|e| format!("parse gh api response: {}", e))
+}
+
 /// Report the current repo's fork relationship so the PR create view can offer
 /// "open against upstream". Token present → REST; otherwise `gh repo view`.
 #[tauri::command]

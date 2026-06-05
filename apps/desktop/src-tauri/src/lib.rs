@@ -328,6 +328,8 @@ pub fn run() {
             commands::gh::gh_pr_detail,
             commands::gh::gh_pr_diff,
             commands::gh::gh_pr_checks,
+            commands::gh::gh_pr_comments,
+            commands::gh::gh_pr_issue_comments,
             commands::gh::gh_pr_ready,
             commands::gh::gh_fork_info,
             commands::github_api::github_device_start,

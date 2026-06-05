@@ -629,6 +629,56 @@ pub(crate) fn rest_pr_files(cwd: &str, number: i64, token: &str) -> Result<Vec<S
     Ok(files)
 }
 
+/// Map a GitHub comment object to the snake_case shape the frontend
+/// `PrReviewComment` interface expects. `issue_level` flags conversation
+/// comments (not anchored to a diff line) so their path/line fields are nulled.
+pub(crate) fn map_comment(c: &serde_json::Value, issue_level: bool) -> serde_json::Value {
+    use serde_json::Value;
+    let side = {
+        let s = js(c, "side");
+        if s.is_empty() { "RIGHT".to_string() } else { s }
+    };
+    serde_json::json!({
+        "id": ji(c, "id"),
+        "body": js(c, "body"),
+        "author": jnested(c, "user", "login"),
+        "created_at": js(c, "created_at"),
+        "updated_at": js(c, "updated_at"),
+        "path": if issue_level { String::new() } else { js(c, "path") },
+        "line": if issue_level { Value::Null } else { c.get("line").cloned().unwrap_or(Value::Null) },
+        "original_line": if issue_level { Value::Null } else { c.get("original_line").cloned().unwrap_or(Value::Null) },
+        "side": if issue_level { "RIGHT".to_string() } else { side },
+        "start_line": if issue_level { Value::Null } else { c.get("start_line").cloned().unwrap_or(Value::Null) },
+        "start_side": if issue_level { Value::Null } else { c.get("start_side").cloned().unwrap_or(Value::Null) },
+        "in_reply_to_id": if issue_level { Value::Null } else { c.get("in_reply_to_id").cloned().unwrap_or(Value::Null) },
+        "diff_hunk": if issue_level { String::new() } else { js(c, "diff_hunk") },
+        "url": js(c, "html_url"),
+    })
+}
+
+/// Map a JSON array of GitHub comments into frontend `PrReviewComment` shape.
+pub(crate) fn map_comments(v: &serde_json::Value, issue_level: bool) -> Vec<serde_json::Value> {
+    v.as_array()
+        .map(|arr| arr.iter().map(|c| map_comment(c, issue_level)).collect())
+        .unwrap_or_default()
+}
+
+/// List inline review comments (anchored to diff lines) for a PR (REST).
+pub(crate) fn rest_pr_comments(cwd: &str, number: i64, token: &str) -> Result<Vec<serde_json::Value>, String> {
+    let (repo, _pr) = get_pr_json(cwd, number, token)?;
+    let url = format!("{}/repos/{}/pulls/{}/comments?per_page=100", API_BASE, repo, number);
+    let v = api_json("GET", &url, token, None)?;
+    Ok(map_comments(&v, false))
+}
+
+/// List issue-level (conversation) comments for a PR (REST).
+pub(crate) fn rest_pr_issue_comments(cwd: &str, number: i64, token: &str) -> Result<Vec<serde_json::Value>, String> {
+    let (repo, _pr) = get_pr_json(cwd, number, token)?;
+    let url = format!("{}/repos/{}/issues/{}/comments?per_page=100", API_BASE, repo, number);
+    let v = api_json("GET", &url, token, None)?;
+    Ok(map_comments(&v, true))
+}
+
 /// Resolve the current repo's fork relationship (REST).
 pub(crate) fn rest_fork_info(cwd: &str, token: &str) -> Result<ForkInfo, String> {
     let (owner, repo) = owner_repo(cwd)?;

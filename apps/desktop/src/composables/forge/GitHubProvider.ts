@@ -24,6 +24,7 @@ import {
   ghMergePr,
   ghCheckoutPr,
   ghPrComments,
+  ghPrIssueComments,
   ghPrCreateComment,
   ghPrUpdateComment,
   ghPrDeleteComment,
@@ -128,6 +129,10 @@ export class GitHubProvider implements ForgeProvider {
 
   listComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
     return ghPrComments(cwd, prNumber);
+  }
+
+  listIssueComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
+    return ghPrIssueComments(cwd, prNumber);
   }
 
   createComment(cwd: string, prNumber: number, params: CreatePrCommentParams): Promise<PrReviewComment> {

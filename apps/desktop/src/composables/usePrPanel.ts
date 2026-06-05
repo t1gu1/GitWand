@@ -93,6 +93,7 @@ export function usePrPanel(cwd: Ref<string>) {
   const prChecks = ref<CICheck[]>([]);
   const prDiffFiles = ref<GitDiff[]>([]);
   const prComments = ref<PrReviewComment[]>([]);
+  const prIssueComments = ref<PrReviewComment[]>([]);
   const prReviews = ref<PrReview[]>([]);
   const detailLoading = ref(false);
   const detailError = ref<string | null>(null);
@@ -380,6 +381,7 @@ export function usePrPanel(cwd: Ref<string>) {
     prChecks.value = [];
     prDiffFiles.value = [];
     prComments.value = [];
+    prIssueComments.value = [];
     prReviews.value = [];
     draftReviewComments.value = [];
     conflictPreview.value = null;
@@ -397,16 +399,18 @@ export function usePrPanel(cwd: Ref<string>) {
     detailLoading.value = true;
     detailError.value = null;
     try {
-      const [detail, checks, comments, reviews, fileCount] = await Promise.all([
+      const [detail, checks, comments, issueComments, reviews, fileCount] = await Promise.all([
         forge.value.getPR(cwd.value, pr.number),
         forge.value.getCIChecks(cwd.value, pr.number).catch(() => [] as CICheck[]),
         forge.value.listComments(cwd.value, pr.number).catch(() => [] as PrReviewComment[]),
+        forge.value.listIssueComments?.(cwd.value, pr.number).catch(() => [] as PrReviewComment[]) ?? Promise.resolve([] as PrReviewComment[]),
         forge.value.listReviews(cwd.value, pr.number).catch(() => [] as PrReview[]),
         gitFileCount(cwd.value).catch(() => 0),
       ]);
       prDetail.value = detail;
       prChecks.value = checks;
       prComments.value = comments;
+      prIssueComments.value = issueComments;
       prReviews.value = reviews;
       totalRepoFiles.value = fileCount;
     } catch (err: any) {
@@ -734,7 +738,7 @@ export function usePrPanel(cwd: Ref<string>) {
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     forkInfo, newPrBaseRepo,
     mergingPr, mergeMethod,
-    selectedPr, prDetail, prChecks, prDiffFiles, prComments, prReviews,
+    selectedPr, prDetail, prChecks, prDiffFiles, prComments, prIssueComments, prReviews,
     detailLoading, detailError, detailTab, selectedDiffFile, diffMode,
     draftReviewComments, showReviewModal, submittingReview,
     conflictPreview, conflictLoading, conflictError,

@@ -2611,6 +2611,41 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/gh-pr-issue-comments?cwd=<path>&number=<n>
+    // Issue-level (conversation) comments — not anchored to a diff line.
+    if (url.pathname === "/api/gh-pr-issue-comments" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const number = url.searchParams.get("number");
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
+      try {
+        const token = getGithubToken();
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
+        const nwo = getRepoNwo(resolve(cwd));
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
+        const resp = await githubFetch(`/repos/${nwo}/issues/${number}/comments?per_page=100`, token);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
+        const raw = await resp.json();
+        return jsonResponse(req, res, raw.map((c) => ({
+          id: c.id,
+          body: c.body,
+          author: c.user?.login ?? "",
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          path: "",
+          line: null,
+          original_line: null,
+          side: "RIGHT",
+          start_line: null,
+          start_side: null,
+          in_reply_to_id: null,
+          diff_hunk: "",
+          url: c.html_url ?? "",
+        })));
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
     // POST /api/gh-pr-comment  — create or reply
     // Body: { cwd, number, body, path, line, side, start_line?, start_side?, in_reply_to_id? }
     if (url.pathname === "/api/gh-pr-comment" && req.method === "POST") {

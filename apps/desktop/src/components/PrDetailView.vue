@@ -11,7 +11,7 @@
  * - Stat cards refined with icons + gradient hover
  * - Polished tabs with animation + count badges
  */
-import { computed, inject, ref } from "vue";
+import { computed, inject, nextTick, ref } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
 import { renderMarkdown } from "../composables/useSafeHtml";
 import { openExternalUrl } from "../utils/backend";
@@ -79,6 +79,34 @@ const isOpenPr = computed(() => {
 
 /** Local UI state for the PR description's formatted / raw switch. */
 const descriptionTab = ref<"formatted" | "raw">("formatted");
+
+/** Review + issue-level comments, sorted oldest-first for display under the description. */
+const sortedComments = computed(() =>
+  [...p.prComments.value, ...p.prIssueComments.value].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  ),
+);
+
+/** Anchor at the bottom of the comments list — target for the Comments tile. */
+const commentsEnd = ref<HTMLElement | null>(null);
+
+/** Clicking the Comments tile jumps to the Info tab and scrolls to the last comment. */
+async function scrollToLastComment() {
+  p.detailTab.value = "info";
+  await nextTick();
+  commentsEnd.value?.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+/** Short relative time for a comment timestamp. */
+function commentTimeAgo(dateStr: string): string {
+  try {
+    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}j`;
+  } catch { return dateStr; }
+}
 </script>
 
 <template>
@@ -339,7 +367,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </span>
             </div>
 
-            <div class="pdv-stat">
+            <button type="button" class="pdv-stat pdv-stat--clickable" @click="p.detailTab.value = 'diff'">
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5z" />
@@ -348,9 +376,9 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statFiles') }}</span>
               <span class="pdv-stat-value">{{ p.prDetail.value.changedFiles }}</span>
-            </div>
+            </button>
 
-            <div class="pdv-stat">
+            <button type="button" class="pdv-stat pdv-stat--clickable" @click="p.detailTab.value = 'diff'">
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
                   <path d="M8 3v10M3 8h10" />
@@ -361,9 +389,15 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
                 <span class="pdv-add">+{{ p.prDetail.value.additions }}</span>
                 <span class="pdv-del">−{{ p.prDetail.value.deletions }}</span>
               </span>
-            </div>
+            </button>
 
-            <div class="pdv-stat">
+            <component
+              :is="sortedComments.length ? 'button' : 'div'"
+              :type="sortedComments.length ? 'button' : undefined"
+              class="pdv-stat"
+              :class="{ 'pdv-stat--clickable': sortedComments.length }"
+              @click="sortedComments.length && scrollToLastComment()"
+            >
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 8c0 3-3 5.5-6 5.5-.7 0-1.4-.1-2-.3L3 14l.7-2.8A5.5 5.5 0 0 1 2 8c0-3 3-5.5 6-5.5S14 5 14 8z" />
@@ -371,7 +405,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statComments') }}</span>
               <span class="pdv-stat-value">{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
-            </div>
+            </component>
           </div>
 
           <!-- Reviewers -->
@@ -432,6 +466,28 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
             </div>
             <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
+          </section>
+
+          <!-- Comments -->
+          <section v-if="sortedComments.length" class="pdv-section pdv-section--comments">
+            <h2 class="pdv-section-label">
+              {{ t('pr.detail.statComments') }}
+              <span class="pdv-section-count">{{ sortedComments.length }}</span>
+            </h2>
+            <ul class="pdv-comments">
+              <li v-for="c in sortedComments" :key="`${c.path}#${c.id}`" class="pdv-comment">
+                <div class="pdv-comment-head">
+                  <span class="pdv-comment-avatar" :style="{ background: `hsl(${authorHue(c.author)} 65% 55%)` }" aria-hidden="true">
+                    {{ authorInitials(c.author) }}
+                  </span>
+                  <span class="pdv-comment-author">{{ c.author }}</span>
+                  <span v-if="c.path" class="pdv-comment-anchor">{{ c.path.split('/').pop() }}<template v-if="c.line">:{{ c.line }}</template></span>
+                  <span class="pdv-comment-time" :title="c.created_at">{{ commentTimeAgo(c.created_at) }}</span>
+                </div>
+                <div class="pdv-comment-body" @click="onMarkdownClick" v-html="renderMarkdown(c.body)" />
+              </li>
+            </ul>
+            <div ref="commentsEnd"></div>
           </section>
 
           <!-- Secondary links -->
@@ -996,6 +1052,14 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   overflow: hidden;
 }
 
+.pdv-stat--clickable {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+
 .pdv-stat::before {
   content: "";
   position: absolute;
@@ -1068,6 +1132,86 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.pdv-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.pdv-comments {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pdv-comment {
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pdv-comment-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.pdv-comment-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.pdv-comment-author {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.pdv-comment-anchor {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.pdv-comment-time {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.pdv-comment-body {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .pdv-chips {
