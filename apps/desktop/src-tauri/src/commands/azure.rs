@@ -37,6 +37,9 @@ use crate::types::*;
 pub(crate) const AZ_SERVICE: &str = "gitwand:azure";
 /// Keychain account key — fixed, resolved without knowing the login up front.
 pub(crate) const AZ_ACCOUNT: &str = "oauth";
+/// Keychain account key for the Entra refresh token (used to renew the access
+/// token, which expires ~1h after sign-in).
+const AZ_ACCOUNT_REFRESH: &str = "oauth-refresh";
 
 /// Azure DevOps first-party resource app id — the audience our access token
 /// targets. Stable, public, documented by Microsoft.
@@ -81,19 +84,75 @@ fn client_id() -> String {
 
 // ─── Token resolution ───────────────────────────────────────────────────────
 
-/// Read the Settings-managed Azure token from the OS keychain.
-pub(crate) fn settings_azure_token() -> Option<String> {
-    let entry = keyring::Entry::new(AZ_SERVICE, AZ_ACCOUNT).ok()?;
-    let tok = entry.get_password().ok()?;
-    let tok = tok.trim().to_string();
-    if tok.is_empty() { None } else { Some(tok) }
+/// Read a value from the keychain under `AZ_SERVICE` / `account`.
+fn read_secret(account: &str) -> Option<String> {
+    let entry = keyring::Entry::new(AZ_SERVICE, account).ok()?;
+    let v = entry.get_password().ok()?;
+    let v = v.trim().to_string();
+    if v.is_empty() { None } else { Some(v) }
 }
 
-fn require_token() -> Result<String, String> {
-    settings_azure_token().ok_or_else(|| {
-        "Not signed in to Azure DevOps. Open Settings → Accounts and sign in with Azure."
+/// Store a value in the keychain under `AZ_SERVICE` / `account`.
+fn write_secret(account: &str, value: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(AZ_SERVICE, account)
+        .map_err(|e| format!("keyring init failed: {}", e))?;
+    entry
+        .set_password(value)
+        .map_err(|e| format!("Failed to store Azure token: {}", e))
+}
+
+/// Read the Settings-managed Azure access token from the OS keychain.
+pub(crate) fn settings_azure_token() -> Option<String> {
+    read_secret(AZ_ACCOUNT)
+}
+
+/// Read the stored Entra refresh token.
+fn settings_azure_refresh() -> Option<String> {
+    read_secret(AZ_ACCOUNT_REFRESH)
+}
+
+/// Persist the access token (and refresh token, when the grant returns one).
+fn store_tokens(access: &str, refresh: &str) -> Result<(), String> {
+    write_secret(AZ_ACCOUNT, access)?;
+    if !refresh.is_empty() {
+        write_secret(AZ_ACCOUNT_REFRESH, refresh)?;
+    }
+    Ok(())
+}
+
+/// Exchange the stored refresh token for a fresh access token (Entra rotates the
+/// refresh token, so persist the new one too). Returns the new access token.
+///
+/// Entra access tokens live ~1h; without this, the PR workflow breaks an hour
+/// after sign-in and Azure DevOps starts returning an HTML sign-in page.
+fn refresh_access_token() -> Result<String, String> {
+    let refresh = settings_azure_refresh().ok_or_else(|| {
+        "Azure session expired. Open Settings → Accounts and sign in with Azure again."
             .to_string()
-    })
+    })?;
+    let cid = client_id();
+    let scope = format!("{}/.default offline_access", AZURE_DEVOPS_RESOURCE);
+    let (_status, text) = curl_form(
+        TOKEN_URL,
+        &[
+            ("grant_type", "refresh_token"),
+            ("client_id", &cid),
+            ("refresh_token", &refresh),
+            ("scope", &scope),
+        ],
+    )?;
+    let v: serde_json::Value = serde_json::from_str(text.trim())
+        .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
+    let access = js(&v, "access_token");
+    if access.is_empty() {
+        return Err(
+            "Azure session expired. Open Settings → Accounts and sign in with Azure again."
+                .to_string(),
+        );
+    }
+    // Entra refresh-token rotation: store whatever new refresh token it returns.
+    let _ = store_tokens(&access, &js(&v, "refresh_token"));
+    Ok(access)
 }
 
 // ─── org/project/repo resolution ────────────────────────────────────────────
@@ -294,15 +353,21 @@ fn curl_form(url: &str, fields: &[(&str, &str)]) -> Result<(i32, String), String
     Ok((status, body))
 }
 
-/// Perform an Azure DevOps JSON API call. Maps HTTP ≥ 400 to a user-facing
-/// error, preferring Azure's `message` field.
-fn api_json(
-    method: &str,
-    url: &str,
-    token: &str,
-    body_json: Option<&str>,
-) -> Result<serde_json::Value, String> {
-    let (status, body) = curl_raw(method, url, Some(token), body_json)?;
+/// Whether a response means "the access token is no longer accepted".
+///
+/// Azure DevOps does not always answer 401: when an OAuth token is expired or
+/// rejected it frequently replies **HTTP 200 with an HTML sign-in page**. So we
+/// also treat a non-JSON HTML body as an auth failure.
+fn auth_failed(status: i32, body: &str) -> bool {
+    if status == 401 || status == 203 {
+        return true;
+    }
+    let t = body.trim_start();
+    t.starts_with("<!DOCTYPE") || t.starts_with("<html") || t.starts_with("<HTML")
+}
+
+/// Turn a raw `(status, body)` into JSON or a user-facing error.
+fn finalize_json(status: i32, body: &str) -> Result<serde_json::Value, String> {
     if status >= 400 {
         let msg = serde_json::from_str::<serde_json::Value>(body.trim())
             .ok()
@@ -315,6 +380,36 @@ fn api_json(
     }
     serde_json::from_str(body.trim())
         .map_err(|e| format!("Failed to parse Azure DevOps response: {}", e))
+}
+
+/// Perform an authenticated Azure DevOps JSON API call.
+///
+/// Resolves the access token from the keychain; on an auth failure it refreshes
+/// the token once (via the stored refresh token) and retries. A persistent
+/// failure surfaces a clear "sign in again" error rather than a JSON parse error.
+fn az_json(
+    method: &str,
+    url: &str,
+    body_json: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    let token = settings_azure_token().ok_or_else(|| {
+        "Not signed in to Azure DevOps. Open Settings → Accounts and sign in with Azure."
+            .to_string()
+    })?;
+    let (status, body) = curl_raw(method, url, Some(&token), body_json)?;
+    if !auth_failed(status, &body) {
+        return finalize_json(status, &body);
+    }
+    // Token rejected/expired → refresh once and retry.
+    let fresh = refresh_access_token()?;
+    let (status2, body2) = curl_raw(method, url, Some(&fresh), body_json)?;
+    if auth_failed(status2, &body2) {
+        return Err(
+            "Azure session expired. Open Settings → Accounts and sign in with Azure again."
+                .to_string(),
+        );
+    }
+    finalize_json(status2, &body2)
 }
 
 /// Append the pinned `api-version` query parameter to a URL.
@@ -431,14 +526,25 @@ fn json_to_detail(r: &AzureRepo, pr: &serde_json::Value) -> PullRequestDetail {
 
 // ─── REST PR workflow ───────────────────────────────────────────────────────
 
-fn rest_current_user(token: &str) -> Result<String, String> {
+fn rest_current_user() -> Result<String, String> {
     let url = with_api_version("https://app.vssps.visualstudio.com/_apis/profile/profiles/me");
-    let v = api_json("GET", &url, token, None)?;
+    let v = az_json("GET", &url, None)?;
     let name = js(&v, "displayName");
     let name = if name.is_empty() { js(&v, "emailAddress") } else { name };
     if name.is_empty() {
         return Err("Azure DevOps returned an empty profile for this token.".to_string());
     }
+    Ok(name)
+}
+
+/// Resolve the display name for an explicit token (used right after sign-in,
+/// before the token is fully wired into the keychain-backed `az_json` path).
+fn rest_current_user_with(token: &str) -> Result<String, String> {
+    let url = with_api_version("https://app.vssps.visualstudio.com/_apis/profile/profiles/me");
+    let (status, body) = curl_raw("GET", &url, Some(token), None)?;
+    let v = finalize_json(status, &body)?;
+    let name = js(&v, "displayName");
+    let name = if name.is_empty() { js(&v, "emailAddress") } else { name };
     Ok(name)
 }
 
@@ -451,14 +557,14 @@ fn search_status(state: &str) -> &'static str {
     }
 }
 
-fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64, token: &str) -> Result<Vec<PullRequest>, String> {
+fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<PullRequest>, String> {
     let r = azure_repo(cwd)?;
     let top = (limit + offset).clamp(1, 100);
     let url = with_api_version(&format!(
         "{}/pullrequests?searchCriteria.status={}&$top={}",
         r.api_base(), search_status(state), top
     ));
-    let v = api_json("GET", &url, token, None)?;
+    let v = az_json("GET", &url, None)?;
     let mut prs: Vec<PullRequest> = v
         .get("value")
         .and_then(|a| a.as_array())
@@ -472,28 +578,28 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64, token: &str) -
     Ok(prs)
 }
 
-fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, String> {
+fn rest_pr_count(cwd: &str, state: &str) -> Result<i64, String> {
     let r = azure_repo(cwd)?;
     let url = with_api_version(&format!(
         "{}/pullrequests?searchCriteria.status={}&$top=1000",
         r.api_base(), search_status(state)
     ));
-    let v = api_json("GET", &url, token, None)?;
+    let v = az_json("GET", &url, None)?;
     Ok(v.get("count").and_then(|c| c.as_i64()).unwrap_or_else(|| {
         v.get("value").and_then(|a| a.as_array()).map(|a| a.len() as i64).unwrap_or(0)
     }))
 }
 
 /// Fetch a single PR object together with its repo descriptor.
-fn get_pr_json(cwd: &str, number: i64, token: &str) -> Result<(AzureRepo, serde_json::Value), String> {
+fn get_pr_json(cwd: &str, number: i64) -> Result<(AzureRepo, serde_json::Value), String> {
     let r = azure_repo(cwd)?;
     let url = with_api_version(&format!("{}/pullrequests/{}", r.api_base(), number));
-    let v = api_json("GET", &url, token, None)?;
+    let v = az_json("GET", &url, None)?;
     Ok((r, v))
 }
 
-fn rest_pr_detail(cwd: &str, number: i64, token: &str) -> Result<PullRequestDetail, String> {
-    let (r, v) = get_pr_json(cwd, number, token)?;
+fn rest_pr_detail(cwd: &str, number: i64) -> Result<PullRequestDetail, String> {
+    let (r, v) = get_pr_json(cwd, number)?;
     Ok(json_to_detail(&r, &v))
 }
 
@@ -514,8 +620,8 @@ fn fetch_pr_branches(cwd: &str, source: &str, target: &str) -> Result<(), String
     Ok(())
 }
 
-fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String, String> {
-    let (_r, pr) = get_pr_json(cwd, number, token)?;
+fn rest_pr_diff(cwd: &str, number: i64) -> Result<String, String> {
+    let (_r, pr) = get_pr_json(cwd, number)?;
     let source = short_ref(&js(&pr, "sourceRefName"));
     let target = short_ref(&js(&pr, "targetRefName"));
     fetch_pr_branches(cwd, &source, &target)?;
@@ -531,8 +637,8 @@ fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-fn rest_pr_files(cwd: &str, number: i64, token: &str) -> Result<Vec<String>, String> {
-    let (_r, pr) = get_pr_json(cwd, number, token)?;
+fn rest_pr_files(cwd: &str, number: i64) -> Result<Vec<String>, String> {
+    let (_r, pr) = get_pr_json(cwd, number)?;
     let source = short_ref(&js(&pr, "sourceRefName"));
     let target = short_ref(&js(&pr, "targetRefName"));
     fetch_pr_branches(cwd, &source, &target)?;
@@ -558,7 +664,6 @@ fn rest_create_pr(
     body: String,
     base: String,
     draft: bool,
-    token: &str,
 ) -> Result<PullRequest, String> {
     let r = azure_repo(cwd)?;
     let head_branch = current_branch(cwd)?;
@@ -571,12 +676,12 @@ fn rest_create_pr(
         "isDraft": draft,
     });
     let url = with_api_version(&format!("{}/pullrequests", r.api_base()));
-    let created = api_json("POST", &url, token, Some(&payload.to_string()))?;
+    let created = az_json("POST", &url, Some(&payload.to_string()))?;
     Ok(json_to_pr(&r, &created))
 }
 
-fn rest_merge_pr(cwd: &str, number: i64, method: &str, token: &str) -> Result<(), String> {
-    let (r, pr) = get_pr_json(cwd, number, token)?;
+fn rest_merge_pr(cwd: &str, number: i64, method: &str) -> Result<(), String> {
+    let (r, pr) = get_pr_json(cwd, number)?;
     let merge_strategy = match method {
         "squash" => "squash",
         "rebase" => "rebase",
@@ -597,20 +702,20 @@ fn rest_merge_pr(cwd: &str, number: i64, method: &str, token: &str) -> Result<()
         },
     });
     let url = with_api_version(&format!("{}/pullrequests/{}", r.api_base(), number));
-    api_json("PATCH", &url, token, Some(&payload.to_string()))?;
+    az_json("PATCH", &url, Some(&payload.to_string()))?;
     Ok(())
 }
 
-fn rest_pr_ready(cwd: &str, number: i64, token: &str) -> Result<(), String> {
+fn rest_pr_ready(cwd: &str, number: i64) -> Result<(), String> {
     let r = azure_repo(cwd)?;
     let payload = serde_json::json!({ "isDraft": false });
     let url = with_api_version(&format!("{}/pullrequests/{}", r.api_base(), number));
-    api_json("PATCH", &url, token, Some(&payload.to_string()))?;
+    az_json("PATCH", &url, Some(&payload.to_string()))?;
     Ok(())
 }
 
-fn rest_checkout_pr(cwd: &str, number: i64, token: &str) -> Result<(), String> {
-    let (_r, pr) = get_pr_json(cwd, number, token)?;
+fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
+    let (_r, pr) = get_pr_json(cwd, number)?;
     let source = short_ref(&js(&pr, "sourceRefName"));
     let fetch = git_cmd()
         .args(["fetch", "origin", &source])
@@ -641,32 +746,32 @@ fn rest_checkout_pr(cwd: &str, number: i64, token: &str) -> Result<(), String> {
 
 #[tauri::command]
 pub(crate) fn az_current_user() -> Result<String, String> {
-    rest_current_user(&require_token()?)
+    rest_current_user()
 }
 
 #[tauri::command]
 pub(crate) fn az_list_prs(cwd: String, state: String, limit: i64, offset: i64) -> Result<Vec<PullRequest>, String> {
-    rest_list_prs(&cwd, &state, limit, offset, &require_token()?)
+    rest_list_prs(&cwd, &state, limit, offset)
 }
 
 #[tauri::command]
 pub(crate) fn az_pr_count(cwd: String, state: String) -> Result<i64, String> {
-    rest_pr_count(&cwd, &state, &require_token()?)
+    rest_pr_count(&cwd, &state)
 }
 
 #[tauri::command]
 pub(crate) fn az_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
-    rest_pr_detail(&cwd, number, &require_token()?)
+    rest_pr_detail(&cwd, number)
 }
 
 #[tauri::command]
 pub(crate) fn az_pr_diff(cwd: String, number: i64) -> Result<String, String> {
-    rest_pr_diff(&cwd, number, &require_token()?)
+    rest_pr_diff(&cwd, number)
 }
 
 #[tauri::command]
 pub(crate) fn az_pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
-    rest_pr_files(&cwd, number, &require_token()?)
+    rest_pr_files(&cwd, number)
 }
 
 #[tauri::command]
@@ -677,22 +782,22 @@ pub(crate) fn az_create_pr(
     base: Option<String>,
     draft: Option<bool>,
 ) -> Result<PullRequest, String> {
-    rest_create_pr(&cwd, title, body, base.unwrap_or_default(), draft.unwrap_or(false), &require_token()?)
+    rest_create_pr(&cwd, title, body, base.unwrap_or_default(), draft.unwrap_or(false))
 }
 
 #[tauri::command]
 pub(crate) fn az_merge_pr(cwd: String, number: i64, method: Option<String>) -> Result<(), String> {
-    rest_merge_pr(&cwd, number, &method.unwrap_or_else(|| "merge".to_string()), &require_token()?)
+    rest_merge_pr(&cwd, number, &method.unwrap_or_else(|| "merge".to_string()))
 }
 
 #[tauri::command]
 pub(crate) fn az_pr_ready(cwd: String, number: i64) -> Result<(), String> {
-    rest_pr_ready(&cwd, number, &require_token()?)
+    rest_pr_ready(&cwd, number)
 }
 
 #[tauri::command]
 pub(crate) fn az_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
-    rest_checkout_pr(&cwd, number, &require_token()?)
+    rest_checkout_pr(&cwd, number)
 }
 
 // ─── Entra ID device flow ───────────────────────────────────────────────────
@@ -776,13 +881,11 @@ pub(crate) fn azure_device_poll(device_code: String) -> Result<GithubDevicePoll,
         });
     }
 
-    let entry = keyring::Entry::new(AZ_SERVICE, AZ_ACCOUNT)
-        .map_err(|e| format!("keyring init failed: {}", e))?;
-    entry
-        .set_password(&token)
-        .map_err(|e| format!("Failed to store Azure token: {}", e))?;
+    // Persist access + refresh tokens so the PR workflow survives the ~1h
+    // access-token lifetime (refreshed transparently by `az_json`).
+    store_tokens(&token, &js(&v, "refresh_token"))?;
 
-    let login = rest_current_user(&token).unwrap_or_default();
+    let login = rest_current_user_with(&token).unwrap_or_default();
     Ok(GithubDevicePoll {
         status: "success".to_string(),
         login,
