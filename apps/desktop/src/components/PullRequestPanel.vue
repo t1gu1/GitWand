@@ -140,6 +140,15 @@ const forge = computed(() =>
 const isGitHub = computed(() => remote.value?.provider === "github");
 const hasDetail = computed(() => !!selectedPr.value);
 
+/** Human-facing name of the active forge — used for "Open on …" labels. */
+const FORGE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+  bitbucket: "Bitbucket",
+  azure: "Azure DevOps",
+};
+const forgeLabel = computed(() => FORGE_LABELS[forge.value.name] ?? "Web");
+
 // ─── Parse unified diff ─────────────────────────────────
 function parseUnifiedDiff(rawDiff: string): GitDiff[] {
   const files: GitDiff[] = [];
@@ -618,7 +627,7 @@ watch(() => props.cwd, () => {
                 <div class="pr-item-actions" @click.stop>
                   <button class="eco-btn eco-btn--xs" @click="checkoutPr(pr)">Checkout</button>
                   <button v-if="pr.state === 'OPEN' || pr.state === 'open'" class="eco-btn eco-btn--xs eco-btn--primary" @click="mergingPr = pr">Merger</button>
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(pr.url)" title="Ouvrir sur GitHub">↗</button>
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(pr.url)" :title="`Ouvrir sur ${forgeLabel}`">↗</button>
                 </div>
               </button>
             </div>
@@ -681,7 +690,7 @@ watch(() => props.cwd, () => {
                 >
                   ✍️ Review
                 </button>
-                <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ GitHub</button>
+                <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ {{ forgeLabel }}</button>
               </div>
 
               <!-- Info tab -->

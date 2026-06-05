@@ -34,6 +34,14 @@ import { t } from "./useI18n";
 
 export const PR_PANEL_KEY = Symbol("prPanel");
 
+/** Human-facing forge names for "Open on …" / platform labels. */
+const FORGE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+  bitbucket: "Bitbucket",
+  azure: "Azure DevOps",
+};
+
 export function usePrPanel(cwd: Ref<string>) {
 
   // ─── Remote / list ─────────────────────────────────────
@@ -43,6 +51,9 @@ export function usePrPanel(cwd: Ref<string>) {
   const forge = computed(() =>
     remote.value ? forgeFromRemoteInfo(remote.value) : githubProvider,
   );
+
+  /** Human-facing name of the active forge — used for "Open on …" labels. */
+  const forgeLabel = computed(() => FORGE_LABELS[forge.value.name] ?? "Web");
 
   const prs = ref<PullRequest[]>([]);
   const loading = ref(false);
@@ -712,6 +723,7 @@ export function usePrPanel(cwd: Ref<string>) {
     // Pagination (v2.8.5)
     hasMore, loadingMore,
     // Computed
+    forge, forgeLabel,
     commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
     // Actions
     init, loadRemote, loadPrs, loadMorePrs, loadCurrentUser, selectPr, loadDiff,
