@@ -360,7 +360,6 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
 }
 
 .pls-title {
-  flex: 1;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
@@ -387,6 +386,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
   width: 24px;
   height: 24px;
   padding: 0;
