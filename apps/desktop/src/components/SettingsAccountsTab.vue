@@ -48,7 +48,7 @@ const {
 // ─── Add-account form ────────────────────────────────────────────────────────
 
 const showForm = ref(false);
-const formForge = ref<ForgeName>("bitbucket");
+const formForge = ref<ForgeName>("github");
 const formLabel = ref("");
 const formUsername = ref("");
 const formWorkspace = ref("");
@@ -57,7 +57,7 @@ const formError = ref<string | null>(null);
 const formSuccess = ref(false);
 
 function openForm() {
-  formForge.value = "bitbucket";
+  formForge.value = "github";
   formLabel.value = "";
   formUsername.value = "";
   formWorkspace.value = "";
@@ -203,7 +203,8 @@ const totalAccounts = computed(() => accounts.value.length);
           <input v-model="formLabel" type="text" class="sa-input" placeholder="work, perso, client-x…" />
         </div>
 
-        <div class="sa-field">
+        <!-- GitHub returns the username via OAuth — no manual input needed. -->
+        <div v-if="formForge !== 'github'" class="sa-field">
           <label class="sa-label">{{ t('settings.accountsUsernameLabel') }}</label>
           <input v-model="formUsername" type="text" class="sa-input" />
         </div>
