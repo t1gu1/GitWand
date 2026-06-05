@@ -189,10 +189,12 @@ export function usePrPanel(cwd: Ref<string>) {
     const names = [...new Set(unmet.map((c) => c.name).filter(Boolean))];
     if (names.length) reasons.push(...names);
     else if (!checksOk) reasons.push(t("pr.ready.reasonChecksFailing"));
-    // Only add the generic "no approval" reason when no policy already covers it.
-    const reviewerPolicyShown = names.some((n) => /review|approv/i.test(n));
-    if (!hasApproval && !reviewerPolicyShown) reasons.push(t("pr.ready.reasonNoApproval"));
     if (hasChangesRequested) reasons.push(t("pr.ready.reasonChangesRequested"));
+    // A missing approval on its own isn't worth a banner — checks are green and
+    // nobody requested changes, so we're just waiting for the merge. Hide it
+    // rather than nag with "waiting: no approval". (Named reviewer *policies*
+    // from `unmet` are still surfaced above.)
+    if (reasons.length === 0) return null;
     return { ready: false, reason: t("pr.ready.waitingPrefix", reasons.join(", ")) };
   });
 
