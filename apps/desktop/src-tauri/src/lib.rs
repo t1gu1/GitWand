@@ -346,6 +346,8 @@ pub fn run() {
             commands::azure::az_merge_pr,
             commands::azure::az_pr_ready,
             commands::azure::az_checkout_pr,
+            commands::azure::az_pr_comments,
+            commands::azure::az_pr_create_comment,
             commands::ops::git_exec,
             commands::ops::git_autocomplete,
             commands::ops::git_get_user,

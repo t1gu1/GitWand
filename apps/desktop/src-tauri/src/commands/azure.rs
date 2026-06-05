@@ -600,7 +600,44 @@ fn get_pr_json(cwd: &str, number: i64) -> Result<(AzureRepo, serde_json::Value),
 
 fn rest_pr_detail(cwd: &str, number: i64) -> Result<PullRequestDetail, String> {
     let (r, v) = get_pr_json(cwd, number)?;
-    Ok(json_to_detail(&r, &v))
+    let mut detail = json_to_detail(&r, &v);
+    // Azure's PR object has no file/line stats — compute them from local git so
+    // the Files tab badge and the changed-files/additions/deletions stats are
+    // populated (best-effort; leaves zeros if the branches can't be fetched).
+    let source = short_ref(&js(&v, "sourceRefName"));
+    let target = short_ref(&js(&v, "targetRefName"));
+    if fetch_pr_branches(cwd, &source, &target).is_ok() {
+        let (files, adds, dels) = diff_numstat(cwd, &source, &target);
+        detail.changed_files = files;
+        detail.additions = adds;
+        detail.deletions = dels;
+    }
+    Ok(detail)
+}
+
+/// `git diff --numstat target...source` → (changed_files, additions, deletions).
+fn diff_numstat(cwd: &str, source: &str, target: &str) -> (i64, i64, i64) {
+    let range = format!("origin/{}...origin/{}", target, source);
+    let out = match git_cmd()
+        .args(["diff", "--numstat", &range])
+        .current_dir(cwd)
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return (0, 0, 0),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (mut files, mut adds, mut dels) = (0i64, 0i64, 0i64);
+    for line in text.lines() {
+        let mut cols = line.split('\t');
+        let a = cols.next().unwrap_or("");
+        let d = cols.next().unwrap_or("");
+        files += 1;
+        // Binary files show "-" for counts.
+        adds += a.parse::<i64>().unwrap_or(0);
+        dels += d.parse::<i64>().unwrap_or(0);
+    }
+    (files, adds, dels)
 }
 
 /// Diff is produced locally: fetch both PR branches from origin and diff the
@@ -742,6 +779,99 @@ fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Comments (Azure DevOps threads) ────────────────────────────────────────
+//
+// Azure groups PR comments into *threads*. A thread may be anchored to a file
+// (`threadContext.filePath` + line range) or be a general PR comment. Comment
+// ids restart at 1 within each thread, so we synthesize a globally-unique id
+// (`thread_id * COMMENT_ID_STRIDE + comment_id`) to keep Vue keys and reply
+// links unambiguous. The same transform is applied to `parentCommentId`.
+
+const COMMENT_ID_STRIDE: i64 = 1_000_000;
+
+/// Map Azure threads into the snake_case shape the frontend `PrReviewComment`
+/// type expects (consumed directly by `azPrComments`).
+fn threads_to_comments(threads: &serde_json::Value) -> Vec<serde_json::Value> {
+    let mut out = Vec::new();
+    let empty: Vec<serde_json::Value> = vec![];
+    let threads_arr = threads.get("value").and_then(|a| a.as_array()).unwrap_or(&empty);
+    for thread in threads_arr {
+        let thread_id = ji(thread, "id");
+        let ctx = thread.get("threadContext");
+        let path = ctx
+            .and_then(|c| c.get("filePath"))
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .trim_start_matches('/')
+            .to_string();
+        let line = ctx
+            .and_then(|c| c.get("rightFileStart").or_else(|| c.get("rightFileEnd")))
+            .and_then(|p| p.get("line"))
+            .and_then(|l| l.as_i64());
+
+        let comments = thread.get("comments").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+        for c in &comments {
+            // Skip system-generated entries (status changes, votes, etc.).
+            if js(c, "commentType") == "system" {
+                continue;
+            }
+            let content = js(c, "content");
+            if content.trim().is_empty() {
+                continue;
+            }
+            let cid = ji(c, "id");
+            let parent = ji(c, "parentCommentId");
+            let in_reply_to = if parent > 0 {
+                serde_json::json!(thread_id * COMMENT_ID_STRIDE + parent)
+            } else {
+                serde_json::Value::Null
+            };
+            out.push(serde_json::json!({
+                "id": thread_id * COMMENT_ID_STRIDE + cid,
+                "body": content,
+                "author": jnested(c, "author", "displayName"),
+                "created_at": js(c, "publishedDate"),
+                "updated_at": js(c, "lastUpdatedDate"),
+                "path": path,
+                "line": line,
+                "original_line": serde_json::Value::Null,
+                "side": "RIGHT",
+                "start_line": serde_json::Value::Null,
+                "start_side": serde_json::Value::Null,
+                "in_reply_to_id": in_reply_to,
+                "diff_hunk": "",
+                "url": "",
+            }));
+        }
+    }
+    out
+}
+
+fn rest_pr_comments(cwd: &str, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    let r = azure_repo(cwd)?;
+    let url = with_api_version(&format!("{}/pullrequests/{}/threads", r.api_base(), number));
+    let threads = az_json("GET", &url, None)?;
+    Ok(threads_to_comments(&threads))
+}
+
+/// Create a general PR comment (a new thread). File-anchored creation is not
+/// wired yet — `path`/`line` are accepted but ignored, producing a general
+/// comment so nothing is silently dropped.
+fn rest_pr_create_comment(cwd: &str, number: i64, body: &str) -> Result<serde_json::Value, String> {
+    let r = azure_repo(cwd)?;
+    let payload = serde_json::json!({
+        "comments": [{ "parentCommentId": 0, "content": body, "commentType": "text" }],
+        "status": "active",
+    });
+    let url = with_api_version(&format!("{}/pullrequests/{}/threads", r.api_base(), number));
+    let thread = az_json("POST", &url, Some(&payload.to_string()))?;
+    // Return the created comment in PrReviewComment shape (first non-system one).
+    threads_to_comments(&serde_json::json!({ "value": [thread] }))
+        .into_iter()
+        .next()
+        .ok_or_else(|| "Azure DevOps returned no comment after create.".to_string())
+}
+
 // ─── Tauri commands — PR workflow ───────────────────────────────────────────
 
 #[tauri::command]
@@ -798,6 +928,16 @@ pub(crate) fn az_pr_ready(cwd: String, number: i64) -> Result<(), String> {
 #[tauri::command]
 pub(crate) fn az_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
     rest_checkout_pr(&cwd, number)
+}
+
+#[tauri::command]
+pub(crate) fn az_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    rest_pr_comments(&cwd, number)
+}
+
+#[tauri::command]
+pub(crate) fn az_pr_create_comment(cwd: String, number: i64, body: String) -> Result<serde_json::Value, String> {
+    rest_pr_create_comment(&cwd, number, &body)
 }
 
 // ─── Entra ID device flow ───────────────────────────────────────────────────

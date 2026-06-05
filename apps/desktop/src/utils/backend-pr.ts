@@ -999,3 +999,13 @@ export async function azCheckoutPr(cwd: string, number: number): Promise<void> {
   if (isTauri()) return tauriInvoke<void>("az_checkout_pr", { cwd, number });
   throw new Error(AZURE_WEB_ONLY);
 }
+
+export async function azPrComments(cwd: string, number: number): Promise<PrReviewComment[]> {
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("az_pr_comments", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrCreateComment(cwd: string, number: number, body: string): Promise<PrReviewComment> {
+  if (isTauri()) return tauriInvoke<PrReviewComment>("az_pr_create_comment", { cwd, number, body });
+  throw new Error(AZURE_WEB_ONLY);
+}

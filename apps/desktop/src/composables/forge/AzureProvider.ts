@@ -29,6 +29,8 @@ import {
   azMergePr,
   azPrReady,
   azCheckoutPr,
+  azPrComments,
+  azPrCreateComment,
   ghPrConflictPreview,
   ghPrHotspots,
 } from "../../utils/backend";
@@ -126,14 +128,15 @@ export class AzureProvider implements ForgeProvider {
     return azPrReady(cwd, number);
   }
 
-  // ── Comments (not yet implemented) ─────────────────────────────────────────
+  // ── Comments ───────────────────────────────────────────────────────────────
+  // Azure threads API. Anchored-line creation + edit/delete not wired yet.
 
-  async listComments(_cwd: string, _prNumber: number): Promise<PrReviewComment[]> {
-    return [];
+  listComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
+    return azPrComments(cwd, prNumber);
   }
 
-  createComment(_cwd: string, _prNumber: number, _params: CreatePrCommentParams): Promise<PrReviewComment> {
-    throw new ForgeNotImplementedError("azure", "createComment");
+  createComment(cwd: string, prNumber: number, params: CreatePrCommentParams): Promise<PrReviewComment> {
+    return azPrCreateComment(cwd, prNumber, params.body);
   }
 
   updateComment(_cwd: string, _commentId: number, _body: string, _prNumber?: number): Promise<void> {
