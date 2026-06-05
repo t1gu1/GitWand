@@ -16,6 +16,7 @@
 use crate::git::*;
 use crate::types::*;
 use crate::commands::github_api;
+use serde_json;
 
 /// List pull requests using `gh` CLI.
 ///
@@ -120,8 +121,10 @@ pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, Strin
 
     // Resolve owner/name once via `gh repo view`. `nameWithOwner` is the
     // canonical "org/repo" slug — splittable by '/' without ambiguity.
+    // v2.17: include isFork and parent to correctly count PRs in the base repo
+    // (the target repo that `gh pr list` would use by default).
     let view = hidden_cmd("gh")
-        .args(["repo", "view", "--json", "nameWithOwner"])
+        .args(["repo", "view", "--json", "nameWithOwner,isFork,parent"])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("gh repo view (for pr count): {}", e))?;
@@ -131,19 +134,22 @@ pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, Strin
             String::from_utf8_lossy(&view.stderr)
         ));
     }
-    let nwo = {
-        let stdout = String::from_utf8_lossy(&view.stdout);
-        // Tiny, dependency-free extraction — avoids dragging in serde_json
-        // just for one string field. Mirrors extract_json_string in parse.rs.
-        let key = "\"nameWithOwner\"";
-        let start = stdout.find(key)
-            .ok_or_else(|| "nameWithOwner missing from gh repo view output".to_string())?;
-        let after = &stdout[start + key.len()..];
-        let q1 = after.find('"').ok_or_else(|| "malformed nameWithOwner".to_string())?;
-        let rest = &after[q1 + 1..];
-        let q2 = rest.find('"').ok_or_else(|| "unterminated nameWithOwner".to_string())?;
-        rest[..q2].to_string()
+
+    let v: serde_json::Value = serde_json::from_slice(&view.stdout).map_err(|e| e.to_string())?;
+    let is_fork = v.get("isFork").and_then(|b| b.as_bool()).unwrap_or(false);
+    let nwo = if is_fork {
+        v.get("parent")
+            .and_then(|p| {
+                let owner = p.get("owner").and_then(|o| o.get("login")).and_then(|s| s.as_str())?;
+                let name = p.get("name").and_then(|s| s.as_str())?;
+                Some(format!("{}/{}", owner, name))
+            })
+            .or_else(|| v.get("nameWithOwner").and_then(|s| s.as_str()).map(|s| s.to_string()))
+            .unwrap_or_default()
+    } else {
+        v.get("nameWithOwner").and_then(|s| s.as_str()).unwrap_or("").to_string()
     };
+
     let (owner, name) = match nwo.split_once('/') {
         Some((o, n)) if !o.is_empty() && !n.is_empty() => (o.to_string(), n.to_string()),
         _ => return Err(format!("Unexpected nameWithOwner format: {}", nwo)),

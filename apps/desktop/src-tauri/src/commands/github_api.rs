@@ -344,6 +344,8 @@ pub(crate) fn rest_list_prs(
 ) -> Result<Vec<PullRequest>, String> {
     let (owner, repo) = owner_repo(cwd)?;
     let origin = format!("{}/{}", owner, repo);
+    let base = base_owner_repo(cwd, token).unwrap_or_else(|_| origin.clone());
+
     let page = limit.max(1);
     let off = offset.max(0);
     // Naïve pagination identical to gh_list_prs: fetch offset+limit, then slice.
@@ -356,12 +358,12 @@ pub(crate) fn rest_list_prs(
         _ => "open",
     };
 
-    // PRs that live in origin.
-    let mut raw: Vec<serde_json::Value> = api_json(
+    // Fetch PRs from the base repository (matches `gh pr list` behavior).
+    let raw: Vec<serde_json::Value> = api_json(
         "GET",
         &format!(
             "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
-            API_BASE, origin, api_state, per_page
+            API_BASE, base, api_state, per_page
         ),
         token,
         None,
@@ -369,35 +371,6 @@ pub(crate) fn rest_list_prs(
     .as_array()
     .cloned()
     .unwrap_or_default();
-
-    // When origin is a fork, also surface the PRs you opened on the upstream
-    // repo (head repo == your fork) — these never appear in origin's pulls.
-    if let Some(parent) = upstream_parent(cwd, token) {
-        if let Ok(up) = api_json(
-            "GET",
-            &format!(
-                "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
-                API_BASE, parent, api_state, per_page
-            ),
-            token,
-            None,
-        ) {
-            for pr in up.as_array().cloned().unwrap_or_default() {
-                let head_repo = pr
-                    .get("head")
-                    .and_then(|h| h.get("repo"))
-                    .and_then(|r| r.get("full_name"))
-                    .and_then(|s| s.as_str())
-                    .unwrap_or("");
-                if head_repo.eq_ignore_ascii_case(&origin) {
-                    raw.push(pr);
-                }
-            }
-        }
-    }
-
-    // Newest-first — updated_at is ISO-8601, so lexicographic compare works.
-    raw.sort_by(|a, b| js(b, "updated_at").cmp(&js(a, "updated_at")));
 
     let mut prs: Vec<PullRequest> = raw
         .iter()
@@ -560,7 +533,10 @@ fn get_pr_json(cwd: &str, number: i64, token: &str) -> Result<(String, serde_jso
 }
 
 pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, String> {
-    let (owner, repo) = owner_repo(cwd)?;
+    let base = base_owner_repo(cwd, token).unwrap_or_else(|_| {
+        let (o, r) = owner_repo(cwd).unwrap_or_default();
+        format!("{}/{}", o, r)
+    });
     let qualifier = match state.to_lowercase().as_str() {
         "closed" => "+state:closed",
         "merged" => "+is:merged",
@@ -569,8 +545,8 @@ pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, 
     };
     // /search/issues returns total_count without expanding every item.
     let url = format!(
-        "{}/search/issues?q=repo:{}/{}+type:pr{}&per_page=1",
-        API_BASE, owner, repo, qualifier
+        "{}/search/issues?q=repo:{}+type:pr{}&per_page=1",
+        API_BASE, base, qualifier
     );
     let v = api_json("GET", &url, token, None)?;
     Ok(v.get("total_count").and_then(|c| c.as_i64()).unwrap_or(0))
@@ -700,6 +676,17 @@ pub(crate) fn rest_fork_info(cwd: &str, token: &str) -> Result<ForkInfo, String>
 fn upstream_parent(cwd: &str, token: &str) -> Option<String> {
     let fi = rest_fork_info(cwd, token).ok()?;
     (fi.is_fork && !fi.parent.is_empty()).then_some(fi.parent)
+}
+
+/// The canonical base `owner/repo` for PRs. For a fork, this is the upstream
+/// parent. For a regular repo, it's the repo itself.
+fn base_owner_repo(cwd: &str, token: &str) -> Result<String, String> {
+    let fi = rest_fork_info(cwd, token)?;
+    if fi.is_fork && !fi.parent.is_empty() {
+        Ok(fi.parent)
+    } else {
+        Ok(fi.origin)
+    }
 }
 
 pub(crate) fn rest_create_pr(
