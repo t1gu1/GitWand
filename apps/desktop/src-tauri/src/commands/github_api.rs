@@ -429,8 +429,73 @@ pub(crate) fn rest_list_prs(
             pr.additions = adds;
             pr.deletions = dels;
         }
+        // The REST list carries no CI status. Fetch the status-check rollup for
+        // the listed PRs in a single batched GraphQL call so the sidebar can
+        // flag in-progress / failing CI (yellow dot).
+        let nums: Vec<i64> = prs.iter().map(|p| p.number).collect();
+        let rollups = rest_status_rollups(cwd, &nums, token);
+        for pr in &mut prs {
+            if let Some(state) = rollups.get(&pr.number) {
+                pr.checks_rollup = state.clone();
+            }
+        }
     }
     Ok(prs)
+}
+
+/// Batched status-check rollup for a set of PR numbers via one GraphQL request.
+/// Returns `number → rollup state` (e.g. SUCCESS / PENDING / FAILURE). Best
+/// effort: any failure yields an empty map (no dot, never an error).
+fn rest_status_rollups(
+    cwd: &str,
+    numbers: &[i64],
+    token: &str,
+) -> std::collections::HashMap<i64, String> {
+    let mut map = std::collections::HashMap::new();
+    if numbers.is_empty() {
+        return map;
+    }
+    let (owner, repo) = match owner_repo(cwd) {
+        Ok(x) => x,
+        Err(_) => return map,
+    };
+    // One aliased field per PR: pr<NUM>: pullRequest(number: NUM) { … }.
+    let mut fields = String::new();
+    for n in numbers {
+        fields.push_str(&format!(
+            "pr{0}: pullRequest(number: {0}) {{ commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} ",
+            n
+        ));
+    }
+    let query = format!(
+        "query {{ repository(owner: \"{}\", name: \"{}\") {{ {} }} }}",
+        owner, repo, fields
+    );
+    let payload = serde_json::json!({ "query": query });
+    let v = match api_json("POST", &format!("{}/graphql", API_BASE), token, Some(&payload.to_string())) {
+        Ok(v) => v,
+        Err(_) => return map,
+    };
+    let Some(obj) = v.get("data").and_then(|d| d.get("repository")) else {
+        return map;
+    };
+    for n in numbers {
+        let state = obj
+            .get(format!("pr{}", n))
+            .and_then(|p| p.get("commits"))
+            .and_then(|c| c.get("nodes"))
+            .and_then(|a| a.as_array())
+            .and_then(|a| a.first())
+            .and_then(|node| node.get("commit"))
+            .and_then(|c| c.get("statusCheckRollup"))
+            .and_then(|r| r.get("state"))
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        if !state.is_empty() {
+            map.insert(*n, state.to_uppercase());
+        }
+    }
+    map
 }
 
 /// `git diff --numstat origin/base...origin/head` → (additions, deletions).

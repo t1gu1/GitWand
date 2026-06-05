@@ -77,8 +77,11 @@ function stateInfo(state: string): { label: string; cls: StateCls } {
  * requested changes, conflicts / blocked merge). Drives a yellow status dot.
  * Uses only fields present on the list item — no extra per-PR requests.
  */
-function isWaiting(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string }): boolean {
+function isWaiting(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string; checksRollup: string }): boolean {
   if (pr.state.toUpperCase() !== "OPEN" || pr.draft) return false;
+  // CI not green yet (in progress, failing, queued).
+  const ci = (pr.checksRollup || "").toUpperCase();
+  if (["PENDING", "FAILURE", "ERROR", "EXPECTED"].includes(ci)) return true;
   const rd = (pr.reviewDecision || "").toUpperCase();
   if (rd === "REVIEW_REQUIRED" || rd === "CHANGES_REQUESTED") return true;
   const ms = (pr.mergeStateStatus || "").toUpperCase();
