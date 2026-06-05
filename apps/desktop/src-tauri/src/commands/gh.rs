@@ -485,7 +485,26 @@ pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequest
     let raw: GhPrDetailRaw = serde_json::from_str(stdout.trim())
         .map_err(|e| format!("Failed to parse gh pr view output: {}", e))?;
 
-    Ok(gh_pr_detail_raw_to_detail(raw))
+    let mut detail = gh_pr_detail_raw_to_detail(raw);
+    detail.can_merge = gh_viewer_can_merge(&cwd);
+    Ok(detail)
+}
+
+/// Resolve whether the current viewer can merge PRs in `cwd`'s repo via
+/// `gh repo view --json viewerPermission`. WRITE / MAINTAIN / ADMIN can merge.
+/// Returns `None` on any failure so the UI falls back to error-only gating.
+fn gh_viewer_can_merge(cwd: &str) -> Option<bool> {
+    let output = hidden_cmd("gh")
+        .args(["repo", "view", "--json", "viewerPermission"])
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let v: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let perm = v.get("viewerPermission")?.as_str()?.to_uppercase();
+    Some(matches!(perm.as_str(), "ADMIN" | "MAINTAIN" | "WRITE"))
 }
 
 /// Get the diff of a PR using `gh` CLI.

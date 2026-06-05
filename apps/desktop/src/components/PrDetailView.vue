@@ -238,6 +238,8 @@ function commentTimeAgo(dateStr: string): string {
             <button
               v-if="isOpenPr"
               class="pdv-btn pdv-btn--primary"
+              :disabled="p.mergeBlocked.value"
+              :title="p.mergeBlocked.value ? p.mergeBlockedReason.value : undefined"
               @click="p.mergingPr.value = p.selectedPr.value"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1779,6 +1781,16 @@ function commentTimeAgo(dateStr: string): string {
 }
 .pdv-btn:active {
   box-shadow: none;
+}
+.pdv-btn:disabled,
+.pdv-btn:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+  transform: none;
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
 }
 
 .pdv-btn--sm {

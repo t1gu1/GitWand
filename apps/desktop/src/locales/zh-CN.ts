@@ -790,6 +790,7 @@ const zhCN: Locale = {
       mergeConflicting: "存在冲突",
       mergeProblem: "检测到问题",
       mergeUnknown: "未知",
+      mergeNoPermission: "您没有权限合并此拉取请求",
       statFiles: "文件",
       statDiff: "Diff",
       statComments: "评论",

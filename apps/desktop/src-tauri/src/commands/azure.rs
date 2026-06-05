@@ -540,6 +540,9 @@ fn json_to_detail(r: &AzureRepo, pr: &serde_json::Value) -> PullRequestDetail {
             .unwrap_or_default(),
         mergeable,
         checks_status: String::new(),
+        // Azure merge permission needs the Security/Permissions API — not
+        // cheaply available here. Unknown ⇒ UI gates on errors only.
+        can_merge: None,
     }
 }
 

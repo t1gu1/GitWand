@@ -801,6 +801,7 @@ const es: Locale = {
       mergeConflicting: "En conflicto",
       mergeProblem: "Problema detectado",
       mergeUnknown: "Desconocido",
+      mergeNoPermission: "No tienes permiso para fusionar esta pull request",
       statFiles: "Archivos",
       statDiff: "Diff",
       statComments: "Comentarios",

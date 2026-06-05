@@ -812,6 +812,7 @@ const fr: Locale = {
       mergeConflicting: "Conflit",
       mergeProblem: "Problème détecté",
       mergeUnknown: "Inconnu",
+      mergeNoPermission: "Vous n'avez pas l'autorisation de fusionner cette pull request",
       statFiles: "Fichiers",
       statDiff: "Diff",
       statComments: "Commentaires",

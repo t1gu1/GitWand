@@ -802,6 +802,7 @@ const ptBR: Locale = {
       mergeConflicting: "Em conflito",
       mergeProblem: "Problema detectado",
       mergeUnknown: "Desconhecido",
+      mergeNoPermission: "Você não tem permissão para fazer merge deste pull request",
       statFiles: "Arquivos",
       statDiff: "Diff",
       statComments: "Comentários",

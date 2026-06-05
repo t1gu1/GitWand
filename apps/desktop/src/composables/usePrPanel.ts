@@ -215,6 +215,25 @@ export function usePrPanel(cwd: Ref<string>) {
   });
 
   /**
+   * Whether the merge button must be disabled — either the viewer lacks the
+   * role to merge (forge reported `canMerge === false`) or the PR has blocking
+   * errors (conflict / failing or pending checks / requested changes). An
+   * unknown permission (`canMerge` null) never disables on its own.
+   */
+  const mergeBlocked = computed<boolean>(() => {
+    if (prDetail.value?.canMerge === false) return true;
+    const r = mergeReadiness.value;
+    return !!r && !r.ready;
+  });
+
+  /** Human-readable reason for a disabled merge button (tooltip). */
+  const mergeBlockedReason = computed<string>(() => {
+    if (prDetail.value?.canMerge === false) return t("pr.detail.mergeNoPermission");
+    const r = mergeReadiness.value;
+    return r && !r.ready ? r.reason : "";
+  });
+
+  /**
    * v2.10 — Virtual 'Merge Conflict' check surfaced in the CI tab.
    * If the PR's mergeable state is CONFLICTING, we unshift a hard failure
    * into the checks list so the user sees exactly what's blocking.
@@ -883,7 +902,7 @@ export function usePrPanel(cwd: Ref<string>) {
     hasMore, loadingMore,
     // Computed
     forge, forgeLabel,
-    commentsForFile, commentCount, mergeReadiness, selectedDiff, displayedPrs,
+    commentsForFile, commentCount, mergeReadiness, mergeBlocked, mergeBlockedReason, selectedDiff, displayedPrs,
     // Actions
     init, loadRemote, loadPrs, loadMorePrs, loadCurrentUser, selectPr, loadDiff,
     createPr, checkoutPr, mergePr, convertDraftToReady,

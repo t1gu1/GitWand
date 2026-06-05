@@ -322,6 +322,14 @@ fn json_to_detail(pr: &serde_json::Value) -> PullRequestDetail {
         reviewers: jlogins(pr, "requested_reviewers", "login"),
         mergeable,
         checks_status: String::new(),
+        // Authenticated REST repo sub-objects embed a `permissions` map;
+        // `push` access on the base repo means the viewer can merge.
+        can_merge: pr
+            .get("base")
+            .and_then(|b| b.get("repo"))
+            .and_then(|r| r.get("permissions"))
+            .and_then(|p| p.get("push"))
+            .and_then(|b| b.as_bool()),
     }
 }
 

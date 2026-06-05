@@ -818,6 +818,7 @@ const en = {
       mergeConflicting: "Conflicting",
       mergeProblem: "Problem detected",
       mergeUnknown: "Unknown",
+      mergeNoPermission: "You don't have permission to merge this pull request",
       statFiles: "Files",
       statDiff: "Diff",
       statComments: "Comments",

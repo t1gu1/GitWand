@@ -407,6 +407,12 @@ export interface PullRequestDetail {
   reviewers: string[];
   mergeable: string;
   checksStatus: string;
+  /**
+   * Whether the current viewer can merge this PR. `null` when the forge does
+   * not expose it (Azure, Bitbucket) — callers must treat null as "allowed"
+   * and gate the merge button on errors only, never on an unknown permission.
+   */
+  canMerge: boolean | null;
 }
 
 export interface CICheck {
@@ -443,6 +449,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
       reviewers: string[];
       mergeable: string;
       checks_status: string;
+      can_merge: boolean | null;
     }>("gh_pr_detail", { cwd, number });
     return {
       number: raw.number,
@@ -466,6 +473,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
       reviewers: raw.reviewers,
       mergeable: raw.mergeable,
       checksStatus: raw.checks_status,
+      canMerge: raw.can_merge ?? null,
     };
   }
   // Browser dev mode
@@ -480,6 +488,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
     url: raw.url, additions: raw.additions, deletions: raw.deletions,
     changedFiles: raw.changed_files, comments: raw.comments, reviewComments: raw.review_comments,
     labels: raw.labels, reviewers: raw.reviewers, mergeable: raw.mergeable, checksStatus: raw.checks_status,
+    canMerge: raw.can_merge ?? null,
   };
 }
 
@@ -970,6 +979,7 @@ export async function azPrDetail(cwd: string, number: number): Promise<PullReque
       reviewers: raw.reviewers,
       mergeable: raw.mergeable,
       checksStatus: raw.checks_status,
+      canMerge: raw.can_merge ?? null,
     };
   }
   throw new Error(AZURE_WEB_ONLY);

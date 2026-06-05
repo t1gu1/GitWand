@@ -183,6 +183,11 @@ fn gl_mr_to_detail(mr: &serde_json::Value) -> PullRequestDetail {
         reviewers: jusernames(mr, "reviewers"),
         mergeable,
         checks_status: String::new(),
+        // GitLab's single-MR endpoint carries `user.can_merge` for the caller.
+        can_merge: mr
+            .get("user")
+            .and_then(|u| u.get("can_merge"))
+            .and_then(|b| b.as_bool()),
     }
 }
 

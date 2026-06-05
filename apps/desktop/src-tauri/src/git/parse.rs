@@ -377,6 +377,9 @@ pub(crate) fn gh_pr_detail_raw_to_detail(r: GhPrDetailRaw) -> PullRequestDetail 
         reviewers,
         mergeable: r.mergeable.unwrap_or_default(),
         checks_status,
+        // Filled in by the caller (gh_pr_detail) via a `gh repo view`
+        // viewerPermission lookup — `gh pr view` doesn't carry it.
+        can_merge: None,
     }
 }
 

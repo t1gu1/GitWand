@@ -388,6 +388,9 @@ fn bb_pr_to_detail(pr: &serde_json::Value) -> PullRequestDetail {
         reviewers,
         mergeable: String::new(), // Not directly available in v2.10
         checks_status: String::new(), // Bitbucket Pipelines needs a separate call
+        // Bitbucket merge permission needs a separate privileges call —
+        // unknown ⇒ UI gates on errors only.
+        can_merge: None,
     }
 }
 

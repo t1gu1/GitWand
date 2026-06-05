@@ -484,6 +484,12 @@ pub struct PullRequestDetail {
     pub reviewers: Vec<String>,
     pub mergeable: String,
     pub checks_status: String,
+    /// Whether the current viewer has permission to merge this PR.
+    /// `None` when the forge does not cheaply expose it (Azure, Bitbucket) —
+    /// the UI must treat unknown as "allowed" and gate on errors only, never
+    /// disable the merge button on an unknown permission.
+    #[serde(default)]
+    pub can_merge: Option<bool>,
 }
 
 // ─── Fork / PR target info ─────────────────────────────────────────
