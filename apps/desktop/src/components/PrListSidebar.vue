@@ -119,9 +119,28 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
           <line x1="6" y1="9" x2="6" y2="21" />
         </svg>
         <span class="pls-title">{{ t('pr.list.title') }}</span>
-        <span v-if="!panel.loading.value && totalCount > 0" class="pls-count-pill">{{ totalCount }}</span>
-        <button class="pls-icon-btn" @click="panel.loadPrs" :title="t('pr.list.refresh')" aria-label="Refresh">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <span v-if="totalCount > 0" class="pls-count-pill">{{ totalCount }}</span>
+        <!-- SWR: subtle spinner while a background revalidation runs over the
+             cached list already on screen (distinct from the cold full spinner). -->
+        <span
+          v-if="panel.refreshing.value"
+          class="pls-spinner pls-spinner--sm"
+          :title="t('pr.list.refreshing')"
+          :aria-label="t('pr.list.refreshing')"
+          role="status"
+        ></span>
+        <button
+          class="pls-icon-btn"
+          @click="panel.loadPrs"
+          :title="t('pr.list.refresh')"
+          aria-label="Refresh"
+          :disabled="panel.loading.value || panel.refreshing.value"
+        >
+          <svg
+            class="pls-refresh-icon"
+            :class="{ 'pls-refresh-icon--spinning': panel.loading.value || panel.refreshing.value }"
+            width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+          >
             <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" />
             <path d="M13.5 2.5v3h-3" />
           </svg>
@@ -370,6 +389,16 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   background: var(--color-bg-tertiary);
   border-color: var(--color-border);
   color: var(--color-text);
+}
+.pls-icon-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* SWR: spin the refresh glyph while a (cold or background) reload is running. */
+.pls-refresh-icon--spinning {
+  animation: pls-spin 0.8s linear infinite;
+  transform-origin: center;
 }
 
 /* ─── Segmented filter ───────────────────────────────────── */
@@ -791,7 +820,8 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   .pls-new-btn:hover {
     transform: none;
   }
-  .pls-spinner {
+  .pls-spinner,
+  .pls-refresh-icon--spinning {
     animation: none;
   }
 }

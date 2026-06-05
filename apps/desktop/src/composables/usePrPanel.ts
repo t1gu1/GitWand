@@ -28,6 +28,7 @@ import {
   type ForkInfo,
 } from "../utils/backend";
 import { forgeFromRemoteInfo, githubProvider } from "./forge/useForge";
+import { usePrCache, listKey, detailKey } from "./usePrCache";
 import { getPersistedDiffMode, type DiffMode } from "../utils/diffMode";
 import { requireOnline } from "../utils/networkGuard";
 import { t } from "./useI18n";
@@ -44,6 +45,10 @@ const FORGE_LABELS: Record<string, string> = {
 
 export function usePrPanel(cwd: Ref<string>) {
 
+  // Disk-persisted SWR cache — paints the list/detail instantly on repo-switch
+  // or cold app start, then revalidates in the background. See usePrCache.ts.
+  const cache = usePrCache();
+
   // ─── Remote / list ─────────────────────────────────────
   const remote = ref<RemoteInfo | null>(null);
 
@@ -57,6 +62,9 @@ export function usePrPanel(cwd: Ref<string>) {
 
   const prs = ref<PullRequest[]>([]);
   const loading = ref(false);
+  // SWR: true while a background revalidation runs over cached data already on
+  // screen. Distinct from `loading` (cold load, full-page spinner).
+  const refreshing = ref(false);
   const error = ref<string | null>(null);
   // Optional follow-up action surfaced alongside an error. `"open-settings"`
   // is set when the failure is actionable from Settings (e.g. gh CLI missing
@@ -96,6 +104,9 @@ export function usePrPanel(cwd: Ref<string>) {
   const prIssueComments = ref<PrReviewComment[]>([]);
   const prReviews = ref<PrReview[]>([]);
   const detailLoading = ref(false);
+  // SWR equivalent of `refreshing` for the detail pane: cached detail is shown
+  // while the 6-call revalidation runs in the background.
+  const detailRefreshing = ref(false);
   const detailError = ref<string | null>(null);
   const detailTab = ref<"info" | "diff" | "checks" | "intelligence">("info");
   const selectedDiffFile = ref<string | null>(null);
@@ -259,8 +270,17 @@ export function usePrPanel(cwd: Ref<string>) {
 
   // ─── Data loading ───────────────────────────────────────
   async function loadRemote() {
-    try { remote.value = await gitRemoteInfo(cwd.value); }
-    catch { remote.value = null; }
+    // SWR: seed from cache so `forge` resolves on the first paint instead of
+    // waiting on `gitRemoteInfo` before `init()` can call `loadPrs()`.
+    const cached = cache.getRemote(cwd.value);
+    if (cached) remote.value = cached.remote;
+    try {
+      const fresh = await gitRemoteInfo(cwd.value);
+      remote.value = fresh;
+      cache.setRemote(cwd.value, fresh);
+    } catch {
+      if (!cached) remote.value = null;
+    }
   }
 
   /**
@@ -283,17 +303,30 @@ export function usePrPanel(cwd: Ref<string>) {
 
   async function loadPrs() {
     if (!cwd.value) return;
+    // SWR: paint cached PRs immediately, then revalidate in the background.
+    // A cache hit means `loading` (cold full-page spinner) stays false and we
+    // only flip the subtle `refreshing` flag instead.
+    const key = listKey(cwd.value, filterState.value);
+    const cached = cache.getList(key);
+    if (cached) {
+      prs.value = cached.prs;
+      hasMore.value = cached.hasMore;
+    }
     // F1 — Mode hors-ligne: short-circuit before the gh subprocess.
     // `gh pr list` itself would hang on DNS / TCP timeout for the user
     // visible duration of the IPC, leaving the panel stuck on a spinner.
     if (!requireOnline("gh pr list")) {
-      prs.value = [];
+      // Keep cached data on screen when offline; only wipe when we have none.
+      if (!cached) {
+        prs.value = [];
+        hasMore.value = false;
+      }
       loading.value = false;
-      hasMore.value = false;
+      refreshing.value = false;
       error.value = t("connectivity.offline.disabledOp");
       return;
     }
-    loading.value = true;
+    if (cached) refreshing.value = true; else loading.value = true;
     error.value = null;
     errorAction.value = null;
     // Reset pagination — first page only
@@ -303,6 +336,7 @@ export function usePrPanel(cwd: Ref<string>) {
       prs.value = page;
       // If gh returned fewer than asked, there's nothing more to fetch.
       hasMore.value = page.length >= PAGE_SIZE;
+      cache.setList(key, page, hasMore.value);
     } catch (err: any) {
       const msg: string = err?.message ?? String(err);
       // §B2 — surface the raw underlying error so users + maintainers can
@@ -325,10 +359,15 @@ export function usePrPanel(cwd: Ref<string>) {
       } else {
         error.value = msg || t("pr.error.unknown");
       }
-      prs.value = [];
-      hasMore.value = false;
+      // SWR: keep the stale list on screen when revalidation fails — yanking it
+      // to an empty error state is more jarring than a soft error banner.
+      if (!cached) {
+        prs.value = [];
+        hasMore.value = false;
+      }
     } finally {
       loading.value = false;
+      refreshing.value = false;
     }
   }
 
@@ -396,7 +435,19 @@ export function usePrPanel(cwd: Ref<string>) {
     if (selectedPr.value?.number === pr.number) return;
     selectedPr.value = pr;
     resetDetail();
-    detailLoading.value = true;
+    // SWR: paint cached detail bundle instantly, revalidate in background.
+    const key = detailKey(cwd.value, pr.number);
+    const cached = cache.getDetail(key);
+    if (cached) {
+      prDetail.value = cached.detail;
+      prChecks.value = cached.checks;
+      prComments.value = cached.comments;
+      prIssueComments.value = cached.issueComments;
+      prReviews.value = cached.reviews;
+      detailRefreshing.value = true;
+    } else {
+      detailLoading.value = true;
+    }
     detailError.value = null;
     try {
       const [detail, checks, comments, issueComments, reviews, fileCount] = await Promise.all([
@@ -407,23 +458,42 @@ export function usePrPanel(cwd: Ref<string>) {
         forge.value.listReviews(cwd.value, pr.number).catch(() => [] as PrReview[]),
         gitFileCount(cwd.value).catch(() => 0),
       ]);
+      // Ignore a stale response if the user moved on to another PR meanwhile.
+      if (selectedPr.value?.number !== pr.number) return;
       prDetail.value = detail;
       prChecks.value = checks;
       prComments.value = comments;
       prIssueComments.value = issueComments;
       prReviews.value = reviews;
       totalRepoFiles.value = fileCount;
+      cache.setDetail(key, { detail, checks, comments, issueComments, reviews });
     } catch (err: any) {
-      detailError.value = err.message;
+      // Keep the cached bundle on screen if revalidation failed.
+      if (!cached) detailError.value = err.message;
     } finally {
       detailLoading.value = false;
+      detailRefreshing.value = false;
     }
+  }
+
+  /** Write the current detail refs back to the SWR cache (write-through after
+   *  a comment / review mutation so the cached bundle stays fresh). */
+  function persistDetailCache() {
+    if (!selectedPr.value || !prDetail.value) return;
+    cache.setDetail(detailKey(cwd.value, selectedPr.value.number), {
+      detail: prDetail.value,
+      checks: prChecks.value,
+      comments: prComments.value,
+      issueComments: prIssueComments.value,
+      reviews: prReviews.value,
+    });
   }
 
   async function refreshComments() {
     if (!selectedPr.value) return;
     try {
       prComments.value = await forge.value.listComments(cwd.value, selectedPr.value.number);
+      persistDetailCache();
     } catch { /* silent */ }
   }
 
@@ -491,6 +561,7 @@ export function usePrPanel(cwd: Ref<string>) {
       showCreateForm.value = false;
       newPrTitle.value = ""; newPrBody.value = ""; newPrDraft.value = false;
       newPrReviewers.value = [];
+      cache.invalidateLists(cwd.value);
       await loadPrs();
     } catch (err: any) { error.value = err.message; }
     finally { isCreating.value = false; }
@@ -543,6 +614,8 @@ export function usePrPanel(cwd: Ref<string>) {
     try {
       await forge.value.mergePR(cwd.value, mergingPr.value.number, mergeMethod.value);
       success.value = t("pr.success.prMerged", mergingPr.value.number);
+      cache.invalidateDetail(cwd.value, mergingPr.value.number);
+      cache.invalidateLists(cwd.value);
       mergingPr.value = null;
       await loadPrs();
     } catch (err: any) { error.value = err.message; }
@@ -555,6 +628,7 @@ export function usePrPanel(cwd: Ref<string>) {
       await forge.value.createComment(cwd.value, selectedPr.value.number, params);
       await refreshComments();
       if (prDetail.value) prDetail.value.reviewComments++;
+      persistDetailCache();
     } catch (err: any) { error.value = err.message; }
   }
 
@@ -571,6 +645,7 @@ export function usePrPanel(cwd: Ref<string>) {
       await forge.value.updateComment(cwd.value, id, body);
       const idx = prComments.value.findIndex((c) => c.id === id);
       if (idx !== -1) prComments.value[idx] = { ...prComments.value[idx], body, updated_at: new Date().toISOString() };
+      persistDetailCache();
     } catch (err: any) { error.value = err.message; }
   }
 
@@ -579,6 +654,7 @@ export function usePrPanel(cwd: Ref<string>) {
       await forge.value.deleteComment(cwd.value, id);
       prComments.value = prComments.value.filter((c) => c.id !== id && c.in_reply_to_id !== id);
       if (prDetail.value && prDetail.value.reviewComments > 0) prDetail.value.reviewComments--;
+      persistDetailCache();
     } catch (err: any) { error.value = err.message; }
   }
 
@@ -617,6 +693,7 @@ export function usePrPanel(cwd: Ref<string>) {
       ]);
       prReviews.value = reviews;
       prComments.value = comments;
+      persistDetailCache();
       success.value = t("pr.success.reviewSubmitted", opts.event);
     } catch (err: any) {
       error.value = err.message;
@@ -723,7 +800,17 @@ export function usePrPanel(cwd: Ref<string>) {
     // From now on, cwd changes will auto-reload the PR list because the
     // user has expressed intent by opening the PR view at least once.
     panelMounted.value = true;
-    await loadRemote();
+    // SWR: with a cached remote we resolve `forge` synchronously and revalidate
+    // in the background, so `loadPrs()` paints from its own cache without first
+    // waiting on the `gitRemoteInfo` roundtrip. Cold (no cache) still awaits so
+    // the correct forge is known before listing a non-GitHub repo.
+    const cachedRemote = cache.getRemote(cwd.value);
+    if (cachedRemote) {
+      remote.value = cachedRemote.remote;
+      loadRemote();
+    } else {
+      await loadRemote();
+    }
     await loadPrs();
     // Load current user in background for "assigned / reviews" filter
     loadCurrentUser();
@@ -733,13 +820,13 @@ export function usePrPanel(cwd: Ref<string>) {
 
   return {
     // State
-    remote, prs, loading, error, errorAction, success, filterState, filterMode,
+    remote, prs, loading, refreshing, error, errorAction, success, filterState, filterMode,
     currentUser, currentUserLoading, currentUserError,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     forkInfo, newPrBaseRepo,
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, prDiffFiles, prComments, prIssueComments, prReviews,
-    detailLoading, detailError, detailTab, selectedDiffFile, diffMode,
+    detailLoading, detailRefreshing, detailError, detailTab, selectedDiffFile, diffMode,
     draftReviewComments, showReviewModal, submittingReview,
     conflictPreview, conflictLoading, conflictError,
     hotspots, hotspotsLoading, totalRepoFiles, fileHistory, fileHistoryLoading,

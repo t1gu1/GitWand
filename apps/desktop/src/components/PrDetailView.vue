@@ -163,6 +163,17 @@ function commentTimeAgo(dateStr: string): string {
           <div class="pdv-hero-title">
             <span class="pdv-pr-num">#{{ p.prDetail.value.number }}</span>
             <h1 class="pdv-pr-title">{{ p.prDetail.value.title }}</h1>
+            <!-- SWR: cached detail is on screen; show a small badge while the
+                 background revalidation runs. -->
+            <span
+              v-if="p.detailRefreshing.value"
+              class="pdv-refresh-badge"
+              role="status"
+              :title="t('pr.detail.refreshing')"
+            >
+              <span class="pdv-spinner pdv-spinner--sm" aria-hidden="true"></span>
+              {{ t('pr.detail.refreshing') }}
+            </span>
           </div>
           <div class="pdv-hero-actions">
             <button class="pdv-btn" @click="p.checkoutPr(p.selectedPr.value!)">
@@ -725,8 +736,26 @@ function commentTimeAgo(dateStr: string): string {
   animation: pdv-spin 0.8s linear infinite;
 }
 
+.pdv-spinner--sm {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+
 @keyframes pdv-spin {
   to { transform: rotate(360deg); }
+}
+
+/* SWR background-refresh badge in the hero. */
+.pdv-refresh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  align-self: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 /* ─── Hero header ────────────────────────────────────────── */
