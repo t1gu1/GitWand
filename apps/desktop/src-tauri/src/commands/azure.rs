@@ -948,6 +948,39 @@ fn map_policy_status(status: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// Rank a check's `conclusion` by how "resolved & positive" it is, so duplicate
+/// evaluations of the same policy can be collapsed to their best outcome.
+/// Higher wins: a passed copy beats a still-queued one.
+fn conclusion_rank(conclusion: &str) -> u8 {
+    match conclusion.to_uppercase().as_str() {
+        "SUCCESS" => 3,
+        "SKIPPED" | "NEUTRAL" => 2,
+        "FAILURE" | "ERROR" => 1,
+        _ => 0, // "" / queued / running
+    }
+}
+
+/// Collapse duplicate checks by name. Azure surfaces the same branch policy
+/// twice (inherited + branch-level); when one copy is approved and the other is
+/// still queued, the requirement is already met, so the whole group is success.
+/// First-seen order is preserved.
+fn dedupe_checks(checks: Vec<CICheck>) -> Vec<CICheck> {
+    let mut order: Vec<String> = Vec::new();
+    let mut best: HashMap<String, CICheck> = HashMap::new();
+    for c in checks {
+        match best.get(&c.name) {
+            Some(existing) if conclusion_rank(&existing.conclusion) >= conclusion_rank(&c.conclusion) => {}
+            _ => {
+                if !best.contains_key(&c.name) {
+                    order.push(c.name.clone());
+                }
+                best.insert(c.name.clone(), c);
+            }
+        }
+    }
+    order.into_iter().filter_map(|n| best.remove(&n)).collect()
+}
+
 /// Aggregate a PR's policy/check evaluations into one rollup state:
 /// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` when there
 /// are no checks. Precedence: any failure ⇒ red, else any unfinished ⇒ yellow.
@@ -1038,6 +1071,10 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
             })
         })
         .collect();
+
+    // Azure reports the same policy twice (inherited + branch-level) — collapse
+    // duplicates so an approved copy isn't shown alongside a queued one.
+    let checks = dedupe_checks(checks);
 
     // Fallback: the preview policy API can be unavailable (permissions, tag).
     // Still convey "waiting for reviewer" from the PR's own reviewer list — if
