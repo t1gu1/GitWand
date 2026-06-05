@@ -761,3 +761,72 @@ export async function deleteCredential(service: string, account: string): Promis
   if (!isTauri()) return;
   return tauriInvoke<void>("delete_credential", { service, account });
 }
+
+// ─── GitHub OAuth device flow ───────────────────────────────────────────────
+//
+// "Sign in with GitHub" from Settings > Accounts. The token is stored in the
+// OS keychain (service "gitwand:github", account "oauth"); once present, the
+// Rust `gh_*` commands route through the REST API instead of the `gh` CLI, so
+// the `gh` binary is no longer required.
+
+export interface GithubDeviceCode {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  /** verification_uri with the code pre-filled (skips manual entry); may be "". */
+  verification_uri_complete: string;
+  expires_in: number;
+  /** Minimum seconds between polls (GitHub-mandated, floored at 5). */
+  interval: number;
+}
+
+export interface GithubDevicePoll {
+  /** "pending" | "slow_down" | "success" | "error" */
+  status: string;
+  /** Populated only on success. */
+  login: string;
+  /** Populated only on a hard error. */
+  error: string;
+}
+
+/** Begin the OAuth device flow — returns the user code + verification URL. */
+export async function githubDeviceStart(): Promise<GithubDeviceCode> {
+  if (isTauri()) return tauriInvoke<GithubDeviceCode>("github_device_start");
+  // dev:web — mock device flow (does not actually authenticate).
+  const res = await devFetch(`${DEV_SERVER}/api/github-device-start`, { method: "POST" });
+  if (!res.ok) throw new Error(`github-device-start failed: ${res.status}`);
+  return res.json() as Promise<GithubDeviceCode>;
+}
+
+/** Poll once for the access token. On success the token is stored server-side. */
+export async function githubDevicePoll(deviceCode: string): Promise<GithubDevicePoll> {
+  if (isTauri()) return tauriInvoke<GithubDevicePoll>("github_device_poll", { deviceCode });
+  const res = await devFetch(`${DEV_SERVER}/api/github-device-poll`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_code: deviceCode }),
+  });
+  if (!res.ok) throw new Error(`github-device-poll failed: ${res.status}`);
+  return res.json() as Promise<GithubDevicePoll>;
+}
+
+/**
+ * Open an http(s) URL in the system browser. In Tauri the webview's
+ * `window.open` is a no-op, so we hand the URL to the OS via the Rust
+ * `open_url` command; in dev:web we fall back to `window.open`.
+ */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke<void>("open_url", { url });
+    return;
+  }
+  window.open(url, "_blank");
+}
+
+/** Whether a Settings-managed GitHub token is currently stored. */
+export async function githubTokenPresent(): Promise<boolean> {
+  if (isTauri()) return tauriInvoke<boolean>("github_token_present");
+  const res = await devFetch(`${DEV_SERVER}/api/github-token-present`, { method: "POST" });
+  if (!res.ok) return false;
+  return res.json() as Promise<boolean>;
+}

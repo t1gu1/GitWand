@@ -2663,6 +2663,10 @@ pub(crate) fn shell_exec(cwd: String, command: String) -> Result<String, String>
 /// Calls `gh api user --jq .login` — fast, no repo context needed.
 #[tauri::command]
 pub(crate) fn gh_current_user() -> Result<String, String> {
+    // Settings-managed token present → resolve via REST (no `gh` needed).
+    if let Some(tok) = crate::commands::github_api::settings_github_token() {
+        return crate::commands::github_api::rest_current_user(&tok);
+    }
     // GH_TOKEN propagation: centralized in `hidden_cmd` (cf. git/cmd.rs).
     let output = hidden_cmd("gh")
         .args(["api", "user", "--jq", ".login"])
@@ -2690,6 +2694,9 @@ pub(crate) fn gh_current_user() -> Result<String, String> {
 // readers don't think it's missing the prefix by accident.
 #[tauri::command]
 pub(crate) fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
+    if let Some(tok) = crate::commands::github_api::settings_github_token() {
+        return crate::commands::github_api::rest_pr_files(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args([
             "pr", "view", &number.to_string(),
@@ -2729,6 +2736,33 @@ pub(crate) fn git_merge_base(cwd: String, ref1: String, ref2: String) -> Result<
         return Ok(String::new());
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+// ─── Open a URL in the system browser ────────────────────────
+//
+// The webview's `window.open` is a no-op in Tauri, so external links must be
+// handed to the OS default handler. Restricted to http(s) to avoid opening
+// arbitrary schemes (file://, etc.).
+
+#[tauri::command]
+pub(crate) fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Refusing to open non-http(s) URL".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    let mut cmd = hidden_cmd("open");
+    #[cfg(target_os = "linux")]
+    let mut cmd = hidden_cmd("xdg-open");
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = hidden_cmd("cmd");
+        c.args(["/C", "start", ""]);
+        c
+    };
+    cmd.arg(&url)
+        .spawn()
+        .map_err(|e| format!("Failed to open URL: {}", e))?;
+    Ok(())
 }
 
 // ─── Open in external editor ─────────────────────────────────

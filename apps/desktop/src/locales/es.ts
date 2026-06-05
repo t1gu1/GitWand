@@ -1164,6 +1164,13 @@ const es: Locale = {
     accountsSaveBtn: "Guardar",
     accountsCancelBtn: "Cancelar",
     accountsSaved: "Cuenta guardada.",
+    accountsGithubSignIn: "Iniciar sesión con GitHub",
+    accountsGithubHint: "Abre GitHub en tu navegador para autorizar GitWand. No requiere la CLI gh.",
+    accountsGithubEnterCode: "Copia este código, luego abre GitHub e introdúcelo:",
+    accountsGithubOpen: "Abrir GitHub",
+    accountsGithubDevMock: "Simulación de desarrollo: no inicia sesión de verdad. Ejecuta la app completa para el inicio de sesión real de GitHub.",
+    accountsGithubWaiting: "Esperando autorización…",
+    accountsGithubConnected: "Conectado como",
     accountsDeleteConfirm: "¿Eliminar esta cuenta?",
     // v2.12
     git: {

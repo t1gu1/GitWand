@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sign in with GitHub (no `gh` CLI required)** — Settings → Accounts now offers a "Sign in with GitHub" button using the OAuth device flow. The resulting token is stored in the OS keychain; once present, the GitHub PR workflow (list, count, detail, diff, checks, files, create, merge, checkout, mark-ready) routes through the GitHub REST API instead of shelling out to `gh`. The `gh` CLI still works as before when no Settings token is configured — the ambient `GH_TOKEN`/`GITHUB_TOKEN` env path is unchanged.
+
+### Notes
+
+- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23licwiCpPiRPRodWN`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
+
 ## [2.17.0] - 2026-06-04
 
 v2.17 rounds out the agent-CLI lineup with **opencode** as a first-class AI provider, and gives every CLI agent its own model picker — a second select under the provider dropdown, scoped per provider so switching back restores the previous choice.

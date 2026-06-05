@@ -5,11 +5,17 @@
  * Settings > Accounts tab — v2.10 §4.2.
  */
 
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useAccounts } from "../composables/useAccounts";
 import { useCredentials } from "../composables/useCredentials";
+import { useGithubAuth, GITHUB_TOKEN_KEY } from "../composables/useGithubAuth";
+import { isTauri } from "../utils/backend";
 import type { ForgeName } from "../composables/forge/types";
+
+// In dev:web there is no Rust backend — the GitHub flow is a fake mock that
+// cannot actually authenticate. Flag it so the UI says so plainly.
+const isDevMock = !isTauri();
 
 const { t } = useI18n();
 const {
@@ -27,6 +33,17 @@ const {
   saveBitbucketCredential,
   removeCredential,
 } = useCredentials();
+
+// GitHub OAuth device flow — auto-unwrapped refs for template ergonomics.
+const {
+  phase: ghPhase,
+  userCode: ghUserCode,
+  error: ghError,
+  login: ghLogin,
+  start: ghStart,
+  openVerification: ghOpen,
+  reset: ghReset,
+} = useGithubAuth();
 
 // ─── Add-account form ────────────────────────────────────────────────────────
 
@@ -47,12 +64,39 @@ function openForm() {
   formToken.value = "";
   formError.value = null;
   formSuccess.value = false;
+  ghReset();
   showForm.value = true;
 }
 
 function cancelForm() {
+  ghReset();
   showForm.value = false;
 }
+
+// ─── GitHub OAuth device flow ─────────────────────────────────────────────────
+
+function startGithubLogin() {
+  formError.value = null;
+  ghStart();
+}
+
+// On successful sign-in, register the account. The token is already in the OS
+// keychain (stored by the Rust poll command) under GITHUB_TOKEN_KEY.
+watch(ghPhase, (p) => {
+  if (p !== "success") return;
+  addAccount({
+    forge: "github",
+    label: formLabel.value.trim() || ghLogin.value,
+    username: ghLogin.value,
+    tokenKey: GITHUB_TOKEN_KEY,
+  });
+  formSuccess.value = true;
+  setTimeout(() => {
+    showForm.value = false;
+    formSuccess.value = false;
+    ghReset();
+  }, 1200);
+});
 
 async function submitForm() {
   formError.value = null;
@@ -175,13 +219,35 @@ const totalAccounts = computed(() => accounts.value.length);
           </div>
         </template>
 
+        <!-- GitHub — OAuth device flow, no token paste, no gh CLI required. -->
+        <div v-else-if="formForge === 'github'" class="sa-gh">
+          <template v-if="ghPhase === 'idle' || ghPhase === 'error'">
+            <button class="sa-gh-btn" @click="startGithubLogin">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              {{ t('settings.accountsGithubSignIn') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsGithubHint') }}</p>
+            <p v-if="ghError" class="sa-msg sa-msg--error">{{ ghError }}</p>
+          </template>
+          <template v-else-if="ghPhase === 'awaiting'">
+            <p v-if="isDevMock" class="sa-msg sa-msg--error">{{ t('settings.accountsGithubDevMock') }}</p>
+            <p class="sa-note">{{ t('settings.accountsGithubEnterCode') }}</p>
+            <code class="sa-gh-code">{{ ghUserCode }}</code>
+            <button v-if="!isDevMock" class="sa-gh-btn" @click="ghOpen">
+              {{ t('settings.accountsGithubOpen') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsGithubWaiting') }}</p>
+          </template>
+          <template v-else-if="ghPhase === 'success'">
+            <p class="sa-msg sa-msg--ok">{{ t('settings.accountsGithubConnected') }} @{{ ghLogin }}</p>
+          </template>
+        </div>
+
+        <!-- GitLab — still CLI-based. -->
         <div v-else class="sa-note">
-          <template v-if="formForge === 'gitlab'">
-            GitLab auth is handled by <code>glab auth login</code> — no token needed here.
-          </template>
-          <template v-else>
-            GitHub auth is handled by <code>gh auth login</code> — no token needed here.
-          </template>
+          GitLab auth is handled by <code>glab auth login</code> — no token needed here.
         </div>
 
         <p v-if="formError" class="sa-msg sa-msg--error">{{ formError }}</p>
@@ -191,7 +257,12 @@ const totalAccounts = computed(() => accounts.value.length);
           <button class="sa-ghost-btn" :disabled="saving" @click="cancelForm">
             {{ t('settings.accountsCancelBtn') }}
           </button>
-          <button class="sa-primary-btn" :disabled="saving" @click="submitForm">
+          <button
+            v-if="formForge !== 'github'"
+            class="sa-primary-btn"
+            :disabled="saving"
+            @click="submitForm"
+          >
             {{ saving ? '…' : t('settings.accountsSaveBtn') }}
           </button>
         </div>
@@ -408,6 +479,48 @@ const totalAccounts = computed(() => accounts.value.length);
   background: rgba(255, 255, 255, 0.07);
   padding: 1px 5px;
   border-radius: 3px;
+}
+
+/* ── GitHub OAuth device flow ── */
+.sa-gh {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sa-gh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 5px);
+  background: var(--color-text, #eee);
+  color: var(--color-bg, #1e1e1e);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.sa-gh-btn:hover {
+  opacity: 0.88;
+}
+
+.sa-gh-code {
+  align-self: flex-start;
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-subtle, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  color: var(--color-text, #eee);
+  user-select: all;
 }
 
 /* ── Messages ── */

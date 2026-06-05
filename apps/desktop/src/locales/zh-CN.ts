@@ -1151,6 +1151,13 @@ const zhCN: Locale = {
     accountsSaveBtn: "\u4fdd\u5b58",
     accountsCancelBtn: "\u53d6\u6d88",
     accountsSaved: "\u8d26\u53f7\u5df2\u4fdd\u5b58\u3002",
+    accountsGithubSignIn: "\u4f7f\u7528 GitHub \u767b\u5f55",
+    accountsGithubHint: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00 GitHub \u4ee5\u6388\u6743 GitWand\u3002\u65e0\u9700 gh CLI\u3002",
+    accountsGithubEnterCode: "\u590d\u5236\u6b64\u4ee3\u7801\uff0c\u7136\u540e\u6253\u5f00 GitHub \u5e76\u8f93\u5165\uff1a",
+    accountsGithubOpen: "\u6253\u5f00 GitHub",
+    accountsGithubDevMock: "\u5f00\u53d1\u6a21\u62df \u2014 \u5e76\u975e\u771f\u6b63\u767b\u5f55\u3002\u8bf7\u8fd0\u884c\u5b8c\u6574\u5e94\u7528\u4ee5\u8fdb\u884c\u771f\u5b9e\u7684 GitHub \u767b\u5f55\u3002",
+    accountsGithubWaiting: "\u7b49\u5f85\u6388\u6743\u2026",
+    accountsGithubConnected: "\u5df2\u8fde\u63a5\u4e3a",
     accountsDeleteConfirm: "\u5220\u9664\u6b64\u8d26\u53f7\uff1f",
     // v2.12
     git: {
