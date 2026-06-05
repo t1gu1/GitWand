@@ -1009,3 +1009,35 @@ export async function azPrCreateComment(cwd: string, number: number, body: strin
   if (isTauri()) return tauriInvoke<PrReviewComment>("az_pr_create_comment", { cwd, number, body });
   throw new Error(AZURE_WEB_ONLY);
 }
+
+export async function azPrChecks(cwd: string, number: number): Promise<CICheck[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ name: string; state: string; conclusion: string; details_url: string }>>(
+      "az_pr_checks",
+      { cwd, number },
+    );
+    return raw.map((c) => ({
+      name: c.name,
+      state: c.state,
+      conclusion: c.conclusion,
+      detailsUrl: c.details_url,
+    }));
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrReviews(cwd: string, number: number): Promise<PrReview[]> {
+  if (isTauri()) return tauriInvoke<PrReview[]>("az_pr_reviews", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azSubmitReview(
+  cwd: string,
+  number: number,
+  opts: { event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT"; body?: string },
+): Promise<PrReview> {
+  if (isTauri()) {
+    return tauriInvoke<PrReview>("az_submit_review", { cwd, number, event: opts.event, body: opts.body });
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}

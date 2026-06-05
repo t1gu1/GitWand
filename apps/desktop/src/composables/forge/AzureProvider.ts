@@ -31,6 +31,9 @@ import {
   azCheckoutPr,
   azPrComments,
   azPrCreateComment,
+  azPrChecks,
+  azPrReviews,
+  azSubmitReview,
   ghPrConflictPreview,
   ghPrHotspots,
 } from "../../utils/backend";
@@ -104,9 +107,9 @@ export class AzureProvider implements ForgeProvider {
     return azPrDiff(cwd, number);
   }
 
-  async getCIChecks(_cwd: string, _number: number): Promise<CICheck[]> {
-    // Azure Pipelines status not wired yet — empty rollup (no checks shown).
-    return [];
+  getCIChecks(cwd: string, number: number): Promise<CICheck[]> {
+    // Azure branch-policy evaluations (build validation, reviewers, etc.).
+    return azPrChecks(cwd, number);
   }
 
   // ── PR actions ─────────────────────────────────────────────────────────────
@@ -147,14 +150,15 @@ export class AzureProvider implements ForgeProvider {
     throw new ForgeNotImplementedError("azure", "deleteComment");
   }
 
-  // ── Reviews (not yet implemented) ──────────────────────────────────────────
+  // ── Reviews (reviewer votes) ───────────────────────────────────────────────
 
-  async listReviews(_cwd: string, _prNumber: number): Promise<PrReview[]> {
-    return [];
+  listReviews(cwd: string, prNumber: number): Promise<PrReview[]> {
+    return azPrReviews(cwd, prNumber);
   }
 
-  submitReview(_cwd: string, _prNumber: number, _opts: SubmitReviewOptions): Promise<PrReview> {
-    throw new ForgeNotImplementedError("azure", "submitReview");
+  submitReview(cwd: string, prNumber: number, opts: SubmitReviewOptions): Promise<PrReview> {
+    // Azure has no inline-comment review payload — cast the vote (+ optional note).
+    return azSubmitReview(cwd, prNumber, { event: opts.event, body: opts.body });
   }
 
   // ── Intelligence ───────────────────────────────────────────────────────────

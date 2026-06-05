@@ -872,6 +872,169 @@ fn rest_pr_create_comment(cwd: &str, number: i64, body: &str) -> Result<serde_js
         .ok_or_else(|| "Azure DevOps returned no comment after create.".to_string())
 }
 
+// ─── CI checks (Azure branch-policy evaluations) ────────────────────────────
+//
+// Azure surfaces "merge state" through branch *policy evaluations* (build
+// validation, required/minimum reviewers, comment resolution, external status).
+// This is a richer signal than raw commit statuses and matches what the PR page
+// shows under "Checks", so we map each evaluation to a `CICheck`.
+
+/// Map an Azure policy-evaluation `status` to (state, conclusion) in the
+/// vocabulary the frontend merge-readiness logic understands.
+fn map_policy_status(status: &str) -> (&'static str, &'static str) {
+    match status {
+        "approved" => ("completed", "SUCCESS"),
+        "rejected" => ("completed", "FAILURE"),
+        "notApplicable" => ("completed", "SKIPPED"),
+        "running" => ("in_progress", ""),
+        // "queued" | "notSubmitted" | anything else → still pending.
+        _ => ("queued", ""),
+    }
+}
+
+fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
+    let (r, pr) = get_pr_json(cwd, number)?;
+    let project_id = pr
+        .get("repository")
+        .and_then(|repo| repo.get("project"))
+        .and_then(|p| p.get("id"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+    if project_id.is_empty() {
+        return Ok(Vec::new());
+    }
+    // artifactId identifies the PR for the policy engine.
+    let artifact = format!("vstfs:///CodeReview/CodeReviewId/{}/{}", project_id, number);
+    let url = with_api_version(&format!(
+        "https://dev.azure.com/{}/{}/_apis/policy/evaluations?artifactId={}",
+        urlenc(&r.org),
+        urlenc(&r.project),
+        urlenc(&artifact),
+    ));
+    // Policies may be disabled on the repo — treat any failure as "no checks".
+    let v = match az_json("GET", &url, None) {
+        Ok(v) => v,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let evals = v.get("value").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+    let checks = evals
+        .iter()
+        .map(|e| {
+            let display = e
+                .get("configuration")
+                .and_then(|c| c.get("type"))
+                .and_then(|t| t.get("displayName"))
+                .and_then(|s| s.as_str())
+                .unwrap_or("Policy")
+                .to_string();
+            let (state, conclusion) = map_policy_status(&js(e, "status"));
+            CICheck {
+                name: display,
+                state: state.to_string(),
+                conclusion: conclusion.to_string(),
+                details_url: String::new(),
+            }
+        })
+        .collect();
+    Ok(checks)
+}
+
+// ─── Reviews (reviewer votes) ───────────────────────────────────────────────
+//
+// Azure has no GitHub-style review submissions; approval is a per-reviewer
+// *vote*: 10 approved, 5 approved-with-suggestions, 0 none, -5 waiting for
+// author, -10 rejected. We map non-zero votes onto the review vocabulary so the
+// merge-readiness chip can reason about approvals / requested changes.
+
+fn map_vote(vote: i64) -> Option<&'static str> {
+    match vote {
+        v if v >= 5 => Some("APPROVED"),
+        -5 => Some("CHANGES_REQUESTED"), // waiting for author
+        -10 => Some("CHANGES_REQUESTED"), // rejected
+        _ => None,                        // 0 — no vote yet
+    }
+}
+
+/// Resolve the signed-in user's Azure DevOps identity id (a GUID) for the org.
+/// This is the `reviewerId` the vote endpoint expects.
+fn current_user_id(org: &str) -> Result<String, String> {
+    let url = format!("https://dev.azure.com/{}/_apis/connectionData", urlenc(org));
+    let v = az_json("GET", &url, None)?;
+    let id = v
+        .get("authenticatedUser")
+        .and_then(|u| u.get("id"))
+        .and_then(|s| s.as_str())
+        .unwrap_or("")
+        .to_string();
+    if id.is_empty() {
+        return Err("Could not resolve your Azure DevOps identity.".to_string());
+    }
+    Ok(id)
+}
+
+/// Cast / update the signed-in user's vote on a PR (Azure's review model).
+///
+/// `event` maps onto a vote: APPROVE → 10, REQUEST_CHANGES → -10. COMMENT casts
+/// no vote. Any `body` is posted as a general comment first, so a "Comment"
+/// review still leaves a visible note.
+fn rest_submit_review(cwd: &str, number: i64, event: &str, body: &str) -> Result<serde_json::Value, String> {
+    let r = azure_repo(cwd)?;
+    if !body.trim().is_empty() {
+        // Best-effort — never fail the vote because the note failed to post.
+        let _ = rest_pr_create_comment(cwd, number, body);
+    }
+    let vote: i64 = match event {
+        "APPROVE" => 10,
+        "REQUEST_CHANGES" => -10,
+        _ => 0,
+    };
+    let state = if vote > 0 {
+        "APPROVED"
+    } else if vote < 0 {
+        "CHANGES_REQUESTED"
+    } else {
+        "COMMENTED"
+    };
+    if vote != 0 {
+        let uid = current_user_id(&r.org)?;
+        let payload = serde_json::json!({ "vote": vote });
+        let url = with_api_version(&format!(
+            "{}/pullrequests/{}/reviewers/{}",
+            r.api_base(), number, urlenc(&uid)
+        ));
+        az_json("PUT", &url, Some(&payload.to_string()))?;
+    }
+    Ok(serde_json::json!({
+        "id": 0,
+        "state": state,
+        "body": body,
+        "user": { "login": "", "avatar_url": "" },
+        "submitted_at": "",
+        "html_url": "",
+    }))
+}
+
+fn rest_pr_reviews(cwd: &str, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    let (_r, pr) = get_pr_json(cwd, number)?;
+    let reviewers = pr.get("reviewers").and_then(|a| a.as_array()).cloned().unwrap_or_default();
+    let mut out = Vec::new();
+    for (i, rev) in reviewers.iter().enumerate() {
+        let Some(state) = map_vote(ji(rev, "vote")) else { continue };
+        out.push(serde_json::json!({
+            "id": i as i64 + 1,
+            "state": state,
+            "body": "",
+            "user": {
+                "login": js(rev, "displayName"),
+                "avatar_url": js(rev, "imageUrl"),
+            },
+            "submitted_at": "",
+            "html_url": "",
+        }));
+    }
+    Ok(out)
+}
+
 // ─── Tauri commands — PR workflow ───────────────────────────────────────────
 
 #[tauri::command]
@@ -938,6 +1101,26 @@ pub(crate) fn az_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json:
 #[tauri::command]
 pub(crate) fn az_pr_create_comment(cwd: String, number: i64, body: String) -> Result<serde_json::Value, String> {
     rest_pr_create_comment(&cwd, number, &body)
+}
+
+#[tauri::command]
+pub(crate) fn az_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+    rest_pr_checks(&cwd, number)
+}
+
+#[tauri::command]
+pub(crate) fn az_pr_reviews(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    rest_pr_reviews(&cwd, number)
+}
+
+#[tauri::command]
+pub(crate) fn az_submit_review(
+    cwd: String,
+    number: i64,
+    event: String,
+    body: Option<String>,
+) -> Result<serde_json::Value, String> {
+    rest_submit_review(&cwd, number, &event, &body.unwrap_or_default())
 }
 
 // ─── Entra ID device flow ───────────────────────────────────────────────────
