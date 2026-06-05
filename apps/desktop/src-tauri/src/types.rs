@@ -363,7 +363,17 @@ pub struct GhPrReviewRequest {
 
 #[derive(Deserialize)]
 pub struct GhPrStatusCheck {
+    /// CheckRun outcome (SUCCESS / FAILURE / …). `None` while still running.
+    #[serde(default)]
     pub conclusion: Option<String>,
+    /// StatusContext outcome (SUCCESS / PENDING / FAILURE / ERROR). Present on
+    /// legacy commit-status entries that carry no `conclusion`.
+    #[serde(default)]
+    pub state: Option<String>,
+    /// CheckRun lifecycle (QUEUED / IN_PROGRESS / COMPLETED). Used to detect a
+    /// check that is still running (no conclusion yet).
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 #[derive(Deserialize)]

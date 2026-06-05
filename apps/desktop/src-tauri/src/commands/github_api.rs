@@ -38,6 +38,7 @@
 
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
+use rayon::prelude::*;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -402,11 +403,28 @@ pub(crate) fn rest_list_prs(
             pr.additions = adds;
             pr.deletions = dels;
         }
-        // The REST list carries no CI status. Fetch the status-check rollup for
-        // the listed PRs in a single batched GraphQL call so the sidebar can
-        // flag in-progress / failing CI (yellow dot).
-        let nums: Vec<i64> = prs.iter().map(|p| p.number).collect();
-        let rollups = rest_status_rollups(cwd, &nums, token);
+        // The REST list carries no CI status. Resolve each PR's head SHA from
+        // the raw list payload, then aggregate its check-runs so the sidebar can
+        // colour the dot (red = failing, yellow = pending, green = passing).
+        // We use the REST check-runs endpoint — not GraphQL `statusCheckRollup`
+        // — because fine-grained / GitHub-App tokens can read check-runs but
+        // often can't read the GraphQL rollup field, which would silently leave
+        // every dot green.
+        let sha_by_num: std::collections::HashMap<i64, String> = raw
+            .iter()
+            .filter_map(|pr| {
+                let n = pr.get("number").and_then(|x| x.as_i64())?;
+                Some((n, jnested(pr, "head", "sha")))
+            })
+            .collect();
+        let rollups: std::collections::HashMap<i64, String> = prs
+            .par_iter()
+            .filter_map(|pr| {
+                let sha = sha_by_num.get(&pr.number)?;
+                let rollup = rest_rollup_for_sha(&base, sha, token);
+                if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
+            })
+            .collect();
         for pr in &mut prs {
             if let Some(state) = rollups.get(&pr.number) {
                 pr.checks_rollup = state.clone();
@@ -416,59 +434,49 @@ pub(crate) fn rest_list_prs(
     Ok(prs)
 }
 
-/// Batched status-check rollup for a set of PR numbers via one GraphQL request.
-/// Returns `number → rollup state` (e.g. SUCCESS / PENDING / FAILURE). Best
-/// effort: any failure yields an empty map (no dot, never an error).
-fn rest_status_rollups(
-    cwd: &str,
-    numbers: &[i64],
-    token: &str,
-) -> std::collections::HashMap<i64, String> {
-    let mut map = std::collections::HashMap::new();
-    if numbers.is_empty() {
-        return map;
+/// Aggregate the check-runs of commit `sha` in `repo` ("owner/name") into a
+/// single rollup state: `FAILURE` / `PENDING` / `SUCCESS`, or `""` when the
+/// commit has no checks configured. Best effort — any HTTP error yields `""`.
+///
+/// Uses the REST check-runs endpoint (the same one that powers the CI tab's
+/// per-check list) rather than GraphQL `statusCheckRollup`, so it keeps working
+/// with fine-grained / GitHub-App tokens that can't read the GraphQL field.
+fn rest_rollup_for_sha(repo: &str, sha: &str, token: &str) -> String {
+    if sha.is_empty() {
+        return String::new();
     }
-    let (owner, repo) = match owner_repo(cwd) {
-        Ok(x) => x,
-        Err(_) => return map,
-    };
-    // One aliased field per PR: pr<NUM>: pullRequest(number: NUM) { … }.
-    let mut fields = String::new();
-    for n in numbers {
-        fields.push_str(&format!(
-            "pr{0}: pullRequest(number: {0}) {{ commits(last: 1) {{ nodes {{ commit {{ statusCheckRollup {{ state }} }} }} }} }} ",
-            n
-        ));
-    }
-    let query = format!(
-        "query {{ repository(owner: \"{}\", name: \"{}\") {{ {} }} }}",
-        owner, repo, fields
-    );
-    let payload = serde_json::json!({ "query": query });
-    let v = match api_json("POST", &format!("{}/graphql", API_BASE), token, Some(&payload.to_string())) {
+    let url = format!("{}/repos/{}/commits/{}/check-runs", API_BASE, repo, sha);
+    let v = match api_json("GET", &url, token, None) {
         Ok(v) => v,
-        Err(_) => return map,
+        Err(_) => return String::new(),
     };
-    let Some(obj) = v.get("data").and_then(|d| d.get("repository")) else {
-        return map;
-    };
-    for n in numbers {
-        let state = obj
-            .get(format!("pr{}", n))
-            .and_then(|p| p.get("commits"))
-            .and_then(|c| c.get("nodes"))
-            .and_then(|a| a.as_array())
-            .and_then(|a| a.first())
-            .and_then(|node| node.get("commit"))
-            .and_then(|c| c.get("statusCheckRollup"))
-            .and_then(|r| r.get("state"))
-            .and_then(|s| s.as_str())
-            .unwrap_or("");
-        if !state.is_empty() {
-            map.insert(*n, state.to_uppercase());
+    let runs = v.get("check_runs").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+    rollup_from_check_runs(&runs)
+}
+
+/// Reduce a set of check-run objects to one rollup state.
+/// Precedence: any failure ⇒ `FAILURE`, else any still-running ⇒ `PENDING`,
+/// else `SUCCESS`. Empty input ⇒ `""`.
+fn rollup_from_check_runs(runs: &[serde_json::Value]) -> String {
+    if runs.is_empty() {
+        return String::new();
+    }
+    let mut pending = false;
+    for run in runs {
+        // `status`: QUEUED / IN_PROGRESS / COMPLETED.
+        // `conclusion`: only meaningful once COMPLETED.
+        if js(run, "status").to_uppercase() != "COMPLETED" {
+            pending = true;
+            continue;
+        }
+        match js(run, "conclusion").to_uppercase().as_str() {
+            "FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STARTUP_FAILURE"
+            | "STALE" => return "FAILURE".to_string(),
+            "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
+            _ => pending = true,
         }
     }
-    map
+    if pending { "PENDING".to_string() } else { "SUCCESS".to_string() }
 }
 
 /// `git diff --numstat origin/base...origin/head` → (additions, deletions).
@@ -553,8 +561,13 @@ pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, 
 }
 
 pub(crate) fn rest_pr_detail(cwd: &str, number: i64, token: &str) -> Result<PullRequestDetail, String> {
-    let (_repo, v) = get_pr_json(cwd, number, token)?;
-    Ok(json_to_detail(&v))
+    let (repo, v) = get_pr_json(cwd, number, token)?;
+    let mut detail = json_to_detail(&v);
+    // The REST PR object carries no CI status; aggregate the head commit's
+    // check-runs so the CI tab can colour itself (red / yellow / green).
+    let sha = jnested(&v, "head", "sha");
+    detail.checks_status = rest_rollup_for_sha(&repo, &sha, token);
+    Ok(detail)
 }
 
 pub(crate) fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String, String> {

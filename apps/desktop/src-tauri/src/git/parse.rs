@@ -2,9 +2,53 @@ use std::collections::HashMap;
 use std::path::Path;
 use crate::git::cmd::git_cmd;
 use crate::types::{
-    DiffHunk, DiffLine, FileLogEntry, FolderDiffNode, GhIssueRaw, GhPrDetailRaw, GhPrRaw, Issue,
-    MonorepoPackage, PullRequest, PullRequestDetail, RawFileChange, ShortlogEntry,
+    DiffHunk, DiffLine, FileLogEntry, FolderDiffNode, GhIssueRaw, GhPrDetailRaw, GhPrRaw,
+    GhPrStatusCheck, Issue, MonorepoPackage, PullRequest, PullRequestDetail, RawFileChange,
+    ShortlogEntry,
 };
+
+/// Aggregate a PR's individual status checks into a single rollup state.
+///
+/// Mirrors GitHub's own `statusCheckRollup.state`: a single failing check turns
+/// the whole rollup red, regardless of position. Previously only the first
+/// check's `conclusion` was read, so a green first check masked later failures
+/// (and still-running checks with a null conclusion were dropped entirely).
+///
+/// Precedence: any failure ⇒ `FAILURE`, else any pending/running ⇒ `PENDING`,
+/// else `SUCCESS`. Empty input ⇒ `""` (no checks configured → no dot).
+pub(crate) fn rollup_status_checks(checks: &[GhPrStatusCheck]) -> String {
+    if checks.is_empty() {
+        return String::new();
+    }
+    let mut pending = false;
+    for c in checks {
+        // CheckRun: lifecycle in `status`, outcome in `conclusion` once COMPLETED.
+        // StatusContext: outcome directly in `state`.
+        let outcome = c
+            .conclusion
+            .as_deref()
+            .or(c.state.as_deref())
+            .unwrap_or("")
+            .to_uppercase();
+        match outcome.as_str() {
+            "FAILURE" | "ERROR" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED"
+            | "STARTUP_FAILURE" | "STALE" => return "FAILURE".to_string(),
+            "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
+            // PENDING / EXPECTED / QUEUED / "" (running CheckRun with no
+            // conclusion yet) → not green, not red.
+            _ => pending = true,
+        }
+        // A CheckRun that hasn't completed is still pending even if some stale
+        // conclusion is absent.
+        if let Some(st) = c.status.as_deref() {
+            let st = st.to_uppercase();
+            if st != "COMPLETED" && c.conclusion.is_none() {
+                pending = true;
+            }
+        }
+    }
+    if pending { "PENDING".to_string() } else { "SUCCESS".to_string() }
+}
 
 pub(crate) fn parse_diff_hunks(stdout: &str) -> (Vec<DiffHunk>, Option<String>) {
     let mut hunks: Vec<DiffHunk> = Vec::new();
@@ -301,20 +345,15 @@ pub(crate) fn gh_pr_detail_raw_to_detail(r: GhPrDetailRaw) -> PullRequestDetail 
         .into_iter()
         .filter_map(|rr| rr.requested_reviewer?.login)
         .collect();
-    let checks_status = {
-        let mut has_failure = false;
-        let mut has_pending = false;
-        for c in &r.status_check_rollup {
-            match c.conclusion.as_deref() {
-                Some("FAILURE" | "ERROR") => has_failure = true,
-                Some("PENDING" | "QUEUED" | "IN_PROGRESS") => has_pending = true,
-                _ => {}
-            }
-        }
-        if has_failure { "failure".to_string() }
-        else if has_pending { "pending".to_string() }
-        else if !r.status_check_rollup.is_empty() { "success".to_string() }
-        else { "unknown".to_string() }
+    // Same aggregation as the list dot (any failure ⇒ red, else pending ⇒
+    // yellow, else green). The old inline logic only looked at `conclusion`,
+    // so a still-running check (its run state lives in `status`) was missed and
+    // a single later failure could be masked.
+    let checks_status = match rollup_status_checks(&r.status_check_rollup).as_str() {
+        "FAILURE" => "failure".to_string(),
+        "PENDING" => "pending".to_string(),
+        "SUCCESS" => "success".to_string(),
+        _ => "unknown".to_string(),
     };
     PullRequestDetail {
         number: r.number,
@@ -372,11 +411,7 @@ pub(crate) fn gh_pr_raw_to_pr(r: GhPrRaw) -> PullRequest {
         .into_iter()
         .filter_map(|rr| rr.requested_reviewer?.login)
         .collect();
-    let checks_rollup = r.status_check_rollup
-        .into_iter()
-        .filter_map(|c| c.conclusion)
-        .next()
-        .unwrap_or_default();
+    let checks_rollup = rollup_status_checks(&r.status_check_rollup);
     let comment_count = r.comments.len() as i64;
     let author = r
         .author

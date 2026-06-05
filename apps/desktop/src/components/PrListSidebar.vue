@@ -73,19 +73,28 @@ function stateInfo(state: string): { label: string; cls: StateCls } {
 }
 
 /**
- * Whether an open PR is still waiting on something to merge (review approval,
- * requested changes, conflicts / blocked merge). Drives a yellow status dot.
+ * Merge-readiness of an open PR, surfaced as the status-dot colour:
+ *  - "fail"    → red: CI failed/errored, or the merge is blocked by conflicts.
+ *  - "waiting" → yellow: still pending (CI running, or an approval is missing).
+ *  - "ok"      → green: everything green, ready to merge.
  * Uses only fields present on the list item — no extra per-PR requests.
  */
-function isWaiting(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string; checksRollup: string }): boolean {
-  if (pr.state.toUpperCase() !== "OPEN" || pr.draft) return false;
-  // CI not green yet (in progress, failing, queued).
+type PrStatus = "ok" | "waiting" | "fail";
+function prStatus(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string; checksRollup: string }): PrStatus {
+  if (pr.state.toUpperCase() !== "OPEN" || pr.draft) return "ok";
   const ci = (pr.checksRollup || "").toUpperCase();
-  if (["PENDING", "FAILURE", "ERROR", "EXPECTED"].includes(ci)) return true;
-  const rd = (pr.reviewDecision || "").toUpperCase();
-  if (rd === "REVIEW_REQUIRED" || rd === "CHANGES_REQUESTED") return true;
   const ms = (pr.mergeStateStatus || "").toUpperCase();
-  return ["BLOCKED", "CONFLICTING", "CONFLICTS", "DIRTY", "UNSTABLE"].includes(ms);
+  // Red: a hard failure — CI is red, or the merge is blocked by conflicts.
+  if (["FAILURE", "ERROR"].includes(ci)) return "fail";
+  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(ms)) return "fail";
+  // Yellow: CI still running / queued.
+  if (["PENDING", "EXPECTED"].includes(ci)) return "waiting";
+  // Yellow: waiting on review approval or changes requested.
+  const rd = (pr.reviewDecision || "").toUpperCase();
+  if (rd === "REVIEW_REQUIRED" || rd === "CHANGES_REQUESTED") return "waiting";
+  // Yellow: blocked / unstable per GitHub's merge-state machine.
+  if (["BLOCKED", "UNSTABLE"].includes(ms)) return "waiting";
+  return "ok";
 }
 
 /** Total count shown as a subtle pill next to the title. */
@@ -273,7 +282,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
         <div class="pls-row-top">
           <span class="pls-num">#{{ pr.number }}</span>
           <span class="pls-state-chip" :class="stateInfo(pr.state).cls">
-            <span class="pls-state-dot" :class="{ 'pls-state-dot--waiting': isWaiting(pr) }" aria-hidden="true"></span>
+            <span class="pls-state-dot" :class="`pls-state-dot--${prStatus(pr)}`" aria-hidden="true"></span>
             {{ stateInfo(pr.state).label }}
           </span>
           <span v-if="pr.draft" class="pls-draft-chip">{{ t('pr.list.draft') }}</span>
@@ -695,8 +704,16 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
 }
 
 /* Open PR still waiting on review/merge → yellow dot instead of the green one. */
+.pls-state-dot--ok {
+  background: currentColor;
+}
+
 .pls-state-dot--waiting {
   background: var(--color-warning, #e3b341);
+}
+
+.pls-state-dot--fail {
+  background: var(--color-danger, #f85149);
 }
 
 .pls-state-chip.pls-state--open {

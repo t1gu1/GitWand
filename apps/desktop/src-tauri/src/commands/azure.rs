@@ -30,6 +30,8 @@
 
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -607,6 +609,21 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<
             pr.additions = adds;
             pr.deletions = dels;
         }
+        // Aggregate each PR's branch-policy evaluations into a rollup so the
+        // sidebar dot can colour (red = a build/policy failed, yellow = pending,
+        // green = all pass). Parallel — one policy round-trip per PR.
+        let rollups: HashMap<i64, String> = prs
+            .par_iter()
+            .filter_map(|pr| {
+                let rollup = rollup_from_checks(&rest_pr_checks(cwd, pr.number).ok()?);
+                if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
+            })
+            .collect();
+        for pr in &mut prs {
+            if let Some(state) = rollups.get(&pr.number) {
+                pr.checks_rollup = state.clone();
+            }
+        }
     }
     Ok(prs)
 }
@@ -645,6 +662,9 @@ fn rest_pr_detail(cwd: &str, number: i64) -> Result<PullRequestDetail, String> {
         detail.additions = adds;
         detail.deletions = dels;
     }
+    // Aggregate branch-policy evaluations into a rollup so the CI tab can colour
+    // itself red (a build/policy failed) / yellow (pending) / green (all pass).
+    detail.checks_status = rollup_from_checks(&rest_pr_checks(cwd, number).unwrap_or_default());
     Ok(detail)
 }
 
@@ -918,11 +938,35 @@ fn map_policy_status(status: &str) -> (&'static str, &'static str) {
     match status {
         "approved" => ("completed", "SUCCESS"),
         "rejected" => ("completed", "FAILURE"),
+        // "broken" = the policy evaluation itself errored (e.g. a build that
+        // failed to run) — surface it as a red failure, not a yellow pending.
+        "broken" => ("completed", "FAILURE"),
         "notApplicable" => ("completed", "SKIPPED"),
         "running" => ("in_progress", ""),
         // "queued" | "notSubmitted" | anything else → still pending.
         _ => ("queued", ""),
     }
+}
+
+/// Aggregate a PR's policy/check evaluations into one rollup state:
+/// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` when there
+/// are no checks. Precedence: any failure ⇒ red, else any unfinished ⇒ yellow.
+fn rollup_from_checks(checks: &[CICheck]) -> String {
+    if checks.is_empty() {
+        return String::new();
+    }
+    let mut pending = false;
+    for c in checks {
+        match c.conclusion.to_uppercase().as_str() {
+            "FAILURE" | "ERROR" => return "FAILURE".to_string(),
+            "SUCCESS" | "SKIPPED" | "NEUTRAL" => {}
+            _ => pending = true, // "" → still running / queued
+        }
+        if c.state.to_lowercase() != "completed" {
+            pending = true;
+        }
+    }
+    if pending { "PENDING".to_string() } else { "SUCCESS".to_string() }
 }
 
 fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {

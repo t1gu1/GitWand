@@ -534,6 +534,64 @@ mod tests {
     }
 
     #[test]
+    fn checks_rollup_is_red_when_any_check_fails() {
+        // Regression: the old parser read only the *first* check's conclusion,
+        // so a green first check masked a later failure → green dot on a red PR.
+        let json = r#"[{
+          "number": 7, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"conclusion": "FAILURE"},
+            {"conclusion": "SUCCESS"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "FAILURE");
+    }
+
+    #[test]
+    fn checks_rollup_is_pending_while_a_check_runs() {
+        // A still-running CheckRun (status IN_PROGRESS, conclusion null) and a
+        // legacy StatusContext (state PENDING) both yield a yellow rollup.
+        let json = r#"[{
+          "number": 8, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"status": "IN_PROGRESS", "conclusion": null},
+            {"state": "PENDING"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "PENDING");
+    }
+
+    #[test]
+    fn checks_rollup_green_only_when_all_pass() {
+        let json = r#"[{
+          "number": 9, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"conclusion": "SKIPPED"},
+            {"state": "SUCCESS"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "SUCCESS");
+    }
+
+    #[test]
     fn parse_pr_with_braces_in_title_does_not_silently_drop() {
         // Regression test: the old char-scanning parser broke when PR titles
         // or branch names contained '{' or '}', silently producing 0 results.

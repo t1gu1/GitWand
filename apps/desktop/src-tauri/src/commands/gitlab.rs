@@ -17,6 +17,8 @@
 
 use crate::git::hidden_cmd;
 use crate::types::*;
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 // ─── JSON field helpers ────────────────────────────────────────────────────────
 
@@ -250,6 +252,33 @@ pub(crate) async fn gl_list_mrs(
         mrs.drain(..skip);
     }
 
+    // Colour the sidebar dot from each MR's pipeline. The list payload rarely
+    // embeds `head_pipeline`, so use it when present (free) and otherwise fetch
+    // the pipeline per MR in parallel (red = failed, yellow = pending).
+    let embedded: HashMap<i64, String> = arr
+        .iter()
+        .filter_map(|mr| {
+            let iid = ji(mr, "iid");
+            let status = mr.get("head_pipeline").or_else(|| mr.get("pipeline")).map(|p| js(p, "status"))?;
+            Some((iid, status))
+        })
+        .collect();
+    let rollups: HashMap<i64, String> = mrs
+        .par_iter()
+        .filter_map(|mr| {
+            let rollup = match embedded.get(&mr.number) {
+                Some(s) => gl_status_to_rollup(s),
+                None => gl_pipeline_rollup(&cwd, mr.number),
+            };
+            if rollup.is_empty() { None } else { Some((mr.number, rollup)) }
+        })
+        .collect();
+    for mr in &mut mrs {
+        if let Some(state) = rollups.get(&mr.number) {
+            mr.checks_rollup = state.clone();
+        }
+    }
+
     Ok(mrs)
 }
 
@@ -300,7 +329,20 @@ pub(crate) async fn gl_get_mr(cwd: String, iid: i64) -> Result<PullRequestDetail
     let mr: serde_json::Value = serde_json::from_str(stdout.trim())
         .map_err(|e| format!("Failed to parse glab mr view output: {}", e))?;
 
-    Ok(gl_mr_to_detail(&mr))
+    let mut detail = gl_mr_to_detail(&mr);
+    // Prefer the pipeline status embedded in the MR object (free); fall back to
+    // a dedicated pipelines call so the CI tab can colour red / yellow / green.
+    let embedded = mr
+        .get("head_pipeline")
+        .or_else(|| mr.get("pipeline"))
+        .map(|p| js(p, "status"))
+        .unwrap_or_default();
+    detail.checks_status = if embedded.is_empty() {
+        gl_pipeline_rollup(&cwd, iid)
+    } else {
+        gl_status_to_rollup(&embedded)
+    };
+    Ok(detail)
 }
 
 /// Get the unified diff of a MR using `glab mr diff`.
@@ -374,6 +416,41 @@ pub(crate) async fn gl_mr_pipelines(cwd: String, iid: i64) -> Result<Vec<CICheck
             }
         })
         .collect())
+}
+
+/// Reduce a GitLab pipeline `status` to a rollup state the frontend colours:
+/// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` (no CI).
+fn gl_status_to_rollup(status: &str) -> String {
+    match status {
+        "success" => "SUCCESS",
+        "failed" | "canceled" => "FAILURE",
+        // No pipeline / skipped → no dot.
+        "" | "skipped" => "",
+        // created / waiting_for_resource / preparing / pending / running /
+        // manual / scheduled → still in flight.
+        _ => "PENDING",
+    }
+    .to_string()
+}
+
+/// Fetch a MR's most-recent pipeline and reduce it to a rollup state. Sync and
+/// best-effort (empty on any error) so it's safe to fan out under rayon.
+fn gl_pipeline_rollup(cwd: &str, iid: i64) -> String {
+    let endpoint = format!("projects/:fullpath/merge_requests/{}/pipelines", iid);
+    let out = match hidden_cmd("glab").args(["api", &endpoint]).current_dir(cwd).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return String::new(),
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value =
+        serde_json::from_str(stdout.trim()).unwrap_or(serde_json::Value::Array(vec![]));
+    // The API returns pipelines newest-first; the first entry is the active one.
+    let status = v
+        .as_array()
+        .and_then(|a| a.first())
+        .map(|p| js(p, "status"))
+        .unwrap_or_default();
+    gl_status_to_rollup(&status)
 }
 
 /// Create a MR using `glab mr create`.

@@ -24,6 +24,8 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use crate::git::hidden_cmd;
 use crate::types::*;
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 // ─── Credential helpers ────────────────────────────────────────────────────────
 
@@ -457,6 +459,30 @@ pub(crate) async fn bb_list_prs(
         prs.drain(..skip);
     }
 
+    // Colour the sidebar dot from each PR's head-commit build statuses. The list
+    // payload carries `source.commit.hash`, so resolve it per PR (no extra PR
+    // fetch) and aggregate statuses in parallel (red = failed, yellow = running).
+    let sha_by_num: HashMap<i64, String> = values
+        .iter()
+        .filter_map(|pr| {
+            let hash = jdeep(pr, "source", "commit", "hash");
+            if hash.is_empty() { None } else { Some((ji(pr, "id"), hash)) }
+        })
+        .collect();
+    let rollups: HashMap<i64, String> = prs
+        .par_iter()
+        .filter_map(|pr| {
+            let sha = sha_by_num.get(&pr.number)?;
+            let rollup = bb_rollup_for_sha(&workspace, &slug, sha, &auth);
+            if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
+        })
+        .collect();
+    for pr in &mut prs {
+        if let Some(state) = rollups.get(&pr.number) {
+            pr.checks_rollup = state.clone();
+        }
+    }
+
     Ok(prs)
 }
 
@@ -492,7 +518,11 @@ pub(crate) async fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDeta
 
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
     let resp = bb_curl("GET", &url, None, &auth)?;
-    Ok(bb_pr_to_detail(&resp))
+    let mut detail = bb_pr_to_detail(&resp);
+    // Aggregate the head commit's build statuses so the CI tab can colour itself.
+    let sha = jdeep(&resp, "source", "commit", "hash");
+    detail.checks_status = bb_rollup_for_sha(&workspace, &slug, &sha, &auth);
+    Ok(detail)
 }
 
 /// Get the diff of a PR as a unified diff string.
@@ -845,6 +875,40 @@ pub(crate) async fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCa
 
     candidates.sort_by(|a, b| a.login.to_lowercase().cmp(&b.login.to_lowercase()));
     Ok(candidates)
+}
+
+/// Reduce a commit's Bitbucket build statuses to one rollup state:
+/// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` (no CI).
+/// Precedence: any failed/stopped build ⇒ red, else any in-progress ⇒ yellow.
+fn bb_rollup_from_statuses(values: &[serde_json::Value]) -> String {
+    if values.is_empty() {
+        return String::new();
+    }
+    let mut pending = false;
+    for s in values {
+        // Bitbucket status states: SUCCESSFUL / FAILED / INPROGRESS / STOPPED.
+        match js(s, "state").as_str() {
+            "FAILED" | "STOPPED" => return "FAILURE".to_string(),
+            "SUCCESSFUL" => {}
+            _ => pending = true, // INPROGRESS / anything unknown → still running
+        }
+    }
+    if pending { "PENDING".to_string() } else { "SUCCESS".to_string() }
+}
+
+/// Fetch + aggregate the build statuses of commit `sha`. Sync, best-effort
+/// (empty on any error) so it's safe to fan out under rayon.
+fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth: &str) -> String {
+    if sha.is_empty() {
+        return String::new();
+    }
+    let url = format!(
+        "https://api.bitbucket.org/2.0/repositories/{}/{}/commit/{}/statuses?pagelen=100",
+        workspace, slug, sha
+    );
+    let resp = bb_curl("GET", &url, None, auth).unwrap_or(serde_json::Value::Null);
+    let values = resp.get("values").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    bb_rollup_from_statuses(&values)
 }
 
 /// Get CI status checks for a PR via Bitbucket Pipelines commit statuses endpoint.

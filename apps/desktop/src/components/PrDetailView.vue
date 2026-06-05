@@ -75,6 +75,16 @@ const checksUrl = computed(() => {
   return `${base}/checks`;
 });
 
+/** CI tab tint: red on failure, green when all pass, yellow while pending. */
+const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
+  const s = (p.prDetail.value?.checksStatus || "").toUpperCase();
+  if (!s) return null;
+  if (["FAILURE", "FAIL", "ERROR"].includes(s)) return "fail";
+  if (s === "SUCCESS" || s === "PASS") return "ok";
+  if (s === "PENDING") return "pending";
+  return null;
+});
+
 /** Review + issue-level comments, sorted oldest-first for display under the description. */
 const sortedComments = computed(() =>
   [...p.prComments.value, ...p.prIssueComments.value].sort(
@@ -311,7 +321,7 @@ function commentTimeAgo(dateStr: string): string {
           </span>
         </button>
         <button
-          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'checks' }]"
+          :class="['pdv-tab', ciTabState ? `pdv-tab--ci-${ciTabState}` : '', { 'pdv-tab--active': p.detailTab.value === 'checks' }]"
           @click="p.detailTab.value = 'checks'"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -941,6 +951,17 @@ function commentTimeAgo(dateStr: string): string {
   color: var(--color-accent);
   border-bottom-color: var(--color-accent);
   font-weight: var(--font-weight-semibold);
+}
+
+/* CI tab tint — visible at a glance even when the tab isn't selected. */
+.pdv-tab--ci-fail:not(.pdv-tab--active) {
+  color: var(--color-danger, #ef4444);
+}
+.pdv-tab--ci-ok:not(.pdv-tab--active) {
+  color: var(--color-success, #3fb950);
+}
+.pdv-tab--ci-pending:not(.pdv-tab--active) {
+  color: var(--color-warning, #f59e0b);
 }
 
 .pdv-tab-emoji {
