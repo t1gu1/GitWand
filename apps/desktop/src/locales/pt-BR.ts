@@ -917,6 +917,8 @@ const ptBR: Locale = {
       noToken: "Autenticação do GitHub necessária — execute `gh auth login` no seu terminal.",
       noRemote: "Nenhum remote do GitHub encontrado — verifique se este repo tem uma origin do GitHub.",
       ghNotInstalled: "GitHub CLI não instalado — instale em cli.github.com.",
+      ghNotInstalledHint: "Ou adicione sua conta do GitHub nas configurações.",
+      openSettings: "Abrir configurações",
       unknown: "Falha ao carregar os pull requests.",
       retry: "Tentar novamente",
     },

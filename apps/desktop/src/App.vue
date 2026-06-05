@@ -88,6 +88,7 @@ import {
   LOG_FOCUS_SEARCH_KEY,
   LAUNCHPAD_OPEN_REQUEST_KEY,
   TOGGLE_GIT_TREE_KEY,
+  OPEN_SETTINGS_KEY,
 } from "./composables/branchPickerBridge";
 import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
@@ -337,6 +338,7 @@ provide(UNDO_POPOVER_REQUEST_KEY, undoPopoverRequest);
 provide(LOG_FOCUS_SEARCH_KEY, logFocusRequest);
 provide(LAUNCHPAD_OPEN_REQUEST_KEY, launchpadOpenRequest);
 provide(TOGGLE_GIT_TREE_KEY, () => { showGitTree.value = !showGitTree.value; });
+provide(OPEN_SETTINGS_KEY, (tab) => { settingsInitialTab.value = tab; showSettings.value = true; });
 provide("askConfirm", askConfirm);
 
 // ─── Multi-repo tabs (lightweight — paths only) ─────────
@@ -1124,7 +1126,7 @@ function onPaletteSelectCommit(hash: string) {
 
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
-const settingsInitialTab = ref<"general" | "git" | "editor" | "ai" | "logs" | undefined>(undefined);
+const settingsInitialTab = ref<"general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | undefined>(undefined);
 
 // ─── Error log (in-memory ring buffer, feeds SettingsPanel Logs tab) ─
 // Uses the useLogs() singleton composable — no localStorage persistence so a

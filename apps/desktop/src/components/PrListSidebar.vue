@@ -12,11 +12,13 @@
  */
 import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
 
 const panel = inject<PrPanelState>(PR_PANEL_KEY)!;
+const openSettings = inject(OPEN_SETTINGS_KEY, undefined);
 
 // ─── Lazy pagination sentinel (v2.8.5 §E) ─────────────────
 // IntersectionObserver watches a 1px element at the bottom of the list;
@@ -173,6 +175,10 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
     <!-- Messages -->
     <div v-if="panel.error.value" class="pls-msg pls-msg--error">
       <span>{{ panel.error.value }}</span>
+      <template v-if="panel.errorAction.value === 'open-settings' && openSettings">
+        <span class="pls-msg-hint">{{ t('pr.error.ghNotInstalledHint') }}</span>
+        <button class="pls-msg-action" @click="openSettings('accounts')">{{ t('pr.error.openSettings') }}</button>
+      </template>
       <button class="pls-msg-action" @click="panel.loadPrs">{{ t('pr.error.retry') }}</button>
     </div>
     <div
@@ -502,6 +508,11 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.pls-msg-hint {
+  font-size: var(--font-size-xs);
+  opacity: 0.85;
 }
 
 .pls-msg-action {

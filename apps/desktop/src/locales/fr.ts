@@ -927,6 +927,8 @@ const fr: Locale = {
       noToken: "Authentification GitHub requise — lancez `gh auth login` dans votre terminal.",
       noRemote: "Aucune remote GitHub — vérifiez que ce dépôt a une origin GitHub.",
       ghNotInstalled: "GitHub CLI non installé — installez-le depuis cli.github.com.",
+      ghNotInstalledHint: "Ou ajoutez votre compte GitHub depuis les réglages.",
+      openSettings: "Ouvrir les réglages",
       unknown: "Impossible de charger les pull requests.",
       retry: "Réessayer",
     },

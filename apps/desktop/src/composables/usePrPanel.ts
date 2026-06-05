@@ -47,6 +47,10 @@ export function usePrPanel(cwd: Ref<string>) {
   const prs = ref<PullRequest[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  // Optional follow-up action surfaced alongside an error. `"open-settings"`
+  // is set when the failure is actionable from Settings (e.g. gh CLI missing
+  // but the user can add a GitHub account instead). Reset on every reload.
+  const errorAction = ref<"open-settings" | null>(null);
   const success = ref<string | null>(null);
   const filterState = ref<"open" | "closed" | "all">("open");
   /** 'all' = no user filter | 'assigned' = assignees | 'reviews' = review_requested */
@@ -260,6 +264,7 @@ export function usePrPanel(cwd: Ref<string>) {
     }
     loading.value = true;
     error.value = null;
+    errorAction.value = null;
     // Reset pagination — first page only
     hasMore.value = true;
     try {
@@ -281,6 +286,7 @@ export function usePrPanel(cwd: Ref<string>) {
         (msg.includes("gh") && msg.includes("installed"));
       if (isGhMissing) {
         error.value = t("pr.error.ghNotInstalled");
+        errorAction.value = "open-settings";
       } else if (msg.includes("gh auth") || msg.includes("authentication") || msg.includes("token") || msg.includes("401")) {
         error.value = t("pr.error.noToken");
       } else if (msg.includes("404") || msg.includes("Could not resolve to a Repository")) {
@@ -693,7 +699,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   return {
     // State
-    remote, prs, loading, error, success, filterState, filterMode,
+    remote, prs, loading, error, errorAction, success, filterState, filterMode,
     currentUser, currentUserLoading, currentUserError,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     forkInfo, newPrBaseRepo,
