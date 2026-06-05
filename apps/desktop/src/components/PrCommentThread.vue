@@ -156,7 +156,7 @@ function timeAgo(dateStr: string): string {
       <div
         v-else
         class="pct-body"
-        :style="{ '--suggestion-label': `\"${suggLabel}\"` }"
+        :style="{ '--suggestion-label': `'${suggLabel}'` }"
         @click="onMarkdownClick"
         v-html="renderMarkdown(comment.body)"
       />
