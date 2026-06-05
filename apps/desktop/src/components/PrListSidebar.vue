@@ -121,24 +121,26 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
         <span class="pls-title">{{ t('pr.list.title') }}</span>
         <span v-if="totalCount > 0" class="pls-count-pill">{{ totalCount }}</span>
         <!-- SWR: subtle spinner while a background revalidation runs over the
-             cached list already on screen (distinct from the cold full spinner). -->
-        <span
-          v-if="panel.refreshing.value"
-          class="pls-spinner pls-spinner--sm"
+             cached list already on screen (distinct from the cold full spinner).
+             Replaces the refresh button while active. -->
+        <div
+          v-if="panel.loading.value || panel.refreshing.value"
+          class="pls-icon-btn pls-icon-btn--loading"
           :title="t('pr.list.refreshing')"
           :aria-label="t('pr.list.refreshing')"
           role="status"
-        ></span>
+        >
+          <div class="pls-spinner pls-spinner--sm"></div>
+        </div>
         <button
+          v-else
           class="pls-icon-btn"
           @click="panel.loadPrs"
           :title="t('pr.list.refresh')"
           aria-label="Refresh"
-          :disabled="panel.loading.value || panel.refreshing.value"
         >
           <svg
             class="pls-refresh-icon"
-            :class="{ 'pls-refresh-icon--spinning': panel.loading.value || panel.refreshing.value }"
             width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
           >
             <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" />
@@ -390,16 +392,14 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   border-color: var(--color-border);
   color: var(--color-text);
 }
-.pls-icon-btn:disabled {
+.pls-icon-btn:disabled,
+.pls-icon-btn--loading {
   cursor: default;
   opacity: 0.7;
 }
 
-/* SWR: spin the refresh glyph while a (cold or background) reload is running. */
-.pls-refresh-icon--spinning {
-  animation: pls-spin 0.8s linear infinite;
-  transform-origin: center;
-}
+/* SWR: subtle spinner while a background revalidation runs over the
+             cached list already on screen. */
 
 /* ─── Segmented filter ───────────────────────────────────── */
 .pls-segmented {
