@@ -1289,6 +1289,50 @@ function commentTimeAgo(dateStr: string): string {
   line-height: 1.5;
   word-break: break-word;
 }
+.pdv-comment-body :deep(p) { margin-bottom: var(--space-5); }
+.pdv-comment-body :deep(p:last-child) { margin-bottom: 0; }
+.pdv-comment-body :deep(h1),
+.pdv-comment-body :deep(h2),
+.pdv-comment-body :deep(h3),
+.pdv-comment-body :deep(h4) {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pdv-comment-body :deep(h1:first-child),
+.pdv-comment-body :deep(h2:first-child) {
+  margin-top: 0;
+}
+.pdv-comment-body :deep(h1) { font-size: var(--font-size-lg); }
+.pdv-comment-body :deep(h2) { font-size: var(--font-size-md); }
+.pdv-comment-body :deep(ul),
+.pdv-comment-body :deep(ol) {
+  margin: var(--space-1) 0 var(--space-2) 0;
+  padding-left: var(--space-6);
+}
+.pdv-comment-body :deep(li) { margin-bottom: 2px; }
+.pdv-comment-body :deep(.md-code-block) {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  overflow-x: auto;
+}
+.pdv-comment-body :deep(.md-inline-code) {
+  background: var(--color-bg-tertiary);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+}
+.pdv-comment-body :deep(.md-hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-4) 0;
+}
 
 .pdv-chips {
   display: flex;

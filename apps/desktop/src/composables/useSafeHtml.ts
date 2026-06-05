@@ -152,7 +152,7 @@ export function safeHtml(raw: string | null | undefined): string {
 const md = new MarkdownIt({
   html: false, // do not let source markdown embed arbitrary HTML
   linkify: true,
-  breaks: false,
+  breaks: true,
   typographer: false,
 });
 
@@ -177,8 +177,14 @@ rules.code_block = (tokens, idx, options, env, self) => {
   return rendered.replace("<pre>", '<pre class="md-code-block">');
 };
 rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const lang = (token.info || "").trim();
   const rendered = originalFence(tokens, idx, options, env, self);
-  return rendered.replace("<pre>", '<pre class="md-code-block">');
+  let html = rendered.replace("<pre>", '<pre class="md-code-block">');
+  if (lang === "suggestion") {
+    html = html.replace('class="md-code-block"', 'class="md-code-block md-suggestion-block"');
+  }
+  return html;
 };
 rules.code_inline = (tokens, idx, options, env, self) => {
   const rendered = originalCodeInline(tokens, idx, options, env, self);

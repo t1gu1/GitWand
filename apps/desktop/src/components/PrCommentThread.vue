@@ -10,7 +10,7 @@
 import { ref, computed } from "vue";
 import type { PrReviewComment } from "../utils/backend";
 import { openExternalUrl } from "../utils/backend";
-import { safeHtml } from "../composables/useSafeHtml";
+import { safeHtml, renderMarkdown } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
 import { useAvatar } from "../composables/useAvatar";
 
@@ -93,38 +93,7 @@ function applySuggestion(comment: PrReviewComment) {
   emit("apply-suggestion", code, comment.start_line, comment.line);
 }
 
-// ─── Markdown-lite renderer ─────────────────────────────
-/** Very light renderer: code blocks, inline code, bold, links. */
-function renderBody(body: string): string {
-  // Replace suggestion blocks with a styled box
-  const suggLabel = t("pr.comment.suggestionLabel");
-  let html = body.replace(
-    /```suggestion\r?\n([\s\S]*?)```/gm,
-    (_, code) =>
-      `<div class="comment-suggestion"><div class="comment-suggestion-label">${escHtml(suggLabel)}</div><pre class="comment-suggestion-code">${escHtml(code)}</pre></div>`,
-  );
-  // Other fenced code blocks
-  html = html.replace(
-    /```(\w*)\r?\n([\s\S]*?)```/gm,
-    (_, lang, code) => `<pre class="comment-code-block" data-lang="${lang}">${escHtml(code)}</pre>`,
-  );
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, (_, c) => `<code class="comment-inline-code">${escHtml(c)}</code>`);
-  // Bold
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  // Links
-  html = html.replace(
-    /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener">$1</a>',
-  );
-  // Newlines → <br>
-  html = html.replace(/\n/g, "<br>");
-  return html;
-}
-
-function escHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+const suggLabel = computed(() => t("pr.comment.suggestionLabel"));
 
 // Avatar disks share the app-wide outline style — see composables/useAvatar.
 const { avatarStyle, avatarInitials } = useAvatar();
@@ -184,7 +153,13 @@ function timeAgo(dateStr: string): string {
           <button class="pct-submit-btn" @click="submitEdit" :disabled="!editText.trim()">{{ t('pr.comment.save') }}</button>
         </div>
       </div>
-      <div v-else class="pct-body" @click="onMarkdownClick" v-html="safeHtml(renderBody(comment.body))" />
+      <div
+        v-else
+        class="pct-body"
+        :style="{ '--suggestion-label': `\"${suggLabel}\"` }"
+        @click="onMarkdownClick"
+        v-html="renderMarkdown(comment.body)"
+      />
 
       <!-- Apply suggestion button -->
       <div v-if="hasSuggestion(comment) && editingId !== comment.id" class="pct-suggestion-actions">
@@ -292,49 +267,95 @@ function timeAgo(dateStr: string): string {
 }
 
 /* Markdown rendered content */
-:deep(.comment-code-block),
-:deep(.comment-suggestion-code) {
+.pct-body :deep(p) { margin-bottom: 12px; }
+.pct-body :deep(p:last-child) { margin-bottom: 0; }
+
+.pct-body :deep(h1),
+.pct-body :deep(h2),
+.pct-body :deep(h3),
+.pct-body :deep(h4),
+.pct-body :deep(h5),
+.pct-body :deep(h6) {
+  margin-top: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pct-body :deep(h1:first-child),
+.pct-body :deep(h2:first-child),
+.pct-body :deep(h3:first-child),
+.pct-body :deep(h4:first-child) {
+  margin-top: 0;
+}
+
+.pct-body :deep(h1) { font-size: 1.4em; }
+.pct-body :deep(h2) { font-size: 1.25em; }
+.pct-body :deep(h3) { font-size: 1.15em; }
+.pct-body :deep(h4) { font-size: 1.1em; }
+
+.pct-body :deep(ul),
+.pct-body :deep(ol) {
+  margin-bottom: 8px;
+  padding-left: 20px;
+}
+.pct-body :deep(li) { margin-bottom: 2px; }
+
+.pct-body :deep(.md-code-block) {
   background: var(--color-bg-tertiary);
   border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 6px 8px;
-  margin: 4px 0;
-  font-family: monospace;
+  margin: 8px 0;
+  font-family: var(--font-mono);
   font-size: 11px;
   overflow-x: auto;
   white-space: pre;
 }
 
-:deep(.comment-inline-code) {
+.pct-body :deep(.md-inline-code) {
   background: var(--color-bg-tertiary);
   padding: 1px 4px;
   border-radius: 3px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 
-:deep(.comment-suggestion) {
+.pct-body :deep(.md-suggestion-block) {
   border: 1px solid var(--color-accent);
   border-radius: 6px;
   overflow: hidden;
-  margin: 4px 0;
+  margin: 8px 0;
+  background: var(--color-bg-secondary);
 }
 
-:deep(.comment-suggestion-label) {
+.pct-body :deep(.md-suggestion-block):before {
+  content: var(--suggestion-label);
+  display: block;
   background: var(--color-accent-soft);
   padding: 3px 8px;
   font-size: 10px;
   font-weight: 600;
   color: var(--color-accent);
+  border-bottom: 1px solid var(--color-border);
 }
 
-:deep(.comment-suggestion-code) {
+.pct-body :deep(.md-suggestion-block) .md-code-block {
   border: none;
   border-radius: 0;
   margin: 0;
+  background: transparent;
 }
 
-:deep(a) { color: var(--color-accent); text-decoration: underline; }
+.pct-body :deep(.md-link) {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.pct-body :deep(.md-hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 12px 0;
+}
 
 /* Suggestion apply button */
 .pct-suggestion-actions {
