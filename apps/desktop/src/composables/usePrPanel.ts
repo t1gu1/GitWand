@@ -469,6 +469,14 @@ export function usePrPanel(cwd: Ref<string>) {
       prComments.value = comments;
       prIssueComments.value = issueComments;
       prReviews.value = reviews;
+
+      // Azure DevOps API doesn't include comment counts in the PR object.
+      // We populate them from the actual comments list we just fetched.
+      if (forge.value.name === "azure" && prDetail.value) {
+        prDetail.value.reviewComments = comments.length;
+        prDetail.value.comments = 0;
+      }
+
       totalRepoFiles.value = fileCount;
       cache.setDetail(key, { detail, checks, comments, issueComments, reviews });
     } catch (err: any) {

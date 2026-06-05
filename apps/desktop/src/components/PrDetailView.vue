@@ -404,7 +404,7 @@ function commentTimeAgo(dateStr: string): string {
                 </svg>
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statComments') }}</span>
-              <span class="pdv-stat-value">{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
+              <span class="pdv-stat-value">{{ Math.max(p.prDetail.value.comments + p.prDetail.value.reviewComments, sortedComments.length) }}</span>
             </component>
           </div>
 

@@ -720,7 +720,7 @@ watch(() => props.cwd, () => {
                   </div>
                   <div class="pr-stat">
                     <span class="pr-stat-label">Commentaires</span>
-                    <span>{{ prDetail.comments + prDetail.reviewComments }}</span>
+                    <span>{{ Math.max(prDetail.comments + prDetail.reviewComments, prComments.length) }}</span>
                   </div>
                 </div>
 
