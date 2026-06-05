@@ -2,7 +2,7 @@ import { onMounted, onUnmounted, watch, type ComputedRef, type Ref } from "vue";
 import { Menu, Submenu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import { useI18n } from "./useI18n";
 import { useFolderHistory } from "./useFolderHistory";
-import { isTauri } from "../utils/backend";
+import { isTauri, openExternalUrl } from "../utils/backend";
 
 /**
  * Native macOS menu bar — File / Edit / Repository / View / Window / Help.
@@ -337,12 +337,12 @@ export function useAppMenu(actions: AppMenuActions, state: AppMenuState) {
         await MenuItem.new({
           id: "help-whats-new",
           text: t("menu.whatsNew"),
-          action: () => window.open(URL_WHATS_NEW, "_blank"),
+          action: () => { void openExternalUrl(URL_WHATS_NEW); },
         }),
         await MenuItem.new({
           id: "help-report-issue",
           text: t("menu.reportIssue"),
-          action: () => window.open(URL_REPORT_ISSUE, "_blank"),
+          action: () => { void openExternalUrl(URL_REPORT_ISSUE); },
         }),
         await PredefinedMenuItem.new({ item: "Separator" }),
         await MenuItem.new({

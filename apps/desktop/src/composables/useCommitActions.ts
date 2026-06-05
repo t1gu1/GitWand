@@ -22,6 +22,7 @@ import {
   gitRemoteInfo,
   gitDeleteTag,
   gitDeleteRemoteTag,
+  openExternalUrl,
 } from "../utils/backend";
 import { useI18n } from "./useI18n";
 import { useTagSuggestion } from "./useTagSuggestion";
@@ -369,7 +370,7 @@ export function useCommitActions(deps: Deps) {
           : info.provider === "bitbucket"
             ? `https://bitbucket.org/${info.owner}/${info.repo}/commits/${entry.hashFull}`
             : `https://github.com/${info.owner}/${info.repo}/commit/${entry.hashFull}`;
-      window.open(base, "_blank");
+      void openExternalUrl(base);
     } catch {
       repoError.value = t("commitCtx.noRemote");
     }

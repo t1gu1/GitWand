@@ -6,6 +6,7 @@ import {
   ghCreatePr,
   ghCheckoutPr,
   ghMergePr,
+  openExternalUrl,
   ghPrDetail,
   ghPrDiff,
   ghPrChecks,
@@ -306,7 +307,8 @@ async function mergePr() {
   } catch (err: any) { error.value = err.message; }
 }
 
-function openInBrowser(url: string) { window.open(url, "_blank"); }
+// window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
+function openInBrowser(url: string) { void openExternalUrl(url); }
 
 // ─── Comment actions ─────────────────────────────────────
 async function handleCreateComment(params: CreatePrCommentParams & { path: string }) {

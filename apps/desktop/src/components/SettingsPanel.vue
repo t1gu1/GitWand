@@ -76,7 +76,7 @@ import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
 import type { IdentityProfile, CommitTemplate, AiPromptPreset } from "../composables/useSettings";
-import { gitCommitTemplatePath } from "../utils/backend";
+import { gitCommitTemplatePath, openExternalUrl } from "../utils/backend";
 export type { AIProvider };
 
 // Re-export for back-compat — earlier callers imported this shape from
@@ -115,6 +115,7 @@ interface Settings {
   defaultBranch: string;
   commitSignature: boolean;
   commitMessageLang: string; // "" = follow UI locale
+  prAiLanguage: "english" | "ui";
   diffMode: DiffMode;
   pullMode: PullMode;
   switchBehavior: SwitchBehavior;
@@ -166,6 +167,7 @@ const defaultSettings: Settings = {
   defaultBranch: "main",
   commitSignature: true,
   commitMessageLang: "",
+  prAiLanguage: "english",
   diffMode: "inline",
   pullMode: "merge",
   switchBehavior: "ask",
@@ -477,7 +479,7 @@ const claudeConnectError = ref<string | null>(null);
 
 function startClaudeConnect() {
   // Open the Anthropic console key creation page
-  window.open("https://console.anthropic.com/settings/keys", "_blank");
+  void openExternalUrl("https://console.anthropic.com/settings/keys");
   claudeConnectStep.value = "waiting";
   claudeConnectError.value = null;
 }
@@ -1137,6 +1139,17 @@ function savePresetForm() {
               <option v-for="loc in supportedLocales" :key="loc" :value="loc">{{ localeLabels[loc] }}</option>
             </select>
             <span class="sp-hint">{{ t('settings.commitMessageLangHint') }}</span>
+          </div>
+
+          <!-- PR AI language -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-pr-ai-lang">{{ t('settings.prAiLanguage') }}</label>
+            <select id="setting-pr-ai-lang" class="sp-select" :value="settings.prAiLanguage"
+              @change="updateSetting('prAiLanguage', ($event.target as HTMLSelectElement).value as 'english' | 'ui')">
+              <option value="english">{{ t('settings.prAiLanguageEnglish') }}</option>
+              <option value="ui">{{ t('settings.prAiLanguageUi') }}</option>
+            </select>
+            <span class="sp-hint">{{ t('settings.prAiLanguageHint') }}</span>
           </div>
 
           <!-- Theme -->

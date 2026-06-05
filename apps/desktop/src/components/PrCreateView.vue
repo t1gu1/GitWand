@@ -17,6 +17,7 @@ import { ghListReviewerCandidates, type GitBranch, type ReviewerCandidate } from
 import { useI18n } from "../composables/useI18n";
 import { useAIProvider } from "../composables/useAIProvider";
 import { usePrDescription } from "../composables/usePrDescription";
+import { loadSettings } from "../composables/useSettings";
 import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
@@ -38,11 +39,13 @@ async function generateWithAI() {
   const hasContent = p.newPrTitle.value.trim() || p.newPrBody.value.trim();
   if (hasContent && !confirm(t("pr.create.aiReplaceConfirm"))) return;
   try {
+    // PR language: "english" (default) forces English; "ui" follows the app locale.
+    const prLang = loadSettings().prAiLanguage === "ui" ? locale.value : "en";
     const result = await generatePrDescription(
       props.cwd,
       props.currentBranch,
       p.newPrBase.value,
-      { locale: locale.value },
+      { locale: prLang },
     );
     if (result.title) p.newPrTitle.value = result.title;
     if (result.body) p.newPrBody.value = result.body;

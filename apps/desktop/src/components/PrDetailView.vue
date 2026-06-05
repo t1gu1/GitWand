@@ -14,6 +14,7 @@
 import { computed, inject, ref } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
 import { renderMarkdown } from "../composables/useSafeHtml";
+import { openExternalUrl } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
@@ -28,7 +29,8 @@ const emit = defineEmits<{
 
 const p = inject<PrPanelState>(PR_PANEL_KEY)!;
 
-function openInBrowser(url: string) { window.open(url, "_blank"); }
+// window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
+function openInBrowser(url: string) { void openExternalUrl(url); }
 
 /** Author initials for the avatar disk. */
 function authorInitials(author: string): string {
