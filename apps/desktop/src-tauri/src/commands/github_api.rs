@@ -850,7 +850,7 @@ pub(crate) fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
 /// Begin the OAuth device flow. Returns the user code + verification URL the
 /// frontend shows, plus the `device_code` used for polling.
 #[tauri::command]
-pub(crate) fn github_device_start() -> Result<GithubDeviceCode, String> {
+pub(crate) async fn github_device_start() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
     if cid.starts_with("REPLACE_WITH") {
         return Err(
@@ -894,7 +894,7 @@ pub(crate) fn github_device_start() -> Result<GithubDeviceCode, String> {
 /// On success the token is persisted to the OS keychain so the REST path can
 /// pick it up; the secret is never returned to the frontend.
 #[tauri::command]
-pub(crate) fn github_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
+pub(crate) async fn github_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
     let cid = client_id();
     let body = serde_json::json!({
         "client_id": cid,
@@ -954,6 +954,6 @@ pub(crate) fn github_device_poll(device_code: String) -> Result<GithubDevicePoll
 
 /// Whether a Settings-managed GitHub token is currently stored.
 #[tauri::command]
-pub(crate) fn github_token_present() -> Result<bool, String> {
+pub(crate) async fn github_token_present() -> Result<bool, String> {
     Ok(settings_github_token().is_some())
 }

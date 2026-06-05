@@ -17,7 +17,7 @@ use rayon::prelude::*;
 
 /// Read a `.gitwand-workspace.json` from the given directory.
 #[tauri::command]
-pub(crate) fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
+pub(crate) async fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
     let dir = std::path::Path::new(&path);
     let file = dir.join(".gitwand-workspace.json");
     if !file.exists() {
@@ -31,7 +31,7 @@ pub(crate) fn workspace_read(path: String) -> Result<WorkspaceConfig, String> {
 
 /// Write a `.gitwand-workspace.json` to the given directory.
 #[tauri::command]
-pub(crate) fn workspace_write(path: String, workspace: WorkspaceConfig) -> Result<(), String> {
+pub(crate) async fn workspace_write(path: String, workspace: WorkspaceConfig) -> Result<(), String> {
     let dir = std::path::Path::new(&path);
     let file = dir.join(".gitwand-workspace.json");
     std::fs::create_dir_all(dir)
@@ -48,7 +48,7 @@ pub(crate) fn workspace_write(path: String, workspace: WorkspaceConfig) -> Resul
 /// Order is preserved by `into_par_iter().map(...).collect::<Vec<_>>()`
 /// because `Vec<T>::into_par_iter()` is an `IndexedParallelIterator`.
 #[tauri::command]
-pub(crate) fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+pub(crate) async fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
     repos.into_par_iter().map(|repo| {
         let path = repo.path.clone();
         let name = repo.name.clone();
@@ -75,14 +75,14 @@ pub(crate) fn workspace_status_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRe
 /// Network operations parallelized via rayon (P3.2): for a workspace with
 /// N repos, total wall-clock is ~max(per-repo) instead of sum(per-repo).
 #[tauri::command]
-pub(crate) fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+pub(crate) async fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
     repos.par_iter().for_each(|repo| {
         let _ = git_cmd()
             .args(["fetch", "--all", "--prune"])
             .current_dir(&repo.path)
             .output();
     });
-    workspace_status_all(repos)
+    workspace_status_all(repos).await
 }
 
 /// Run `git pull --ff-only` on all repos (best-effort).
@@ -90,14 +90,14 @@ pub(crate) fn workspace_fetch_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRep
 /// Parallelized via rayon (P3.2). Each repo's pull is independent — different
 /// remotes, different working dirs — so concurrent execution is safe.
 #[tauri::command]
-pub(crate) fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
+pub(crate) async fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoStatus> {
     repos.par_iter().for_each(|repo| {
         let _ = git_cmd()
             .args(["pull", "--ff-only"])
             .current_dir(&repo.path)
             .output();
     });
-    workspace_status_all(repos)
+    workspace_status_all(repos).await
 }
 
 /// Get detailed WIP status for all repos in a workspace.
@@ -107,7 +107,7 @@ pub(crate) fn workspace_pull_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepo
 /// Combined with rayon parallelization (P3.2), a 5-repo workspace listing
 /// went from ~750 ms wall-clock to ~30 ms in the typical case.
 #[tauri::command]
-pub(crate) fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
+pub(crate) async fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipItem> {
     repos.into_par_iter().map(|repo| {
         let path = repo.path.clone();
         let name = repo.name.clone();
@@ -142,7 +142,7 @@ pub(crate) fn workspace_wip_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceWipIt
 /// Note: GitHub API rate-limits per token; in practice 5–20 concurrent calls
 /// from a single user fit well within the 5000 req/h authenticated budget.
 #[tauri::command]
-pub(crate) fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
+pub(crate) async fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoPrs> {
     repos.into_par_iter().map(|repo| {
         let repo_path = repo.path.clone();
         let repo_name = repo.name.clone();
@@ -210,7 +210,7 @@ pub(crate) fn workspace_prs_all(repos: Vec<WorkspaceRepo>) -> Vec<WorkspaceRepoP
 /// Parallelized via rayon (P3.2). `filter` is captured by-ref and read-only
 /// so it's safe to share across threads.
 #[tauri::command]
-pub(crate) fn workspace_issues_all(repos: Vec<WorkspaceRepo>, filter: String) -> Vec<WorkspaceRepoIssues> {
+pub(crate) async fn workspace_issues_all(repos: Vec<WorkspaceRepo>, filter: String) -> Vec<WorkspaceRepoIssues> {
     repos.into_par_iter().map(|repo| {
         let repo_path = repo.path.clone();
         let repo_name = repo.name.clone();

@@ -39,7 +39,7 @@ use crate::types::*;
 // fallback ensures we never regress vs. the v2.8 baseline.
 
 #[tauri::command]
-pub(crate) fn git_status(cwd: String) -> Result<GitStatus, String> {
+pub(crate) async fn git_status(cwd: String) -> Result<GitStatus, String> {
     match git_status_libgit2(&cwd) {
         Ok(s) => Ok(s),
         Err(e) => {
@@ -537,7 +537,7 @@ fn compute_main_commit_count(cwd: &str, branch: &str) -> i32 {
 // ─── Git diff ────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDiff, String> {
+pub(crate) async fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDiff, String> {
     let mut cmd = git_cmd();
     if staged {
         cmd.arg("diff").arg("--cached");
@@ -603,7 +603,7 @@ pub(crate) fn git_diff(cwd: String, path: String, staged: bool) -> Result<GitDif
 // ─── Git log ─────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_log(
+pub(crate) async fn git_log(
     cwd: String,
     count: Option<i32>,
     all: Option<bool>,
@@ -712,7 +712,7 @@ pub(crate) fn git_log(
 /// .git directory directly — more reliable than parsing locale-dependent
 /// `git status` messages.
 #[tauri::command]
-pub(crate) fn git_repo_state(cwd: String) -> Result<RepoOperationState, String> {
+pub(crate) async fn git_repo_state(cwd: String) -> Result<RepoOperationState, String> {
     let git_dir = resolve_git_dir(&cwd)?;
 
     // ── Plain or interactive rebase (git >= 2.26: rebase-merge dir) ───────
@@ -805,7 +805,7 @@ pub(crate) fn git_repo_state(cwd: String) -> Result<RepoOperationState, String> 
 // ─── Git show (commit diff) ──────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
+pub(crate) async fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String> {
     let output = git_cmd()
         .args(["show", "-m", "--first-parent", "--format=", &hash])
         .current_dir(&cwd)
@@ -961,7 +961,7 @@ pub(crate) fn git_show(cwd: String, hash: String) -> Result<Vec<GitDiff>, String
 // ─── File log (v1.9) — pickaxe + line-range ──────────────
 
 #[tauri::command]
-pub(crate) fn git_file_log(cwd: String, path: String, count: Option<u32>) -> Result<Vec<FileLogEntry>, String> {
+pub(crate) async fn git_file_log(cwd: String, path: String, count: Option<u32>) -> Result<Vec<FileLogEntry>, String> {
     let n = count.unwrap_or(50).to_string();
     let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
     let output = git_cmd()
@@ -978,7 +978,7 @@ pub(crate) fn git_file_log(cwd: String, path: String, count: Option<u32>) -> Res
 /// Pickaxe: find commits that added or removed `search` string.
 /// mode: "S" (literal string) | "G" (regex)
 #[tauri::command]
-pub(crate) fn git_file_log_pickaxe(cwd: String, path: String, search: String, mode: String) -> Result<Vec<FileLogEntry>, String> {
+pub(crate) async fn git_file_log_pickaxe(cwd: String, path: String, search: String, mode: String) -> Result<Vec<FileLogEntry>, String> {
     let flag = if mode == "G" { "-G" } else { "-S" };
     let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
     let output = git_cmd()
@@ -995,7 +995,7 @@ pub(crate) fn git_file_log_pickaxe(cwd: String, path: String, search: String, mo
 /// Line-range history: commits that touched lines [start..end] in path.
 /// Uses git log -L <start>,<end>:<path> (no --follow; incompatible with -L).
 #[tauri::command]
-pub(crate) fn git_file_log_range(cwd: String, path: String, start_line: u32, end_line: u32) -> Result<Vec<FileLogEntry>, String> {
+pub(crate) async fn git_file_log_range(cwd: String, path: String, start_line: u32, end_line: u32) -> Result<Vec<FileLogEntry>, String> {
     let range = format!("{},{}:{}", start_line, end_line, path);
     let fmt = "%H\n%h\n%an\n%aI\n%s\n%b\n---END---";
     let output = git_cmd()
@@ -1012,7 +1012,7 @@ pub(crate) fn git_file_log_range(cwd: String, path: String, start_line: u32, end
 /// Run `git blame --porcelain` on a file.
 /// algorithm: "histogram" | "patience" | "minimal" | "myers" (default "histogram").
 #[tauri::command]
-pub(crate) fn git_blame(cwd: String, path: String, algorithm: Option<String>) -> Result<Vec<BlameLine>, String> {
+pub(crate) async fn git_blame(cwd: String, path: String, algorithm: Option<String>) -> Result<Vec<BlameLine>, String> {
     let algo = algorithm.as_deref().unwrap_or("histogram");
     let diff_algo_flag = format!("--diff-algorithm={}", algo);
     let output = git_cmd()
@@ -1079,7 +1079,7 @@ pub(crate) fn git_blame(cwd: String, path: String, algorithm: Option<String>) ->
 //   7. Retourner la liste brute — le résolveur tourne côté frontend (TypeScript)
 
 #[tauri::command]
-pub(crate) fn preview_merge(cwd: String, source_branch: String) -> Result<Vec<FileMergePreview>, String> {
+pub(crate) async fn preview_merge(cwd: String, source_branch: String) -> Result<Vec<FileMergePreview>, String> {
     let git = git_binary();
 
     // 1. Merge-base
@@ -1254,7 +1254,7 @@ fn merge_file_preview(
 /// Excludes the current branch and the default branch itself.
 /// Equivalent to `git branch --merged <default_branch> --format="%(refname:short)"`.
 #[tauri::command]
-pub(crate) fn git_branch_merged(cwd: String) -> Result<Vec<String>, String> {
+pub(crate) async fn git_branch_merged(cwd: String) -> Result<Vec<String>, String> {
     use crate::git::cmd::git_cmd;
 
     // Resolve default branch (main / master / trunk / …)
@@ -1305,7 +1305,7 @@ pub(crate) fn git_branch_merged(cwd: String) -> Result<Vec<String>, String> {
 
 /// Return the effective git user.name and user.email for the given repo.
 #[tauri::command]
-pub(crate) fn git_config_identity(cwd: String) -> Result<(String, String), String> {
+pub(crate) async fn git_config_identity(cwd: String) -> Result<(String, String), String> {
     use crate::git::cmd::git_cmd;
 
     let name_out = git_cmd()
@@ -1331,7 +1331,7 @@ pub(crate) fn git_config_identity(cwd: String) -> Result<(String, String), Strin
 /// Return the absolute path of the commit.template configured for the repo,
 /// with ~ expanded to the home directory. Returns null (None) if not set.
 #[tauri::command]
-pub(crate) fn git_commit_template_path(cwd: String) -> Result<Option<String>, String> {
+pub(crate) async fn git_commit_template_path(cwd: String) -> Result<Option<String>, String> {
     use crate::git::cmd::git_cmd;
 
     let output = git_cmd()

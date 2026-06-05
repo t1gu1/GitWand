@@ -148,7 +148,7 @@ fn tcp_probe(host: &str, port: u16, timeout: Duration) -> bool {
 /// `timeout_ms = 0` is normalised to a small floor (250 ms) so the caller
 /// cannot accidentally turn the probe into a zero-wait fast-fail.
 #[tauri::command]
-pub(crate) fn check_remote_reachable(url: String, timeout_ms: u64) -> Result<bool, String> {
+pub(crate) async fn check_remote_reachable(url: String, timeout_ms: u64) -> Result<bool, String> {
     let parsed = match parse_remote_host_port(&url) {
         Some(p) => p,
         None => return Ok(false),

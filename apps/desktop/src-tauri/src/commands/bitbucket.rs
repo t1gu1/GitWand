@@ -405,7 +405,7 @@ impl OrElseEmpty for String {
 ///
 /// `state` accepts "OPEN" (default), "MERGED", "DECLINED", "ALL".
 #[tauri::command]
-pub(crate) fn bb_list_prs(
+pub(crate) async fn bb_list_prs(
     cwd: String,
     state: String,
     limit: Option<i64>,
@@ -462,7 +462,7 @@ pub(crate) fn bb_list_prs(
 
 /// Count PRs for a given state.
 #[tauri::command]
-pub(crate) fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
+pub(crate) async fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -485,7 +485,7 @@ pub(crate) fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
 
 /// Get detailed PR info.
 #[tauri::command]
-pub(crate) fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, String> {
+pub(crate) async fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -497,7 +497,7 @@ pub(crate) fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, St
 
 /// Get the diff of a PR as a unified diff string.
 #[tauri::command]
-pub(crate) fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
+pub(crate) async fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -527,7 +527,7 @@ pub(crate) fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
 /// If `source_branch` is empty, the current HEAD branch is resolved via
 /// `git rev-parse --abbrev-ref HEAD` (mirrors the `glab mr create` convention).
 #[tauri::command]
-pub(crate) fn bb_create_pr(
+pub(crate) async fn bb_create_pr(
     cwd: String,
     title: String,
     body: String,
@@ -575,7 +575,7 @@ pub(crate) fn bb_create_pr(
 ///
 /// `method` accepts "merge" (default), "squash", "fast_forward".
 #[tauri::command]
-pub(crate) fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(), String> {
+pub(crate) async fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -602,7 +602,7 @@ pub(crate) fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(),
 /// 1. Fetch the source branch from origin
 /// 2. Switch to it (create tracking branch if needed)
 #[tauri::command]
-pub(crate) fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -655,7 +655,7 @@ pub(crate) fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
 
 /// List comments on a PR. Returns raw JSON array for TypeScript parsing.
 #[tauri::command]
-pub(crate) fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Value, String> {
+pub(crate) async fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Value, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -671,7 +671,7 @@ pub(crate) fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Valu
 
 /// Create a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_create_comment(
+pub(crate) async fn bb_create_comment(
     cwd: String,
     pr_id: i64,
     body: String,
@@ -691,7 +691,7 @@ pub(crate) fn bb_create_comment(
 
 /// Update a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_update_comment(
+pub(crate) async fn bb_update_comment(
     cwd: String,
     pr_id: i64,
     comment_id: i64,
@@ -714,7 +714,7 @@ pub(crate) fn bb_update_comment(
 
 /// Delete a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_delete_comment(
+pub(crate) async fn bb_delete_comment(
     cwd: String,
     pr_id: i64,
     comment_id: i64,
@@ -735,7 +735,7 @@ pub(crate) fn bb_delete_comment(
 
 /// Approve a PR (current user).
 #[tauri::command]
-pub(crate) fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -751,7 +751,7 @@ pub(crate) fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
 
 /// List files changed in a PR.
 #[tauri::command]
-pub(crate) fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String> {
+pub(crate) async fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -786,7 +786,7 @@ pub(crate) fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String
 
 /// Get the current Bitbucket user (the one whose credentials are stored).
 #[tauri::command]
-pub(crate) fn bb_current_user(cwd: String) -> Result<String, String> {
+pub(crate) async fn bb_current_user(cwd: String) -> Result<String, String> {
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
 
@@ -801,7 +801,7 @@ pub(crate) fn bb_current_user(cwd: String) -> Result<String, String> {
 
 /// List reviewer candidates (repo members with write access).
 #[tauri::command]
-pub(crate) fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+pub(crate) async fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -852,7 +852,7 @@ pub(crate) fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidat
 /// Endpoint: GET /2.0/repositories/{ws}/{slug}/commit/{sha}/statuses
 /// The head commit SHA is read from the PR's `source.commit.hash` field.
 #[tauri::command]
-pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, String> {
+pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);
@@ -913,7 +913,7 @@ pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, S
 /// Bitbucket has no native draft concept — the convention is a "Draft: " title
 /// prefix. This command strips it via a PUT update on the PR.
 #[tauri::command]
-pub(crate) fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
     let auth = basic_auth_header(&username, &app_password);

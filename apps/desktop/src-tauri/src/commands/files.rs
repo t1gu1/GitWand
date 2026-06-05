@@ -18,13 +18,13 @@ use crate::types::*;
 use std::path::PathBuf;
 
 #[tauri::command]
-pub(crate) fn read_file(cwd: String, path: String) -> Result<String, String> {
+pub(crate) async fn read_file(cwd: String, path: String) -> Result<String, String> {
     let full = safe_repo_path(&cwd, &path)?;
     std::fs::read_to_string(&full).map_err(|e| format!("Failed to read {}: {}", path, e))
 }
 
 #[tauri::command]
-pub(crate) fn write_file(cwd: String, path: String, content: String) -> Result<(), String> {
+pub(crate) async fn write_file(cwd: String, path: String, content: String) -> Result<(), String> {
     let full = safe_repo_path(&cwd, &path)?;
     std::fs::write(&full, &content).map_err(|e| format!("Failed to write {}: {}", path, e))
 }
@@ -44,7 +44,7 @@ pub(crate) fn write_file(cwd: String, path: String, content: String) -> Result<(
 /// here (`.gitwandrc` / `.gitwandrc.json`), so no user-supplied path
 /// component reaches the filesystem.
 #[tauri::command]
-pub(crate) fn write_gitwandrc(cwd: String, content: String) -> Result<(), String> {
+pub(crate) async fn write_gitwandrc(cwd: String, content: String) -> Result<(), String> {
     if cwd.trim().is_empty() {
         return Err("cwd must not be empty".to_string());
     }
@@ -68,7 +68,7 @@ pub(crate) fn write_gitwandrc(cwd: String, content: String) -> Result<(), String
 }
 
 #[tauri::command]
-pub(crate) fn read_file_at_revision(
+pub(crate) async fn read_file_at_revision(
     cwd: String,
     rev: String,
     path: String,
@@ -136,7 +136,7 @@ pub(crate) fn read_file_at_revision(
 }
 
 #[tauri::command]
-pub(crate) fn folder_diff(cwd: String, ref_a: String, ref_b: String) -> Result<FolderDiffNode, String> {
+pub(crate) async fn folder_diff(cwd: String, ref_a: String, ref_b: String) -> Result<FolderDiffNode, String> {
     if cwd.trim().is_empty() {
         return Err("cwd must not be empty".to_string());
     }
@@ -223,7 +223,7 @@ pub(crate) fn folder_diff(cwd: String, ref_a: String, ref_b: String) -> Result<F
 // ─── Directory listing (for FolderPicker) ──────────────────
 
 #[tauri::command]
-pub(crate) fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
+pub(crate) async fn list_dir(path: Option<String>) -> Result<ListDirResult, String> {
     let home_path = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"));
     let home = home_path.to_string_lossy().to_string();
 

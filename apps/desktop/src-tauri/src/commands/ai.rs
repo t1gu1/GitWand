@@ -124,7 +124,7 @@ fn resolve_codex_binary() -> Option<String> {
 /// stderr surfaces a clear "please log in" message that the calling
 /// command (`claude_cli_prompt`) propagates as an error.
 #[tauri::command]
-pub(crate) fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
+pub(crate) async fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
     let binary = match resolve_claude_binary() {
         Some(b) => b,
         None => {
@@ -165,7 +165,7 @@ pub(crate) fn detect_claude_cli() -> Result<ClaudeCliInfo, String> {
 /// The CLI already handles auth via the user's subscription — we just pipe
 /// text in and get text back.
 #[tauri::command]
-pub(crate) fn claude_cli_prompt(
+pub(crate) async fn claude_cli_prompt(
     prompt: String,
     system_prompt: Option<String>,
     cwd: Option<String>,
@@ -244,7 +244,7 @@ pub(crate) fn claude_cli_prompt(
 /// for a prompt they never asked for. Auth verifies implicitly on the
 /// first real prompt via `codex_cli_prompt`.
 #[tauri::command]
-pub(crate) fn detect_codex_cli() -> Result<CodexCliInfo, String> {
+pub(crate) async fn detect_codex_cli() -> Result<CodexCliInfo, String> {
     let binary = match resolve_codex_binary() {
         Some(b) => b,
         None => {
@@ -277,7 +277,7 @@ pub(crate) fn detect_codex_cli() -> Result<CodexCliInfo, String> {
 }
 
 #[tauri::command]
-pub(crate) fn codex_cli_prompt(
+pub(crate) async fn codex_cli_prompt(
     prompt: String,
     system_prompt: Option<String>,
     cwd: Option<String>,
@@ -381,7 +381,7 @@ fn resolve_opencode_binary() -> Option<String> {
 /// Claude / Codex detectors: no prompt is sent to verify auth — that is
 /// confirmed implicitly on the first real `opencode_cli_prompt`.
 #[tauri::command]
-pub(crate) fn detect_opencode_cli() -> Result<OpencodeCliInfo, String> {
+pub(crate) async fn detect_opencode_cli() -> Result<OpencodeCliInfo, String> {
     let binary = match resolve_opencode_binary() {
         Some(b) => b,
         None => {
@@ -414,7 +414,7 @@ pub(crate) fn detect_opencode_cli() -> Result<OpencodeCliInfo, String> {
 }
 
 #[tauri::command]
-pub(crate) fn opencode_cli_prompt(
+pub(crate) async fn opencode_cli_prompt(
     prompt: String,
     system_prompt: Option<String>,
     cwd: Option<String>,
@@ -471,7 +471,7 @@ pub(crate) fn opencode_cli_prompt(
 /// when the binary is missing or the command fails, so the UI can fall back
 /// to free-text entry gracefully.
 #[tauri::command]
-pub(crate) fn opencode_list_models() -> Result<Vec<String>, String> {
+pub(crate) async fn opencode_list_models() -> Result<Vec<String>, String> {
     let binary = match resolve_opencode_binary() {
         Some(b) => b,
         None => return Ok(Vec::new()),
@@ -650,7 +650,7 @@ pub(crate) fn copilot_cli_prompt(
 /// embed a PTY because this is a one-shot setup flow: the user validates
 /// in their browser and comes back to GitWand.
 #[tauri::command]
-pub(crate) fn claude_cli_login() -> Result<(), String> {
+pub(crate) async fn claude_cli_login() -> Result<(), String> {
     let binary = resolve_claude_binary()
         .ok_or_else(|| "Binaire `claude` introuvable. Installez-le d'abord.".to_string())?;
 

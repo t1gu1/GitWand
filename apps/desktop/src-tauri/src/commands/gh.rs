@@ -40,7 +40,7 @@ use crate::commands::github_api;
 /// CI/merge state pieces — keeps the list query light while still letting
 /// the sidebar render CI/merge dots without a click.
 #[tauri::command]
-pub(crate) fn gh_list_prs(
+pub(crate) async fn gh_list_prs(
     cwd: String,
     state: String,
     limit: Option<i64>,
@@ -106,7 +106,7 @@ pub(crate) fn gh_list_prs(
 /// Returns 0 on any non-fatal failure (no remote, no token, etc.) so the
 /// dashboard can still render — the caller decides whether to surface.
 #[tauri::command]
-pub(crate) fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
+pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_count(&cwd, &state, &tok);
     }
@@ -192,7 +192,7 @@ pub(crate) fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
 
 /// Create a pull request using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_create_pr(
+pub(crate) async fn gh_create_pr(
     cwd: String,
     title: String,
     body: String,
@@ -316,7 +316,7 @@ pub(crate) fn gh_create_pr(
 /// Calls `gh api /repos/:owner/:repo/assignees` (paginated) which returns
 /// users with push access — exactly the set GitHub allows as reviewers.
 #[tauri::command]
-pub(crate) fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+pub(crate) async fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     // Discover owner/repo from the current repo.
     let view = hidden_cmd("gh")
         .args(["repo", "view", "--json", "owner,name"])
@@ -389,7 +389,7 @@ pub(crate) fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCan
 
 /// Checkout a PR branch locally using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
+pub(crate) async fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
     if github_api::settings_github_token().is_some() {
         return github_api::rest_checkout_pr(&cwd, number);
     }
@@ -409,7 +409,7 @@ pub(crate) fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
 
 /// Merge a PR using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<(), String> {
+pub(crate) async fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<(), String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_merge_pr(&cwd, number, &method, &tok);
     }
@@ -438,7 +438,7 @@ pub(crate) fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<()
 /// Idempotent — `gh pr ready` on a non-draft PR exits 0 with a message like
 /// "Pull request #N is already marked as ready for review."
 #[tauri::command]
-pub(crate) fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+pub(crate) async fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_ready(&cwd, number, &tok);
     }
@@ -458,7 +458,7 @@ pub(crate) fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
 
 /// Get detailed PR information using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
+pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_detail(&cwd, number, &tok);
     }
@@ -484,7 +484,7 @@ pub(crate) fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail
 
 /// Get the diff of a PR using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
+pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_diff(&cwd, number, &tok);
     }
@@ -503,7 +503,7 @@ pub(crate) fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
 
 /// Get CI checks for a PR using `gh` CLI.
 #[tauri::command]
-pub(crate) fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+pub(crate) async fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_checks(&cwd, number, &tok);
     }
@@ -563,7 +563,7 @@ pub(crate) fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, Str
 /// List inline review comments (anchored to diff lines) for a PR.
 /// Token present → REST; otherwise `gh api`.
 #[tauri::command]
-pub(crate) fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+pub(crate) async fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_comments(&cwd, number, &tok);
     }
@@ -577,7 +577,7 @@ pub(crate) fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json:
 /// List issue-level (conversation) comments for a PR.
 /// Token present → REST; otherwise `gh api`.
 #[tauri::command]
-pub(crate) fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_issue_comments(&cwd, number, &tok);
     }
@@ -610,7 +610,7 @@ fn gh_api_json(cwd: &str, path: &str) -> Result<serde_json::Value, String> {
 /// Report the current repo's fork relationship so the PR create view can offer
 /// "open against upstream". Token present → REST; otherwise `gh repo view`.
 #[tauri::command]
-pub(crate) fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
+pub(crate) async fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_fork_info(&cwd, &tok);
     }

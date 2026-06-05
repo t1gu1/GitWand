@@ -203,28 +203,31 @@ pub fn git_log_parity(
     all: Option<bool>,
     author: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
-    commands::read::git_log(cwd, count, all, author, None, None)
+    // Command fns are now `async` (run off the UI thread). These `*_parity`
+    // wrappers are sync entry points for the parity-probe example, so block on
+    // the future here to keep their signatures unchanged.
+    tauri::async_runtime::block_on(commands::read::git_log(cwd, count, all, author, None, None))
 }
 
 pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String> {
-    commands::ops::git_branches(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_branches(cwd))
 }
 
 pub fn git_stash_list_parity(cwd: String) -> Result<Vec<types::StashEntry>, String> {
-    commands::ops::git_stash_list(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_stash_list(cwd))
 }
 
 pub fn git_submodule_branches_parity(
     cwd: String,
     submodule_path: String,
 ) -> Result<Vec<types::SubmoduleBranch>, String> {
-    commands::ops::git_submodule_branches(cwd, submodule_path)
+    tauri::async_runtime::block_on(commands::ops::git_submodule_branches(cwd, submodule_path))
 }
 
 pub fn git_commit_submodule_changes_parity(
     cwd: String,
 ) -> Result<std::collections::HashMap<String, Vec<types::CommitSubmoduleChange>>, String> {
-    commands::ops::git_commit_submodule_changes(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_commit_submodule_changes(cwd))
 }
 
 // ─── Tauri entry point ─────────────────────────────────────

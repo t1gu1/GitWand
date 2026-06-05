@@ -1259,7 +1259,7 @@ pub(crate) async fn az_submit_review(
 
 /// Begin the Entra ID device authorization grant.
 #[tauri::command]
-pub(crate) fn azure_device_start() -> Result<GithubDeviceCode, String> {
+pub(crate) async fn azure_device_start() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
     if cid.starts_with("REPLACE_WITH") {
         return Err(
@@ -1293,7 +1293,7 @@ pub(crate) fn azure_device_start() -> Result<GithubDeviceCode, String> {
 /// Poll once for the Entra access token. On success the token is stored in the
 /// OS keychain; the secret never reaches the frontend.
 #[tauri::command]
-pub(crate) fn azure_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
+pub(crate) async fn azure_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
     let cid = client_id();
     let (status, text) = curl_form(
         TOKEN_URL,
@@ -1350,6 +1350,6 @@ pub(crate) fn azure_device_poll(device_code: String) -> Result<GithubDevicePoll,
 
 /// Whether a Settings-managed Azure token is currently stored.
 #[tauri::command]
-pub(crate) fn azure_token_present() -> Result<bool, String> {
+pub(crate) async fn azure_token_present() -> Result<bool, String> {
     Ok(settings_azure_token().is_some())
 }
