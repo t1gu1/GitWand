@@ -172,6 +172,8 @@ export function usePrPanel(cwd: Ref<string>) {
     const isBlocking = (c: CICheck) => {
       const concl = (c.conclusion || "").toUpperCase();
       if (FAILING.includes(concl)) return true;
+      // Expired build (needs a re-queue) — a pending-style warning, still blocks.
+      if (concl === "EXPIRED") return true;
       // Still running — no conclusion yet and a pending-looking state.
       return !concl && PENDING.includes((c.state || "").toUpperCase());
     };
@@ -786,6 +788,7 @@ export function usePrPanel(cwd: Ref<string>) {
     const s = (c.conclusion || c.state || "").toUpperCase();
     if (s === "SUCCESS") return "✅";
     if (["FAILURE", "ERROR", "CANCELLED"].includes(s)) return "❌";
+    if (s === "EXPIRED") return "⚠️";
     if (["PENDING", "IN_PROGRESS", "QUEUED"].includes(s)) return "⏳";
     if (s === "SKIPPED") return "⏭️";
     return "❓";

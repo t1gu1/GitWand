@@ -981,29 +981,30 @@ fn conclusion_rank(conclusion: &str) -> u8 {
         "SUCCESS" => 3,
         "SKIPPED" | "NEUTRAL" => 2,
         "FAILURE" | "ERROR" => 1,
-        _ => 0, // "" / queued / running
+        _ => 0, // "" / queued / running / expired
     }
 }
 
-/// Collapse duplicate checks by name. Azure surfaces the same branch policy
+/// Collapse duplicate checks by `key`. Azure surfaces the same branch policy
 /// twice (inherited + branch-level); when one copy is approved and the other is
 /// still queued, the requirement is already met, so the whole group is success.
+/// Distinct build definitions get distinct keys, so they are NOT merged.
 /// First-seen order is preserved.
-fn dedupe_checks(checks: Vec<CICheck>) -> Vec<CICheck> {
+fn dedupe_checks(checks: Vec<(String, CICheck)>) -> Vec<CICheck> {
     let mut order: Vec<String> = Vec::new();
     let mut best: HashMap<String, CICheck> = HashMap::new();
-    for c in checks {
-        match best.get(&c.name) {
+    for (key, c) in checks {
+        match best.get(&key) {
             Some(existing) if conclusion_rank(&existing.conclusion) >= conclusion_rank(&c.conclusion) => {}
             _ => {
-                if !best.contains_key(&c.name) {
-                    order.push(c.name.clone());
+                if !best.contains_key(&key) {
+                    order.push(key.clone());
                 }
-                best.insert(c.name.clone(), c);
+                best.insert(key, c);
             }
         }
     }
-    order.into_iter().filter_map(|n| best.remove(&n)).collect()
+    order.into_iter().filter_map(|k| best.remove(&k)).collect()
 }
 
 /// Aggregate a PR's policy/check evaluations into one rollup state:
@@ -1018,7 +1019,8 @@ fn rollup_from_checks(checks: &[CICheck]) -> String {
         match c.conclusion.to_uppercase().as_str() {
             "FAILURE" | "ERROR" => return "FAILURE".to_string(),
             "SUCCESS" | "SKIPPED" | "NEUTRAL" => {}
-            _ => pending = true, // "" → still running / queued
+            // EXPIRED (stale build, needs re-queue) → pending/warning, not red.
+            _ => pending = true, // "" / EXPIRED → still running / queued
         }
         if c.state.to_lowercase() != "completed" {
             pending = true;
@@ -1054,7 +1056,7 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
         Err(_) => return Ok(Vec::new()),
     };
     let evals = v.get("value").and_then(|a| a.as_array()).cloned().unwrap_or_default();
-    let checks: Vec<CICheck> = evals
+    let checks: Vec<(String, CICheck)> = evals
         .iter()
         .filter_map(|e| {
             let cfg = e.get("configuration");
@@ -1071,11 +1073,12 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
             if dl.contains("merge strategy") || dl.contains("stratégie de fusion") {
                 return None;
             }
+            let settings = cfg.and_then(|c| c.get("settings"));
             // Spell out the reviewer requirement ("At least N reviewer(s) must
             // approve") so the merge-readiness banner is self-explanatory.
-            let name = if display.to_lowercase().contains("reviewer") {
-                let n = cfg
-                    .and_then(|c| c.get("settings"))
+            let is_reviewer = display.to_lowercase().contains("reviewer");
+            let name = if is_reviewer {
+                let n = settings
                     .and_then(|s| s.get("minimumApproverCount"))
                     .and_then(|c| c.as_i64())
                     .unwrap_or(0);
@@ -1085,35 +1088,69 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
                     display
                 }
             } else {
-                display
+                // Build / Status policies all share the generic type displayName
+                // ("Build"); their real name lives in `settings.displayName`. Use
+                // it so distinct builds don't all read as "Build".
+                settings
+                    .and_then(|s| s.get("displayName"))
+                    .and_then(|x| x.as_str())
+                    .filter(|x| !x.is_empty())
+                    .map(String::from)
+                    .unwrap_or(display)
+            };
+            // Dedupe key: reviewer policies legitimately appear twice (inherited +
+            // branch-level) and must collapse, but distinct build definitions can
+            // share a name and must NOT — so fold the build definition id into the
+            // key when present.
+            let build_def_id = settings
+                .and_then(|s| s.get("buildDefinitionId"))
+                .and_then(|b| b.as_i64());
+            let dedupe_key = match build_def_id {
+                Some(id) => format!("build:{}", id),
+                None => name.clone(),
             };
             let (mut state, mut conclusion) = map_policy_status(&js(e, "status"));
-            // Build-validation policies: the policy `status` can sit at "queued"
-            // even after the build has finished and *failed* (Azure shows "1
-            // required check failed" while the policy re-evaluation is still
-            // queued). The build result is authoritative, so resolve it when a
-            // `buildId` is present and override the policy status.
-            if let Some(bid) = e
+            let is_expired = e
+                .get("context")
+                .and_then(|c| c.get("isExpired"))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+            if is_expired {
+                // The build ran against a stale commit — Azure flags it
+                // "Expired (Please Re-queue)" and it blocks the merge. Surface it
+                // as a labelled failure so the user knows to re-run it.
+                state = "completed";
+                conclusion = "EXPIRED";
+            } else if let Some(bid) = e
                 .get("context")
                 .and_then(|c| c.get("buildId"))
                 .and_then(|b| b.as_i64())
             {
+                // Build-validation policies: the policy `status` can sit at
+                // "queued" even after the build has finished and *failed* (Azure
+                // shows "1 required check failed" while the policy re-evaluation
+                // is still queued). The build result is authoritative, so resolve
+                // it when a `buildId` is present and override the policy status.
                 if let Some((s, c)) = azure_build_outcome(&r.org, project_id, bid) {
                     state = s;
                     conclusion = c;
                 }
             }
-            Some(CICheck {
-                name,
-                state: state.to_string(),
-                conclusion: conclusion.to_string(),
-                details_url: String::new(),
-            })
+            Some((
+                dedupe_key,
+                CICheck {
+                    name,
+                    state: state.to_string(),
+                    conclusion: conclusion.to_string(),
+                    details_url: String::new(),
+                },
+            ))
         })
         .collect();
 
     // Azure reports the same policy twice (inherited + branch-level) — collapse
-    // duplicates so an approved copy isn't shown alongside a queued one.
+    // duplicates so an approved copy isn't shown alongside a queued one. Keyed by
+    // build definition where applicable so distinct builds are kept separate.
     let checks = dedupe_checks(checks);
 
     // Fallback: the preview policy API can be unavailable (permissions, tag).
