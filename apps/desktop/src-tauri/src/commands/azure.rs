@@ -1128,90 +1128,131 @@ fn rest_pr_reviews(cwd: &str, number: i64) -> Result<Vec<serde_json::Value>, Str
 
 // ─── Tauri commands — PR workflow ───────────────────────────────────────────
 
+// These forge commands do blocking network I/O (Azure DevOps REST, ~1–2s each).
+// Tauri runs *synchronous* commands on the webview main thread, so a bare `fn`
+// here freezes the whole UI for the call's duration. Declaring them `async` and
+// running the blocking body via `spawn_blocking` keeps the work off the main
+// thread — the UI stays interactive while the request is in flight.
 #[tauri::command]
-pub(crate) fn az_current_user() -> Result<String, String> {
-    rest_current_user()
+pub(crate) async fn az_current_user() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(rest_current_user)
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_list_prs(cwd: String, state: String, limit: i64, offset: i64) -> Result<Vec<PullRequest>, String> {
-    rest_list_prs(&cwd, &state, limit, offset)
+pub(crate) async fn az_list_prs(cwd: String, state: String, limit: i64, offset: i64) -> Result<Vec<PullRequest>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_list_prs(&cwd, &state, limit, offset))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_count(cwd: String, state: String) -> Result<i64, String> {
-    rest_pr_count(&cwd, &state)
+pub(crate) async fn az_pr_count(cwd: String, state: String) -> Result<i64, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_count(&cwd, &state))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
-    rest_pr_detail(&cwd, number)
+pub(crate) async fn az_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_detail(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_diff(cwd: String, number: i64) -> Result<String, String> {
-    rest_pr_diff(&cwd, number)
+pub(crate) async fn az_pr_diff(cwd: String, number: i64) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_diff(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
-    rest_pr_files(&cwd, number)
+pub(crate) async fn az_pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_files(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_create_pr(
+pub(crate) async fn az_create_pr(
     cwd: String,
     title: String,
     body: String,
     base: Option<String>,
     draft: Option<bool>,
 ) -> Result<PullRequest, String> {
-    rest_create_pr(&cwd, title, body, base.unwrap_or_default(), draft.unwrap_or(false))
+    tauri::async_runtime::spawn_blocking(move || {
+        rest_create_pr(&cwd, title, body, base.unwrap_or_default(), draft.unwrap_or(false))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_merge_pr(cwd: String, number: i64, method: Option<String>) -> Result<(), String> {
-    rest_merge_pr(&cwd, number, &method.unwrap_or_else(|| "merge".to_string()))
+pub(crate) async fn az_merge_pr(cwd: String, number: i64, method: Option<String>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        rest_merge_pr(&cwd, number, &method.unwrap_or_else(|| "merge".to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_ready(cwd: String, number: i64) -> Result<(), String> {
-    rest_pr_ready(&cwd, number)
+pub(crate) async fn az_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_ready(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
-    rest_checkout_pr(&cwd, number)
+pub(crate) async fn az_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || rest_checkout_pr(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
-    rest_pr_comments(&cwd, number)
+pub(crate) async fn az_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_comments(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_create_comment(cwd: String, number: i64, body: String) -> Result<serde_json::Value, String> {
-    rest_pr_create_comment(&cwd, number, &body)
+pub(crate) async fn az_pr_create_comment(cwd: String, number: i64, body: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_create_comment(&cwd, number, &body))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
-    rest_pr_checks(&cwd, number)
+pub(crate) async fn az_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_checks(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_pr_reviews(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
-    rest_pr_reviews(&cwd, number)
+pub(crate) async fn az_pr_reviews(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_pr_reviews(&cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn az_submit_review(
+pub(crate) async fn az_submit_review(
     cwd: String,
     number: i64,
     event: String,
     body: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    rest_submit_review(&cwd, number, &event, &body.unwrap_or_default())
+    tauri::async_runtime::spawn_blocking(move || {
+        rest_submit_review(&cwd, number, &event, &body.unwrap_or_default())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ─── Entra ID device flow ───────────────────────────────────────────────────

@@ -386,7 +386,11 @@ export function usePrPanel(cwd: Ref<string>) {
    * making the dedup + slice cost go away.
    */
   async function loadMorePrs() {
-    if (!cwd.value || loadingMore.value || !hasMore.value || loading.value) return;
+    // Guard on `refreshing` too: during SWR revalidation the cached list is on
+    // screen with `loading` false, so without this the pagination sentinel
+    // fires a second `listPRs` (e.g. offset 4) concurrently with the in-flight
+    // page-0 refresh — doubling slow forge calls (Azure: ~1.8s each).
+    if (!cwd.value || loadingMore.value || !hasMore.value || loading.value || refreshing.value) return;
     if (!requireOnline("gh pr list (more)")) {
       hasMore.value = false;
       return;

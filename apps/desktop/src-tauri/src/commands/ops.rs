@@ -2363,23 +2363,30 @@ pub(crate) fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
 
 // ─── Git exec / autocomplete ─────────────────────────────────
 
+// Async + spawn_blocking: a synchronous Tauri command runs on the webview main
+// thread, so a slow `git` invocation (e.g. `status` on a large repo, ~1.3s)
+// freezes the UI. Offloading the blocking process spawn keeps the UI responsive.
 #[tauri::command]
-pub(crate) fn git_exec(cwd: String, args: Vec<String>) -> Result<TerminalResult, String> {
-    if args.is_empty() {
-        return Err("No arguments provided".to_string());
-    }
+pub(crate) async fn git_exec(cwd: String, args: Vec<String>) -> Result<TerminalResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if args.is_empty() {
+            return Err("No arguments provided".to_string());
+        }
 
-    let output = git_cmd()
-        .args(&args)
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| format!("Failed to execute git command: {}", e))?;
+        let output = git_cmd()
+            .args(&args)
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to execute git command: {}", e))?;
 
-    Ok(TerminalResult {
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        exit_code: output.status.code().unwrap_or(-1),
+        Ok(TerminalResult {
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            exit_code: output.status.code().unwrap_or(-1),
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -2469,49 +2476,53 @@ pub(crate) fn get_conflicted_files(cwd: String) -> Result<Vec<String>, String> {
 // ─── Git remote info ─────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
-    let output = git_cmd()
-        .args(["remote", "-v"])
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| format!("Failed to get remote info: {}", e))?;
+pub(crate) async fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = git_cmd()
+            .args(["remote", "-v"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to get remote info: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if !line.contains("(fetch)") {
-            continue;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if !line.contains("(fetch)") {
+                continue;
+            }
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let name = parts[0].to_string();
+            let url = parts[1].to_string();
+
+            let provider = if url.contains("github.com") {
+                "github"
+            } else if url.contains("gitlab.com") || url.contains("gitlab") {
+                "gitlab"
+            } else if url.contains("bitbucket.org") || url.contains("bitbucket") {
+                "bitbucket"
+            } else if url.contains("dev.azure.com") || url.contains("visualstudio.com") {
+                "azure"
+            } else {
+                "unknown"
+            };
+
+            let (owner, repo) = parse_remote_owner_repo(&url);
+
+            return Ok(RemoteInfo {
+                name,
+                url,
+                provider: provider.to_string(),
+                owner,
+                repo,
+            });
         }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        let name = parts[0].to_string();
-        let url = parts[1].to_string();
 
-        let provider = if url.contains("github.com") {
-            "github"
-        } else if url.contains("gitlab.com") || url.contains("gitlab") {
-            "gitlab"
-        } else if url.contains("bitbucket.org") || url.contains("bitbucket") {
-            "bitbucket"
-        } else if url.contains("dev.azure.com") || url.contains("visualstudio.com") {
-            "azure"
-        } else {
-            "unknown"
-        };
-
-        let (owner, repo) = parse_remote_owner_repo(&url);
-
-        return Ok(RemoteInfo {
-            name,
-            url,
-            provider: provider.to_string(),
-            owner,
-            repo,
-        });
-    }
-
-    Err("No remote found".to_string())
+        Err("No remote found".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ─── Git user ────────────────────────────────────────────────
