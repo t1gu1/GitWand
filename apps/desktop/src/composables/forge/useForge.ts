@@ -42,6 +42,7 @@ _cache.set("github", githubProvider);
 // Pre-warm at module init — Vite emits separate chunks for each provider.
 import("./GitLabProvider").then((m) => _cache.set("gitlab", m.gitlabProvider));
 import("./BitbucketProvider").then((m) => _cache.set("bitbucket", m.bitbucketProvider));
+import("./AzureProvider").then((m) => _cache.set("azure", m.azureProvider));
 
 /**
  * Retourne le ForgeProvider correspondant à un nom de forge déjà connu.

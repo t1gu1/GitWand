@@ -10,6 +10,7 @@ import { useI18n } from "../composables/useI18n";
 import { useAccounts } from "../composables/useAccounts";
 import { useCredentials } from "../composables/useCredentials";
 import { useGithubAuth, GITHUB_TOKEN_KEY } from "../composables/useGithubAuth";
+import { useAzureAuth, AZURE_TOKEN_KEY } from "../composables/useAzureAuth";
 import { isTauri } from "../utils/backend";
 import type { ForgeName } from "../composables/forge/types";
 
@@ -45,6 +46,17 @@ const {
   reset: ghReset,
 } = useGithubAuth();
 
+// Azure DevOps Entra ID device flow — same shape as the GitHub flow.
+const {
+  phase: azPhase,
+  userCode: azUserCode,
+  error: azError,
+  login: azLogin,
+  start: azStart,
+  openVerification: azOpen,
+  reset: azReset,
+} = useAzureAuth();
+
 // ─── Add-account form ────────────────────────────────────────────────────────
 
 const showForm = ref(false);
@@ -65,11 +77,13 @@ function openForm() {
   formError.value = null;
   formSuccess.value = false;
   ghReset();
+  azReset();
   showForm.value = true;
 }
 
 function cancelForm() {
   ghReset();
+  azReset();
   showForm.value = false;
 }
 
@@ -79,6 +93,31 @@ function startGithubLogin() {
   formError.value = null;
   ghStart();
 }
+
+// ─── Azure DevOps Entra ID device flow ────────────────────────────────────────
+
+function startAzureLogin() {
+  formError.value = null;
+  azStart();
+}
+
+// On successful sign-in, register the Azure account. The token is already in the
+// OS keychain (stored by the Rust poll command) under AZURE_TOKEN_KEY.
+watch(azPhase, (p) => {
+  if (p !== "success") return;
+  addAccount({
+    forge: "azure",
+    label: formLabel.value.trim() || azLogin.value,
+    username: azLogin.value,
+    tokenKey: AZURE_TOKEN_KEY,
+  });
+  formSuccess.value = true;
+  setTimeout(() => {
+    showForm.value = false;
+    formSuccess.value = false;
+    azReset();
+  }, 1200);
+});
 
 // On successful sign-in, register the account. The token is already in the OS
 // keychain (stored by the Rust poll command) under GITHUB_TOKEN_KEY.
@@ -138,8 +177,8 @@ async function onRemove(id: string) {
 
 // ─── Display ─────────────────────────────────────────────────────────────────
 
-const forgeOrder: ForgeName[] = ["github", "gitlab", "bitbucket"];
-const forgeLabel: Record<ForgeName, string> = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket", unknown: "Unknown" };
+const forgeOrder: ForgeName[] = ["github", "gitlab", "bitbucket", "azure"];
+const forgeLabel: Record<ForgeName, string> = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket", azure: "Azure DevOps", unknown: "Unknown" };
 const knownForges = computed(() => forgeOrder.filter((f) => (accountsByForge.value[f]?.length ?? 0) > 0));
 const totalAccounts = computed(() => accounts.value.length);
 </script>
@@ -195,6 +234,7 @@ const totalAccounts = computed(() => accounts.value.length);
             <option value="github">GitHub</option>
             <option value="gitlab">GitLab</option>
             <option value="bitbucket">Bitbucket</option>
+            <option value="azure">Azure DevOps</option>
           </select>
         </div>
 
@@ -203,8 +243,8 @@ const totalAccounts = computed(() => accounts.value.length);
           <input v-model="formLabel" type="text" class="sa-input" placeholder="work, perso, client-x…" />
         </div>
 
-        <!-- GitHub returns the username via OAuth — no manual input needed. -->
-        <div v-if="formForge !== 'github'" class="sa-field">
+        <!-- GitHub / Azure return the username via OAuth — no manual input needed. -->
+        <div v-if="formForge !== 'github' && formForge !== 'azure'" class="sa-field">
           <label class="sa-label">{{ t('settings.accountsUsernameLabel') }}</label>
           <input v-model="formUsername" type="text" class="sa-input" />
         </div>
@@ -246,6 +286,32 @@ const totalAccounts = computed(() => accounts.value.length);
           </template>
         </div>
 
+        <!-- Azure DevOps — Entra ID OAuth device flow, no PAT paste. -->
+        <div v-else-if="formForge === 'azure'" class="sa-gh">
+          <template v-if="azPhase === 'idle' || azPhase === 'error'">
+            <button class="sa-gh-btn sa-gh-btn--azure" @click="startAzureLogin">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M3.6 11.9L8 1.4l3.2 7.6-5 1.2 4.3 4.4H1.6l2-2.7zm6 1.7l2.8-4.6 1.6 5.2H8.1l1.5-.6z"/>
+              </svg>
+              {{ t('settings.accountsAzureSignIn') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsAzureHint') }}</p>
+            <p v-if="azError" class="sa-msg sa-msg--error">{{ azError }}</p>
+          </template>
+          <template v-else-if="azPhase === 'awaiting'">
+            <p v-if="isDevMock" class="sa-msg sa-msg--error">{{ t('settings.accountsAzureDevMock') }}</p>
+            <p class="sa-note">{{ t('settings.accountsAzureEnterCode') }}</p>
+            <code class="sa-gh-code">{{ azUserCode }}</code>
+            <button v-if="!isDevMock" class="sa-gh-btn" @click="azOpen">
+              {{ t('settings.accountsAzureOpen') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsAzureWaiting') }}</p>
+          </template>
+          <template v-else-if="azPhase === 'success'">
+            <p class="sa-msg sa-msg--ok">{{ t('settings.accountsAzureConnected') }} {{ azLogin }}</p>
+          </template>
+        </div>
+
         <!-- GitLab — still CLI-based. -->
         <div v-else class="sa-note">
           GitLab auth is handled by <code>glab auth login</code> — no token needed here.
@@ -259,7 +325,7 @@ const totalAccounts = computed(() => accounts.value.length);
             {{ t('settings.accountsCancelBtn') }}
           </button>
           <button
-            v-if="formForge !== 'github'"
+            v-if="formForge !== 'github' && formForge !== 'azure'"
             class="sa-primary-btn"
             :disabled="saving"
             @click="submitForm"
@@ -508,6 +574,11 @@ const totalAccounts = computed(() => accounts.value.length);
 
 .sa-gh-btn:hover {
   opacity: 0.88;
+}
+
+.sa-gh-btn--azure {
+  background: #0078d4;
+  color: #fff;
 }
 
 .sa-gh-code {

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-fork pull requests** — when the repo's `origin` is a fork, the PR create view shows a target-repository selector (upstream parent vs your fork), defaulting to upstream. Works on both the REST (token) path — head is qualified as `fork-owner:branch` — and the `gh` path (`--repo`). New `gh_fork_info` command detects the relationship.
 - **Fork PRs in the list** — on the REST (token) path, the PR list for a fork now also includes the PRs you opened on the upstream repo (head repo == your fork), merged and sorted with origin's own PRs. PR detail/diff/checks/merge transparently resolve to the upstream repo for those entries.
 - **Sign in with GitHub (no `gh` CLI required)** — Settings → Accounts now offers a "Sign in with GitHub" button using the OAuth device flow. The resulting token is stored in the OS keychain; once present, the GitHub PR workflow (list, count, detail, diff, checks, files, create, merge, checkout, mark-ready) routes through the GitHub REST API instead of shelling out to `gh`. The `gh` CLI still works as before when no Settings token is configured — the ambient `GH_TOKEN`/`GITHUB_TOKEN` env path is unchanged.
+- **Azure DevOps support (new forge)** — Settings → Accounts now offers "Sign in with Azure" using the Entra ID OAuth device flow (same UX as GitHub). The access token is stored in the OS keychain (`gitwand:azure/oauth`). Azure DevOps remotes (`dev.azure.com`, `*.visualstudio.com`) are auto-detected and routed to a new `AzureProvider` backed by the Azure DevOps REST API (api-version 7.1): PR list/count/detail/diff/files/create/merge/checkout and draft→ready. Diff and file lists are produced from local git (Azure has no unified-patch endpoint). Comments, reviews, reviewer pickers and CI checks are not wired yet and degrade gracefully.
 
 ### Technical
 
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 
 - Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23licwiCpPiRPRodWN`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
+- Azure DevOps sign-in ships with a **temporary** default Entra ID client id — the well-known Azure CLI public client (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`, device flow enabled) — so it works without registering an app. Stop-gap only: the consent screen reads "Microsoft Azure CLI" and Microsoft may restrict reuse. Override with a dedicated GitWand Entra app via `GITWAND_AZURE_CLIENT_ID` (runtime or build time) before shipping.
 
 ## [2.17.0] - 2026-06-04
 

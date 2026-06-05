@@ -1217,6 +1217,13 @@ const en = {
     accountsGithubDevMock: "Dev mock — this does not really sign in. Run the full app for real GitHub login.",
     accountsGithubWaiting: "Waiting for authorization…",
     accountsGithubConnected: "Connected as",
+    accountsAzureSignIn: "Sign in with Azure",
+    accountsAzureHint: "Opens Microsoft sign-in in your browser to authorize GitWand for Azure DevOps.",
+    accountsAzureEnterCode: "Copy this code, then open Microsoft sign-in and enter it:",
+    accountsAzureOpen: "Open Microsoft sign-in",
+    accountsAzureDevMock: "Azure sign-in is only available in the desktop app.",
+    accountsAzureWaiting: "Waiting for authorization…",
+    accountsAzureConnected: "Connected as",
     accountsDeleteConfirm: "Remove this account?",
     // v2.12 Git tab — branch + identity + templates
     git: {

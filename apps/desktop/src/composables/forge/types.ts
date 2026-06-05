@@ -73,7 +73,7 @@ export interface SubmitReviewOptions {
 
 // ─── Forge name discriminant ────────────────────────────────────────────────
 
-export type ForgeName = "github" | "gitlab" | "bitbucket" | "unknown";
+export type ForgeName = "github" | "gitlab" | "bitbucket" | "azure" | "unknown";
 
 // ─── ForgeProvider interface ─────────────────────────────────────────────────
 

@@ -2494,6 +2494,8 @@ pub(crate) fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
             "gitlab"
         } else if url.contains("bitbucket.org") || url.contains("bitbucket") {
             "bitbucket"
+        } else if url.contains("dev.azure.com") || url.contains("visualstudio.com") {
+            "azure"
         } else {
             "unknown"
         };

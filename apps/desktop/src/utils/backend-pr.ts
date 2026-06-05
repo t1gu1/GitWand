@@ -851,3 +851,151 @@ export async function githubTokenPresent(): Promise<boolean> {
   if (!res.ok) return false;
   return res.json() as Promise<boolean>;
 }
+
+// ─── Azure DevOps (Entra ID OAuth + REST) ───────────────────────────────────
+//
+// "Sign in with Azure" from Settings > Accounts uses Microsoft's Entra ID
+// device-authorization grant — the same UX as the GitHub device flow, so the
+// `GithubDeviceCode` / `GithubDevicePoll` shapes are reused verbatim. The
+// access token is stored in the OS keychain (service "gitwand:azure", account
+// "oauth"); the `az_*` PR commands route through the Azure DevOps REST API.
+//
+// Azure DevOps support is Tauri-only — there is no dev:web mock backend, so the
+// browser path throws a clear "desktop only" error.
+
+const AZURE_WEB_ONLY = "Azure DevOps sign-in is only available in the desktop app.";
+
+/** Begin the Entra ID device flow — returns the user code + verification URL. */
+export async function azureDeviceStart(): Promise<GithubDeviceCode> {
+  if (isTauri()) return tauriInvoke<GithubDeviceCode>("azure_device_start");
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+/** Poll once for the Entra access token. On success the token is stored. */
+export async function azureDevicePoll(deviceCode: string): Promise<GithubDevicePoll> {
+  if (isTauri()) return tauriInvoke<GithubDevicePoll>("azure_device_poll", { deviceCode });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+/** Whether a Settings-managed Azure token is currently stored. */
+export async function azureTokenPresent(): Promise<boolean> {
+  if (isTauri()) return tauriInvoke<boolean>("azure_token_present");
+  return false;
+}
+
+/** Map the Rust `PullRequest` serde shape (snake_case) to the camelCase type. */
+function mapRawPr(pr: any): PullRequest {
+  return {
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    author: pr.author,
+    branch: pr.branch,
+    base: pr.base,
+    draft: pr.draft,
+    createdAt: pr.created_at,
+    updatedAt: pr.updated_at,
+    url: pr.url,
+    additions: pr.additions,
+    deletions: pr.deletions,
+    labels: pr.labels ?? [],
+    assignees: pr.assignees ?? [],
+    reviewRequested: pr.review_requested ?? [],
+    reviewDecision: pr.review_decision ?? "",
+    mergeStateStatus: pr.merge_state_status ?? "",
+    checksRollup: pr.checks_rollup ?? "",
+    commentCount: pr.comment_count ?? 0,
+  };
+}
+
+export async function azCurrentUser(): Promise<string> {
+  if (isTauri()) return tauriInvoke<string>("az_current_user");
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azListPrs(
+  cwd: string,
+  state: string = "open",
+  limit: number = 10,
+  offset: number = 0,
+): Promise<PullRequest[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any[]>("az_list_prs", { cwd, state, limit, offset });
+    return raw.map(mapRawPr);
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrCount(cwd: string, state: string = "open"): Promise<number> {
+  if (isTauri()) return tauriInvoke<number>("az_pr_count", { cwd, state });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrDetail(cwd: string, number: number): Promise<PullRequestDetail> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any>("az_pr_detail", { cwd, number });
+    return {
+      number: raw.number,
+      title: raw.title,
+      body: raw.body,
+      state: raw.state,
+      author: raw.author,
+      branch: raw.branch,
+      base: raw.base,
+      draft: raw.draft,
+      createdAt: raw.created_at,
+      updatedAt: raw.updated_at,
+      mergedAt: raw.merged_at,
+      url: raw.url,
+      additions: raw.additions,
+      deletions: raw.deletions,
+      changedFiles: raw.changed_files,
+      comments: raw.comments,
+      reviewComments: raw.review_comments,
+      labels: raw.labels,
+      reviewers: raw.reviewers,
+      mergeable: raw.mergeable,
+      checksStatus: raw.checks_status,
+    };
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrDiff(cwd: string, number: number): Promise<string> {
+  if (isTauri()) return tauriInvoke<string>("az_pr_diff", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrFiles(cwd: string, number: number): Promise<string[]> {
+  if (isTauri()) return tauriInvoke<string[]>("az_pr_files", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azCreatePr(
+  cwd: string,
+  title: string,
+  body: string,
+  base?: string,
+  draft?: boolean,
+): Promise<PullRequest> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any>("az_create_pr", { cwd, title, body, base, draft });
+    return mapRawPr(raw);
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azMergePr(cwd: string, number: number, method: string = "merge"): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_merge_pr", { cwd, number, method });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrReady(cwd: string, number: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_pr_ready", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azCheckoutPr(cwd: string, number: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_checkout_pr", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}

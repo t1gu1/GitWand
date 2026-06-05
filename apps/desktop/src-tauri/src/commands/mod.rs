@@ -1,4 +1,5 @@
 pub(crate) mod ai;
+pub(crate) mod azure;
 pub(crate) mod bitbucket;
 pub(crate) mod credentials;
 pub(crate) mod files;

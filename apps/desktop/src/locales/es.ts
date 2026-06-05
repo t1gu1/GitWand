@@ -1186,6 +1186,13 @@ const es: Locale = {
     accountsGithubDevMock: "Simulación de desarrollo: no inicia sesión de verdad. Ejecuta la app completa para el inicio de sesión real de GitHub.",
     accountsGithubWaiting: "Esperando autorización…",
     accountsGithubConnected: "Conectado como",
+    accountsAzureSignIn: "Iniciar sesión con Azure",
+    accountsAzureHint: "Abre el inicio de sesión de Microsoft en tu navegador para autorizar GitWand en Azure DevOps.",
+    accountsAzureEnterCode: "Copia este código, luego abre el inicio de sesión de Microsoft e ingrésalo:",
+    accountsAzureOpen: "Abrir inicio de sesión de Microsoft",
+    accountsAzureDevMock: "El inicio de sesión de Azure solo está disponible en la aplicación de escritorio.",
+    accountsAzureWaiting: "Esperando autorización…",
+    accountsAzureConnected: "Conectado como",
     accountsDeleteConfirm: "¿Eliminar esta cuenta?",
     // v2.12
     git: {

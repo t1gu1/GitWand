@@ -1186,6 +1186,13 @@ const ptBR: Locale = {
     accountsGithubDevMock: "Mock de dev — isto não faz login de verdade. Execute o app completo para o login real do GitHub.",
     accountsGithubWaiting: "Aguardando autorização…",
     accountsGithubConnected: "Conectado como",
+    accountsAzureSignIn: "Entrar com Azure",
+    accountsAzureHint: "Abre o login da Microsoft no seu navegador para autorizar o GitWand no Azure DevOps.",
+    accountsAzureEnterCode: "Copie este código, depois abra o login da Microsoft e insira-o:",
+    accountsAzureOpen: "Abrir login da Microsoft",
+    accountsAzureDevMock: "O login do Azure só está disponível no aplicativo desktop.",
+    accountsAzureWaiting: "Aguardando autorização…",
+    accountsAzureConnected: "Conectado como",
     accountsDeleteConfirm: "Remover esta conta?",
     // v2.12
     git: {

@@ -1197,6 +1197,13 @@ const fr: Locale = {
     accountsGithubDevMock: "Mock de dev — ceci ne connecte pas réellement. Lancez l'app complète pour une vraie connexion GitHub.",
     accountsGithubWaiting: "En attente d'autorisation…",
     accountsGithubConnected: "Connecté en tant que",
+    accountsAzureSignIn: "Se connecter avec Azure",
+    accountsAzureHint: "Ouvre la connexion Microsoft dans votre navigateur pour autoriser GitWand sur Azure DevOps.",
+    accountsAzureEnterCode: "Copiez ce code, puis ouvrez la connexion Microsoft et saisissez-le :",
+    accountsAzureOpen: "Ouvrir la connexion Microsoft",
+    accountsAzureDevMock: "La connexion Azure n'est disponible que dans l'application desktop.",
+    accountsAzureWaiting: "En attente d'autorisation…",
+    accountsAzureConnected: "Connecté en tant que",
     accountsDeleteConfirm: "Supprimer ce compte ?",
     // v2.12 Onglet Git
     git: {

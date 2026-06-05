@@ -1173,6 +1173,13 @@ const zhCN: Locale = {
     accountsGithubDevMock: "\u5f00\u53d1\u6a21\u62df \u2014 \u5e76\u975e\u771f\u6b63\u767b\u5f55\u3002\u8bf7\u8fd0\u884c\u5b8c\u6574\u5e94\u7528\u4ee5\u8fdb\u884c\u771f\u5b9e\u7684 GitHub \u767b\u5f55\u3002",
     accountsGithubWaiting: "\u7b49\u5f85\u6388\u6743\u2026",
     accountsGithubConnected: "\u5df2\u8fde\u63a5\u4e3a",
+    accountsAzureSignIn: "\u4f7f\u7528 Azure \u767b\u5f55",
+    accountsAzureHint: "\u5728\u6d4f\u89c8\u5668\u4e2d\u6253\u5f00 Microsoft \u767b\u5f55\u4ee5\u6388\u6743 GitWand \u8bbf\u95ee Azure DevOps\u3002",
+    accountsAzureEnterCode: "\u590d\u5236\u6b64\u4ee3\u7801\uff0c\u7136\u540e\u6253\u5f00 Microsoft \u767b\u5f55\u5e76\u8f93\u5165\uff1a",
+    accountsAzureOpen: "\u6253\u5f00 Microsoft \u767b\u5f55",
+    accountsAzureDevMock: "Azure \u767b\u5f55\u4ec5\u5728\u684c\u9762\u5e94\u7528\u4e2d\u53ef\u7528\u3002",
+    accountsAzureWaiting: "\u6b63\u5728\u7b49\u5f85\u6388\u6743\u2026",
+    accountsAzureConnected: "\u5df2\u8fde\u63a5\u4e3a",
     accountsDeleteConfirm: "\u5220\u9664\u6b64\u8d26\u53f7\uff1f",
     // v2.12
     git: {
