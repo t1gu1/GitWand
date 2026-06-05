@@ -89,6 +89,23 @@ const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
   return null;
 });
 
+/** Merge status shown in the stats grid — never claims "Mergeable" while CI is
+ * red or the branch conflicts. */
+const mergeStatus = computed<{ icon: string; label: string }>(() => {
+  const m = (p.prDetail.value?.mergeable || "").toUpperCase();
+  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(m)) {
+    return { icon: "⚠️", label: t("pr.detail.mergeConflicting") };
+  }
+  // CI failed (red) but no git conflict — surface a generic problem instead of
+  // a misleading "Mergeable".
+  if (ciTabState.value === "fail") {
+    return { icon: "⚠️", label: t("pr.detail.mergeProblem") };
+  }
+  if (m === "MERGEABLE") return { icon: "✅", label: t("pr.detail.mergeMergeable") };
+  if (!m || m === "UNKNOWN") return { icon: "—", label: t("pr.detail.mergeUnknown") };
+  return { icon: p.mergeableIcon(m), label: m };
+});
+
 /** Review + issue-level comments, sorted oldest-first for display under the description. */
 const sortedComments = computed(() =>
   [...p.prComments.value, ...p.prIssueComments.value].sort(
@@ -421,8 +438,8 @@ function commentTimeAgo(dateStr: string): string {
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statMerge') }}</span>
               <span class="pdv-stat-value">
-                <span class="pdv-stat-emoji">{{ p.mergeableIcon(p.prDetail.value.mergeable) }}</span>
-                {{ p.prDetail.value.mergeable }}
+                <span class="pdv-stat-emoji">{{ mergeStatus.icon }}</span>
+                {{ mergeStatus.label }}
               </span>
             </div>
 
