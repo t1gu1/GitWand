@@ -9,8 +9,19 @@
  */
 import { ref, computed } from "vue";
 import type { PrReviewComment } from "../utils/backend";
+import { openExternalUrl } from "../utils/backend";
 import { safeHtml } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
+
+// Anchors in rendered comment markdown must open in the OS browser, not
+// navigate the Tauri webview away from the app.
+function onMarkdownClick(e: MouseEvent) {
+  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href");
+  if (href && /^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+  }
+}
 
 const { t } = useI18n();
 
@@ -169,7 +180,7 @@ function timeAgo(dateStr: string): string {
           <button class="pct-submit-btn" @click="submitEdit" :disabled="!editText.trim()">{{ t('pr.comment.save') }}</button>
         </div>
       </div>
-      <div v-else class="pct-body" v-html="safeHtml(renderBody(comment.body))" />
+      <div v-else class="pct-body" @click="onMarkdownClick" v-html="safeHtml(renderBody(comment.body))" />
 
       <!-- Apply suggestion button -->
       <div v-if="hasSuggestion(comment) && editingId !== comment.id" class="pct-suggestion-actions">

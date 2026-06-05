@@ -32,6 +32,19 @@ const p = inject<PrPanelState>(PR_PANEL_KEY)!;
 // window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
 function openInBrowser(url: string) { void openExternalUrl(url); }
 
+// Anchors inside rendered markdown (PR description) would otherwise navigate the
+// Tauri webview away from the app. Intercept clicks on http(s) links and hand
+// them to the OS browser instead.
+function onMarkdownClick(e: MouseEvent) {
+  const anchor = (e.target as HTMLElement | null)?.closest("a");
+  const href = anchor?.getAttribute("href");
+  if (!href) return;
+  if (/^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+  }
+}
+
 /** Author initials for the avatar disk. */
 function authorInitials(author: string): string {
   if (!author) return "?";
@@ -413,6 +426,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               <div
                 v-if="descriptionTab === 'formatted'"
                 class="pdv-body-formatted"
+                @click="onMarkdownClick"
                 v-html="renderMarkdown(p.prDetail.value.body)"
               />
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
