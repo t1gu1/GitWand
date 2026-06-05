@@ -24,6 +24,8 @@ import {
   type PrConflictPreview,
   type PrHotspot,
   type PrFileHistory,
+  ghForkInfo,
+  type ForkInfo,
 } from "../utils/backend";
 import { forgeFromRemoteInfo, githubProvider } from "./forge/useForge";
 import { getPersistedDiffMode, type DiffMode } from "../utils/diffMode";
@@ -61,6 +63,10 @@ export function usePrPanel(cwd: Ref<string>) {
   const newPrDraft = ref(false);
   const newPrReviewers = ref<string[]>([]);
   const isCreating = ref(false);
+  // Fork target — when origin is a fork, the user can open the PR against the
+  // upstream parent. `newPrBaseRepo` is "owner/repo" or "" for the origin.
+  const forkInfo = ref<ForkInfo | null>(null);
+  const newPrBaseRepo = ref("");
 
   // Merge dialog
   const mergingPr = ref<PullRequest | null>(null);
@@ -220,6 +226,24 @@ export function usePrPanel(cwd: Ref<string>) {
   async function loadRemote() {
     try { remote.value = await gitRemoteInfo(cwd.value); }
     catch { remote.value = null; }
+  }
+
+  /**
+   * Detect the GitHub fork relationship so the create view can default the PR
+   * target to the upstream parent. GitHub-only; silently no-ops elsewhere.
+   * On a fork, pre-select upstream as the target (the common intent).
+   */
+  async function loadForkInfo() {
+    forkInfo.value = null;
+    newPrBaseRepo.value = "";
+    if (forge.value.name !== "github") return;
+    try {
+      const info = await ghForkInfo(cwd.value);
+      forkInfo.value = info;
+      if (info.isFork && info.parent) newPrBaseRepo.value = info.parent;
+    } catch {
+      forkInfo.value = null;
+    }
   }
 
   async function loadPrs() {
@@ -412,10 +436,14 @@ export function usePrPanel(cwd: Ref<string>) {
     isCreating.value = true;
     error.value = null;
     try {
+      // Only treat baseRepo as cross-fork when it differs from origin.
+      const target = newPrBaseRepo.value.trim();
+      const baseRepo = target && target !== forkInfo.value?.origin ? target : "";
       const pr = await forge.value.createPR(cwd.value, {
         title: newPrTitle.value.trim(),
         body: newPrBody.value.trim(),
         base: newPrBase.value.trim(),
+        baseRepo,
         draft: newPrDraft.value,
         reviewers: newPrReviewers.value.slice(),
       });
@@ -659,6 +687,8 @@ export function usePrPanel(cwd: Ref<string>) {
     await loadPrs();
     // Load current user in background for "assigned / reviews" filter
     loadCurrentUser();
+    // Fork detection in background — only affects the create view.
+    loadForkInfo();
   }
 
   return {
@@ -666,6 +696,7 @@ export function usePrPanel(cwd: Ref<string>) {
     remote, prs, loading, error, success, filterState, filterMode,
     currentUser, currentUserLoading, currentUserError,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
+    forkInfo, newPrBaseRepo,
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, prDiffFiles, prComments, prReviews,
     detailLoading, detailError, detailTab, selectedDiffFile, diffMode,

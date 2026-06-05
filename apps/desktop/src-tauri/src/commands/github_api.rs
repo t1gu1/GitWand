@@ -445,21 +445,57 @@ pub(crate) fn rest_pr_files(cwd: &str, number: i64, token: &str) -> Result<Vec<S
     Ok(files)
 }
 
+/// Resolve the current repo's fork relationship (REST).
+pub(crate) fn rest_fork_info(cwd: &str, token: &str) -> Result<ForkInfo, String> {
+    let (owner, repo) = owner_repo(cwd)?;
+    let origin = format!("{}/{}", owner, repo);
+    let info = api_json("GET", &format!("{}/repos/{}/{}", API_BASE, owner, repo), token, None)?;
+    let is_fork = info.get("fork").and_then(|f| f.as_bool()).unwrap_or(false);
+    let parent = info
+        .get("parent")
+        .and_then(|p| p.get("full_name"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_string();
+    let parent_default_branch = info
+        .get("parent")
+        .and_then(|p| p.get("default_branch"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_string();
+    Ok(ForkInfo { is_fork, origin, parent, parent_default_branch })
+}
+
 pub(crate) fn rest_create_pr(
     cwd: &str,
     title: String,
     body: String,
     base: String,
+    base_repo: Option<String>,
     draft: bool,
     reviewers: Option<Vec<String>>,
     token: &str,
 ) -> Result<PullRequest, String> {
     let (owner, repo) = owner_repo(cwd)?;
-    let head = current_branch(cwd)?;
+    let head_branch = current_branch(cwd)?;
+    let origin = format!("{}/{}", owner, repo);
 
-    // Resolve base from the repo default branch when the caller left it empty.
+    // Target repo: caller-supplied (cross-fork) or origin. A cross-fork PR must
+    // qualify the head ref as "fork-owner:branch".
+    let target = match base_repo {
+        Some(r) if !r.trim().is_empty() => r.trim().to_string(),
+        _ => origin.clone(),
+    };
+    let is_cross = target != origin;
+    let head = if is_cross {
+        format!("{}:{}", owner, head_branch)
+    } else {
+        head_branch
+    };
+
+    // Resolve base from the *target* repo's default branch when left empty.
     let base = if base.is_empty() {
-        let repo_info = api_json("GET", &format!("{}/repos/{}/{}", API_BASE, owner, repo), token, None)?;
+        let repo_info = api_json("GET", &format!("{}/repos/{}", API_BASE, target), token, None)?;
         let default = js(&repo_info, "default_branch");
         if default.is_empty() { "main".to_string() } else { default }
     } else {
@@ -473,7 +509,7 @@ pub(crate) fn rest_create_pr(
         "body": body,
         "draft": draft,
     });
-    let url = format!("{}/repos/{}/{}/pulls", API_BASE, owner, repo);
+    let url = format!("{}/repos/{}/pulls", API_BASE, target);
     let created = api_json("POST", &url, token, Some(&payload.to_string()))?;
     let number = ji(&created, "number");
 
@@ -487,8 +523,8 @@ pub(crate) fn rest_create_pr(
         if !cleaned.is_empty() && number > 0 {
             let rev_payload = serde_json::json!({ "reviewers": cleaned });
             let rev_url = format!(
-                "{}/repos/{}/{}/pulls/{}/requested_reviewers",
-                API_BASE, owner, repo, number
+                "{}/repos/{}/pulls/{}/requested_reviewers",
+                API_BASE, target, number
             );
             let _ = api_json("POST", &rev_url, token, Some(&rev_payload.to_string()));
         }

@@ -55,6 +55,12 @@ export interface CreatePRInput {
   title: string;
   body: string;
   base?: string;
+  /**
+   * Cross-fork target as "owner/repo". When set (and different from origin),
+   * the PR opens against this repo with the current branch as the head fork.
+   * GitHub only — ignored by GitLab/Bitbucket.
+   */
+  baseRepo?: string;
   draft?: boolean;
   reviewers?: string[];
 }

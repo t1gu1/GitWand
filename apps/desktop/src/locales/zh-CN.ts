@@ -683,6 +683,10 @@ const zhCN: Locale = {
     create: {
       title: "新建 pull request",
       subtitle: "打开一个 PR 让更改得到审查。设置标题、选择目标分支并添加描述。",
+      targetRepoLabel: "目标仓库",
+      targetUpstream: "上游",
+      targetFork: "你的复刻",
+      targetHint: "此分支位于一个复刻仓库。请选择在哪里创建合并请求。",
       branchesLabel: "分支",
       fromLabel: "源",
       intoLabel: "目标",

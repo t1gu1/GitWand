@@ -694,6 +694,10 @@ const es: Locale = {
     create: {
       title: "Nueva pull request",
       subtitle: "Abre una PR para que revisen tus cambios. Define un título, elige una rama objetivo y añade una descripción.",
+      targetRepoLabel: "Repositorio destino",
+      targetUpstream: "Upstream",
+      targetFork: "Tu fork",
+      targetHint: "Esta rama está en un fork. Elige dónde abrir la pull request.",
       branchesLabel: "Ramas",
       fromLabel: "Desde",
       intoLabel: "Hacia",

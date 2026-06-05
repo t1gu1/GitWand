@@ -27,6 +27,27 @@ export function ghCurrentUser(): Promise<string> {
   return _currentUserPromise;
 }
 
+/** GitHub fork relationship for the repo at `cwd`. */
+export interface ForkInfo {
+  /** True when origin is a fork of another GitHub repo. */
+  isFork: boolean;
+  /** Origin as "owner/repo" (head side of a cross-fork PR). */
+  origin: string;
+  /** Parent/upstream as "owner/repo", or "" when not a fork. */
+  parent: string;
+  /** Parent's default branch, or "" when unknown. */
+  parentDefaultBranch: string;
+}
+
+/**
+ * Resolve the current repo's fork relationship so the PR create view can offer
+ * "open against upstream". Falls back to a non-fork result in dev:web.
+ */
+export async function ghForkInfo(cwd: string): Promise<ForkInfo> {
+  if (isTauri()) return tauriInvoke<ForkInfo>("gh_fork_info", { cwd });
+  return { isFork: false, origin: "", parent: "", parentDefaultBranch: "" };
+}
+
 /** Returns the list of file paths changed by a PR (lazy — call only when needed). */
 export async function ghPrFiles(repoPath: string, prNumber: number): Promise<string[]> {
   if (isTauri()) {
@@ -216,6 +237,8 @@ export async function ghCreatePr(
   base: string = "",
   draft: boolean = false,
   reviewers: string[] = [],
+  /** Cross-fork target as "owner/repo". Empty → open against the origin repo. */
+  baseRepo: string = "",
 ): Promise<PullRequest> {
   if (isTauri()) {
     const raw = await tauriInvoke<{
@@ -235,7 +258,7 @@ export async function ghCreatePr(
       review_decision: string;
       merge_state_status: string;
       checks_rollup: string;
-    }>("gh_create_pr", { cwd, title, body, base, draft, reviewers });
+    }>("gh_create_pr", { cwd, title, body, base, baseRepo: baseRepo || null, draft, reviewers });
     return {
       number: raw.number,
       title: raw.title,
@@ -262,7 +285,7 @@ export async function ghCreatePr(
   const res = await devFetch(`${DEV_SERVER}/api/gh-create-pr`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, title, body, base, draft, reviewers }),
+    body: JSON.stringify({ cwd, title, body, base, baseRepo, draft, reviewers }),
   });
   const raw = await res.json();
   if (!res.ok || raw.error) {

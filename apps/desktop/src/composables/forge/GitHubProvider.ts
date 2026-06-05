@@ -109,7 +109,7 @@ export class GitHubProvider implements ForgeProvider {
   // ── PR actions ────────────────────────────────────────────────────────────
 
   createPR(cwd: string, input: CreatePRInput): Promise<PullRequest> {
-    return ghCreatePr(cwd, input.title, input.body, input.base, input.draft, input.reviewers);
+    return ghCreatePr(cwd, input.title, input.body, input.base, input.draft, input.reviewers, input.baseRepo);
   }
 
   mergePR(cwd: string, number: number, method: "merge" | "squash" | "rebase" = "merge"): Promise<void> {

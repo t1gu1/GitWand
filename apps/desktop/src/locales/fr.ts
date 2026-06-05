@@ -701,6 +701,10 @@ const fr: Locale = {
     create: {
       title: "Nouvelle pull request",
       subtitle: "Ouvre une PR pour proposer tes changements à la review. Remplis le titre, choisis la branche cible, et ajoute une description.",
+      targetRepoLabel: "Dépôt cible",
+      targetUpstream: "Amont",
+      targetFork: "Votre fork",
+      targetHint: "Cette branche est dans un fork. Choisissez où ouvrir la pull request.",
       branchesLabel: "Branches",
       fromLabel: "Depuis",
       intoLabel: "Vers",

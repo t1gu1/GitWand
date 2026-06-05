@@ -390,6 +390,30 @@ function removeReviewer(name: string) {
       <!-- Messages -->
       <div v-if="p.error.value" class="pcv-msg pcv-msg--error">{{ p.error.value }}</div>
 
+      <!-- Fork target (only when origin is a fork) -->
+      <section v-if="p.forkInfo.value?.isFork && p.forkInfo.value.parent" class="pcv-section">
+        <label class="pcv-label">{{ t("pr.create.targetRepoLabel") }}</label>
+        <div class="pcv-fork-target">
+          <label
+            class="pcv-fork-opt"
+            :class="{ 'pcv-fork-opt--active': p.newPrBaseRepo.value === p.forkInfo.value.parent }"
+          >
+            <input type="radio" :value="p.forkInfo.value.parent" v-model="p.newPrBaseRepo.value" />
+            <span class="pcv-fork-name mono">{{ p.forkInfo.value.parent }}</span>
+            <span class="pcv-fork-badge">{{ t("pr.create.targetUpstream") }}</span>
+          </label>
+          <label
+            class="pcv-fork-opt"
+            :class="{ 'pcv-fork-opt--active': p.newPrBaseRepo.value === p.forkInfo.value.origin }"
+          >
+            <input type="radio" :value="p.forkInfo.value.origin" v-model="p.newPrBaseRepo.value" />
+            <span class="pcv-fork-name mono">{{ p.forkInfo.value.origin }}</span>
+            <span class="pcv-fork-badge">{{ t("pr.create.targetFork") }}</span>
+          </label>
+        </div>
+        <p class="pcv-hint">{{ t("pr.create.targetHint") }}</p>
+      </section>
+
       <!-- Branch flow -->
       <section class="pcv-section">
         <label class="pcv-label" for="pcv-base-input">{{ t("pr.create.branchesLabel") }}</label>
@@ -845,6 +869,64 @@ function removeReviewer(name: string) {
   align-self: center;
   flex-shrink: 0;
   opacity: 0.7;
+}
+
+/* ─── Fork target selector ───────────────────────────── */
+.pcv-fork-target {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.pcv-fork-opt {
+  flex: 1 1 240px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+}
+.pcv-fork-opt:hover {
+  border-color: var(--color-border-strong);
+}
+.pcv-fork-opt--active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
+}
+.pcv-fork-opt input[type="radio"] {
+  flex-shrink: 0;
+  accent-color: var(--color-accent);
+  margin: 0;
+}
+.pcv-fork-name {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.pcv-fork-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+}
+.pcv-fork-opt--active .pcv-fork-badge {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 /* ─── Inputs ─────────────────────────────────────────── */

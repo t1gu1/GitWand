@@ -707,6 +707,10 @@ const en = {
     create: {
       title: "New pull request",
       subtitle: "Open a PR to get your changes reviewed. Set a title, pick a target branch, and add a description.",
+      targetRepoLabel: "Target repository",
+      targetUpstream: "Upstream",
+      targetFork: "Your fork",
+      targetHint: "This branch lives in a fork. Choose where to open the pull request.",
       branchesLabel: "Branches",
       fromLabel: "From",
       intoLabel: "Into",

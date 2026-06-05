@@ -197,11 +197,12 @@ pub(crate) fn gh_create_pr(
     title: String,
     body: String,
     base: String,
+    base_repo: Option<String>,
     draft: bool,
     reviewers: Option<Vec<String>>,
 ) -> Result<PullRequest, String> {
     if let Some(tok) = github_api::settings_github_token() {
-        return github_api::rest_create_pr(&cwd, title, body, base, draft, reviewers, &tok);
+        return github_api::rest_create_pr(&cwd, title, body, base, base_repo, draft, reviewers, &tok);
     }
     let mut args = vec![
         "pr".to_string(),
@@ -211,6 +212,15 @@ pub(crate) fn gh_create_pr(
         "--body".to_string(),
         body,
     ];
+
+    // Cross-fork target: `gh pr create --repo owner/repo` opens the PR against
+    // that repo, using the current fork branch as head automatically.
+    if let Some(repo) = base_repo {
+        if !repo.trim().is_empty() {
+            args.push("--repo".to_string());
+            args.push(repo.trim().to_string());
+        }
+    }
 
     if !base.is_empty() {
         args.push("--base".to_string());
@@ -548,4 +558,39 @@ pub(crate) fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, Str
     }
 
     Ok(checks)
+}
+
+/// Report the current repo's fork relationship so the PR create view can offer
+/// "open against upstream". Token present → REST; otherwise `gh repo view`.
+#[tauri::command]
+pub(crate) fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_fork_info(&cwd, &tok);
+    }
+    let output = hidden_cmd("gh")
+        .args(["repo", "view", "--json", "isFork,parent,nameWithOwner"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh repo view (fork info): {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "gh repo view failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&output.stdout).map_err(|e| e.to_string())?;
+    let origin = v.get("nameWithOwner").and_then(|s| s.as_str()).unwrap_or("").to_string();
+    let is_fork = v.get("isFork").and_then(|b| b.as_bool()).unwrap_or(false);
+    let parent = v
+        .get("parent")
+        .and_then(|p| {
+            let owner = p.get("owner").and_then(|o| o.get("login")).and_then(|s| s.as_str())?;
+            let name = p.get("name").and_then(|s| s.as_str())?;
+            Some(format!("{}/{}", owner, name))
+        })
+        .unwrap_or_default();
+    // gh repo view doesn't expose the parent's default branch; the UI falls back
+    // to letting the user type the base branch (PR create resolves it server-side).
+    Ok(ForkInfo { is_fork, origin, parent, parent_default_branch: String::new() })
 }

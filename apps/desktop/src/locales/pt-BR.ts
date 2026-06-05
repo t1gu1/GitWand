@@ -695,6 +695,10 @@ const ptBR: Locale = {
     create: {
       title: "Nova pull request",
       subtitle: "Abra uma PR para suas alterações serem revisadas. Defina um título, escolha um branch alvo e adicione uma descrição.",
+      targetRepoLabel: "Repositório de destino",
+      targetUpstream: "Upstream",
+      targetFork: "Seu fork",
+      targetHint: "Esta branch está em um fork. Escolha onde abrir o pull request.",
       branchesLabel: "Branches",
       fromLabel: "De",
       intoLabel: "Para",

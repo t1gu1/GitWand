@@ -476,6 +476,23 @@ pub struct PullRequestDetail {
     pub checks_status: String,
 }
 
+// ─── Fork / PR target info ─────────────────────────────────────────
+
+/// Describes the current repo's GitHub fork relationship, used by the PR
+/// create view to offer "open against upstream" for forks.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkInfo {
+    /// True when `origin` is a fork of another GitHub repo.
+    pub is_fork: bool,
+    /// `origin` as `owner/repo` (the head side of a cross-fork PR).
+    pub origin: String,
+    /// Parent/upstream as `owner/repo`, or "" when not a fork.
+    pub parent: String,
+    /// Parent's default branch (e.g. "main"), or "" when unknown / not a fork.
+    pub parent_default_branch: String,
+}
+
 // ─── GitHub OAuth device flow ──────────────────────────────────────
 
 /// Returned by `github_device_start` — the user-facing code + the
