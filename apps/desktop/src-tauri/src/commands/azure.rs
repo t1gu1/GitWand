@@ -460,6 +460,23 @@ fn pr_web_url(r: &AzureRepo, id: i64) -> String {
 
 // ─── Mapping ────────────────────────────────────────────────────────────────
 
+/// Derive a GitHub-style review decision from the reviewer votes carried on the
+/// PR list/detail object, so the sidebar can flag PRs that are still waiting.
+fn review_decision(pr: &serde_json::Value) -> &'static str {
+    match pr.get("reviewers").and_then(|a| a.as_array()) {
+        Some(rv) if !rv.is_empty() => {
+            if rv.iter().any(|r| ji(r, "vote") <= -5) {
+                "CHANGES_REQUESTED"
+            } else if rv.iter().any(|r| ji(r, "vote") >= 5) {
+                "APPROVED"
+            } else {
+                "REVIEW_REQUIRED"
+            }
+        }
+        _ => "",
+    }
+}
+
 fn json_to_pr(r: &AzureRepo, pr: &serde_json::Value) -> PullRequest {
     let id = ji(pr, "pullRequestId");
     PullRequest {
@@ -478,7 +495,7 @@ fn json_to_pr(r: &AzureRepo, pr: &serde_json::Value) -> PullRequest {
         labels: Vec::new(),
         assignees: Vec::new(),
         review_requested: Vec::new(),
-        review_decision: String::new(),
+        review_decision: review_decision(pr).to_string(),
         merge_state_status: js(pr, "mergeStatus").to_uppercase(),
         checks_rollup: String::new(),
         comment_count: 0,
@@ -575,6 +592,18 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<
         prs.drain(..skip);
     }
     prs.truncate(limit.max(1) as usize);
+
+    // Azure PR objects carry no line stats. Refresh remote-tracking branches
+    // once (a single incremental network call), then compute +/- locally per
+    // PR. Branches that no longer exist (merged/closed) leave the stats at 0.
+    if !prs.is_empty() {
+        let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
+        for pr in &mut prs {
+            let (_, adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
+            pr.additions = adds;
+            pr.deletions = dels;
+        }
+    }
     Ok(prs)
 }
 

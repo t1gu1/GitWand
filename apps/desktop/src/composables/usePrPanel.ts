@@ -162,7 +162,9 @@ export function usePrPanel(cwd: Ref<string>) {
     }
     const reasons: string[] = [];
     // Prefer the concrete policy/check names; fall back to the generic label.
-    const names = unmet.map((c) => c.name).filter(Boolean);
+    // De-duplicate identical names (Azure can report the same policy twice, e.g.
+    // an inherited + branch-level "At least 1 reviewer must approve").
+    const names = [...new Set(unmet.map((c) => c.name).filter(Boolean))];
     if (names.length) reasons.push(...names);
     else if (!checksOk) reasons.push(t("pr.ready.reasonChecksFailing"));
     // Only add the generic "no approval" reason when no policy already covers it.

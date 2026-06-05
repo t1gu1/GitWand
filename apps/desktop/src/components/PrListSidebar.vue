@@ -72,6 +72,19 @@ function stateInfo(state: string): { label: string; cls: StateCls } {
   return { label: t("pr.list.stateClosed"), cls: "pls-state--closed" };
 }
 
+/**
+ * Whether an open PR is still waiting on something to merge (review approval,
+ * requested changes, conflicts / blocked merge). Drives a yellow status dot.
+ * Uses only fields present on the list item — no extra per-PR requests.
+ */
+function isWaiting(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string }): boolean {
+  if (pr.state.toUpperCase() !== "OPEN" || pr.draft) return false;
+  const rd = (pr.reviewDecision || "").toUpperCase();
+  if (rd === "REVIEW_REQUIRED" || rd === "CHANGES_REQUESTED") return true;
+  const ms = (pr.mergeStateStatus || "").toUpperCase();
+  return ["BLOCKED", "CONFLICTING", "CONFLICTS", "DIRTY", "UNSTABLE"].includes(ms);
+}
+
 /** Total count shown as a subtle pill next to the title. */
 const totalCount = computed(() => panel.displayedPrs.value.length);
 
@@ -236,7 +249,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
         <div class="pls-row-top">
           <span class="pls-num">#{{ pr.number }}</span>
           <span class="pls-state-chip" :class="stateInfo(pr.state).cls">
-            <span class="pls-state-dot" aria-hidden="true"></span>
+            <span class="pls-state-dot" :class="{ 'pls-state-dot--waiting': isWaiting(pr) }" aria-hidden="true"></span>
             {{ stateInfo(pr.state).label }}
           </span>
           <span v-if="pr.draft" class="pls-draft-chip">{{ t('pr.list.draft') }}</span>
@@ -647,6 +660,11 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   height: 6px;
   border-radius: 50%;
   background: currentColor;
+}
+
+/* Open PR still waiting on review/merge → yellow dot instead of the green one. */
+.pls-state-dot--waiting {
+  background: var(--color-warning, #e3b341);
 }
 
 .pls-state-chip.pls-state--open {
