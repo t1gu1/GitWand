@@ -9,20 +9,9 @@
  */
 import { ref, computed } from "vue";
 import type { PrReviewComment } from "../utils/backend";
-import { openExternalUrl } from "../utils/backend";
-import { safeHtml, renderMarkdown } from "../composables/useSafeHtml";
+import { renderMarkdown, onMarkdownLinkClick } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
 import { useAvatar } from "../composables/useAvatar";
-
-// Anchors in rendered comment markdown must open in the OS browser, not
-// navigate the Tauri webview away from the app.
-function onMarkdownClick(e: MouseEvent) {
-  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href");
-  if (href && /^https?:\/\//i.test(href)) {
-    e.preventDefault();
-    void openExternalUrl(href);
-  }
-}
 
 const { t } = useI18n();
 
@@ -95,6 +84,15 @@ function applySuggestion(comment: PrReviewComment) {
 
 const suggLabel = computed(() => t("pr.comment.suggestionLabel"));
 
+// Render each comment's markdown once per data change. Done here rather than in
+// the `v-html` binding so the (expensive) parse + sanitize doesn't re-run on
+// every component re-render for every comment in the thread.
+const bodyHtmlById = computed(() => {
+  const m = new Map<number, string>();
+  for (const c of props.comments) m.set(c.id, renderMarkdown(c.body));
+  return m;
+});
+
 // Avatar disks share the app-wide outline style — see composables/useAvatar.
 const { avatarStyle, avatarInitials } = useAvatar();
 
@@ -157,8 +155,8 @@ function timeAgo(dateStr: string): string {
         v-else
         class="pct-body"
         :style="{ '--suggestion-label': `'${suggLabel}'` }"
-        @click="onMarkdownClick"
-        v-html="renderMarkdown(comment.body)"
+        @click="onMarkdownLinkClick"
+        v-html="bodyHtmlById.get(comment.id)"
       />
 
       <!-- Apply suggestion button -->

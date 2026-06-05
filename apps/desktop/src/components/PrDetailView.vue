@@ -12,8 +12,8 @@
  * - Polished tabs with animation + count badges
  */
 import { computed, inject, nextTick, ref } from "vue";
-import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
-import { renderMarkdown } from "../composables/useSafeHtml";
+import { PR_PANEL_KEY, isMergeConflict, type PrPanelState } from "../composables/usePrPanel";
+import { renderMarkdown, onMarkdownLinkClick } from "../composables/useSafeHtml";
 import { useAvatar } from "../composables/useAvatar";
 import { openExternalUrl } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
@@ -32,19 +32,6 @@ const p = inject<PrPanelState>(PR_PANEL_KEY)!;
 
 // window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
 function openInBrowser(url: string) { void openExternalUrl(url); }
-
-// Anchors inside rendered markdown (PR description) would otherwise navigate the
-// Tauri webview away from the app. Intercept clicks on http(s) links and hand
-// them to the OS browser instead.
-function onMarkdownClick(e: MouseEvent) {
-  const anchor = (e.target as HTMLElement | null)?.closest("a");
-  const href = anchor?.getAttribute("href");
-  if (!href) return;
-  if (/^https?:\/\//i.test(href)) {
-    e.preventDefault();
-    void openExternalUrl(href);
-  }
-}
 
 // Avatar disks share the app-wide outline style — see composables/useAvatar.
 const { avatarStyle, avatarInitials: authorInitials } = useAvatar();
@@ -79,8 +66,7 @@ const checksUrl = computed(() => {
 const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
   // A merge conflict blocks the PR just like a failing check — flag it red even
   // when CI itself is green/empty.
-  const mergeable = (p.prDetail.value?.mergeable || "").toUpperCase();
-  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(mergeable)) return "fail";
+  if (isMergeConflict(p.prDetail.value?.mergeable)) return "fail";
   const s = (p.prDetail.value?.checksStatus || "").toUpperCase();
   if (!s) return null;
   if (["FAILURE", "FAIL", "ERROR"].includes(s)) return "fail";
@@ -93,7 +79,7 @@ const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
  * red or the branch conflicts. */
 const mergeStatus = computed<{ icon: string; label: string }>(() => {
   const m = (p.prDetail.value?.mergeable || "").toUpperCase();
-  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(m)) {
+  if (isMergeConflict(m)) {
     return { icon: "⚠️", label: t("pr.detail.mergeConflicting") };
   }
   // CI failed (red) but no git conflict — surface a generic problem instead of
@@ -106,12 +92,20 @@ const mergeStatus = computed<{ icon: string; label: string }>(() => {
   return { icon: p.mergeableIcon(m), label: m };
 });
 
-/** Review + issue-level comments, sorted oldest-first for display under the description. */
+/**
+ * Review + issue-level comments, sorted oldest-first for display under the
+ * description. `bodyHtml` is rendered once here (markdown parse + sanitize is
+ * expensive) instead of in the `v-html` binding, which would re-run on every
+ * re-render for every comment.
+ */
 const sortedComments = computed(() =>
-  [...p.prComments.value, ...p.prIssueComments.value].sort(
-    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-  ),
+  [...p.prComments.value, ...p.prIssueComments.value]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((c) => ({ ...c, bodyHtml: renderMarkdown(c.body) })),
 );
+
+/** PR description rendered once (see `sortedComments` for the rationale). */
+const descriptionHtml = computed(() => renderMarkdown(p.prDetail.value?.body));
 
 /** Anchor at the bottom of the comments list — target for the Comments tile. */
 const commentsEnd = ref<HTMLElement | null>(null);
@@ -536,8 +530,8 @@ function commentTimeAgo(dateStr: string): string {
               <div
                 v-if="descriptionTab === 'formatted'"
                 class="pdv-body-formatted"
-                @click="onMarkdownClick"
-                v-html="renderMarkdown(p.prDetail.value.body)"
+                @click="onMarkdownLinkClick"
+                v-html="descriptionHtml"
               />
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
             </div>
@@ -572,7 +566,7 @@ function commentTimeAgo(dateStr: string): string {
                   <span v-if="c.path" class="pdv-comment-anchor">{{ c.path.split('/').pop() }}<template v-if="c.line">:{{ c.line }}</template></span>
                   <span class="pdv-comment-time" :title="c.created_at">{{ commentTimeAgo(c.created_at) }}</span>
                 </div>
-                <div class="pdv-comment-body" @click="onMarkdownClick" v-html="renderMarkdown(c.body)" />
+                <div class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="c.bodyHtml" />
               </li>
             </ul>
             <div ref="commentsEnd"></div>

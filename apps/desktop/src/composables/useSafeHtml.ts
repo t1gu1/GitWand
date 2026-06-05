@@ -30,6 +30,7 @@
 
 import DOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
+import { openExternalUrl } from "../utils/backend";
 
 /**
  * Lowercase, strip non-word characters, collapse whitespace / dashes.
@@ -223,4 +224,19 @@ export function renderMarkdown(src: string | null | undefined): string {
   if (!src) return "";
   const rawHtml = md.render(src);
   return safeHtml(rawHtml);
+}
+
+/**
+ * Click handler for containers that render markdown via `v-html`. Anchors
+ * inside rendered markdown would otherwise navigate the Tauri webview away from
+ * the app — intercept clicks on http(s) links and hand them to the OS browser.
+ *
+ * Usage: `<div v-html="..." @click="onMarkdownLinkClick" />`.
+ */
+export function onMarkdownLinkClick(e: MouseEvent): void {
+  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href");
+  if (href && /^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+  }
 }

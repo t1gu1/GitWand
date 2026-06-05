@@ -43,6 +43,16 @@ const FORGE_LABELS: Record<string, string> = {
   azure: "Azure DevOps",
 };
 
+/**
+ * Whether a PR's `mergeable` state means the branch has conflicts and cannot
+ * merge. Forges spell this differently (GitHub `CONFLICTING`, GitLab
+ * `CONFLICTS`, others `DIRTY`), so normalise here and reuse everywhere a
+ * conflict needs to be flagged as a hard blocker.
+ */
+export function isMergeConflict(mergeable: string | null | undefined): boolean {
+  return ["CONFLICTING", "CONFLICTS", "DIRTY"].includes((mergeable || "").toUpperCase());
+}
+
 export function usePrPanel(cwd: Ref<string>) {
 
   // Disk-persisted SWR cache — paints the list/detail instantly on repo-switch
@@ -160,8 +170,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   const mergeReadiness = computed<{ ready: boolean; reason: string } | null>(() => {
     // A merge conflict blocks the PR on its own, even with no checks/reviews.
-    const mergeable = (prDetail.value?.mergeable || "").toUpperCase();
-    const hasConflict = ["CONFLICTING", "CONFLICTS", "DIRTY"].includes(mergeable);
+    const hasConflict = isMergeConflict(prDetail.value?.mergeable);
     if (!prReviews.value.length && !prChecks.value.length && !hasConflict) return null;
     // A check blocks merge only when it is genuinely failing or still pending.
     // Anything else (success, skipped, neutral, or a completed check with an

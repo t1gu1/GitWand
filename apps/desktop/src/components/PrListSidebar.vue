@@ -11,7 +11,7 @@
  * - Hover-lift + active accent border, matching the rest of the app
  */
 import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from "vue";
-import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { PR_PANEL_KEY, isMergeConflict, type PrPanelState } from "../composables/usePrPanel";
 import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
 import { useI18n } from "../composables/useI18n";
 
@@ -87,7 +87,7 @@ function prStatus(pr: { state: string; draft: boolean; reviewDecision: string; m
   const ms = (pr.mergeStateStatus || "").toUpperCase();
   // Red: a hard failure — CI is red, or the merge is blocked by conflicts.
   if (["FAILURE", "ERROR"].includes(ci)) return "fail";
-  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(ms)) return "fail";
+  if (isMergeConflict(ms)) return "fail";
   // Yellow: CI still running / queued.
   if (["PENDING", "EXPECTED"].includes(ci)) return "waiting";
   // Yellow: waiting on review approval or changes requested.

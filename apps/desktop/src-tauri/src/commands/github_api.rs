@@ -398,11 +398,11 @@ pub(crate) fn rest_list_prs(
         if off == 0 {
             let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
         }
-        for pr in &mut prs {
+        prs.par_iter_mut().for_each(|pr| {
             let (adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
             pr.additions = adds;
             pr.deletions = dels;
-        }
+        });
         // The REST list carries no CI status. Resolve each PR's head SHA from
         // the raw list payload, then aggregate its check-runs so the sidebar can
         // colour the dot (red = failing, yellow = pending, green = passing).

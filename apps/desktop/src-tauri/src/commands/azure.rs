@@ -604,11 +604,11 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<
         if offset == 0 {
             let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
         }
-        for pr in &mut prs {
+        prs.par_iter_mut().for_each(|pr| {
             let (_, adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
             pr.additions = adds;
             pr.deletions = dels;
-        }
+        });
         // Aggregate each PR's branch-policy evaluations into a rollup so the
         // sidebar dot can colour (red = a build/policy failed, yellow = pending,
         // green = all pass). Parallel — one policy round-trip per PR.
