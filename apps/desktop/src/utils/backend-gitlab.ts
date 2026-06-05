@@ -147,7 +147,11 @@ function glNoteToComment(note: Record<string, unknown>): PrReviewComment {
 export async function glMrNotes(cwd: string, iid: number): Promise<PrReviewComment[]> {
   if (!isTauri()) return [];
   const raw = await tauriInvoke<unknown[]>("gl_mr_notes", { cwd, iid });
-  return (raw as Record<string, unknown>[]).map(glNoteToComment);
+  // Drop system notes ("changed the description", label/assignee events, …) —
+  // they are activity log entries, not real conversation comments.
+  return (raw as Record<string, unknown>[])
+    .filter((n) => n.system !== true)
+    .map(glNoteToComment);
 }
 
 /** Create a note (comment) on a MR. */

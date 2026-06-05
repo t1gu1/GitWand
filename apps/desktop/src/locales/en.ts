@@ -815,6 +815,7 @@ const en = {
       statFiles: "Files",
       statDiff: "Diff",
       statComments: "Comments",
+      commentGoto: "Go to",
       labels: "Labels",
       reviewers: "Reviewers",
       description: "Description",

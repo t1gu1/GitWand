@@ -787,6 +787,7 @@ const zhCN: Locale = {
       statFiles: "文件",
       statDiff: "Diff",
       statComments: "评论",
+      commentGoto: "前往",
       labels: "标签",
       reviewers: "评审者",
       description: "描述",

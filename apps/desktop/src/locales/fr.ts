@@ -809,6 +809,7 @@ const fr: Locale = {
       statFiles: "Fichiers",
       statDiff: "Diff",
       statComments: "Commentaires",
+      commentGoto: "Aller à",
       labels: "Labels",
       reviewers: "Reviewers",
       description: "Description",

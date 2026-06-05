@@ -798,6 +798,7 @@ const es: Locale = {
       statFiles: "Archivos",
       statDiff: "Diff",
       statComments: "Comentarios",
+      commentGoto: "Ir a",
       labels: "Etiquetas",
       reviewers: "Revisores",
       description: "Descripción",

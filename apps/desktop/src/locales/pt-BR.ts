@@ -799,6 +799,7 @@ const ptBR: Locale = {
       statFiles: "Arquivos",
       statDiff: "Diff",
       statComments: "Comentários",
+      commentGoto: "Ir para",
       labels: "Labels",
       reviewers: "Revisores",
       description: "Descrição",

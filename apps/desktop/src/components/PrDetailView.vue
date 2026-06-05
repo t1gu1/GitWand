@@ -97,6 +97,18 @@ async function scrollToLastComment() {
   commentsEnd.value?.scrollIntoView({ behavior: "smooth", block: "end" });
 }
 
+/**
+ * Web URL for a comment's "Go to" button. GitHub/Bitbucket expose a direct
+ * per-comment permalink; GitLab/Azure don't, so fall back to the PR/MR page
+ * (with the GitLab `#note_<id>` anchor when the base is a GitLab MR).
+ */
+function commentHref(c: { url: string; id: number }): string {
+  if (c.url) return c.url;
+  const base = p.prDetail.value?.url ?? "";
+  if (!base) return "";
+  return /gitlab/i.test(base) && c.id ? `${base}#note_${c.id}` : base;
+}
+
 /** Short relative time for a comment timestamp. */
 function commentTimeAgo(dateStr: string): string {
   try {
@@ -481,6 +493,18 @@ function commentTimeAgo(dateStr: string): string {
                     {{ authorInitials(c.author) }}
                   </span>
                   <span class="pdv-comment-author">{{ c.author }}</span>
+                  <button
+                    v-if="commentHref(c)"
+                    type="button"
+                    class="pdv-comment-goto"
+                    :title="t('pr.detail.commentGoto')"
+                    @click="openInBrowser(commentHref(c))"
+                  >
+                    {{ t('pr.detail.commentGoto') }}
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
+                    </svg>
+                  </button>
                   <span v-if="c.path" class="pdv-comment-anchor">{{ c.path.split('/').pop() }}<template v-if="c.line">:{{ c.line }}</template></span>
                   <span class="pdv-comment-time" :title="c.created_at">{{ commentTimeAgo(c.created_at) }}</span>
                 </div>
@@ -1205,6 +1229,24 @@ function commentTimeAgo(dateStr: string): string {
   margin-left: auto;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+}
+
+.pdv-comment-goto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.pdv-comment-goto:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .pdv-comment-body {
