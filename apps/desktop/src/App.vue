@@ -102,7 +102,7 @@ const { settings, refreshSettings } = useSettings();
 const { isOffline: navIsOffline } = useNetworkStatus();
 const { isOnline: probedOnline, probeConnectivity } = useConnectivity();
 const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
-import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState } from "./utils/backend";
+import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState, openExternalUrl } from "./utils/backend";
 import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
@@ -2035,7 +2035,7 @@ async function onInstallUpdate() {
   // The user downloads + installs themselves; we close our modal.
   if (pendingUpdate.value?.installMethod === "manual") {
     if (pendingUpdate.value.downloadUrl) {
-      window.open(pendingUpdate.value.downloadUrl, "_blank");
+      void openExternalUrl(pendingUpdate.value.downloadUrl);
     }
     pendingUpdate.value = null;
     return;
@@ -2092,7 +2092,7 @@ useAppMenu(
           : info.provider === "bitbucket"
             ? `https://bitbucket.org/${info.owner}/${info.repo}`
             : `https://github.com/${info.owner}/${info.repo}`;
-      window.open(url, "_blank");
+      void openExternalUrl(url);
     },
     toggleTheme,
     checkForUpdates: runUpdateCheck,

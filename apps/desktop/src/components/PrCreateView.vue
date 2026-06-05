@@ -54,6 +54,16 @@ async function generateWithAI() {
   }
 }
 
+// Fork-target radio options: upstream parent first, then the fork (origin).
+const forkTargets = computed(() => {
+  const fi = p.forkInfo.value;
+  if (!fi?.isFork || !fi.parent) return [];
+  return [
+    { repo: fi.parent, badge: t("pr.create.targetUpstream") },
+    { repo: fi.origin, badge: t("pr.create.targetFork") },
+  ];
+});
+
 // ─── Base branch candidates ─────────────────────────────
 const baseCandidates = computed<string[]>(() => {
   const locals = new Set<string>();
@@ -394,24 +404,18 @@ function removeReviewer(name: string) {
       <div v-if="p.error.value" class="pcv-msg pcv-msg--error">{{ p.error.value }}</div>
 
       <!-- Fork target (only when origin is a fork) -->
-      <section v-if="p.forkInfo.value?.isFork && p.forkInfo.value.parent" class="pcv-section">
+      <section v-if="forkTargets.length" class="pcv-section">
         <label class="pcv-label">{{ t("pr.create.targetRepoLabel") }}</label>
         <div class="pcv-fork-target">
           <label
+            v-for="opt in forkTargets"
+            :key="opt.repo"
             class="pcv-fork-opt"
-            :class="{ 'pcv-fork-opt--active': p.newPrBaseRepo.value === p.forkInfo.value.parent }"
+            :class="{ 'pcv-fork-opt--active': p.newPrBaseRepo.value === opt.repo }"
           >
-            <input type="radio" :value="p.forkInfo.value.parent" v-model="p.newPrBaseRepo.value" />
-            <span class="pcv-fork-name mono">{{ p.forkInfo.value.parent }}</span>
-            <span class="pcv-fork-badge">{{ t("pr.create.targetUpstream") }}</span>
-          </label>
-          <label
-            class="pcv-fork-opt"
-            :class="{ 'pcv-fork-opt--active': p.newPrBaseRepo.value === p.forkInfo.value.origin }"
-          >
-            <input type="radio" :value="p.forkInfo.value.origin" v-model="p.newPrBaseRepo.value" />
-            <span class="pcv-fork-name mono">{{ p.forkInfo.value.origin }}</span>
-            <span class="pcv-fork-badge">{{ t("pr.create.targetFork") }}</span>
+            <input type="radio" :value="opt.repo" v-model="p.newPrBaseRepo.value" />
+            <span class="pcv-fork-name mono">{{ opt.repo }}</span>
+            <span class="pcv-fork-badge">{{ opt.badge }}</span>
           </label>
         </div>
         <p class="pcv-hint">{{ t("pr.create.targetHint") }}</p>

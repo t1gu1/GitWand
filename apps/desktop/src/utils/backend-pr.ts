@@ -35,8 +35,6 @@ export interface ForkInfo {
   origin: string;
   /** Parent/upstream as "owner/repo", or "" when not a fork. */
   parent: string;
-  /** Parent's default branch, or "" when unknown. */
-  parentDefaultBranch: string;
 }
 
 /**
@@ -45,7 +43,7 @@ export interface ForkInfo {
  */
 export async function ghForkInfo(cwd: string): Promise<ForkInfo> {
   if (isTauri()) return tauriInvoke<ForkInfo>("gh_fork_info", { cwd });
-  return { isFork: false, origin: "", parent: "", parentDefaultBranch: "" };
+  return { isFork: false, origin: "", parent: "" };
 }
 
 /** Returns the list of file paths changed by a PR (lazy — call only when needed). */

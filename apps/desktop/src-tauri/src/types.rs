@@ -489,8 +489,6 @@ pub struct ForkInfo {
     pub origin: String,
     /// Parent/upstream as `owner/repo`, or "" when not a fork.
     pub parent: String,
-    /// Parent's default branch (e.g. "main"), or "" when unknown / not a fork.
-    pub parent_default_branch: String,
 }
 
 // ─── GitHub OAuth device flow ──────────────────────────────────────

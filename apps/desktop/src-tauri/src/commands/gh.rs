@@ -590,7 +590,5 @@ pub(crate) fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
             Some(format!("{}/{}", owner, name))
         })
         .unwrap_or_default();
-    // gh repo view doesn't expose the parent's default branch; the UI falls back
-    // to letting the user type the base branch (PR create resolves it server-side).
-    Ok(ForkInfo { is_fork, origin, parent, parent_default_branch: String::new() })
+    Ok(ForkInfo { is_fork, origin, parent })
 }

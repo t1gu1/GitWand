@@ -362,27 +362,25 @@ pub(crate) fn rest_list_prs(
 
     // When origin is a fork, also surface the PRs you opened on the upstream
     // repo (head repo == your fork) — these never appear in origin's pulls.
-    if let Ok(fi) = rest_fork_info(cwd, token) {
-        if fi.is_fork && !fi.parent.is_empty() {
-            if let Ok(up) = api_json(
-                "GET",
-                &format!(
-                    "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
-                    API_BASE, fi.parent, api_state, per_page
-                ),
-                token,
-                None,
-            ) {
-                for pr in up.as_array().cloned().unwrap_or_default() {
-                    let head_repo = pr
-                        .get("head")
-                        .and_then(|h| h.get("repo"))
-                        .and_then(|r| r.get("full_name"))
-                        .and_then(|s| s.as_str())
-                        .unwrap_or("");
-                    if head_repo.eq_ignore_ascii_case(&origin) {
-                        raw.push(pr);
-                    }
+    if let Some(parent) = upstream_parent(cwd, token) {
+        if let Ok(up) = api_json(
+            "GET",
+            &format!(
+                "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
+                API_BASE, parent, api_state, per_page
+            ),
+            token,
+            None,
+        ) {
+            for pr in up.as_array().cloned().unwrap_or_default() {
+                let head_repo = pr
+                    .get("head")
+                    .and_then(|h| h.get("repo"))
+                    .and_then(|r| r.get("full_name"))
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("");
+                if head_repo.eq_ignore_ascii_case(&origin) {
+                    raw.push(pr);
                 }
             }
         }
@@ -429,19 +427,17 @@ fn get_pr_json(cwd: &str, number: i64, token: &str) -> Result<(String, serde_jso
         return Ok((origin, v));
     }
     if st == 404 {
-        if let Ok(fi) = rest_fork_info(cwd, token) {
-            if fi.is_fork && !fi.parent.is_empty() {
-                let (st2, body2) = curl_raw(
-                    "GET",
-                    &format!("{}/repos/{}/pulls/{}", API_BASE, fi.parent, number),
-                    Some(token),
-                    None,
-                    "application/vnd.github+json",
-                )?;
-                if st2 < 400 {
-                    let v = serde_json::from_str(body2.trim()).map_err(|e| format!("parse PR: {}", e))?;
-                    return Ok((fi.parent, v));
-                }
+        if let Some(parent) = upstream_parent(cwd, token) {
+            let (st2, body2) = curl_raw(
+                "GET",
+                &format!("{}/repos/{}/pulls/{}", API_BASE, parent, number),
+                Some(token),
+                None,
+                "application/vnd.github+json",
+            )?;
+            if st2 < 400 {
+                let v = serde_json::from_str(body2.trim()).map_err(|e| format!("parse PR: {}", e))?;
+                return Ok((parent, v));
             }
         }
     }
@@ -530,13 +526,15 @@ pub(crate) fn rest_fork_info(cwd: &str, token: &str) -> Result<ForkInfo, String>
         .and_then(|n| n.as_str())
         .unwrap_or("")
         .to_string();
-    let parent_default_branch = info
-        .get("parent")
-        .and_then(|p| p.get("default_branch"))
-        .and_then(|n| n.as_str())
-        .unwrap_or("")
-        .to_string();
-    Ok(ForkInfo { is_fork, origin, parent, parent_default_branch })
+    Ok(ForkInfo { is_fork, origin, parent })
+}
+
+/// The upstream parent `owner/repo` when the current repo is a fork, else None.
+/// Centralizes the `is_fork && !parent.is_empty()` guard shared by the PR list
+/// and the origin→upstream PR fallback.
+fn upstream_parent(cwd: &str, token: &str) -> Option<String> {
+    let fi = rest_fork_info(cwd, token).ok()?;
+    (fi.is_fork && !fi.parent.is_empty()).then_some(fi.parent)
 }
 
 pub(crate) fn rest_create_pr(
