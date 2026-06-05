@@ -550,6 +550,18 @@ pub struct OpencodeCliInfo {
     pub detail: String,
 }
 
+// ─── GitHub Copilot CLI ────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct CopilotCliInfo {
+    pub found: bool,
+    pub path: String,
+    pub version: String,
+    pub logged_in: bool,
+    pub status: String,
+    pub detail: String,
+}
+
 // ─── Git hooks ─────────────────────────────────────────────────────
 
 #[derive(Serialize)]

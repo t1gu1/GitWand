@@ -3267,6 +3267,85 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/copilot-cli-detect
+    if (url.pathname === "/api/copilot-cli-detect" && req.method === "GET") {
+      try {
+        const COPILOT = resolveBin("copilot");
+        const exists = (() => {
+          try { return existsSync(COPILOT); } catch { return false; }
+        })();
+        let resolved = exists ? COPILOT : "";
+        if (!resolved) {
+          try {
+            const r = spawnSync(process.platform === "win32" ? "where" : "which", ["copilot"], { encoding: "utf-8" });
+            if (r.status === 0 && r.stdout.trim()) {
+              resolved = r.stdout.split(/\r?\n/)[0].trim();
+            }
+          } catch { /* ignore */ }
+        }
+
+        if (!resolved) {
+          return jsonResponse(req, res, {
+            found: false,
+            path: "",
+            version: "",
+            logged_in: false,
+            status: "not_found",
+            detail: "Binaire `copilot` introuvable. Installez-le avec `npm install -g @github/copilot`.",
+          });
+        }
+
+        let version = "";
+        try {
+          const r = spawnSync(resolved, ["--version"], { encoding: "utf-8" });
+          if (r.status === 0) version = r.stdout.trim();
+        } catch { /* ignore */ }
+
+        return jsonResponse(req, res, {
+          found: true,
+          path: resolved,
+          version,
+          logged_in: false,
+          status: "detected",
+          detail: "",
+        });
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // POST /api/copilot-cli-prompt  { prompt, systemPrompt?, cwd?, model? }
+    if (url.pathname === "/api/copilot-cli-prompt" && req.method === "POST") {
+      try {
+        const body = await readBody(req);
+        const COPILOT = resolveBin("copilot");
+        const fullPrompt = body.systemPrompt && body.systemPrompt.trim()
+          ? `# System\n${body.systemPrompt.trim()}\n\n# User\n${(body.prompt || "").trim()}`
+          : (body.prompt || "");
+        const cpArgs = ["--no-color", "--deny-tool=shell", "--deny-tool=write", "--no-ask-user"];
+        if (body.model && String(body.model).trim()) {
+          cpArgs.push("--model", String(body.model).trim());
+        }
+        cpArgs.push("-p", fullPrompt);
+        const cpEnv = { ...process.env };
+        delete cpEnv.COPILOT_ALLOW_ALL;
+        const r = spawnSync(COPILOT, cpArgs, {
+          cwd: body.cwd || undefined,
+          env: cpEnv,
+          encoding: "utf-8",
+          timeout: 5 * 60 * 1000,
+          maxBuffer: 20 * 1024 * 1024,
+        });
+        if (r.status !== 0) {
+          const detail = (r.stderr || r.stdout || "").trim() || "Copilot CLI a échoué sans message";
+          return jsonResponse(req, res, { error: detail }, 500);
+        }
+        return res.writeHead(200, { ...corsHeaders(req), "Content-Type": "text/plain" }).end(r.stdout);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
     // POST /api/claude-cli-login  (opens a terminal with `claude login`)
     if (url.pathname === "/api/claude-cli-login" && req.method === "POST") {
       try {

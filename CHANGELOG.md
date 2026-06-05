@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub Copilot CLI as an AI provider** — `copilot-cli` joins `claude-code-cli`, `codex-cli`, and `opencode-cli` in the `AIProvider` union. It piggybacks on the user's locally-installed `copilot` binary and their GitHub Copilot subscription — no API key required. Detection mirrors the existing CLI providers (binary discovery across PATH + common install locations) and it appears in Settings → AI with the same status/re-detect pattern. Prompts run one-shot via `copilot -p` (model selectable via the per-provider model picker, free-text since Copilot has no enumeration command). Tool permissions are deliberately restricted (`--deny-tool=shell`, `--deny-tool=write`, `--no-ask-user`, and `COPILOT_ALLOW_ALL` stripped from the child env) so Copilot only produces text and cannot edit files, run shell commands, or block on interactive prompts.
+
+### Technical
+
+- New Rust commands `detect_copilot_cli` and `copilot_cli_prompt` (`copilot --no-color --deny-tool=shell --deny-tool=write --no-ask-user [--model …] -p <prompt>`), plus a `CopilotCliInfo` type; registered in `lib.rs`. Mirrored across all three layers: `commands/ai.rs`, `dev-server.mjs`, and the `backend-ai.ts` wrapper.
+- `useAIProvider` adds `copilot-cli` to `CLI_AGENT_PROVIDERS`, dispatches it in `suggest()` / `rawPrompt()`, and forwards the per-provider model. `SettingsPanel` gains the provider option, detection state, and status block.
+- i18n: `aiProviderCopilotCli`, `aiProviderCopilotCliNotFound`, `aiCopilotCliDetectedHint`, `aiCopilotCliInfoBox` across all five locales (en, fr, es, pt-BR, zh-CN).
+- Unit tests extended in `useAIProvider-opencode.test.ts` for the Copilot dispatch and model fallback.
+
+
 ## [2.17.0] - 2026-06-04
 
 v2.17 rounds out the agent-CLI lineup with **opencode** as a first-class AI provider, and gives every CLI agent its own model picker — a second select under the provider dropdown, scoped per provider so switching back restores the previous choice.

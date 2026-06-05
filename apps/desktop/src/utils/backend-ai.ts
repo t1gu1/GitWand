@@ -261,6 +261,76 @@ export async function listOpencodeModels(): Promise<string[]> {
   return [];
 }
 
+// ─── GitHub Copilot CLI provider ───────────────────────────
+// Mirrors the Claude / Codex / opencode CLI shape. Copilot runs one-shot
+// prompts via `copilot -p "<prompt>" [--model <m>] --no-color`; the response
+// is printed to stdout while the credits/tokens footer goes to stderr.
+
+export interface CopilotCliInfo {
+  found: boolean;
+  path: string;
+  version: string;
+  logged_in: boolean;
+  status: "ok" | "not_found" | "not_logged_in" | "error" | "detected" | string;
+  detail: string;
+}
+
+/**
+ * Detect whether the GitHub Copilot CLI is installed. Safe to call on app boot.
+ */
+export async function detectCopilotCli(): Promise<CopilotCliInfo> {
+  if (isTauri()) {
+    return tauriInvoke<CopilotCliInfo>("detect_copilot_cli");
+  }
+  try {
+    const res = await devFetch(`${DEV_SERVER}/api/copilot-cli-detect`);
+    if (res.ok) return (await res.json()) as CopilotCliInfo;
+  } catch {
+    // Dev server unavailable
+  }
+  return {
+    found: false,
+    path: "",
+    version: "",
+    logged_in: false,
+    status: "not_found",
+    detail: "",
+  };
+}
+
+/**
+ * Run a prompt through the local GitHub Copilot CLI (`copilot -p`).
+ */
+export async function copilotCliPrompt(
+  prompt: string,
+  systemPrompt?: string,
+  cwd?: string,
+  model?: string,
+): Promise<string> {
+  if (isTauri()) {
+    return tauriInvoke<string>("copilot_cli_prompt", {
+      prompt,
+      systemPrompt,
+      cwd,
+      model,
+    }, IPC_TIMEOUT.NONE);
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/copilot-cli-prompt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, systemPrompt, cwd, model }),
+  });
+  if (!res.ok) {
+    let msg = `copilot CLI error ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.error) msg = body.error;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  return await res.text();
+}
+
 /**
  * Open the native terminal with `claude login` so the user can complete
  * the OAuth-style setup. Not a PTY integration — just a one-shot bootstrap.

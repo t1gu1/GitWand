@@ -495,6 +495,155 @@ pub(crate) fn opencode_list_models() -> Result<Vec<String>, String> {
     Ok(models)
 }
 
+// ─── GitHub Copilot CLI provider ─────────────────────────────────────────
+//
+// GitHub Copilot CLI (`copilot`) is an AI coding agent. Like the other CLIs
+// it exposes a non-interactive entry point:
+//   - `copilot -p "<prompt>" [--model <m>]` — run one prompt, print the
+//     response to stdout and exit. The trailing stats footer (credits /
+//     tokens) is written to stderr, so stdout stays clean.
+//
+// We deliberately run Copilot text-only: `--deny-tool=shell`,
+// `--deny-tool=write` and `--no-ask-user` block file edits, shell exec and
+// interactive prompts, and `COPILOT_ALLOW_ALL` is stripped from the child
+// env. The prompt we send is self-contained (it carries the full conflict
+// hunk), so the model only needs to produce text — never tools.
+//
+// Auth is handled by Copilot itself (`copilot` login / GitHub subscription),
+// stored on the user's machine — GitWand just shells out, same trick as the
+// other three CLIs.
+
+fn resolve_copilot_binary() -> Option<String> {
+    // 1) PATH first
+    let which_cmd = if cfg!(windows) { "where" } else { "which" };
+    if let Ok(out) = hidden_cmd(which_cmd).arg("copilot").output() {
+        if out.status.success() {
+            let raw = String::from_utf8_lossy(&out.stdout);
+            let first = raw.lines().next().unwrap_or("").trim();
+            if !first.is_empty() && std::path::Path::new(first).exists() {
+                return Some(first.to_string());
+            }
+        }
+    }
+
+    // 2) Common install locations (npm global, homebrew, local bin)
+    let home = dirs::home_dir();
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(h) = home.as_ref() {
+        candidates.push(h.join(".copilot/bin/copilot"));
+        candidates.push(h.join(".local/bin/copilot"));
+        candidates.push(h.join(".npm-global/bin/copilot"));
+        candidates.push(h.join("AppData/Roaming/npm/copilot.cmd"));
+        candidates.push(h.join("AppData/Roaming/npm/copilot"));
+    }
+    candidates.push(PathBuf::from("/opt/homebrew/bin/copilot"));
+    candidates.push(PathBuf::from("/usr/local/bin/copilot"));
+    candidates.push(PathBuf::from("/usr/bin/copilot"));
+
+    for c in candidates {
+        if c.exists() {
+            return Some(c.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
+/// Detect GitHub Copilot CLI presence and version. Same privacy stance as the
+/// Claude / Codex / opencode detectors: no prompt is sent to verify auth —
+/// that is confirmed implicitly on the first real `copilot_cli_prompt`.
+#[tauri::command]
+pub(crate) fn detect_copilot_cli() -> Result<CopilotCliInfo, String> {
+    let binary = match resolve_copilot_binary() {
+        Some(b) => b,
+        None => {
+            return Ok(CopilotCliInfo {
+                found: false,
+                path: String::new(),
+                version: String::new(),
+                logged_in: false,
+                status: "not_found".to_string(),
+                detail: "Binaire `copilot` introuvable. Installez-le avec `npm install -g @github/copilot`."
+                    .to_string(),
+            });
+        }
+    };
+
+    let version = hidden_cmd(&binary)
+        .arg("--version")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    Ok(CopilotCliInfo {
+        found: true,
+        path: binary,
+        version,
+        logged_in: false,
+        status: "detected".to_string(),
+        detail: String::new(),
+    })
+}
+
+#[tauri::command]
+pub(crate) fn copilot_cli_prompt(
+    prompt: String,
+    system_prompt: Option<String>,
+    cwd: Option<String>,
+    model: Option<String>,
+) -> Result<String, String> {
+    let binary = resolve_copilot_binary()
+        .ok_or_else(|| "Binaire `copilot` introuvable".to_string())?;
+
+    // Copilot CLI doesn't expose a separate system channel — prepend the
+    // system prompt as a Markdown section, same shape as the other flows.
+    let full_prompt = match system_prompt {
+        Some(sys) if !sys.trim().is_empty() => {
+            format!("# System\n{}\n\n# User\n{}", sys.trim(), prompt.trim())
+        }
+        _ => prompt,
+    };
+
+    let mut cmd = hidden_cmd(&binary);
+    // `--no-color` keeps stdout free of ANSI escapes. Flags precede the
+    // positional prompt passed via `-p`.
+    cmd.arg("--no-color");
+    // Safety: GitWand only wants a text answer back. Deny the tools that
+    // could mutate the user's machine (shell exec, file writes) and disable
+    // the interactive `ask_user` tool so a one-shot run can never block
+    // waiting for input. `COPILOT_ALLOW_ALL` is stripped from the inherited
+    // env so a stray variable can't silently re-enable every tool.
+    cmd.env_remove("COPILOT_ALLOW_ALL");
+    cmd.args(["--deny-tool=shell", "--deny-tool=write", "--no-ask-user"]);
+    if let Some(m) = model.as_ref() {
+        if !m.trim().is_empty() {
+            cmd.args(["--model", m.trim()]);
+        }
+    }
+    cmd.args(["-p", full_prompt.as_str()]);
+    if let Some(dir) = cwd {
+        if !dir.trim().is_empty() {
+            cmd.current_dir(dir);
+        }
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run copilot CLI: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        return Err(if detail.is_empty() {
+            "Copilot CLI a échoué sans message".to_string()
+        } else {
+            detail
+        });
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
 // ─── Claude OAuth login (opens a native terminal) ────────────────────────
 
 /// Launch `claude login` in the user's native terminal emulator. We don't

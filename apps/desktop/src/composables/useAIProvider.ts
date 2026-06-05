@@ -4,6 +4,7 @@ import {
   claudeCliPrompt,
   codexCliPrompt,
   opencodeCliPrompt,
+  copilotCliPrompt,
   listOpencodeModels,
   detectClaudeCli,
 } from "../utils/backend";
@@ -21,6 +22,9 @@ import { t } from "./useI18n";
  * - `opencode-cli`   : piggyback on the user's locally-installed opencode
  *                     CLI (`opencode run`) — uses whatever provider they've
  *                     authenticated via `opencode auth login` (v2.17)
+ * - `copilot-cli`    : piggyback on the user's locally-installed GitHub
+ *                     Copilot CLI (`copilot -p`) — uses their Copilot
+ *                     subscription stored on the machine, no API key needed
  * - `openai-compat`  : any OpenAI-compatible endpoint
  * - `ollama`         : local Ollama instance
  * - `mcp`            : route the LLM call through a connected MCP agent
@@ -35,17 +39,23 @@ export type AIProvider =
   | "claude-code-cli"
   | "codex-cli"
   | "opencode-cli"
+  | "copilot-cli"
   | "openai-compat"
   | "ollama"
   | "mcp";
 
 /** CLI agent providers that support a per-provider model picker (v2.17). */
-export type CliAgentProvider = "claude-code-cli" | "codex-cli" | "opencode-cli";
+export type CliAgentProvider =
+  | "claude-code-cli"
+  | "codex-cli"
+  | "opencode-cli"
+  | "copilot-cli";
 
 export const CLI_AGENT_PROVIDERS: CliAgentProvider[] = [
   "claude-code-cli",
   "codex-cli",
   "opencode-cli",
+  "copilot-cli",
 ];
 
 export interface AISettings {
@@ -275,6 +285,19 @@ async function callOpencodeCli(
   return result ?? "";
 }
 
+/**
+ * Call the local GitHub Copilot CLI (`copilot -p`). Uses the user's Copilot
+ * subscription stored on the machine — no API key required.
+ */
+async function callCopilotCli(
+  systemPrompt: string,
+  userPrompt: string,
+  model?: string,
+): Promise<string> {
+  const result = await copilotCliPrompt(userPrompt, systemPrompt, undefined, model);
+  return result ?? "";
+}
+
 // ─── Per-provider model selection (v2.17) ───────────────
 //
 // The three CLI agents each expose a second model picker. opencode can
@@ -298,7 +321,8 @@ export function modelForProvider(
   if (
     provider === "claude-code-cli" ||
     provider === "codex-cli" ||
-    provider === "opencode-cli"
+    provider === "opencode-cli" ||
+    provider === "copilot-cli"
   ) {
     const m = s.aiModelByProvider?.[provider];
     return m && m.trim() ? m.trim() : undefined;
@@ -410,6 +434,7 @@ export function useAIProvider() {
       if (s.aiProvider === "claude-code-cli") return true;
       if (s.aiProvider === "codex-cli") return true;
       if (s.aiProvider === "opencode-cli") return true;
+      if (s.aiProvider === "copilot-cli") return true;
       // misconfigured explicit provider — fall through to CLI auto-detect
     }
     // Auto-fallback: use Claude Code CLI if installed and logged in,
@@ -454,6 +479,9 @@ export function useAIProvider() {
           break;
         case "opencode-cli":
           rawResponse = await callOpencodeCli(systemPrompt, userPrompt, model);
+          break;
+        case "copilot-cli":
+          rawResponse = await callCopilotCli(systemPrompt, userPrompt, model);
           break;
         case "openai-compat":
           rawResponse = await callOpenAICompat(s, systemPrompt, userPrompt);
@@ -504,6 +532,8 @@ export function useAIProvider() {
         return callCodexCli(systemPrompt, userPrompt, model);
       case "opencode-cli":
         return callOpencodeCli(systemPrompt, userPrompt, model);
+      case "copilot-cli":
+        return callCopilotCli(systemPrompt, userPrompt, model);
       case "openai-compat":
         return callOpenAICompat(s, systemPrompt, userPrompt);
       case "ollama":
