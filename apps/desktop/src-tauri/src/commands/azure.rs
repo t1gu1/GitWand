@@ -948,6 +948,31 @@ fn map_policy_status(status: &str) -> (&'static str, &'static str) {
     }
 }
 
+/// Resolve a build's real outcome to `(state, conclusion)`. Build-validation
+/// policy evaluations can report `queued` while the build itself has already
+/// completed — possibly failed — so the build result is the source of truth.
+/// Best-effort: returns `None` on any error so the caller keeps the policy
+/// status. A still-running build maps to pending (yellow).
+fn azure_build_outcome(org: &str, project: &str, build_id: i64) -> Option<(&'static str, &'static str)> {
+    let url = format!(
+        "https://dev.azure.com/{}/{}/_apis/build/builds/{}?api-version=7.1",
+        urlenc(org),
+        urlenc(project),
+        build_id,
+    );
+    let v = az_json("GET", &url, None).ok()?;
+    // `status`: notStarted / inProgress / completed / cancelling / postponed.
+    if js(&v, "status") != "completed" {
+        return Some(("in_progress", ""));
+    }
+    // `result`: succeeded / partiallySucceeded / failed / canceled.
+    Some(match js(&v, "result").as_str() {
+        "succeeded" => ("completed", "SUCCESS"),
+        "failed" | "partiallySucceeded" | "canceled" => ("completed", "FAILURE"),
+        _ => ("completed", ""),
+    })
+}
+
 /// Rank a check's `conclusion` by how "resolved & positive" it is, so duplicate
 /// evaluations of the same policy can be collapsed to their best outcome.
 /// Higher wins: a passed copy beats a still-queued one.
@@ -1062,7 +1087,22 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
             } else {
                 display
             };
-            let (state, conclusion) = map_policy_status(&js(e, "status"));
+            let (mut state, mut conclusion) = map_policy_status(&js(e, "status"));
+            // Build-validation policies: the policy `status` can sit at "queued"
+            // even after the build has finished and *failed* (Azure shows "1
+            // required check failed" while the policy re-evaluation is still
+            // queued). The build result is authoritative, so resolve it when a
+            // `buildId` is present and override the policy status.
+            if let Some(bid) = e
+                .get("context")
+                .and_then(|c| c.get("buildId"))
+                .and_then(|b| b.as_i64())
+            {
+                if let Some((s, c)) = azure_build_outcome(&r.org, project_id, bid) {
+                    state = s;
+                    conclusion = c;
+                }
+            }
             Some(CICheck {
                 name,
                 state: state.to_string(),

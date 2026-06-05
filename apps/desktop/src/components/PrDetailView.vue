@@ -77,6 +77,10 @@ const checksUrl = computed(() => {
 
 /** CI tab tint: red on failure, green when all pass, yellow while pending. */
 const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
+  // A merge conflict blocks the PR just like a failing check — flag it red even
+  // when CI itself is green/empty.
+  const mergeable = (p.prDetail.value?.mergeable || "").toUpperCase();
+  if (["CONFLICTING", "CONFLICTS", "DIRTY"].includes(mergeable)) return "fail";
   const s = (p.prDetail.value?.checksStatus || "").toUpperCase();
   if (!s) return null;
   if (["FAILURE", "FAIL", "ERROR"].includes(s)) return "fail";
@@ -333,7 +337,7 @@ function commentTimeAgo(dateStr: string): string {
             class="pdv-tab-emoji pdv-tab-emoji--sm"
             :title="p.prDetail.value.checksStatus"
           >{{ p.checksIcon(p.prDetail.value.checksStatus) }}</span>
-          <span v-if="p.prChecks.value.length" class="pdv-tab-count">{{ p.prChecks.value.length }}</span>
+          <span v-if="p.checksWithConflict.value.length" class="pdv-tab-count">{{ p.checksWithConflict.value.length }}</span>
         </button>
         <button
           :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'intelligence' }]"
@@ -607,9 +611,9 @@ function commentTimeAgo(dateStr: string): string {
 
         <!-- CI tab -->
         <div v-else-if="p.detailTab.value === 'checks'" class="pdv-body pdv-checks-body">
-          <div v-if="p.prChecks.value.length === 0" class="pdv-loading">{{ t('pr.detail.noChecks') }}</div>
+          <div v-if="p.checksWithConflict.value.length === 0" class="pdv-loading">{{ t('pr.detail.noChecks') }}</div>
           <div v-else class="pdv-checks">
-            <div v-for="c in p.prChecks.value" :key="c.name" class="pdv-check">
+            <div v-for="c in p.checksWithConflict.value" :key="c.name" class="pdv-check">
               <span class="pdv-check-icon">{{ p.checkIcon(c) }}</span>
               <span class="pdv-check-name">{{ c.name }}</span>
               <span class="pdv-check-state">{{ c.conclusion || c.state }}</span>

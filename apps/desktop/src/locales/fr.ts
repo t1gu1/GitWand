@@ -914,6 +914,7 @@ const fr: Locale = {
       ready: "Tous les checks sont au vert et la PR est approuvée.",
       waitingPrefix: "En attente : {0}.",
       reasonChecksFailing: "checks CI en échec",
+      reasonMergeConflict: "conflit détecté",
       reasonNoApproval: "aucune approbation",
       reasonChangesRequested: "modifications demandées",
     },

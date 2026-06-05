@@ -159,7 +159,10 @@ export function usePrPanel(cwd: Ref<string>) {
   const commentCount = computed(() => prComments.value.length);
 
   const mergeReadiness = computed<{ ready: boolean; reason: string } | null>(() => {
-    if (!prReviews.value.length && !prChecks.value.length) return null;
+    // A merge conflict blocks the PR on its own, even with no checks/reviews.
+    const mergeable = (prDetail.value?.mergeable || "").toUpperCase();
+    const hasConflict = ["CONFLICTING", "CONFLICTS", "DIRTY"].includes(mergeable);
+    if (!prReviews.value.length && !prChecks.value.length && !hasConflict) return null;
     // A check blocks merge only when it is genuinely failing or still pending.
     // Anything else (success, skipped, neutral, or a completed check with an
     // unrecognised/empty conclusion) is treated as fine — so a passing CI run is
@@ -179,10 +182,12 @@ export function usePrPanel(cwd: Ref<string>) {
     const checksOk = unmet.length === 0;
     const hasApproval = prReviews.value.some((r) => r.state === "APPROVED");
     const hasChangesRequested = prReviews.value.some((r) => r.state === "CHANGES_REQUESTED");
-    if (checksOk && hasApproval && !hasChangesRequested) {
+    if (checksOk && hasApproval && !hasChangesRequested && !hasConflict) {
       return { ready: true, reason: t("pr.ready.ready") };
     }
     const reasons: string[] = [];
+    // Merge conflict first — it's the hardest blocker.
+    if (hasConflict) reasons.push(t("pr.ready.reasonMergeConflict"));
     // Prefer the concrete policy/check names; fall back to the generic label.
     // De-duplicate identical names (Azure can report the same policy twice, e.g.
     // an inherited + branch-level "At least 1 reviewer must approve").
@@ -196,6 +201,24 @@ export function usePrPanel(cwd: Ref<string>) {
     // from `unmet` are still surfaced above.)
     if (reasons.length === 0) return null;
     return { ready: false, reason: t("pr.ready.waitingPrefix", reasons.join(", ")) };
+  });
+
+  /**
+   * v2.10 — Virtual 'Merge Conflict' check surfaced in the CI tab.
+   * If the PR's mergeable state is CONFLICTING, we unshift a hard failure
+   * into the checks list so the user sees exactly what's blocking.
+   */
+  const checksWithConflict = computed(() => {
+    const list = [...prChecks.value];
+    if (prDetail.value?.mergeable === "CONFLICTING") {
+      list.unshift({
+        name: "Merge Conflict",
+        state: "completed",
+        conclusion: "FAILURE",
+        detailsUrl: "",
+      } as CICheck);
+    }
+    return list;
   });
 
   const selectedDiff = computed<GitDiff | null>(() =>
@@ -839,7 +862,7 @@ export function usePrPanel(cwd: Ref<string>) {
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,
     forkInfo, newPrBaseRepo,
     mergingPr, mergeMethod,
-    selectedPr, prDetail, prChecks, prDiffFiles, prComments, prIssueComments, prReviews,
+    selectedPr, prDetail, prChecks, checksWithConflict, prDiffFiles, prComments, prIssueComments, prReviews,
     detailLoading, detailRefreshing, detailError, detailTab, selectedDiffFile, diffMode,
     draftReviewComments, showReviewModal, submittingReview,
     conflictPreview, conflictLoading, conflictError,
