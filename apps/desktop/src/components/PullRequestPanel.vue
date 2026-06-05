@@ -709,7 +709,15 @@ watch(() => props.cwd, () => {
                 >
                   ✍️ Review
                 </button>
-                <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ {{ forgeLabel }}</button>
+
+                <div class="pr-forge-group">
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ {{ forgeLabel }}</button>
+                  <div class="pr-links-mini">
+                    <button class="eco-btn eco-btn--xs" @click="openInBrowser(commitsUrl)" title="Commits">📦↗</button>
+                    <button class="eco-btn eco-btn--xs" @click="openInBrowser(filesUrl)" title="Fichiers">📄↗</button>
+                    <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(checksUrl)" title="CI">🔗↗</button>
+                  </div>
+                </div>
               </div>
 
               <!-- Info tab -->
@@ -760,12 +768,6 @@ watch(() => props.cwd, () => {
                 <div class="pr-section-label">Description</div>
                 <div v-if="prDetail.body" class="pr-body-text" v-html="safeHtml(renderBody(prDetail.body))" />
                 <div v-else class="pr-placeholder pr-placeholder--sm">Aucune description.</div>
-
-                <div class="pr-links">
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(commitsUrl)">📦 Commits</button>
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(filesUrl)">📄 Fichiers</button>
-                  <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(checksUrl)">🔗 CI</button>
-                </div>
               </div>
 
               <!-- Diff tab -->
@@ -1286,10 +1288,28 @@ watch(() => props.cwd, () => {
   font-size: 11px;
 }
 
-.pr-links {
+.pr-forge-group {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch;
+  margin-left: 8px;
+}
+
+.pr-links-mini {
+  display: flex;
+  gap: 2px;
+}
+
+.pr-links-mini .eco-btn {
+  flex: 1;
+  padding: 0;
+  height: 18px;
+  min-width: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Diff tab */

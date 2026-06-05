@@ -251,6 +251,33 @@ function commentTimeAgo(dateStr: string): string {
           <span v-if="p.prDetail.value.mergedAt" class="pdv-merged-ago">
             {{ t('pr.detail.mergedAgo', p.timeAgo(p.prDetail.value.mergedAt)) }}
           </span>
+
+          <div style="flex: 1"></div>
+
+          <div class="pdv-hero-links">
+            <button class="pdv-hero-link" @click="openInBrowser(commitsUrl)">
+              {{ t('pr.detail.linkCommits') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+            <button class="pdv-hero-link" @click="openInBrowser(filesUrl)">
+              {{ t('pr.detail.linkFiles') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+            <button
+              v-if="p.prDetail.value.checksStatus"
+              class="pdv-hero-link"
+              @click="openInBrowser(checksUrl)"
+            >
+              {{ t('pr.detail.linkCi') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -519,23 +546,6 @@ function commentTimeAgo(dateStr: string): string {
             </ul>
             <div ref="commentsEnd"></div>
           </section>
-
-          <!-- Secondary links -->
-          <div class="pdv-links">
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(commitsUrl)">
-              {{ t('pr.detail.linkCommits') }}
-            </button>
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(filesUrl)">
-              {{ t('pr.detail.linkFiles') }}
-            </button>
-            <button
-              v-if="p.prDetail.value.checksStatus"
-              class="pdv-btn pdv-btn--ghost pdv-btn--sm"
-              @click="openInBrowser(checksUrl)"
-            >
-              {{ t('pr.detail.linkCi') }}
-            </button>
-          </div>
         </div>
 
         <!-- Diff tab -->
@@ -1495,10 +1505,29 @@ function commentTimeAgo(dateStr: string): string {
   text-align: center;
 }
 
-.pdv-links {
+.pdv-hero-links {
   display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pdv-hero-link {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: 1px var(--space-2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pdv-hero-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .pdv-loading {
