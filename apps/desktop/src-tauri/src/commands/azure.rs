@@ -593,11 +593,15 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<
     }
     prs.truncate(limit.max(1) as usize);
 
-    // Azure PR objects carry no line stats. Refresh remote-tracking branches
-    // once (a single incremental network call), then compute +/- locally per
-    // PR. Branches that no longer exist (merged/closed) leave the stats at 0.
+    // Azure PR objects carry no line stats — compute +/- locally per PR. The
+    // remote-tracking branches are refreshed once on the first page only (a
+    // single incremental network call); paginated loads reuse those refs to
+    // avoid a `git fetch` on every scroll. Branches that no longer exist
+    // (merged/closed) leave the stats at 0.
     if !prs.is_empty() {
-        let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
+        if offset == 0 {
+            let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
+        }
         for pr in &mut prs {
             let (_, adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
             pr.additions = adds;

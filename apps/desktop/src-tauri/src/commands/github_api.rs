@@ -255,6 +255,16 @@ fn jlogins(v: &serde_json::Value, arr_key: &str, field: &str) -> Vec<String> {
 fn json_to_pr(pr: &serde_json::Value) -> PullRequest {
     let merged = pr.get("merged_at").map(|m| !m.is_null()).unwrap_or(false);
     let state = if merged { "merged".to_string() } else { js(pr, "state") };
+    let review_requested = jlogins(pr, "requested_reviewers", "login");
+    // REST has no review-decision field (that's GraphQL). Use the requested
+    // reviewers as a cheap proxy: GitHub removes a reviewer from this list once
+    // they approve, so a non-empty list ⇒ still waiting on review. Lets the PR
+    // sidebar flag the PR (yellow dot) without a per-PR roundtrip.
+    let review_decision = if !review_requested.is_empty() {
+        "REVIEW_REQUIRED".to_string()
+    } else {
+        String::new()
+    };
     PullRequest {
         number: ji(pr, "number"),
         title: js(pr, "title"),
@@ -270,8 +280,8 @@ fn json_to_pr(pr: &serde_json::Value) -> PullRequest {
         deletions: ji(pr, "deletions"),
         labels: jlogins(pr, "labels", "name"),
         assignees: jlogins(pr, "assignees", "login"),
-        review_requested: jlogins(pr, "requested_reviewers", "login"),
-        review_decision: String::new(),
+        review_requested,
+        review_decision,
         merge_state_status: js(pr, "mergeable_state").to_uppercase(),
         checks_rollup: String::new(),
         comment_count: ji(pr, "comments"),
@@ -405,7 +415,47 @@ pub(crate) fn rest_list_prs(
         prs.drain(..skip);
     }
     prs.truncate(page as usize);
+
+    // The list endpoint omits additions/deletions (only the per-PR detail has
+    // them). Fill +/- locally: refresh remote-tracking branches once on the
+    // first page (a single incremental fetch), then numstat per PR. Fork/deleted
+    // head branches not present in origin simply leave the stats at 0.
+    if !prs.is_empty() {
+        if off == 0 {
+            let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
+        }
+        for pr in &mut prs {
+            let (adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
+            pr.additions = adds;
+            pr.deletions = dels;
+        }
+    }
     Ok(prs)
+}
+
+/// `git diff --numstat origin/base...origin/head` → (additions, deletions).
+/// Returns zeros when the refs aren't available locally.
+fn diff_numstat(cwd: &str, head: &str, base: &str) -> (i64, i64) {
+    if head.is_empty() || base.is_empty() {
+        return (0, 0);
+    }
+    let range = format!("origin/{}...origin/{}", base, head);
+    let out = match hidden_cmd("git")
+        .args(["diff", "--numstat", &range])
+        .current_dir(cwd)
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return (0, 0),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let (mut adds, mut dels) = (0i64, 0i64);
+    for line in text.lines() {
+        let mut cols = line.split('\t');
+        adds += cols.next().unwrap_or("").parse::<i64>().unwrap_or(0);
+        dels += cols.next().unwrap_or("").parse::<i64>().unwrap_or(0);
+    }
+    (adds, dels)
 }
 
 /// Fetch a PR object, trying `origin` first and falling back to the upstream

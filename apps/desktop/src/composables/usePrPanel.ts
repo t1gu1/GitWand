@@ -148,12 +148,22 @@ export function usePrPanel(cwd: Ref<string>) {
 
   const mergeReadiness = computed<{ ready: boolean; reason: string } | null>(() => {
     if (!prReviews.value.length && !prChecks.value.length) return null;
-    const isOk = (c: CICheck) =>
-      ["SUCCESS", "SKIPPED", "NEUTRAL"].includes((c.conclusion || c.state || "").toUpperCase());
-    // Checks / branch policies that are failing or still pending — surfaced by
-    // name so forge-specific requirements (e.g. Azure "At least 1 reviewer must
-    // approve") read clearly in the banner instead of a generic "checks failing".
-    const unmet = prChecks.value.filter((c) => !isOk(c));
+    // A check blocks merge only when it is genuinely failing or still pending.
+    // Anything else (success, skipped, neutral, or a completed check with an
+    // unrecognised/empty conclusion) is treated as fine — so a passing CI run is
+    // never mislabelled as "waiting".
+    const FAILING = ["FAILURE", "FAILED", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "ERROR", "STARTUP_FAILURE"];
+    const PENDING = ["QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "EXPECTED"];
+    const isBlocking = (c: CICheck) => {
+      const concl = (c.conclusion || "").toUpperCase();
+      if (FAILING.includes(concl)) return true;
+      // Still running — no conclusion yet and a pending-looking state.
+      return !concl && PENDING.includes((c.state || "").toUpperCase());
+    };
+    // Failing / pending checks + branch policies — surfaced by name so
+    // forge-specific requirements (e.g. Azure "At least 1 reviewer must approve")
+    // read clearly in the banner instead of a generic "checks failing".
+    const unmet = prChecks.value.filter(isBlocking);
     const checksOk = unmet.length === 0;
     const hasApproval = prReviews.value.some((r) => r.state === "APPROVED");
     const hasChangesRequested = prReviews.value.some((r) => r.state === "CHANGES_REQUESTED");
