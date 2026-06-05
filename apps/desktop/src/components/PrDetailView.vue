@@ -219,6 +219,12 @@ function commentTimeAgo(dateStr: string): string {
             </span>
           </div>
           <div class="pdv-hero-actions">
+            <button class="pdv-btn" @click="openInBrowser(p.prDetail.value.url)" :title="p.forgeLabel.value">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+              <span>{{ p.forgeLabel.value }}</span>
+            </button>
             <button class="pdv-btn" @click="p.checkoutPr(p.selectedPr.value!)">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M3 8h10M8 3l5 5-5 5" />
@@ -250,12 +256,6 @@ function commentTimeAgo(dateStr: string): string {
                 <path d="M4 12a8 8 0 0 0 8-8" />
               </svg>
               <span>{{ t('pr.detail.merge') }}</span>
-            </button>
-            <button class="pdv-btn pdv-btn--ghost" @click="openInBrowser(p.prDetail.value.url)" :title="p.forgeLabel.value">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
-              </svg>
-              <span>{{ p.forgeLabel.value }}</span>
             </button>
           </div>
         </div>
