@@ -903,40 +903,98 @@ fn rest_pr_checks(cwd: &str, number: i64) -> Result<Vec<CICheck>, String> {
     if project_id.is_empty() {
         return Ok(Vec::new());
     }
-    // artifactId identifies the PR for the policy engine.
+    // artifactId identifies the PR for the policy engine. The evaluations
+    // endpoint is project-scoped (by GUID) and is still a *preview* API even on
+    // 7.1 — a plain `api-version=7.1` returns 400, so we pin the preview tag.
     let artifact = format!("vstfs:///CodeReview/CodeReviewId/{}/{}", project_id, number);
-    let url = with_api_version(&format!(
-        "https://dev.azure.com/{}/{}/_apis/policy/evaluations?artifactId={}",
+    let url = format!(
+        "https://dev.azure.com/{}/{}/_apis/policy/evaluations?artifactId={}&api-version=7.1-preview.1",
         urlenc(&r.org),
-        urlenc(&r.project),
+        urlenc(project_id),
         urlenc(&artifact),
-    ));
+    );
     // Policies may be disabled on the repo — treat any failure as "no checks".
     let v = match az_json("GET", &url, None) {
         Ok(v) => v,
         Err(_) => return Ok(Vec::new()),
     };
     let evals = v.get("value").and_then(|a| a.as_array()).cloned().unwrap_or_default();
-    let checks = evals
+    let checks: Vec<CICheck> = evals
         .iter()
-        .map(|e| {
-            let display = e
-                .get("configuration")
+        .filter_map(|e| {
+            let cfg = e.get("configuration");
+            let display = cfg
                 .and_then(|c| c.get("type"))
                 .and_then(|t| t.get("displayName"))
                 .and_then(|s| s.as_str())
                 .unwrap_or("Policy")
                 .to_string();
+            // Skip non-blocking housekeeping policies that always read as
+            // "pending" and add noise to the readiness banner (e.g. the merge
+            // strategy, which the user picks at merge time).
+            let dl = display.to_lowercase();
+            if dl.contains("merge strategy") || dl.contains("stratégie de fusion") {
+                return None;
+            }
+            // Spell out the reviewer requirement ("At least N reviewer(s) must
+            // approve") so the merge-readiness banner is self-explanatory.
+            let name = if display.to_lowercase().contains("reviewer") {
+                let n = cfg
+                    .and_then(|c| c.get("settings"))
+                    .and_then(|s| s.get("minimumApproverCount"))
+                    .and_then(|c| c.as_i64())
+                    .unwrap_or(0);
+                if n > 0 {
+                    format!("At least {} reviewer{} must approve", n, if n > 1 { "s" } else { "" })
+                } else {
+                    display
+                }
+            } else {
+                display
+            };
             let (state, conclusion) = map_policy_status(&js(e, "status"));
-            CICheck {
-                name: display,
+            Some(CICheck {
+                name,
                 state: state.to_string(),
                 conclusion: conclusion.to_string(),
                 details_url: String::new(),
-            }
+            })
         })
         .collect();
+
+    // Fallback: the preview policy API can be unavailable (permissions, tag).
+    // Still convey "waiting for reviewer" from the PR's own reviewer list — if
+    // reviewers are assigned and none has approved (vote >= 5), surface it.
+    if checks.is_empty() {
+        if let Some(c) = pending_reviewer_check(&pr) {
+            return Ok(vec![c]);
+        }
+    }
     Ok(checks)
+}
+
+/// Build a "waiting for reviewer approval" pending check from the PR's reviewer
+/// votes, used when branch-policy evaluations aren't available.
+fn pending_reviewer_check(pr: &serde_json::Value) -> Option<CICheck> {
+    let reviewers = pr.get("reviewers").and_then(|a| a.as_array())?;
+    if reviewers.is_empty() {
+        return None;
+    }
+    let any_approved = reviewers.iter().any(|r| ji(r, "vote") >= 5);
+    let any_rejected = reviewers.iter().any(|r| ji(r, "vote") <= -5);
+    if any_approved && !any_rejected {
+        return None; // requirement already satisfied
+    }
+    Some(CICheck {
+        name: if any_rejected {
+            "Changes requested by a reviewer".to_string()
+        } else {
+            "Waiting for reviewer approval".to_string()
+        },
+        state: "queued".to_string(),
+        conclusion: if any_rejected { "FAILURE" } else { "" }.to_string(),
+        details_url: String::new(),
+    })
 }
 
 // ─── Reviews (reviewer votes) ───────────────────────────────────────────────

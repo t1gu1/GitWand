@@ -148,19 +148,26 @@ export function usePrPanel(cwd: Ref<string>) {
 
   const mergeReadiness = computed<{ ready: boolean; reason: string } | null>(() => {
     if (!prReviews.value.length && !prChecks.value.length) return null;
-    const checksOk = prChecks.value.length === 0 ||
-      prChecks.value.every((c) => {
-        const s = (c.conclusion || c.state || "").toUpperCase();
-        return ["SUCCESS", "SKIPPED", "NEUTRAL"].includes(s);
-      });
+    const isOk = (c: CICheck) =>
+      ["SUCCESS", "SKIPPED", "NEUTRAL"].includes((c.conclusion || c.state || "").toUpperCase());
+    // Checks / branch policies that are failing or still pending — surfaced by
+    // name so forge-specific requirements (e.g. Azure "At least 1 reviewer must
+    // approve") read clearly in the banner instead of a generic "checks failing".
+    const unmet = prChecks.value.filter((c) => !isOk(c));
+    const checksOk = unmet.length === 0;
     const hasApproval = prReviews.value.some((r) => r.state === "APPROVED");
     const hasChangesRequested = prReviews.value.some((r) => r.state === "CHANGES_REQUESTED");
     if (checksOk && hasApproval && !hasChangesRequested) {
       return { ready: true, reason: t("pr.ready.ready") };
     }
     const reasons: string[] = [];
-    if (!checksOk) reasons.push(t("pr.ready.reasonChecksFailing"));
-    if (!hasApproval) reasons.push(t("pr.ready.reasonNoApproval"));
+    // Prefer the concrete policy/check names; fall back to the generic label.
+    const names = unmet.map((c) => c.name).filter(Boolean);
+    if (names.length) reasons.push(...names);
+    else if (!checksOk) reasons.push(t("pr.ready.reasonChecksFailing"));
+    // Only add the generic "no approval" reason when no policy already covers it.
+    const reviewerPolicyShown = names.some((n) => /review|approv/i.test(n));
+    if (!hasApproval && !reviewerPolicyShown) reasons.push(t("pr.ready.reasonNoApproval"));
     if (hasChangesRequested) reasons.push(t("pr.ready.reasonChangesRequested"));
     return { ready: false, reason: t("pr.ready.waitingPrefix", reasons.join(", ")) };
   });
