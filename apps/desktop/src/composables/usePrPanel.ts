@@ -6,7 +6,7 @@
  * PrListSidebar (inside RepoSidebar) and PrDetailView (in <main>)
  * share the same reactive state.
  */
-import { ref, computed, watch, type Ref } from "vue";
+import { ref, computed, watch, onUnmounted, type Ref } from "vue";
 import {
   gitFileCount,
   gitRemoteInfo,
@@ -495,8 +495,7 @@ export function usePrPanel(cwd: Ref<string>) {
     selectedPr.value = pr;
     resetDetail();
     // SWR: paint cached detail bundle instantly, revalidate in background.
-    const key = detailKey(cwd.value, pr.number);
-    const cached = cache.getDetail(key);
+    const cached = cache.getDetail(detailKey(cwd.value, pr.number));
     if (cached) {
       prDetail.value = cached.detail;
       prChecks.value = cached.checks;
@@ -507,6 +506,18 @@ export function usePrPanel(cwd: Ref<string>) {
     } else {
       detailLoading.value = true;
     }
+    await fetchDetailBundle(pr, { silentError: !!cached });
+  }
+
+  /**
+   * Fetch (or revalidate) the full detail bundle for `pr` and write it back to
+   * the cache. The caller sets `detailLoading` / `detailRefreshing` before
+   * awaiting; both are cleared here. `silentError` keeps the stale bundle on
+   * screen instead of surfacing an error (used for cache-hit + background
+   * revalidation, where there is already content to show).
+   */
+  async function fetchDetailBundle(pr: PullRequest, { silentError }: { silentError: boolean }) {
+    const key = detailKey(cwd.value, pr.number);
     detailError.value = null;
     try {
       const [detail, checks, comments, issueComments, reviews, fileCount] = await Promise.all([
@@ -536,11 +547,19 @@ export function usePrPanel(cwd: Ref<string>) {
       cache.setDetail(key, { detail, checks, comments, issueComments, reviews });
     } catch (err: any) {
       // Keep the cached bundle on screen if revalidation failed.
-      if (!cached) detailError.value = err.message;
+      if (!silentError) detailError.value = err.message;
     } finally {
       detailLoading.value = false;
       detailRefreshing.value = false;
     }
+  }
+
+  /** Re-fetch the currently open detail bundle in the background (poll-driven). */
+  async function revalidateOpenDetail() {
+    const pr = selectedPr.value;
+    if (!pr) return;
+    detailRefreshing.value = true;
+    await fetchDetailBundle(pr, { silentError: true });
   }
 
   /** Write the current detail refs back to the SWR cache (write-through after
@@ -863,6 +882,60 @@ export function usePrPanel(cwd: Ref<string>) {
     }
   }
 
+  // ─── Visibility-gated background revalidation (5 min) ──────────
+  // SWR is otherwise event-driven only (open list / select PR / actions). This
+  // refreshes the active view on a slow cadence so a long-open panel doesn't go
+  // stale. Perf discipline (apps/desktop/CLAUDE.md): the interval is cleared on
+  // `document.hidden` and restarted on return — never runs in the background.
+  const REVALIDATE_INTERVAL_MS = 5 * 60 * 1000;
+  let _pollTimer: ReturnType<typeof setInterval> | null = null;
+  let _lastPoll = 0;
+  let _visibilityHandler: (() => void) | null = null;
+
+  function pollTick() {
+    if (typeof document !== "undefined" && document.hidden) return;
+    if (!cwd.value) return;
+    _lastPoll = Date.now();
+    // Revalidate whichever view is active — the open detail, else the list.
+    if (selectedPr.value) void revalidateOpenDetail();
+    else void loadPrs();
+  }
+
+  function startPoll() {
+    if (_pollTimer) return;
+    _pollTimer = setInterval(pollTick, REVALIDATE_INTERVAL_MS);
+  }
+
+  function stopPoll() {
+    if (_pollTimer) {
+      clearInterval(_pollTimer);
+      _pollTimer = null;
+    }
+  }
+
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      stopPoll();
+    } else {
+      startPoll();
+      // Catch up immediately if a full interval elapsed while hidden, but don't
+      // refetch on every brief alt-tab.
+      if (Date.now() - _lastPoll >= REVALIDATE_INTERVAL_MS) pollTick();
+    }
+  }
+
+  if (typeof document !== "undefined") {
+    _visibilityHandler = handleVisibilityChange;
+    document.addEventListener("visibilitychange", _visibilityHandler);
+  }
+
+  onUnmounted(() => {
+    stopPoll();
+    if (typeof document !== "undefined" && _visibilityHandler) {
+      document.removeEventListener("visibilitychange", _visibilityHandler);
+    }
+  });
+
   async function init() {
     // Flip the mounted flag — see `panelMounted` declaration for rationale.
     // From now on, cwd changes will auto-reload the PR list because the
@@ -884,6 +957,9 @@ export function usePrPanel(cwd: Ref<string>) {
     loadCurrentUser();
     // Fork detection in background — only affects the create view.
     loadForkInfo();
+    // Start the 5-min visibility-gated revalidation loop (no-op if hidden).
+    _lastPoll = Date.now();
+    if (typeof document === "undefined" || !document.hidden) startPoll();
   }
 
   return {
