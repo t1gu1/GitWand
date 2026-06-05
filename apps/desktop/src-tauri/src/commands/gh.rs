@@ -486,25 +486,43 @@ pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequest
         .map_err(|e| format!("Failed to parse gh pr view output: {}", e))?;
 
     let mut detail = gh_pr_detail_raw_to_detail(raw);
-    detail.can_merge = gh_viewer_can_merge(&cwd);
+    detail.can_merge = gh_viewer_can_merge(&cwd, &detail.url);
     Ok(detail)
 }
 
-/// Resolve whether the current viewer can merge PRs in `cwd`'s repo via
-/// `gh repo view --json viewerPermission`. WRITE / MAINTAIN / ADMIN can merge.
-/// Returns `None` on any failure so the UI falls back to error-only gating.
-fn gh_viewer_can_merge(cwd: &str) -> Option<bool> {
+/// Resolve whether the current viewer can merge this PR. A PR merges into its
+/// **base** repository — which, for a fork, is the upstream repo and not the
+/// fork the working copy points at. So permission must be checked against the
+/// base repo (parsed from the PR url), not `cwd`'s origin: owning a fork grants
+/// ADMIN on the fork but no merge rights on upstream.
+///
+/// `push` access on the base repo means the viewer can merge. Returns `None` on
+/// any failure so the UI falls back to error-only gating.
+fn gh_viewer_can_merge(cwd: &str, pr_url: &str) -> Option<bool> {
+    let nwo = github_nwo_from_pr_url(pr_url)?;
     let output = hidden_cmd("gh")
-        .args(["repo", "view", "--json", "viewerPermission"])
+        .args(["api", &format!("repos/{}", nwo), "--jq", ".permissions.push"])
         .current_dir(cwd)
         .output()
         .ok()?;
     if !output.status.success() {
         return None;
     }
-    let v: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    let perm = v.get("viewerPermission")?.as_str()?.to_uppercase();
-    Some(matches!(perm.as_str(), "ADMIN" | "MAINTAIN" | "WRITE"))
+    match String::from_utf8_lossy(&output.stdout).trim() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+/// Extract `owner/repo` from a GitHub PR url such as
+/// `https://github.com/owner/repo/pull/123`.
+fn github_nwo_from_pr_url(url: &str) -> Option<String> {
+    let rest = url.split("github.com/").nth(1)?;
+    let mut parts = rest.split('/');
+    let owner = parts.next().filter(|s| !s.is_empty())?;
+    let repo = parts.next().filter(|s| !s.is_empty())?;
+    Some(format!("{}/{}", owner, repo))
 }
 
 /// Get the diff of a PR using `gh` CLI.

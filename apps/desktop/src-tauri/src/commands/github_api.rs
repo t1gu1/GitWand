@@ -322,14 +322,9 @@ fn json_to_detail(pr: &serde_json::Value) -> PullRequestDetail {
         reviewers: jlogins(pr, "requested_reviewers", "login"),
         mergeable,
         checks_status: String::new(),
-        // Authenticated REST repo sub-objects embed a `permissions` map;
-        // `push` access on the base repo means the viewer can merge.
-        can_merge: pr
-            .get("base")
-            .and_then(|b| b.get("repo"))
-            .and_then(|r| r.get("permissions"))
-            .and_then(|p| p.get("push"))
-            .and_then(|b| b.as_bool()),
+        // Filled in by rest_pr_detail via an explicit repo lookup — the pulls
+        // response does not embed `permissions` on the nested base repo.
+        can_merge: None,
     }
 }
 
@@ -575,7 +570,24 @@ pub(crate) fn rest_pr_detail(cwd: &str, number: i64, token: &str) -> Result<Pull
     // check-runs so the CI tab can colour itself (red / yellow / green).
     let sha = jnested(&v, "head", "sha");
     detail.checks_status = rest_rollup_for_sha(&repo, &sha, token);
+    // The nested `base.repo` in a pulls response omits the `permissions` block —
+    // only the top-level repo endpoint returns it. `repo` is the *base* repo
+    // (upstream for a fork), so this checks merge rights on the right side.
+    if let Some(cm) = rest_repo_can_push(&repo, token) {
+        detail.can_merge = Some(cm);
+    }
     Ok(detail)
+}
+
+/// Whether the authenticated user has push (= merge) access to `repo`
+/// (`owner/name`), via `GET /repos/{repo}`'s `permissions.push`. Returns `None`
+/// on any failure so the UI falls back to error-only gating.
+fn rest_repo_can_push(repo: &str, token: &str) -> Option<bool> {
+    let url = format!("{}/repos/{}", API_BASE, repo);
+    let v = api_json("GET", &url, token, None).ok()?;
+    v.get("permissions")
+        .and_then(|p| p.get("push"))
+        .and_then(|b| b.as_bool())
 }
 
 pub(crate) fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String, String> {
