@@ -57,6 +57,24 @@ const isOpenPr = computed(() => {
 /** Local UI state for the PR description's formatted / raw switch. */
 const descriptionTab = ref<"formatted" | "raw">("formatted");
 
+const commitsUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return `${base}?_a=commits`;
+  return `${base}/commits`;
+});
+
+const filesUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return `${base}?_a=files`;
+  return `${base}/files`;
+});
+
+const checksUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return base;
+  return `${base}/checks`;
+});
+
 /** Review + issue-level comments, sorted oldest-first for display under the description. */
 const sortedComments = computed(() =>
   [...p.prComments.value, ...p.prIssueComments.value].sort(
@@ -504,16 +522,16 @@ function commentTimeAgo(dateStr: string): string {
 
           <!-- Secondary links -->
           <div class="pdv-links">
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/commits')">
+            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(commitsUrl)">
               {{ t('pr.detail.linkCommits') }}
             </button>
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/files')">
+            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(filesUrl)">
               {{ t('pr.detail.linkFiles') }}
             </button>
             <button
               v-if="p.prDetail.value.checksStatus"
               class="pdv-btn pdv-btn--ghost pdv-btn--sm"
-              @click="openInBrowser(p.prDetail.value.url + '/checks')"
+              @click="openInBrowser(checksUrl)"
             >
               {{ t('pr.detail.linkCi') }}
             </button>

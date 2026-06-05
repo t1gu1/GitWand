@@ -484,13 +484,32 @@ function checkIcon(c: CICheck): string {
   return "❓";
 }
 
-function checksIcon(status: string): string {
+const checksIcon = (status: string) => {
   const s = status.toUpperCase();
   if (s === "SUCCESS" || s === "PASS") return "✅";
   if (["FAILURE","FAIL","ERROR"].includes(s)) return "❌";
   if (s === "PENDING") return "⏳";
   return "";
-}
+};
+
+const commitsUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return `${base}?_a=commits`;
+  return `${base}/commits`;
+});
+
+const filesUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return `${base}?_a=files`;
+  return `${base}/files`;
+});
+
+const checksUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return base;
+  return `${base}/checks`;
+});
+
 
 function renderBody(body: string): string {
   return body
@@ -743,9 +762,9 @@ watch(() => props.cwd, () => {
                 <div v-else class="pr-placeholder pr-placeholder--sm">Aucune description.</div>
 
                 <div class="pr-links">
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/commits')">📦 Commits</button>
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/files')">📄 Fichiers</button>
-                  <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/checks')">🔗 CI</button>
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(commitsUrl)">📦 Commits</button>
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(filesUrl)">📄 Fichiers</button>
+                  <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(checksUrl)">🔗 CI</button>
                 </div>
               </div>
 
