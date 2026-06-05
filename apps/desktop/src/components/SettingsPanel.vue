@@ -1865,7 +1865,7 @@ function savePresetForm() {
                     <div class="sp-connected-badge">
                       <span class="sp-connected-dot sp-connected-dot--neutral"></span>
                       <span>{{ t('settings.aiCliDetected', copilotCliInfo.version || 'copilot') }}</span>
-                      <button class="sp-disconnect-btn" @click="runCopilotCliDetect">{{ t('settings.aiCliRedetect')
+                      <button class="sp-disconnect-btn sp-disconnect-btn--neutral" @click="runCopilotCliDetect">{{ t('settings.aiCliRedetect')
                       }}</button>
                     </div>
                     <span class="sp-hint">{{ t('settings.aiCopilotCliDetectedHint') }}</span>
@@ -2737,6 +2737,15 @@ function savePresetForm() {
 
 .sp-disconnect-btn:hover {
   background: rgba(243, 139, 168, 0.15);
+}
+
+.sp-disconnect-btn--neutral {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+}
+
+.sp-disconnect-btn--neutral:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* .sp-tab-badge removed — replaced by .sp-nav-badge in sidebar */
