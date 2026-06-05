@@ -333,6 +333,7 @@ pub(crate) fn rest_list_prs(
     token: &str,
 ) -> Result<Vec<PullRequest>, String> {
     let (owner, repo) = owner_repo(cwd)?;
+    let origin = format!("{}/{}", owner, repo);
     let page = limit.max(1);
     let off = offset.max(0);
     // Naïve pagination identical to gh_list_prs: fetch offset+limit, then slice.
@@ -344,13 +345,53 @@ pub(crate) fn rest_list_prs(
         "all" => "all",
         _ => "open",
     };
-    let url = format!(
-        "{}/repos/{}/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
-        API_BASE, owner, repo, api_state, per_page
-    );
-    let v = api_json("GET", &url, token, None)?;
-    let arr = v.as_array().cloned().unwrap_or_default();
-    let mut prs: Vec<PullRequest> = arr
+
+    // PRs that live in origin.
+    let mut raw: Vec<serde_json::Value> = api_json(
+        "GET",
+        &format!(
+            "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
+            API_BASE, origin, api_state, per_page
+        ),
+        token,
+        None,
+    )?
+    .as_array()
+    .cloned()
+    .unwrap_or_default();
+
+    // When origin is a fork, also surface the PRs you opened on the upstream
+    // repo (head repo == your fork) — these never appear in origin's pulls.
+    if let Ok(fi) = rest_fork_info(cwd, token) {
+        if fi.is_fork && !fi.parent.is_empty() {
+            if let Ok(up) = api_json(
+                "GET",
+                &format!(
+                    "{}/repos/{}/pulls?state={}&per_page={}&page=1&sort=updated&direction=desc",
+                    API_BASE, fi.parent, api_state, per_page
+                ),
+                token,
+                None,
+            ) {
+                for pr in up.as_array().cloned().unwrap_or_default() {
+                    let head_repo = pr
+                        .get("head")
+                        .and_then(|h| h.get("repo"))
+                        .and_then(|r| r.get("full_name"))
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("");
+                    if head_repo.eq_ignore_ascii_case(&origin) {
+                        raw.push(pr);
+                    }
+                }
+            }
+        }
+    }
+
+    // Newest-first — updated_at is ISO-8601, so lexicographic compare works.
+    raw.sort_by(|a, b| js(b, "updated_at").cmp(&js(a, "updated_at")));
+
+    let mut prs: Vec<PullRequest> = raw
         .iter()
         .filter(|pr| {
             if state == "merged" {
@@ -367,6 +408,44 @@ pub(crate) fn rest_list_prs(
     }
     prs.truncate(page as usize);
     Ok(prs)
+}
+
+/// Fetch a PR object, trying `origin` first and falling back to the upstream
+/// parent (for fork → upstream PRs that don't live in origin). Returns the
+/// `owner/repo` the PR actually lives in alongside its JSON, so callers issue
+/// follow-up requests against the right repo.
+fn get_pr_json(cwd: &str, number: i64, token: &str) -> Result<(String, serde_json::Value), String> {
+    let (owner, repo) = owner_repo(cwd)?;
+    let origin = format!("{}/{}", owner, repo);
+    let (st, body) = curl_raw(
+        "GET",
+        &format!("{}/repos/{}/pulls/{}", API_BASE, origin, number),
+        Some(token),
+        None,
+        "application/vnd.github+json",
+    )?;
+    if st < 400 {
+        let v = serde_json::from_str(body.trim()).map_err(|e| format!("parse PR: {}", e))?;
+        return Ok((origin, v));
+    }
+    if st == 404 {
+        if let Ok(fi) = rest_fork_info(cwd, token) {
+            if fi.is_fork && !fi.parent.is_empty() {
+                let (st2, body2) = curl_raw(
+                    "GET",
+                    &format!("{}/repos/{}/pulls/{}", API_BASE, fi.parent, number),
+                    Some(token),
+                    None,
+                    "application/vnd.github+json",
+                )?;
+                if st2 < 400 {
+                    let v = serde_json::from_str(body2.trim()).map_err(|e| format!("parse PR: {}", e))?;
+                    return Ok((fi.parent, v));
+                }
+            }
+        }
+    }
+    Err(format!("GitHub API error ({}) fetching PR #{}", st, number))
 }
 
 pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, String> {
@@ -387,15 +466,15 @@ pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, 
 }
 
 pub(crate) fn rest_pr_detail(cwd: &str, number: i64, token: &str) -> Result<PullRequestDetail, String> {
-    let (owner, repo) = owner_repo(cwd)?;
-    let url = format!("{}/repos/{}/{}/pulls/{}", API_BASE, owner, repo, number);
-    let v = api_json("GET", &url, token, None)?;
+    let (_repo, v) = get_pr_json(cwd, number, token)?;
     Ok(json_to_detail(&v))
 }
 
 pub(crate) fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String, String> {
-    let (owner, repo) = owner_repo(cwd)?;
-    let url = format!("{}/repos/{}/{}/pulls/{}", API_BASE, owner, repo, number);
+    // Resolve which repo the PR lives in (origin or upstream parent), then fetch
+    // its diff from there.
+    let (repo, _pr) = get_pr_json(cwd, number, token)?;
+    let url = format!("{}/repos/{}/pulls/{}", API_BASE, repo, number);
     let (status, body) = curl_raw("GET", &url, Some(token), None, "application/vnd.github.v3.diff")?;
     if status >= 400 {
         return Err(format!("GitHub diff failed (HTTP {})", status));
@@ -404,19 +483,13 @@ pub(crate) fn rest_pr_diff(cwd: &str, number: i64, token: &str) -> Result<String
 }
 
 pub(crate) fn rest_pr_checks(cwd: &str, number: i64, token: &str) -> Result<Vec<CICheck>, String> {
-    let (owner, repo) = owner_repo(cwd)?;
-    // Resolve the PR head SHA, then list check-runs for that commit.
-    let pr = api_json(
-        "GET",
-        &format!("{}/repos/{}/{}/pulls/{}", API_BASE, owner, repo, number),
-        token,
-        None,
-    )?;
+    // Resolve repo + head SHA, then list check-runs for that commit.
+    let (repo, pr) = get_pr_json(cwd, number, token)?;
     let sha = jnested(&pr, "head", "sha");
     if sha.is_empty() {
         return Ok(Vec::new());
     }
-    let url = format!("{}/repos/{}/{}/commits/{}/check-runs", API_BASE, owner, repo, sha);
+    let url = format!("{}/repos/{}/commits/{}/check-runs", API_BASE, repo, sha);
     let v = match api_json("GET", &url, token, None) {
         Ok(v) => v,
         Err(_) => return Ok(Vec::new()), // no checks configured — not fatal
@@ -435,8 +508,8 @@ pub(crate) fn rest_pr_checks(cwd: &str, number: i64, token: &str) -> Result<Vec<
 }
 
 pub(crate) fn rest_pr_files(cwd: &str, number: i64, token: &str) -> Result<Vec<String>, String> {
-    let (owner, repo) = owner_repo(cwd)?;
-    let url = format!("{}/repos/{}/{}/pulls/{}/files?per_page=100", API_BASE, owner, repo, number);
+    let (repo, _pr) = get_pr_json(cwd, number, token)?;
+    let url = format!("{}/repos/{}/pulls/{}/files?per_page=100", API_BASE, repo, number);
     let v = api_json("GET", &url, token, None)?;
     let files = v
         .as_array()
@@ -534,42 +607,30 @@ pub(crate) fn rest_create_pr(
 }
 
 pub(crate) fn rest_merge_pr(cwd: &str, number: i64, method: &str, token: &str) -> Result<(), String> {
-    let (owner, repo) = owner_repo(cwd)?;
     let merge_method = match method {
         "squash" => "squash",
         "rebase" => "rebase",
         _ => "merge",
     };
-    // Capture the head branch first so we can delete it after a clean merge.
-    let pr = api_json(
-        "GET",
-        &format!("{}/repos/{}/{}/pulls/{}", API_BASE, owner, repo, number),
-        token,
-        None,
-    )?;
+    // Resolve the repo (origin or upstream) + head branch for cleanup.
+    let (repo, pr) = get_pr_json(cwd, number, token)?;
     let branch = jnested(&pr, "head", "ref");
 
     let payload = serde_json::json!({ "merge_method": merge_method });
-    let url = format!("{}/repos/{}/{}/pulls/{}/merge", API_BASE, owner, repo, number);
+    let url = format!("{}/repos/{}/pulls/{}/merge", API_BASE, repo, number);
     api_json("PUT", &url, token, Some(&payload.to_string()))?;
 
     // Best-effort branch deletion (mirrors `gh pr merge --delete-branch`).
     if !branch.is_empty() {
-        let ref_url = format!("{}/repos/{}/{}/git/refs/heads/{}", API_BASE, owner, repo, branch);
+        let ref_url = format!("{}/repos/{}/git/refs/heads/{}", API_BASE, repo, branch);
         let _ = api_json("DELETE", &ref_url, token, None);
     }
     Ok(())
 }
 
 pub(crate) fn rest_pr_ready(cwd: &str, number: i64, token: &str) -> Result<(), String> {
-    let (owner, repo) = owner_repo(cwd)?;
-    // Draft→ready is GraphQL-only; resolve the PR node_id first.
-    let pr = api_json(
-        "GET",
-        &format!("{}/repos/{}/{}/pulls/{}", API_BASE, owner, repo, number),
-        token,
-        None,
-    )?;
+    // Draft→ready is GraphQL-only; resolve the PR node_id first (origin or upstream).
+    let (_repo, pr) = get_pr_json(cwd, number, token)?;
     let node_id = js(&pr, "node_id");
     if node_id.is_empty() {
         return Err("Could not resolve PR node_id for ready conversion.".to_string());
