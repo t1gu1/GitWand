@@ -81,7 +81,8 @@ function stateInfo(state: string): { label: string; cls: StateCls } {
  */
 type PrStatus = "ok" | "waiting" | "fail";
 function prStatus(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string; checksRollup: string }): PrStatus {
-  if (pr.state.toUpperCase() !== "OPEN" || pr.draft) return "ok";
+  // Draft PRs still follow the colour code — a draft with failing CI is red.
+  if (pr.state.toUpperCase() !== "OPEN") return "ok";
   const ci = (pr.checksRollup || "").toUpperCase();
   const ms = (pr.mergeStateStatus || "").toUpperCase();
   // Red: a hard failure — CI is red, or the merge is blocked by conflicts.
