@@ -14,6 +14,7 @@
 import { computed, inject, nextTick, ref } from "vue";
 import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
 import { renderMarkdown } from "../composables/useSafeHtml";
+import { useAvatar } from "../composables/useAvatar";
 import { openExternalUrl } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
@@ -45,29 +46,8 @@ function onMarkdownClick(e: MouseEvent) {
   }
 }
 
-// Avatar disk — kept identical to the rest of the app (Dashboard, CommitGraph,
-// CommitLog): outline style (transparent fill, colored border + initials) with
-// a deterministic hue derived from the name.
-
-/** Author initials for the avatar disk. */
-function authorInitials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-/** Deterministic hue for an avatar from a string (same author → same color). */
-function authorHue(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarStyle(name: string) {
-  const color = `hsl(${authorHue(name)} 70% 55%)`;
-  return { borderColor: color, color, background: "transparent" };
-}
+// Avatar disks share the app-wide outline style — see composables/useAvatar.
+const { avatarStyle, avatarInitials: authorInitials } = useAvatar();
 
 const isOpenPr = computed(() => {
   const s = p.selectedPr.value?.state;

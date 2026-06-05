@@ -3,6 +3,7 @@ import { computed, ref, watch, inject, nextTick, onMounted, onUnmounted, type Re
 import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { useI18n } from "../composables/useI18n";
+import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useCommitSearch, filterCommitsLocal, type CommitMatch } from "../composables/useCommitSearch";
 import { LOG_FOCUS_SEARCH_KEY } from "../composables/branchPickerBridge";
@@ -595,30 +596,6 @@ function truncate(str: string, limit = 20) {
   return str.slice(0, limit - 1) + "…";
 }
 
-/** Deterministic hue for an avatar from a string (same author → same color). */
-function hueFor(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarStyle(key: string) {
-  const h = hueFor(key);
-  const color = `hsl(${h} 70% 55%)`;
-  return {
-    borderColor: color,
-    color: color,
-    background: "transparent",
-  };
-}
-
-function initials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
 function relativeDate(isoDate: string): string {
   const date = new Date(isoDate);
   const now = new Date();
@@ -637,24 +614,6 @@ function relativeDate(isoDate: string): string {
 
 function isCurrent(entry: GitLogEntry): boolean {
   return parseRefBadges(entry.refs).some(b => b.type === "head");
-}
-
-function authorInitials(author: string): string {
-  if (!author) return "?";
-  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
-  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-function authorColor(author: string): string {
-  if (!author) return "hsl(260 65% 55%)";
-  let h = 0;
-  for (let i = 0; i < author.length; i++) {
-    h = (h * 31 + author.charCodeAt(i)) >>> 0;
-  }
-  const hue = h % 360;
-  return `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`;
 }
 
 function abbrevAuthor(author: string): string {
@@ -749,8 +708,8 @@ function abbrevAuthor(author: string): string {
               tabindex="0"
               @keydown.enter="emit('selectCommit', c(vr.index).hashFull)"
             >
-              <div class="commit-avatar" :style="{ background: authorColor(c(vr.index).author) }">
-                {{ authorInitials(c(vr.index).author) }}
+              <div class="commit-avatar" :style="avatarStyle(c(vr.index).email || c(vr.index).author)">
+                {{ initials(c(vr.index).author) }}
               </div>
               <div class="commit-info">
                 <div class="commit-message">
@@ -1247,12 +1206,12 @@ function abbrevAuthor(author: string): string {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  border: 1.5px solid currentColor;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: var(--font-weight-bold);
-  color: var(--color-accent-text);
   flex-shrink: 0;
   margin-top: 2px;
 }

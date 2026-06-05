@@ -5,6 +5,7 @@ import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
 import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser, type GitDiff } from "../utils/backend";
 import PrListSidebar from "./PrListSidebar.vue";
 import { useI18n } from "../composables/useI18n";
+import { avatarStyle, avatarInitials } from "../composables/useAvatar";
 import { useCommitMessage } from "../composables/useCommitMessage";
 import { useAIProvider } from "../composables/useAIProvider";
 import { supportedLocales, localeLabels } from "../locales";
@@ -786,22 +787,6 @@ function onBranchCtxDelete() {
 /** Up to 3 most recent commits — shown as a mini-activity feed. */
 const recentActivity = computed(() => props.logEntries.slice(0, 3));
 
-function activityInitials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function activityAvatarStyle(key: string) {
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-  const hue = Math.abs(h) % 360;
-  return {
-    background: `linear-gradient(135deg, hsl(${hue} 70% 55%), hsl(${(hue + 40) % 360} 70% 45%))`,
-  };
-}
-
 function formatActivityDate(dateStr: string): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -1431,8 +1416,8 @@ function formatActivityDate(dateStr: string): string {
           @click="emit('changeView', 'history')"
           :title="c.message"
         >
-          <span class="activity-dot" :style="activityAvatarStyle(c.email || c.author)">
-            {{ activityInitials(c.author) }}
+          <span class="activity-dot" :style="avatarStyle(c.email || c.author)">
+            {{ avatarInitials(c.author) }}
           </span>
           <div class="activity-body">
             <div class="activity-msg">{{ c.message }}</div>
@@ -2611,13 +2596,12 @@ function formatActivityDate(dateStr: string): string {
   width: 32px;
   height: 32px;
   border-radius: 50%;
+  border: 1.5px solid currentColor;
   display: grid;
   place-items: center;
   font-size: 12px;
   font-weight: 700;
-  color: white;
   flex-shrink: 0;
-  box-shadow: var(--shadow-xs);
   letter-spacing: 0.02em;
 }
 

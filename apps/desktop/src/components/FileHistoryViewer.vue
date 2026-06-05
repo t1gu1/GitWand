@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import type { BlameLine, FileLogEntry, GitDiff } from "../utils/backend";
+import { avatarStyle, avatarInitials } from "../composables/useAvatar";
 import { getGitBlame, getGitFileLog, getGitFileLogPickaxe, getGitFileLogRange, getGitFileDiff, type BlameAlgorithm, type PickaxeMode } from "../utils/backend";
 import { loadSettings } from "../composables/useSettings";
 import { useI18n } from "../composables/useI18n";
@@ -198,13 +199,6 @@ const language = computed(() => detectLanguage(props.filePath));
 
 function hl(content: string): string {
   return highlightLine(content, language.value);
-}
-
-function avatarColor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
-  const hue = ((h % 360) + 360) % 360;
-  return `hsl(${hue}, 55%, 45%)`;
 }
 
 function formatDate(raw: string): string {
@@ -513,8 +507,8 @@ function shortHash(hash: string): string {
         }"
       >
         <div class="fhv-log-top">
-          <span class="fhv-log-avatar" :style="{ background: avatarColor(entry.author) }">
-            {{ entry.author.charAt(0).toUpperCase() }}
+          <span class="fhv-log-avatar" :style="avatarStyle(entry.author)">
+            {{ avatarInitials(entry.author) }}
           </span>
           <div class="fhv-log-info" @click="emit('select-commit', entry.hashFull)">
             <div class="fhv-log-message">{{ entry.message }}</div>
@@ -993,12 +987,12 @@ function shortHash(hash: string): string {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  border: 1.5px solid currentColor;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: var(--text-base);
   font-weight: var(--font-bold);
-  color: #fff;
   flex-shrink: 0;
 }
 

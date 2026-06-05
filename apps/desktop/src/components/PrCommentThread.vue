@@ -12,6 +12,7 @@ import type { PrReviewComment } from "../utils/backend";
 import { openExternalUrl } from "../utils/backend";
 import { safeHtml } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
+import { useAvatar } from "../composables/useAvatar";
 
 // Anchors in rendered comment markdown must open in the OS browser, not
 // navigate the Tauri webview away from the app.
@@ -125,25 +126,8 @@ function escHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Avatar disk — same outline style as the rest of the app (Dashboard,
-// CommitGraph, PrDetailView): transparent fill, colored border + initials.
-function authorHue(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarInitials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
-
-function avatarStyle(name: string) {
-  const color = `hsl(${authorHue(name)} 70% 55%)`;
-  return { borderColor: color, color, background: "transparent" };
-}
+// Avatar disks share the app-wide outline style — see composables/useAvatar.
+const { avatarStyle, avatarInitials } = useAvatar();
 
 function timeAgo(dateStr: string): string {
   try {

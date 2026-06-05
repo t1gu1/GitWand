@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { GitLogEntry, GitBranch } from "../utils/backend";
 import { computeDagLayout, parseRefs, type DagLayout, type DagNode } from "../utils/dagLayout";
 import { useI18n } from "../composables/useI18n";
+import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import { filterCommitsLocal } from "../composables/useCommitSearch";
 
 const { t } = useI18n();
@@ -651,30 +652,6 @@ function edgePath(e: { fromIndex: number; fromLane: number; toIndex: number; toL
 function truncate(str: string, limit = 20) {
   if (str.length <= limit) return str;
   return str.slice(0, limit - 1) + "…";
-}
-
-/** Deterministic hue for an avatar from a string (same author → same color). */
-function hueFor(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarStyle(key: string) {
-  const h = hueFor(key);
-  const color = `hsl(${h} 70% 55%)`;
-  return {
-    borderColor: color,
-    color: color,
-    background: "transparent",
-  };
-}
-
-function initials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function formatDate(raw: string): string {

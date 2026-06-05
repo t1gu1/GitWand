@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted, nextTick } from "vue";
 import type { GitDiff, GitLogEntry, DiffLine, FolderDiffNode } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
+import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import type { DiffMode } from "../utils/diffMode";
 import { detectLanguage, highlightLine } from "../utils/highlight";
 import { safeHtml } from "../composables/useSafeHtml";
@@ -73,25 +74,6 @@ function pairLines(lines: DiffLine[]): SbsPair[] {
 
 function fileName(path: string): string {
   return path.split("/").pop() ?? path;
-}
-
-function hueFor(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarStyle(key: string) {
-  const h = hueFor(key);
-  const color = `hsl(${h} 70% 55%)`;
-  return { borderColor: color, color, background: "transparent" };
-}
-
-function initials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function cleanBody(raw: string): string {
