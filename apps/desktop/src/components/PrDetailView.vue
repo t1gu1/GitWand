@@ -45,32 +45,29 @@ function onMarkdownClick(e: MouseEvent) {
   }
 }
 
+// Avatar disk — kept identical to the rest of the app (Dashboard, CommitGraph,
+// CommitLog): outline style (transparent fill, colored border + initials) with
+// a deterministic hue derived from the name.
+
 /** Author initials for the avatar disk. */
-function authorInitials(author: string): string {
-  if (!author) return "?";
-  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
-  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
+function authorInitials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Deterministic hue from the author name so the avatar keeps a stable color. */
-function authorHue(author: string): number {
-  if (!author) return 260;
+/** Deterministic hue for an avatar from a string (same author → same color). */
+function authorHue(s: string): number {
   let h = 0;
-  for (let i = 0; i < author.length; i++) {
-    h = (h * 31 + author.charCodeAt(i)) >>> 0;
-  }
-  return h % 360;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
 }
 
-const avatarStyle = computed(() => {
-  const author = p.prDetail.value?.author ?? "";
-  const hue = authorHue(author);
-  return {
-    background: `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`,
-  };
-});
+function avatarStyle(name: string) {
+  const color = `hsl(${authorHue(name)} 70% 55%)`;
+  return { borderColor: color, color, background: "transparent" };
+}
 
 const isOpenPr = computed(() => {
   const s = p.selectedPr.value?.state;
@@ -229,7 +226,7 @@ function commentTimeAgo(dateStr: string): string {
 
         <div class="pdv-hero-meta">
           <span class="pdv-author">
-            <span class="pdv-avatar" :style="avatarStyle" aria-hidden="true">{{ authorInitials(p.prDetail.value.author) }}</span>
+            <span class="pdv-avatar" :style="avatarStyle(p.prDetail.value.author)" aria-hidden="true">{{ authorInitials(p.prDetail.value.author) }}</span>
             <span class="pdv-author-name">{{ p.prDetail.value.author }}</span>
           </span>
           <span class="pdv-meta-sep" aria-hidden="true">·</span>
@@ -425,7 +422,7 @@ function commentTimeAgo(dateStr: string): string {
             <h2 class="pdv-section-label">{{ t('pr.detail.reviewers') }}</h2>
             <div class="pdv-chips">
               <span v-for="r in p.prDetail.value.reviewers" :key="r" class="pdv-chip pdv-chip--reviewer">
-                <span class="pdv-chip-avatar" :style="{ background: `hsl(${authorHue(r)} 65% 55%)` }" aria-hidden="true">
+                <span class="pdv-chip-avatar" :style="avatarStyle(r)" aria-hidden="true">
                   {{ authorInitials(r) }}
                 </span>
                 {{ r }}
@@ -489,7 +486,7 @@ function commentTimeAgo(dateStr: string): string {
             <ul class="pdv-comments">
               <li v-for="c in sortedComments" :key="`${c.path}#${c.id}`" class="pdv-comment">
                 <div class="pdv-comment-head">
-                  <span class="pdv-comment-avatar" :style="{ background: `hsl(${authorHue(c.author)} 65% 55%)` }" aria-hidden="true">
+                  <span class="pdv-comment-avatar" :style="avatarStyle(c.author)" aria-hidden="true">
                     {{ authorInitials(c.author) }}
                   </span>
                   <span class="pdv-comment-author">{{ c.author }}</span>
@@ -829,11 +826,11 @@ function commentTimeAgo(dateStr: string): string {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: #fff;
+  border: 1.5px solid currentColor;
   font-size: 9px;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
 .pdv-author-name {
@@ -1201,12 +1198,12 @@ function commentTimeAgo(dateStr: string): string {
   width: 22px;
   height: 22px;
   border-radius: 50%;
+  border: 1.5px solid currentColor;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 10px;
   font-weight: var(--font-weight-bold);
-  color: #fff;
   flex-shrink: 0;
 }
 
@@ -1286,10 +1283,10 @@ function commentTimeAgo(dateStr: string): string {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  color: #fff;
+  border: 1.5px solid currentColor;
   font-size: 8px;
   font-weight: var(--font-weight-bold);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 
 .pdv-chip--label {

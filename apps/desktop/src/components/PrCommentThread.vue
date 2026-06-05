@@ -125,6 +125,26 @@ function escHtml(s: string) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// Avatar disk — same outline style as the rest of the app (Dashboard,
+// CommitGraph, PrDetailView): transparent fill, colored border + initials.
+function authorHue(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h) % 360;
+}
+
+function avatarInitials(name: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function avatarStyle(name: string) {
+  const color = `hsl(${authorHue(name)} 70% 55%)`;
+  return { borderColor: color, color, background: "transparent" };
+}
+
 function timeAgo(dateStr: string): string {
   try {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -147,7 +167,7 @@ function timeAgo(dateStr: string): string {
     >
       <!-- Header -->
       <div class="pct-comment-header">
-        <div class="pct-avatar">{{ comment.author.slice(0, 1).toUpperCase() }}</div>
+        <div class="pct-avatar" :style="avatarStyle(comment.author)">{{ avatarInitials(comment.author) }}</div>
         <span class="pct-author">{{ comment.author }}</span>
         <span class="pct-time" :title="comment.created_at">{{ timeAgo(comment.created_at) }}</span>
         <div class="pct-actions" v-if="comment.author === currentUser || !currentUser">
@@ -241,9 +261,8 @@ function timeAgo(dateStr: string): string {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  font-size: 10px;
+  border: 1.5px solid currentColor;
+  font-size: 9px;
   font-weight: 700;
   display: flex;
   align-items: center;
