@@ -15,6 +15,7 @@
 
 use crate::git::*;
 use crate::types::*;
+use crate::commands::github_api;
 
 /// List pull requests using `gh` CLI.
 ///
@@ -45,6 +46,11 @@ pub(crate) fn gh_list_prs(
     limit: Option<i64>,
     offset: Option<i64>,
 ) -> Result<Vec<PullRequest>, String> {
+    // Settings-managed token present → tokenless REST path (no `gh` needed).
+    if let Some(tok) = github_api::settings_github_token() {
+        let st = if state.is_empty() { "open" } else { &state };
+        return github_api::rest_list_prs(&cwd, st, limit.unwrap_or(10), offset.unwrap_or(0), &tok);
+    }
     let st = if state.is_empty() { "open" } else { &state };
     // Naïve pagination: `gh pr list` has no native --offset, so we ask for
     // `offset + limit` and slice. Works correctly for the small windows the
@@ -101,6 +107,9 @@ pub(crate) fn gh_list_prs(
 /// dashboard can still render — the caller decides whether to surface.
 #[tauri::command]
 pub(crate) fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_count(&cwd, &state, &tok);
+    }
     let st = state.to_lowercase();
     let states_expr = match st.as_str() {
         "closed" => "[CLOSED]",
@@ -191,6 +200,9 @@ pub(crate) fn gh_create_pr(
     draft: bool,
     reviewers: Option<Vec<String>>,
 ) -> Result<PullRequest, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_create_pr(&cwd, title, body, base, draft, reviewers, &tok);
+    }
     let mut args = vec![
         "pr".to_string(),
         "create".to_string(),
@@ -368,6 +380,9 @@ pub(crate) fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCan
 /// Checkout a PR branch locally using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
+    if github_api::settings_github_token().is_some() {
+        return github_api::rest_checkout_pr(&cwd, number);
+    }
     let output = hidden_cmd("gh")
         .args(["pr", "checkout", &number.to_string()])
         .current_dir(&cwd)
@@ -385,6 +400,9 @@ pub(crate) fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
 /// Merge a PR using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<(), String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_merge_pr(&cwd, number, &method, &tok);
+    }
     let merge_flag = match method.as_str() {
         "squash" => "--squash",
         "rebase" => "--rebase",
@@ -411,6 +429,9 @@ pub(crate) fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<()
 /// "Pull request #N is already marked as ready for review."
 #[tauri::command]
 pub(crate) fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_ready(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args(["pr", "ready", &number.to_string()])
         .current_dir(&cwd)
@@ -428,6 +449,9 @@ pub(crate) fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
 /// Get detailed PR information using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_detail(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args([
             "pr", "view", &number.to_string(),
@@ -451,6 +475,9 @@ pub(crate) fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail
 /// Get the diff of a PR using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_diff(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args(["pr", "diff", &number.to_string()])
         .current_dir(&cwd)
@@ -467,6 +494,9 @@ pub(crate) fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
 /// Get CI checks for a PR using `gh` CLI.
 #[tauri::command]
 pub(crate) fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_checks(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args([
             "pr", "checks", &number.to_string(),

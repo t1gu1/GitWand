@@ -1169,6 +1169,13 @@ const ptBR: Locale = {
     accountsSaveBtn: "Salvar",
     accountsCancelBtn: "Cancelar",
     accountsSaved: "Conta salva.",
+    accountsGithubSignIn: "Entrar com o GitHub",
+    accountsGithubHint: "Abre o GitHub no navegador para autorizar o GitWand. Não requer a CLI gh.",
+    accountsGithubEnterCode: "Copie este código, depois abra o GitHub e digite-o:",
+    accountsGithubOpen: "Abrir o GitHub",
+    accountsGithubDevMock: "Mock de dev — isto não faz login de verdade. Execute o app completo para o login real do GitHub.",
+    accountsGithubWaiting: "Aguardando autorização…",
+    accountsGithubConnected: "Conectado como",
     accountsDeleteConfirm: "Remover esta conta?",
     // v2.12
     git: {

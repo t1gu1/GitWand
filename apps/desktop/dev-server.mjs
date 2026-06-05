@@ -152,6 +152,12 @@ function gitSpawn(args, cwd) {
   });
 }
 
+// ── Mock state: GitHub OAuth device flow (dev:web only) ──────────────────────
+// The real flow lives in Rust (`github_api.rs`). In the browser mock we fake it
+// so the Settings > Accounts UI can be exercised without Tauri. It does NOT log
+// you in — it just returns a static code then "succeeds" after a couple polls.
+let _mockGithubPolls = 0;
+
 /**
  * Get a GitHub OAuth token — tries in order:
  *  1. GH_TOKEN / GITHUB_TOKEN env vars
@@ -2178,6 +2184,39 @@ async function handleRequest(req, res) {
     }
 
     // ─── GitHub REST API endpoints (no gh binary needed) ──────
+
+    // POST /api/github-device-start — MOCK device flow (dev:web only).
+    // Returns a static user code + verification URL. The frontend opens the URL
+    // and starts polling; see /api/github-device-poll below.
+    if (url.pathname === "/api/github-device-start" && req.method === "POST") {
+      _mockGithubPolls = 0;
+      // NOTE: verification_uri intentionally does NOT point at the real
+      // github.com/login/device — this is a fake flow and a real code is never
+      // issued. Sending the user to GitHub with a bogus code only confuses.
+      return jsonResponse(req, res, {
+        device_code: "mock-device-code",
+        user_code: "DEV-MOCK",
+        verification_uri: "about:blank#gitwand-dev-mock",
+        verification_uri_complete: "",
+        expires_in: 900,
+        interval: 1,
+      });
+    }
+
+    // POST /api/github-device-poll — MOCK: "pending" twice, then "success".
+    // No real token is stored; this only unblocks UI iteration in dev:web.
+    if (url.pathname === "/api/github-device-poll" && req.method === "POST") {
+      _mockGithubPolls += 1;
+      if (_mockGithubPolls < 3) {
+        return jsonResponse(req, res, { status: "pending", login: "", error: "" });
+      }
+      return jsonResponse(req, res, { status: "success", login: "dev-user", error: "" });
+    }
+
+    // POST /api/github-token-present — MOCK: never "logged in" in dev:web.
+    if (url.pathname === "/api/github-token-present" && req.method === "POST") {
+      return jsonResponse(req, res, false);
+    }
 
     // GET /api/gh-current-user — returns the authenticated GitHub login
     if (url.pathname === "/api/gh-current-user" && req.method === "GET") {

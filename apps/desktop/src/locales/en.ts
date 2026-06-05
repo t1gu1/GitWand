@@ -1200,6 +1200,13 @@ const en = {
     accountsSaveBtn: "Save",
     accountsCancelBtn: "Cancel",
     accountsSaved: "Account saved.",
+    accountsGithubSignIn: "Sign in with GitHub",
+    accountsGithubHint: "Opens GitHub in your browser to authorize GitWand. No gh CLI required.",
+    accountsGithubEnterCode: "Copy this code, then open GitHub and enter it:",
+    accountsGithubOpen: "Open GitHub",
+    accountsGithubDevMock: "Dev mock — this does not really sign in. Run the full app for real GitHub login.",
+    accountsGithubWaiting: "Waiting for authorization…",
+    accountsGithubConnected: "Connected as",
     accountsDeleteConfirm: "Remove this account?",
     // v2.12 Git tab — branch + identity + templates
     git: {

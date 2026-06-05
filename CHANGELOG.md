@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **GitHub Copilot CLI as an AI provider** — `copilot-cli` joins `claude-code-cli`, `codex-cli`, and `opencode-cli` in the `AIProvider` union. It piggybacks on the user's locally-installed `copilot` binary and their GitHub Copilot subscription — no API key required. Detection mirrors the existing CLI providers (binary discovery across PATH + common install locations) and it appears in Settings → AI with the same status/re-detect pattern. Prompts run one-shot via `copilot -p` (model selectable via the per-provider model picker, free-text since Copilot has no enumeration command). Tool permissions are deliberately restricted (`--deny-tool=shell`, `--deny-tool=write`, `--no-ask-user`, and `COPILOT_ALLOW_ALL` stripped from the child env) so Copilot only produces text and cannot edit files, run shell commands, or block on interactive prompts.
+- **Sign in with GitHub (no `gh` CLI required)** — Settings → Accounts now offers a "Sign in with GitHub" button using the OAuth device flow. The resulting token is stored in the OS keychain; once present, the GitHub PR workflow (list, count, detail, diff, checks, files, create, merge, checkout, mark-ready) routes through the GitHub REST API instead of shelling out to `gh`. The `gh` CLI still works as before when no Settings token is configured — the ambient `GH_TOKEN`/`GITHUB_TOKEN` env path is unchanged.
 
 ### Technical
 
@@ -18,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - i18n: `aiProviderCopilotCli`, `aiProviderCopilotCliNotFound`, `aiCopilotCliDetectedHint`, `aiCopilotCliInfoBox` across all five locales (en, fr, es, pt-BR, zh-CN).
 - Unit tests extended in `useAIProvider-opencode.test.ts` for the Copilot dispatch and model fallback.
 
+### Notes
+
+- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23licwiCpPiRPRodWN`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
 
 ## [2.17.0] - 2026-06-04
 

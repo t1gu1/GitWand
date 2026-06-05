@@ -476,6 +476,33 @@ pub struct PullRequestDetail {
     pub checks_status: String,
 }
 
+// ─── GitHub OAuth device flow ──────────────────────────────────────
+
+/// Returned by `github_device_start` — the user-facing code + the
+/// `device_code` the frontend polls with.
+#[derive(Serialize)]
+pub struct GithubDeviceCode {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    /// `verification_uri` with the user code pre-filled — opening this skips the
+    /// manual code-entry step. Empty if GitHub omits it.
+    pub verification_uri_complete: String,
+    pub expires_in: i64,
+    /// Minimum seconds between polls (GitHub-mandated, floored at 5).
+    pub interval: i64,
+}
+
+/// Returned by `github_device_poll`. `status` ∈
+/// `"pending" | "slow_down" | "success" | "error"`. The token itself is never
+/// returned — it is stored directly in the OS keychain on success.
+#[derive(Serialize)]
+pub struct GithubDevicePoll {
+    pub status: String,
+    pub login: String,
+    pub error: String,
+}
+
 // ─── CI Check ──────────────────────────────────────────────────────
 
 #[derive(Serialize)]

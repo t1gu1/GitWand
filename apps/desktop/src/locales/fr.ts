@@ -1180,6 +1180,13 @@ const fr: Locale = {
     accountsSaveBtn: "Enregistrer",
     accountsCancelBtn: "Annuler",
     accountsSaved: "Compte enregistré.",
+    accountsGithubSignIn: "Se connecter avec GitHub",
+    accountsGithubHint: "Ouvre GitHub dans votre navigateur pour autoriser GitWand. Aucun CLI gh requis.",
+    accountsGithubEnterCode: "Copiez ce code, puis ouvrez GitHub et saisissez-le :",
+    accountsGithubOpen: "Ouvrir GitHub",
+    accountsGithubDevMock: "Mock de dev — ceci ne connecte pas réellement. Lancez l'app complète pour une vraie connexion GitHub.",
+    accountsGithubWaiting: "En attente d'autorisation…",
+    accountsGithubConnected: "Connecté en tant que",
     accountsDeleteConfirm: "Supprimer ce compte ?",
     // v2.12 Onglet Git
     git: {
