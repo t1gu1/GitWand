@@ -766,6 +766,80 @@ pub(crate) async fn bb_delete_comment(
     Ok(())
 }
 
+/// List PR reviews derived from the participants array.
+///
+/// Returns each participant who has approved or requested changes, shaped to match
+/// the frontend `PrReview` interface. Participants with no recorded action are omitted.
+#[tauri::command]
+pub(crate) async fn bb_list_reviews(
+    cwd: String,
+    pr_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let (workspace, slug) = parse_workspace_slug(&cwd)?;
+    let (username, app_password) = get_bb_creds(&cwd)?;
+    let auth = basic_auth_header(&username, &app_password);
+
+    let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
+    let resp = bb_curl("GET", &url, None, &auth)?;
+
+    let participants = resp
+        .get("participants")
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let reviews: Vec<serde_json::Value> = participants
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, p)| {
+            let approved = p.get("approved").and_then(|b| b.as_bool()).unwrap_or(false);
+            let state_raw = p
+                .get("state")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            let review_state = if approved || state_raw == "approved" {
+                "APPROVED"
+            } else if state_raw == "changes_requested" {
+                "CHANGES_REQUESTED"
+            } else {
+                return None; // participant hasn't acted yet
+            };
+
+            let user = p.get("user").cloned().unwrap_or(serde_json::Value::Null);
+            let login = user
+                .get("nickname")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let avatar_url = user
+                .get("links")
+                .and_then(|l| l.get("avatar"))
+                .and_then(|a| a.get("href"))
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let submitted_at = p
+                .get("participated_on")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            Some(serde_json::json!({
+                "id": idx as i64,
+                "state": review_state,
+                "body": "",
+                "user": { "login": login, "avatar_url": avatar_url },
+                "submitted_at": submitted_at,
+                "html_url": ""
+            }))
+        })
+        .collect();
+
+    Ok(reviews)
+}
+
 /// Approve a PR (current user).
 #[tauri::command]
 pub(crate) async fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {

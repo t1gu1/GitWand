@@ -452,6 +452,7 @@ pub fn run() {
             commands::bitbucket::bb_create_comment,
             commands::bitbucket::bb_update_comment,
             commands::bitbucket::bb_delete_comment,
+            commands::bitbucket::bb_list_reviews,
             commands::bitbucket::bb_approve_pr,
             commands::bitbucket::bb_pr_files,
             commands::bitbucket::bb_current_user,
