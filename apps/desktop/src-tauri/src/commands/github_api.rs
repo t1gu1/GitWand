@@ -484,7 +484,7 @@ fn rollup_from_check_runs(runs: &[serde_json::Value]) -> String {
 
 /// `git diff --numstat origin/base...origin/head` → (additions, deletions).
 /// Returns zeros when the refs aren't available locally.
-fn diff_numstat(cwd: &str, head: &str, base: &str) -> (i64, i64) {
+pub(crate) fn diff_numstat(cwd: &str, head: &str, base: &str) -> (i64, i64) {
     if head.is_empty() || base.is_empty() {
         return (0, 0);
     }

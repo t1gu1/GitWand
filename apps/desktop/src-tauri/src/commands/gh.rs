@@ -62,14 +62,22 @@ pub(crate) async fn gh_list_prs(
     let off = offset.unwrap_or(0).max(0);
     let total = (page + off).to_string();
 
+    // For forks, `gh pr list` without --repo targets the fork itself (0 PRs).
+    // Resolve the upstream parent so the list matches the OAuth/REST path.
+    let target_repo = gh_fork_upstream(&cwd);
+
     // GH_TOKEN propagation is handled centrally by `hidden_cmd` (cf. git/cmd.rs).
-    let output = hidden_cmd("gh")
-        .args([
-            "pr", "list",
-            "--state", st,
-            "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
-            "--limit", &total,
-        ])
+    let mut cmd = hidden_cmd("gh");
+    cmd.args([
+        "pr", "list",
+        "--state", st,
+        "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
+        "--limit", &total,
+    ]);
+    if let Some(ref nwo) = target_repo {
+        cmd.args(["--repo", nwo]);
+    }
+    let output = cmd
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("Failed to run gh pr list (is GitHub CLI installed?): {}", e))?;
@@ -86,6 +94,18 @@ pub(crate) async fn gh_list_prs(
         let skip = (off as usize).min(prs.len());
         prs.drain(..skip);
     }
+
+    // Enrich +/- stats via local git diff — mirrors rest_list_prs behaviour.
+    // Fetch remote branches once so numstat can resolve origin/branch refs.
+    if !prs.is_empty() && off == 0 {
+        let _ = hidden_cmd("git").args(["fetch", "origin"]).current_dir(&cwd).output();
+    }
+    for pr in &mut prs {
+        let (adds, dels) = github_api::diff_numstat(&cwd, &pr.branch, &pr.base);
+        pr.additions = adds;
+        pr.deletions = dels;
+    }
+
     Ok(prs)
 }
 
@@ -468,11 +488,17 @@ pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequest
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_detail(&cwd, number, &tok);
     }
-    let output = hidden_cmd("gh")
-        .args([
-            "pr", "view", &number.to_string(),
-            "--json", "number,title,body,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,mergedAt,url,additions,deletions,changedFiles,comments,reviewRequests,labels,reviews,mergeable,statusCheckRollup",
-        ])
+    let upstream = gh_fork_upstream(&cwd);
+    let num = number.to_string();
+    let mut cmd = hidden_cmd("gh");
+    cmd.args([
+        "pr", "view", &num,
+        "--json", "number,title,body,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,mergedAt,url,additions,deletions,changedFiles,comments,reviewRequests,labels,reviews,mergeable,statusCheckRollup",
+    ]);
+    if let Some(ref nwo) = upstream {
+        cmd.args(["--repo", nwo]);
+    }
+    let output = cmd
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("gh pr view: {}", e))?;
@@ -488,6 +514,27 @@ pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequest
     let mut detail = gh_pr_detail_raw_to_detail(raw);
     detail.can_merge = gh_viewer_can_merge(&cwd, &detail.url);
     Ok(detail)
+}
+
+/// When `cwd` is a GitHub fork, returns the upstream parent `owner/repo` slug.
+/// Returns `None` for regular (non-fork) repos or on any failure — callers
+/// fall back to `gh`'s default repo inference, which is correct for non-forks.
+fn gh_fork_upstream(cwd: &str) -> Option<String> {
+    let out = hidden_cmd("gh")
+        .args(["repo", "view", "--json", "isFork,parent"])
+        .current_dir(cwd)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    if !v.get("isFork").and_then(|b| b.as_bool()).unwrap_or(false) {
+        return None;
+    }
+    v.get("parent").and_then(|p| {
+        let owner = p.get("owner").and_then(|o| o.get("login")).and_then(|s| s.as_str())?;
+        let name = p.get("name").and_then(|s| s.as_str())?;
+        Some(format!("{}/{}", owner, name))
+    })
 }
 
 /// Resolve whether the current viewer can merge this PR. A PR merges into its
@@ -531,8 +578,14 @@ pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, Strin
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_diff(&cwd, number, &tok);
     }
-    let output = hidden_cmd("gh")
-        .args(["pr", "diff", &number.to_string()])
+    let upstream = gh_fork_upstream(&cwd);
+    let num = number.to_string();
+    let mut cmd = hidden_cmd("gh");
+    cmd.args(["pr", "diff", &num]);
+    if let Some(ref nwo) = upstream {
+        cmd.args(["--repo", nwo]);
+    }
+    let output = cmd
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("gh pr diff: {}", e))?;
@@ -544,62 +597,63 @@ pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, Strin
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Get CI checks for a PR using `gh` CLI.
+/// Get CI checks for a PR using `gh api` (mirrors REST path and dev-server).
+///
+/// `gh pr checks --json` is unreliable across gh CLI versions and its field
+/// names differ from the GitHub REST API. Instead we call the check-runs
+/// REST endpoint via `gh api`, exactly like `rest_pr_checks` and the dev-server
+/// do, to guarantee consistent field names and output.
 #[tauri::command]
 pub(crate) async fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_checks(&cwd, number, &tok);
     }
-    let output = hidden_cmd("gh")
-        .args([
-            "pr", "checks", &number.to_string(),
-            "--json", "name,state,conclusion,detailsUrl",
-        ])
+    // Resolve the canonical repo NWO (upstream for forks, own for regular repos).
+    let nwo = gh_fork_upstream(&cwd)
+        .unwrap_or_else(|| "{owner}/{repo}".to_string());
+
+    // Step 1 — head commit SHA for this PR.
+    let pr_out = hidden_cmd("gh")
+        .args(["api", &format!("repos/{}/pulls/{}", nwo, number), "--jq", ".head.sha"])
         .current_dir(&cwd)
         .output()
-        .map_err(|e| format!("gh pr checks: {}", e))?;
-
-    if !output.status.success() {
-        // Some repos have no checks — not a fatal error
+        .map_err(|e| format!("gh api pr head sha: {}", e))?;
+    if !pr_out.status.success() {
+        return Ok(Vec::new()); // non-fatal: no checks surfaced
+    }
+    let sha = String::from_utf8_lossy(&pr_out.stdout)
+        .trim()
+        .trim_matches('"')
+        .to_string();
+    if sha.is_empty() || sha == "null" {
         return Ok(Vec::new());
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let trimmed = stdout.trim();
-    if trimmed == "[]" || trimmed.is_empty() {
+    // Step 2 — check-runs for that commit.
+    let runs_out = hidden_cmd("gh")
+        .args(["api", &format!("repos/{}/commits/{}/check-runs?per_page=100", nwo, sha)])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh api check-runs: {}", e))?;
+    if !runs_out.status.success() {
         return Ok(Vec::new());
     }
-
-    let mut checks = Vec::new();
-    let mut depth = 0;
-    let mut obj_start = None;
-    for (i, ch) in trimmed.char_indices() {
-        match ch {
-            '{' => {
-                if depth == 1 { obj_start = Some(i); }
-                depth += 1;
-            }
-            '}' => {
-                depth -= 1;
-                if depth == 1 {
-                    if let Some(start) = obj_start {
-                        let obj = &trimmed[start..=i];
-                        checks.push(CICheck {
-                            name: extract_json_string(obj, "name").unwrap_or_default(),
-                            state: extract_json_string(obj, "state").unwrap_or_default(),
-                            conclusion: extract_json_string(obj, "conclusion").unwrap_or_default(),
-                            details_url: extract_json_string(obj, "detailsUrl").unwrap_or_default(),
-                        });
-                    }
-                    obj_start = None;
-                }
-            }
-            '[' if depth == 0 => { depth = 1; }
-            ']' if depth == 1 => { depth = 0; }
-            _ => {}
+    let v: serde_json::Value = match serde_json::from_slice(&runs_out.stdout) {
+        Ok(v) => v,
+        Err(_) => return Ok(Vec::new()),
+    };
+    let runs = v.get("check_runs").and_then(|r| r.as_array()).cloned().unwrap_or_default();
+    let checks = runs.iter().map(|run| {
+        let js = |k: &str| run.get(k).and_then(|s| s.as_str()).unwrap_or("").to_string();
+        let status = js("status").to_uppercase();
+        let conclusion = js("conclusion");
+        CICheck {
+            name: js("name"),
+            state: if status == "COMPLETED" { conclusion.clone() } else { status },
+            conclusion,
+            details_url: js("html_url"),
         }
-    }
-
+    }).collect();
     Ok(checks)
 }
 
@@ -610,9 +664,11 @@ pub(crate) async fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_comments(&cwd, number, &tok);
     }
+    let nwo = gh_fork_upstream(&cwd)
+        .unwrap_or_else(|| "{owner}/{repo}".to_string());
     let json = gh_api_json(
         &cwd,
-        &format!("repos/{{owner}}/{{repo}}/pulls/{}/comments?per_page=100", number),
+        &format!("repos/{}/pulls/{}/comments?per_page=100", nwo, number),
     )?;
     Ok(github_api::map_comments(&json, false))
 }
@@ -624,9 +680,11 @@ pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_issue_comments(&cwd, number, &tok);
     }
+    let nwo = gh_fork_upstream(&cwd)
+        .unwrap_or_else(|| "{owner}/{repo}".to_string());
     let json = gh_api_json(
         &cwd,
-        &format!("repos/{{owner}}/{{repo}}/issues/{}/comments?per_page=100", number),
+        &format!("repos/{}/issues/{}/comments?per_page=100", nwo, number),
     )?;
     Ok(github_api::map_comments(&json, true))
 }
