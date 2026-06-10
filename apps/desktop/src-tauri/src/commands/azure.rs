@@ -1554,3 +1554,164 @@ pub(crate) async fn azure_device_poll(device_code: String) -> Result<GithubDevic
 pub(crate) async fn azure_token_present() -> Result<bool, String> {
     Ok(settings_azure_token().is_some())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn chk(conclusion: &str, state: &str) -> CICheck {
+        CICheck {
+            name: "n".to_string(),
+            state: state.to_string(),
+            conclusion: conclusion.to_string(),
+            details_url: String::new(),
+        }
+    }
+
+    fn parse(url: &str) -> (String, String, String) {
+        let r = parse_azure_remote(url).expect("should parse");
+        (r.org, r.project, r.repo)
+    }
+
+    #[test]
+    fn parse_azure_remote_https_dev_azure() {
+        assert_eq!(
+            parse("https://dev.azure.com/myorg/myproj/_git/myrepo"),
+            ("myorg".into(), "myproj".into(), "myrepo".into())
+        );
+    }
+
+    #[test]
+    fn parse_azure_remote_strips_userinfo_and_dot_git() {
+        assert_eq!(
+            parse("https://myorg@dev.azure.com/myorg/myproj/_git/myrepo.git"),
+            ("myorg".into(), "myproj".into(), "myrepo".into())
+        );
+    }
+
+    #[test]
+    fn parse_azure_remote_visualstudio_with_default_collection() {
+        assert_eq!(
+            parse("https://myorg.visualstudio.com/DefaultCollection/myproj/_git/myrepo"),
+            ("myorg".into(), "myproj".into(), "myrepo".into())
+        );
+        assert_eq!(
+            parse("https://myorg.visualstudio.com/myproj/_git/myrepo"),
+            ("myorg".into(), "myproj".into(), "myrepo".into())
+        );
+    }
+
+    #[test]
+    fn parse_azure_remote_ssh() {
+        assert_eq!(
+            parse("git@ssh.dev.azure.com:v3/myorg/myproj/myrepo"),
+            ("myorg".into(), "myproj".into(), "myrepo".into())
+        );
+    }
+
+    #[test]
+    fn parse_azure_remote_rejects_non_azure() {
+        assert!(parse_azure_remote("https://github.com/owner/repo.git").is_none());
+        assert!(parse_azure_remote("https://dev.azure.com/onlyorg").is_none());
+    }
+
+    #[test]
+    fn urlenc_encodes_spaces_and_reserved() {
+        assert_eq!(urlenc("My Org"), "My%20Org");
+        assert_eq!(urlenc("a/b?c"), "a%2Fb%3Fc");
+        assert_eq!(urlenc("safe-_.~AZ09"), "safe-_.~AZ09");
+    }
+
+    #[test]
+    fn with_api_version_picks_right_separator() {
+        assert_eq!(with_api_version("https://x/y"), "https://x/y?api-version=7.1");
+        assert_eq!(with_api_version("https://x/y?a=1"), "https://x/y?a=1&api-version=7.1");
+    }
+
+    #[test]
+    fn auth_failed_detects_401_203_and_html() {
+        assert!(auth_failed(401, "{}"));
+        assert!(auth_failed(203, "{}"));
+        assert!(auth_failed(200, "<!DOCTYPE html>..."));
+        assert!(auth_failed(200, "  <html>sign in</html>"));
+        assert!(!auth_failed(200, "{\"value\":[]}"));
+    }
+
+    #[test]
+    fn short_ref_strips_refs_heads() {
+        assert_eq!(short_ref("refs/heads/main"), "main");
+        assert_eq!(short_ref("feature/x"), "feature/x");
+    }
+
+    #[test]
+    fn map_status_maps_azure_states() {
+        assert_eq!(map_status("completed"), "merged");
+        assert_eq!(map_status("abandoned"), "closed");
+        assert_eq!(map_status("active"), "open");
+    }
+
+    #[test]
+    fn map_policy_status_broken_is_failure_not_pending() {
+        assert_eq!(map_policy_status("approved"), ("completed", "SUCCESS"));
+        assert_eq!(map_policy_status("rejected"), ("completed", "FAILURE"));
+        assert_eq!(map_policy_status("broken"), ("completed", "FAILURE"));
+        assert_eq!(map_policy_status("running"), ("in_progress", ""));
+        assert_eq!(map_policy_status("queued"), ("queued", ""));
+    }
+
+    #[test]
+    fn dedupe_checks_collapses_same_key_to_best_outcome() {
+        // Same policy reported twice (inherited + branch-level): one approved,
+        // one still queued → collapses to the approved copy.
+        let out = dedupe_checks(vec![
+            ("reviewers".to_string(), chk("", "queued")),
+            ("reviewers".to_string(), chk("SUCCESS", "completed")),
+        ]);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].conclusion, "SUCCESS");
+    }
+
+    #[test]
+    fn dedupe_checks_keeps_distinct_keys_and_order() {
+        let out = dedupe_checks(vec![
+            ("build:1".to_string(), chk("SUCCESS", "completed")),
+            ("build:2".to_string(), chk("FAILURE", "completed")),
+        ]);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].conclusion, "SUCCESS");
+        assert_eq!(out[1].conclusion, "FAILURE");
+    }
+
+    #[test]
+    fn rollup_from_checks_precedence() {
+        assert_eq!(rollup_from_checks(&[]), "");
+        assert_eq!(
+            rollup_from_checks(&[chk("SUCCESS", "completed"), chk("SKIPPED", "completed")]),
+            "SUCCESS"
+        );
+        assert_eq!(
+            rollup_from_checks(&[chk("SUCCESS", "completed"), chk("", "queued")]),
+            "PENDING"
+        );
+        assert_eq!(
+            rollup_from_checks(&[chk("SUCCESS", "completed"), chk("FAILURE", "completed")]),
+            "FAILURE"
+        );
+    }
+
+    #[test]
+    fn map_vote_maps_votes() {
+        assert_eq!(map_vote(10), Some("APPROVED"));
+        assert_eq!(map_vote(5), Some("APPROVED"));
+        assert_eq!(map_vote(-5), Some("CHANGES_REQUESTED"));
+        assert_eq!(map_vote(-10), Some("CHANGES_REQUESTED"));
+        assert_eq!(map_vote(0), None);
+    }
+
+    #[test]
+    fn form_config_emits_data_urlencode_lines() {
+        let cfg = form_config(&[("grant_type", "refresh_token"), ("client_id", "abc")]);
+        assert!(cfg.contains("data-urlencode = \"grant_type=refresh_token\""));
+        assert!(cfg.contains("data-urlencode = \"client_id=abc\""));
+    }
+}

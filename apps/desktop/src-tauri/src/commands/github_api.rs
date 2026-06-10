@@ -1019,3 +1019,100 @@ pub(crate) async fn github_device_poll(device_code: String) -> Result<GithubDevi
 pub(crate) async fn github_token_present() -> Result<bool, String> {
     Ok(settings_github_token().is_some())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn rollup_from_check_runs_failure_wins() {
+        let runs = vec![
+            json!({"status": "COMPLETED", "conclusion": "SUCCESS"}),
+            json!({"status": "COMPLETED", "conclusion": "FAILURE"}),
+            json!({"status": "COMPLETED", "conclusion": "SUCCESS"}),
+        ];
+        assert_eq!(rollup_from_check_runs(&runs), "FAILURE");
+    }
+
+    #[test]
+    fn rollup_from_check_runs_pending_when_incomplete() {
+        let runs = vec![
+            json!({"status": "COMPLETED", "conclusion": "SUCCESS"}),
+            json!({"status": "IN_PROGRESS", "conclusion": null}),
+        ];
+        assert_eq!(rollup_from_check_runs(&runs), "PENDING");
+    }
+
+    #[test]
+    fn rollup_from_check_runs_success_only_when_all_pass() {
+        let runs = vec![
+            json!({"status": "COMPLETED", "conclusion": "SUCCESS"}),
+            json!({"status": "COMPLETED", "conclusion": "SKIPPED"}),
+            json!({"status": "COMPLETED", "conclusion": "NEUTRAL"}),
+        ];
+        assert_eq!(rollup_from_check_runs(&runs), "SUCCESS");
+        assert_eq!(rollup_from_check_runs(&[]), "");
+    }
+
+    #[test]
+    fn rollup_treats_action_required_as_failure() {
+        let runs = vec![json!({"status": "COMPLETED", "conclusion": "ACTION_REQUIRED"})];
+        assert_eq!(rollup_from_check_runs(&runs), "FAILURE");
+    }
+
+    #[test]
+    fn json_to_pr_marks_merged_from_merged_at() {
+        let pr = json!({
+            "number": 42, "title": "t", "state": "closed",
+            "merged_at": "2026-01-01T00:00:00Z",
+            "user": {"login": "alice"},
+            "head": {"ref": "feat"}, "base": {"ref": "main"},
+        });
+        let out = json_to_pr(&pr);
+        assert_eq!(out.number, 42);
+        assert_eq!(out.state, "merged");
+        assert_eq!(out.author, "alice");
+        assert_eq!(out.branch, "feat");
+        assert_eq!(out.base, "main");
+    }
+
+    #[test]
+    fn json_to_pr_review_decision_proxy_from_requested_reviewers() {
+        // Non-empty requested_reviewers ⇒ still waiting on review.
+        let pending = json!({
+            "number": 1, "state": "open",
+            "requested_reviewers": [{"login": "bob"}],
+        });
+        assert_eq!(json_to_pr(&pending).review_decision, "REVIEW_REQUIRED");
+        assert_eq!(json_to_pr(&pending).review_requested, vec!["bob".to_string()]);
+
+        let cleared = json!({"number": 2, "state": "open", "requested_reviewers": []});
+        assert_eq!(json_to_pr(&cleared).review_decision, "");
+    }
+
+    #[test]
+    fn map_comment_nulls_path_and_line_for_issue_level() {
+        let c = json!({
+            "id": 7, "body": "hi", "user": {"login": "u"},
+            "path": "src/x.rs", "line": 10, "side": "LEFT",
+        });
+        let inline = map_comment(&c, false);
+        assert_eq!(inline["path"], json!("src/x.rs"));
+        assert_eq!(inline["line"], json!(10));
+        assert_eq!(inline["side"], json!("LEFT"));
+
+        let issue = map_comment(&c, true);
+        assert_eq!(issue["path"], json!(""));
+        assert_eq!(issue["line"], serde_json::Value::Null);
+        assert_eq!(issue["side"], json!("RIGHT"));
+    }
+
+    #[test]
+    fn bearer_config_keeps_token_in_header_directive() {
+        assert_eq!(
+            bearer_config("ghp_abc123"),
+            "header = \"Authorization: Bearer ghp_abc123\"\n"
+        );
+    }
+}
