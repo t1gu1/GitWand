@@ -430,18 +430,21 @@ pub(crate) fn rest_list_prs(
     prs.truncate(page as usize);
 
     // The list endpoint omits additions/deletions (only the per-PR detail has
-    // them). Fill +/- locally: refresh remote-tracking branches once on the
-    // first page (a single incremental fetch), then numstat per PR. Fork/deleted
-    // head branches not present in origin simply leave the stats at 0.
+    // them). Fetch +/- from the REST detail endpoint per PR, in parallel. GitHub
+    // computes the diff server-side, so this is correct for cross-fork PRs whose
+    // head branch lives in the contributor's fork — a local `git diff` against
+    // `origin/<branch>` would read 0/0 because that ref isn't present locally.
     if !prs.is_empty() {
-        if off == 0 {
-            let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
+        let stats: std::collections::HashMap<i64, (i64, i64)> = prs
+            .par_iter()
+            .filter_map(|pr| rest_pr_line_stats(&base, pr.number, token).map(|s| (pr.number, s)))
+            .collect();
+        for pr in &mut prs {
+            if let Some(&(adds, dels)) = stats.get(&pr.number) {
+                pr.additions = adds;
+                pr.deletions = dels;
+            }
         }
-        prs.par_iter_mut().for_each(|pr| {
-            let (adds, dels) = diff_numstat(cwd, &pr.branch, &pr.base);
-            pr.additions = adds;
-            pr.deletions = dels;
-        });
         // The REST list carries no CI status. Resolve each PR's head SHA from
         // the raw list payload, then aggregate its check-runs so the sidebar can
         // colour the dot (red = failing, yellow = pending, green = passing).
@@ -541,6 +544,16 @@ pub(crate) fn diff_numstat(cwd: &str, head: &str, base: &str) -> (i64, i64) {
         dels += cols.next().unwrap_or("").parse::<i64>().unwrap_or(0);
     }
     (adds, dels)
+}
+
+/// Fetch a PR's `(additions, deletions)` from the REST detail endpoint in
+/// `repo` ("owner/name"). GitHub computes these server-side, so this is correct
+/// for cross-fork PRs (unlike a local numstat, which can't see a fork's head
+/// branch). Best effort — returns `None` on any error so the row keeps 0/0.
+fn rest_pr_line_stats(repo: &str, number: i64, token: &str) -> Option<(i64, i64)> {
+    let url = format!("{}/repos/{}/pulls/{}", API_BASE, repo, number);
+    let v = api_json("GET", &url, token, None).ok()?;
+    Some((ji(&v, "additions"), ji(&v, "deletions")))
 }
 
 /// Fetch a PR object, trying `origin` first and falling back to the upstream
