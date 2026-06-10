@@ -1017,6 +1017,11 @@ const en = {
     aiProviderOpencodeCliNotFound: " — not detected",
     aiOpencodeCliDetectedHint: "Auth is managed by opencode (`opencode auth login`). Verified on first use.",
     aiOpencodeCliInfoBox: "GitWand runs `opencode run` locally. Authenticate your provider once with `opencode auth login`; pick a model below or keep the default.",
+    // GitHub Copilot CLI
+    aiProviderCopilotCli: "GitHub Copilot CLI (Copilot subscription)",
+    aiProviderCopilotCliNotFound: " — not detected",
+    aiCopilotCliDetectedHint: "Auth is managed by GitHub Copilot CLI. Verified on first use.",
+    aiCopilotCliInfoBox: "GitWand runs `copilot -p` locally. No API key required: it uses the GitHub Copilot authentication stored on your machine. Pick a model below or keep the default.",
     // Per-provider model picker for CLI agents (v2.17)
     aiModelCliDefault: "Default (CLI's own setting)",
     aiModelCliPlaceholder: "e.g. gpt-5-codex",

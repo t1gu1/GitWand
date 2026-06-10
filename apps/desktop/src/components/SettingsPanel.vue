@@ -20,6 +20,8 @@ import {
   type CodexCliInfo,
   detectOpencodeCli,
   type OpencodeCliInfo,
+  detectCopilotCli,
+  type CopilotCliInfo,
   readGitwandrc,
   writeGitwandrc,
   checkForUpdates,
@@ -415,6 +417,9 @@ function onAIProviderChange(val: AIProvider) {
   } else if (val === "opencode-cli") {
     runOpencodeCliDetect();
     loadCliModels(val);
+  } else if (val === "copilot-cli") {
+    runCopilotCliDetect();
+    loadCliModels(val);
   } else if (val === "claude") {
     if (!settings.value.aiApiEndpoint || settings.value.aiApiEndpoint === "https://api.openai.com/v1") {
       updateSetting("aiApiEndpoint", "https://api.anthropic.com");
@@ -581,6 +586,28 @@ async function runOpencodeCliDetect() {
   }
 }
 
+// ─── GitHub Copilot CLI detection ───────────────────────
+const copilotCliInfo = ref<CopilotCliInfo | null>(null);
+const copilotCliDetecting = ref(false);
+
+async function runCopilotCliDetect() {
+  copilotCliDetecting.value = true;
+  try {
+    copilotCliInfo.value = await detectCopilotCli();
+  } catch (e) {
+    copilotCliInfo.value = {
+      found: false,
+      path: "",
+      version: "",
+      logged_in: false,
+      status: "error",
+      detail: (e as Error).message,
+    };
+  } finally {
+    copilotCliDetecting.value = false;
+  }
+}
+
 // ─── Per-provider model picker for CLI agents (v2.17) ───
 const cliModelOptions = ref<string[]>([]);
 const cliModelsLoading = ref(false);
@@ -655,6 +682,7 @@ type LlmFallbackProvider =
   | "claude-code-cli"
   | "codex-cli"
   | "opencode-cli"
+  | "copilot-cli"
   | "openai-compat"
   | "ollama"
   | "mcp";
@@ -821,6 +849,7 @@ onMounted(() => {
   runClaudeCliDetect();
   runCodexCliDetect();
   runOpencodeCliDetect();
+  runCopilotCliDetect();
   // Preload the model list when a CLI agent is already the active provider.
   loadCliModels();
 });
@@ -1481,6 +1510,10 @@ function savePresetForm() {
                   {{ t('settings.aiProviderOpencodeCli') }}{{ opencodeCliInfo && !opencodeCliInfo.found ?
                     t('settings.aiProviderOpencodeCliNotFound') : '' }}
                 </option>
+                <option value="copilot-cli">
+                  {{ t('settings.aiProviderCopilotCli') }}{{ copilotCliInfo && !copilotCliInfo.found ?
+                    t('settings.aiProviderCopilotCliNotFound') : '' }}
+                </option>
                 <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                 <option value="ollama" :disabled="!ollamaAvailable">
                   {{ t('settings.aiProviderOllama') }}{{ ollamaAvailable ? '' : t('settings.aiProviderOllamaNotFound')
@@ -1805,6 +1838,51 @@ function savePresetForm() {
               </div>
             </template>
 
+            <!-- GitHub Copilot CLI provider — same shape as the opencode block -->
+            <template v-if="settings.aiProvider === 'copilot-cli'">
+              <div class="sp-row">
+                <div class="sp-label">{{ t('settings.aiCliStatus') }}</div>
+                <div class="sp-cli-status">
+                  <template v-if="copilotCliDetecting">
+                    <span class="sp-hint">{{ t('settings.aiCliDetecting') }}</span>
+                  </template>
+                  <template v-else-if="!copilotCliInfo || !copilotCliInfo.found">
+                    <div class="sp-connect-error-block">
+                      <div class="sp-connect-error">
+                        {{ t('settings.aiCliNotFound') }} <code>copilot</code> {{ t('settings.aiCliNotFoundSuffix') }}
+                      </div>
+                      <span class="sp-hint">
+                        {{ t('settings.aiCliInstallHint') }}
+                        <code>npm install -g @github/copilot</code>
+                        {{ t('settings.aiCliInstallHintSuffix') }}
+                      </span>
+                      <button class="sp-text-btn" @click="runCopilotCliDetect">{{ t('settings.aiCliRedetect') }}</button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <!-- Detected. Auth is managed by Copilot itself and
+                         verified implicitly on first use; we don't ping. -->
+                    <div class="sp-connected-badge">
+                      <span class="sp-connected-dot sp-connected-dot--neutral"></span>
+                      <span>{{ t('settings.aiCliDetected', copilotCliInfo.version || 'copilot') }}</span>
+                      <button class="sp-disconnect-btn sp-disconnect-btn--neutral" @click="runCopilotCliDetect">{{ t('settings.aiCliRedetect')
+                      }}</button>
+                    </div>
+                    <span class="sp-hint">{{ t('settings.aiCopilotCliDetectedHint') }}</span>
+                  </template>
+                </div>
+              </div>
+
+              <div v-if="copilotCliInfo?.found" class="sp-info-box">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+                  <circle cx="8" cy="8" r="7" />
+                  <path d="M8 7v4" stroke-linecap="round" />
+                  <circle cx="8" cy="5" r="0.7" fill="currentColor" stroke="none" />
+                </svg>
+                <p>{{ t('settings.aiCopilotCliInfoBox') }}</p>
+              </div>
+            </template>
+
             <!-- OpenAI-compatible provider -->
             <template v-if="settings.aiProvider === 'openai-compat'">
               <div class="sp-row">
@@ -2043,6 +2121,7 @@ function savePresetForm() {
                   <option value="claude-code-cli">{{ t('settings.aiProviderClaudeCli') }}</option>
                   <option value="codex-cli">{{ t('settings.aiProviderCodexCli') }}</option>
                   <option value="opencode-cli">{{ t('settings.aiProviderOpencodeCli') }}</option>
+                  <option value="copilot-cli">{{ t('settings.aiProviderCopilotCli') }}</option>
                   <option value="openai-compat">{{ t('settings.aiProviderOpenAiCompat') }}</option>
                   <option value="ollama">{{ t('settings.aiProviderOllama') }}</option>
                   <option value="mcp">MCP (Claude Code / Cursor)</option>
@@ -2658,6 +2737,15 @@ function savePresetForm() {
 
 .sp-disconnect-btn:hover {
   background: rgba(243, 139, 168, 0.15);
+}
+
+.sp-disconnect-btn--neutral {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+}
+
+.sp-disconnect-btn--neutral:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* .sp-tab-badge removed — replaced by .sp-nav-badge in sidebar */

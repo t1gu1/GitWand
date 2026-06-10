@@ -993,6 +993,11 @@ const es: Locale = {
     aiProviderOpencodeCliNotFound: " — no detectado",
     aiOpencodeCliDetectedHint: "opencode gestiona la autenticación (`opencode auth login`). Se verifica en el primer uso.",
     aiOpencodeCliInfoBox: "GitWand ejecuta `opencode run` localmente. Autentica tu proveedor una vez con `opencode auth login`; elige un modelo abajo o deja el predeterminado.",
+    // GitHub Copilot CLI
+    aiProviderCopilotCli: "GitHub Copilot CLI (suscripción Copilot)",
+    aiProviderCopilotCliNotFound: " — no detectado",
+    aiCopilotCliDetectedHint: "La autenticación la gestiona GitHub Copilot CLI. Se verifica en el primer uso.",
+    aiCopilotCliInfoBox: "GitWand ejecuta `copilot -p` localmente. No se requiere clave API: usa la autenticación de GitHub Copilot almacenada en tu equipo. Elige un modelo abajo o deja el predeterminado.",
     // Selector de modelo por proveedor para agentes CLI (v2.17)
     aiModelCliDefault: "Predeterminado (ajuste del CLI)",
     aiModelCliPlaceholder: "p. ej. gpt-5-codex",

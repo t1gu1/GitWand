@@ -26,12 +26,14 @@ const {
   claudeCliPrompt,
   codexCliPrompt,
   opencodeCliPrompt,
+  copilotCliPrompt,
   listOpencodeModels,
   detectClaudeCli,
 } = vi.hoisted(() => ({
   claudeCliPrompt: vi.fn(async () => "ok-claude"),
   codexCliPrompt: vi.fn(async () => "ok-codex"),
   opencodeCliPrompt: vi.fn(async () => "ok-opencode"),
+  copilotCliPrompt: vi.fn(async () => "ok-copilot"),
   listOpencodeModels: vi.fn(async () => ["anthropic/claude-x", "openai/gpt-y"]),
   // Keep the auto-fallback disabled so it never hijacks the explicit provider.
   detectClaudeCli: vi.fn(async () => ({
@@ -48,6 +50,7 @@ vi.mock("../utils/backend", () => ({
   claudeCliPrompt,
   codexCliPrompt,
   opencodeCliPrompt,
+  copilotCliPrompt,
   listOpencodeModels,
   detectClaudeCli,
 }));
@@ -109,6 +112,10 @@ describe("listModelsForProvider", () => {
     expect(await listModelsForProvider("codex-cli")).toEqual([]);
   });
 
+  it("returns an empty list (free-text fallback) for Copilot", async () => {
+    expect(await listModelsForProvider("copilot-cli")).toEqual([]);
+  });
+
   it("enumerates opencode models dynamically", async () => {
     const models = await listModelsForProvider("opencode-cli");
     expect(models).toEqual(["anthropic/claude-x", "openai/gpt-y"]);
@@ -144,6 +151,16 @@ describe("rawPrompt provider dispatch", () => {
     });
     await useAIProvider().rawPrompt("sys", "user");
     expect(claudeCliPrompt).toHaveBeenCalledWith("user", "sys", undefined, "text", "opus");
+  });
+
+  it("routes copilot-cli to copilotCliPrompt with the selected model", async () => {
+    setSettings({
+      aiProvider: "copilot-cli",
+      aiModelByProvider: { "copilot-cli": "gpt-5" },
+    });
+    const out = await useAIProvider().rawPrompt("sys", "user");
+    expect(out).toBe("ok-copilot");
+    expect(copilotCliPrompt).toHaveBeenCalledWith("user", "sys", undefined, "gpt-5");
   });
 
   it("passes undefined when no model is configured (CLI default)", async () => {
