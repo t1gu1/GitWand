@@ -39,6 +39,7 @@
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
 use rayon::prelude::*;
+use std::io::Write;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -147,6 +148,40 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 // ─── HTTP transport (curl) ──────────────────────────────────────────────────
 
+/// curl config-file contents that inject the bearer token as an `Authorization`
+/// header without putting it on the command line. `header =` is the config-file
+/// long form of `-H`; token chars (alnum / `_`) never contain a quote.
+fn bearer_config(tok: &str) -> String {
+    format!("header = \"Authorization: Bearer {}\"\n", tok)
+}
+
+/// Spawn `curl` with `args`, optionally feeding `stdin_config` to its stdin
+/// (used with `--config -` so secrets stay off argv), and return its `Output`.
+fn run_curl(args: &[String], stdin_config: Option<&str>) -> Result<std::process::Output, String> {
+    use std::process::Stdio;
+    let mut cmd = hidden_cmd("curl");
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if stdin_config.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
+    if let Some(cfg) = stdin_config {
+        // Config is tiny and curl drains stdin before producing output, so a
+        // synchronous write here can't deadlock against the stdout pipe.
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to open curl stdin".to_string())?
+            .write_all(cfg.as_bytes())
+            .map_err(|e| format!("failed to write curl config: {}", e))?;
+    }
+    child
+        .wait_with_output()
+        .map_err(|e| format!("curl failed: {}", e))
+}
+
 /// Run a `curl` request and return `(http_status, body_text)`.
 ///
 /// `accept` selects the representation (`application/vnd.github+json` for JSON,
@@ -169,9 +204,13 @@ fn curl_raw(
         "-H".to_string(), "User-Agent: GitWand".to_string(),
         "-H".to_string(), "X-GitHub-Api-Version: 2022-11-28".to_string(),
     ];
-    if let Some(tok) = token {
-        args.push("-H".to_string());
-        args.push(format!("Authorization: Bearer {}", tok));
+    // The Authorization header carries the token. Passing it as a `-H` argv
+    // entry would expose the secret to `ps` / process listings, so feed it
+    // through a `--config -` file read from stdin instead (curl's `header =`
+    // directive is the long form of `-H`). Keeps the token off argv.
+    if token.is_some() {
+        args.push("--config".to_string());
+        args.push("-".to_string());
     }
     if let Some(b) = body_json {
         args.push("-H".to_string());
@@ -183,10 +222,7 @@ fn curl_raw(
     args.push(format!("{}%{{http_code}}", MARKER));
     args.push(url.to_string());
 
-    let output = hidden_cmd("curl")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
+    let output = run_curl(&args, token.map(bearer_config).as_deref())?;
 
     let combined = String::from_utf8_lossy(&output.stdout).to_string();
     let (body, status) = match combined.rsplit_once(MARKER) {
