@@ -243,7 +243,7 @@ mod tests {
         // Empty string is a valid input from the caller's point of view but
         // we can't extract a host, so it must short-circuit to false rather
         // than block on DNS or surface an error.
-        let r = check_remote_reachable("".to_string(), 250).unwrap();
+        let r = tauri::async_runtime::block_on(check_remote_reachable("".to_string(), 250)).unwrap();
         assert!(!r);
     }
 
@@ -251,8 +251,11 @@ mod tests {
     fn check_remote_reachable_unreachable_host_returns_false_within_timeout() {
         // RFC 5737 reserved range — guaranteed to never route. Even with a
         // 250ms timeout we expect a clean `false`, not a hang.
-        let r =
-            check_remote_reachable("https://192.0.2.1/foo.git".to_string(), 250).unwrap();
+        let r = tauri::async_runtime::block_on(check_remote_reachable(
+            "https://192.0.2.1/foo.git".to_string(),
+            250,
+        ))
+        .unwrap();
         assert!(!r);
     }
 }
