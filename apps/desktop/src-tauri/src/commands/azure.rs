@@ -1423,13 +1423,6 @@ pub(crate) async fn az_submit_review(
 #[tauri::command]
 pub(crate) async fn azure_device_start() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
-    if cid.starts_with("REPLACE_WITH") {
-        return Err(
-            "Azure login is not configured: missing Entra ID client_id. \
-             Set GITWAND_AZURE_CLIENT_ID at build time or update azure.rs."
-                .to_string(),
-        );
-    }
     // Use the specific delegated scope (`user_impersonation`) rather than
     // `.default`: `.default` requests every permission configured on the app
     // registration and triggers *admin* consent in locked-down enterprise

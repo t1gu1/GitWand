@@ -872,13 +872,6 @@ pub(crate) fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
 #[tauri::command]
 pub(crate) async fn github_device_start() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
-    if cid.starts_with("REPLACE_WITH") {
-        return Err(
-            "GitHub login is not configured: missing OAuth App client_id. \
-             Set GITWAND_GH_CLIENT_ID at build time or update github_api.rs."
-                .to_string(),
-        );
-    }
     // GitHub's OAuth endpoints accept a JSON body when Content-Type is JSON
     // (which `curl_raw` sets whenever a body is present).
     let body = serde_json::json!({ "client_id": cid, "scope": "repo" });
