@@ -48,6 +48,10 @@ bump() {
   echo "  ✓ $file"
 }
 
+# ── Root package.json (private; generic pattern — was historically desynced) ─
+bump package.json \
+  "s/\"version\": \"[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\"/\"version\": \"${NEW}\"/"
+
 # ── package.json files ───────────────────────────────────────────────────────
 for f in \
   apps/desktop/package.json \
