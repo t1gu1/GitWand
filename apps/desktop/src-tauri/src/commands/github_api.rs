@@ -70,7 +70,7 @@ fn client_id() -> String {
     option_env!("GITWAND_GH_CLIENT_ID")
         // GitWand's registered GitHub OAuth App (device flow enabled). Public
         // client_id — not a secret, safe to ship.
-        .unwrap_or("Ov23licwiCpPiRPRodWN")
+        .unwrap_or("Ov23li1JPkwPsqdFrJ76")
         .to_string()
 }
 

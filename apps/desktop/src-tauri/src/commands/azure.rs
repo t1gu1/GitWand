@@ -19,8 +19,10 @@
 //! ## Auth resource / scope
 //!
 //! Azure DevOps is a first-party Entra resource (app id
-//! `499b84ac-1321-427f-aa17-267ca6975798`). We request `.default` on it plus
-//! `offline_access` so a refresh token is available for follow-up work.
+//! `499b84ac-1321-427f-aa17-267ca6975798`). We request its `user_impersonation`
+//! delegated scope plus `offline_access` so a refresh token is available for
+//! follow-up work. (`user_impersonation` rather than `.default` so a standard
+//! user can consent without a tenant admin in locked-down enterprise tenants.)
 //!
 //! ## Security note
 //!
@@ -64,14 +66,9 @@ const TOKEN_URL: &str = "https://login.microsoftonline.com/organizations/oauth2/
 ///   2. `GITWAND_AZURE_CLIENT_ID` baked in at build time.
 ///   3. Fallback default (see below).
 ///
-/// **TEMPORARY default** — the well-known Azure CLI public client id
-/// (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`). It is a Microsoft first-party
-/// public client with device flow enabled, so it works out of the box without
-/// registering our own app. This is a stop-gap: it is *not* GitWand's app, the
-/// consent screen reads "Microsoft Azure CLI", and Microsoft may restrict its
-/// reuse at any time. Replace with a dedicated GitWand Entra app registration
-/// (Azure Portal → App registrations → "Allow public client flows" = Yes) and
-/// supply its id via `GITWAND_AZURE_CLIENT_ID` before shipping.
+/// Default — GitWand's registered Entra app ("Allow public client flows" = Yes,
+/// device flow enabled). Public client id, not a secret — safe to ship.
+/// Overridable via `GITWAND_AZURE_CLIENT_ID` at runtime or build time.
 fn client_id() -> String {
     if let Ok(v) = std::env::var("GITWAND_AZURE_CLIENT_ID") {
         let v = v.trim().to_string();
@@ -80,7 +77,7 @@ fn client_id() -> String {
         }
     }
     option_env!("GITWAND_AZURE_CLIENT_ID")
-        .unwrap_or("04b07795-8ddb-461a-bbee-02f9e1bf7b46")
+        .unwrap_or("e26aa15d-856c-4a64-98ed-d44d4c7b3a18")
         .to_string()
 }
 
@@ -133,7 +130,11 @@ fn refresh_access_token() -> Result<String, String> {
             .to_string()
     })?;
     let cid = client_id();
-    let scope = format!("{}/.default offline_access", AZURE_DEVOPS_RESOURCE);
+    // Use the specific delegated scope (`user_impersonation`) rather than
+    // `.default`: `.default` requests every permission configured on the app
+    // registration and triggers *admin* consent in locked-down enterprise
+    // tenants. A single delegated scope can usually be granted by the user.
+    let scope = format!("{}/user_impersonation offline_access", AZURE_DEVOPS_RESOURCE);
     let (_status, text) = curl_form(
         TOKEN_URL,
         &[
@@ -1429,7 +1430,11 @@ pub(crate) async fn azure_device_start() -> Result<GithubDeviceCode, String> {
                 .to_string(),
         );
     }
-    let scope = format!("{}/.default offline_access", AZURE_DEVOPS_RESOURCE);
+    // Use the specific delegated scope (`user_impersonation`) rather than
+    // `.default`: `.default` requests every permission configured on the app
+    // registration and triggers *admin* consent in locked-down enterprise
+    // tenants. A single delegated scope can usually be granted by the user.
+    let scope = format!("{}/user_impersonation offline_access", AZURE_DEVOPS_RESOURCE);
     let (status, text) = curl_form(DEVICECODE_URL, &[("client_id", &cid), ("scope", &scope)])?;
     if status >= 400 {
         let msg = serde_json::from_str::<serde_json::Value>(text.trim())
