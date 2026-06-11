@@ -2535,6 +2535,53 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/gh-check-annotations?cwd=<path>&number=<n>  (v2.18)
+    if (url.pathname === "/api/gh-check-annotations" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const number = url.searchParams.get("number");
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
+      try {
+        const token = getGithubToken();
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
+        const nwo = getRepoNwo(resolve(cwd));
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
+        // PR head SHA
+        const prResp = await githubFetch(`/repos/${nwo}/pulls/${number}`, token);
+        if (!prResp.ok) return jsonResponse(req, res, { error: `GitHub API ${prResp.status}` }, 500);
+        const pr = await prResp.json();
+        const sha = pr.head?.sha;
+        if (!sha) return jsonResponse(req, res, []);
+        // Check runs with annotation counts
+        const checksResp = await githubFetch(`/repos/${nwo}/commits/${sha}/check-runs?per_page=100`, token);
+        if (!checksResp.ok) return jsonResponse(req, res, { error: `GitHub API ${checksResp.status}` }, 500);
+        const data = await checksResp.json();
+        const annotated = (data.check_runs ?? [])
+          .filter((c) => (c.output?.annotations_count ?? 0) > 0)
+          .slice(0, 20); // mirror the Rust MAX_ANNOTATED_RUNS cap
+        const annotations = [];
+        for (const run of annotated) {
+          const annResp = await githubFetch(`/repos/${nwo}/check-runs/${run.id}/annotations?per_page=100`, token);
+          if (!annResp.ok) continue; // annotations expired — skip run
+          const items = await annResp.json();
+          for (const a of items ?? []) {
+            annotations.push({
+              check_name: run.name ?? "",
+              path: a.path ?? "",
+              start_line: a.start_line ?? 0,
+              end_line: Math.max(a.end_line ?? 0, a.start_line ?? 0),
+              level: a.annotation_level === "failure" || a.annotation_level === "warning"
+                ? a.annotation_level : "notice",
+              title: a.title ?? "",
+              message: a.message ?? "",
+            });
+          }
+        }
+        return jsonResponse(req, res, annotations);
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
     // ─── PR Review Comments ────────────────────────────────
 
     // GET /api/gh-pr-comments?cwd=<path>&number=<n>
@@ -4731,6 +4778,7 @@ server.listen(PORT, "127.0.0.1", () => {
   console.log(`    GET  /api/gh-pr-detail?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-diff?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/gh-pr-checks?cwd=<path>&number=<n>`);
+  console.log(`    GET  /api/gh-check-annotations?cwd=<path>&number=<n>`);
   console.log(`    GET  /api/pr-files?repo=<path>&pr=<n>`);
   console.log(`    GET  /api/git-remote-info?cwd=<path>`);
   console.log(`    GET  /api/git-merge-base?cwd=<path>&ref1=<ref>&ref2=<ref>`);

@@ -795,6 +795,10 @@ const zhCN: Locale = {
       noDiff: "无可用 diff。",
       noChecks: "未找到 CI 检查。",
     },
+    annotations: {
+      badge: "{0} 条注释",
+      badgeTooltip: "在 diff 中查看注释",
+    },
     comment: {
       edit: "编辑",
       delete: "删除",

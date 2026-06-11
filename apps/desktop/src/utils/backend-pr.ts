@@ -396,6 +396,60 @@ export interface CICheck {
 }
 
 /**
+ * A check-run / code-quality annotation anchored to a file line (v2.18).
+ * Forge-agnostic: GitHub check-runs, GitLab codequality, Bitbucket reports.
+ */
+export interface CIAnnotation {
+  /** Name of the check-run / job / report that produced the annotation. */
+  checkName: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  level: "failure" | "warning" | "notice";
+  title: string;
+  message: string;
+}
+
+/** Raw snake_case CIAnnotation shape returned by the Rust/dev-server backends. */
+export interface CIAnnotationRaw {
+  check_name: string;
+  path: string;
+  start_line: number;
+  end_line: number;
+  level: string;
+  title: string;
+  message: string;
+}
+
+export function mapAnnotation(a: CIAnnotationRaw): CIAnnotation {
+  return {
+    checkName: a.check_name,
+    path: a.path,
+    startLine: a.start_line,
+    endLine: a.end_line,
+    level: a.level === "failure" || a.level === "warning" ? a.level : "notice",
+    title: a.title,
+    message: a.message,
+  };
+}
+
+/**
+ * Get check-run annotations for a PR (requires `gh` CLI).
+ * Returns `[]` when the repo has no checks or annotations have expired.
+ */
+export async function ghCheckAnnotations(cwd: string, number: number): Promise<CIAnnotation[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<CIAnnotationRaw[]>("gh_check_annotations", { cwd, number });
+    return raw.map(mapAnnotation);
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/gh-check-annotations?cwd=${encodeURIComponent(cwd)}&number=${number}`);
+  if (!res.ok) throw new Error(`gh check annotations failed: ${res.status}`);
+  const raw = await res.json();
+  if (raw.error) throw new Error(raw.error);
+  return (raw as CIAnnotationRaw[]).map(mapAnnotation);
+}
+
+/**
  * Get detailed PR information (requires `gh` CLI).
  */
 export async function ghPrDetail(cwd: string, number: number): Promise<PullRequestDetail> {

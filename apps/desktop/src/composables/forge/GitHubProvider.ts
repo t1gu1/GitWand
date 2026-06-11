@@ -20,6 +20,7 @@ import {
   ghPrDetail,
   ghPrDiff,
   ghPrChecks,
+  ghCheckAnnotations,
   ghCreatePr,
   ghMergePr,
   ghCheckoutPr,
@@ -44,6 +45,7 @@ import type {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
   PrReviewComment,
   CreatePrCommentParams,
   PrReview,
@@ -104,6 +106,10 @@ export class GitHubProvider implements ForgeProvider {
 
   getCIChecks(cwd: string, number: number): Promise<CICheck[]> {
     return ghPrChecks(cwd, number);
+  }
+
+  getCheckAnnotations(cwd: string, number: number): Promise<CIAnnotation[]> {
+    return ghCheckAnnotations(cwd, number);
   }
 
   // ── PR actions ────────────────────────────────────────────────────────────

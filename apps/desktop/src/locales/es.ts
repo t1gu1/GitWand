@@ -806,6 +806,10 @@ const es: Locale = {
       noDiff: "Sin diff disponible.",
       noChecks: "No se encontraron checks de CI.",
     },
+    annotations: {
+      badge: "{0} anotación(es)",
+      badgeTooltip: "Ver las anotaciones en el diff",
+    },
     comment: {
       edit: "Editar",
       delete: "Eliminar",

@@ -327,6 +327,7 @@ pub fn run() {
             commands::gh::gh_pr_detail,
             commands::gh::gh_pr_diff,
             commands::gh::gh_pr_checks,
+            commands::gh::gh_check_annotations,
             commands::gh::gh_pr_ready,
             commands::ops::git_exec,
             commands::ops::git_autocomplete,
@@ -394,6 +395,7 @@ pub fn run() {
             commands::gitlab::gl_get_mr,
             commands::gitlab::gl_mr_diff,
             commands::gitlab::gl_mr_pipelines,
+            commands::gitlab::gl_mr_annotations,
             commands::gitlab::gl_create_mr,
             commands::gitlab::gl_merge_mr,
             commands::gitlab::gl_checkout_mr,
@@ -429,6 +431,7 @@ pub fn run() {
             commands::bitbucket::bb_current_user,
             commands::bitbucket::bb_reviewer_candidates,
             commands::bitbucket::bb_pr_ci_checks,
+            commands::bitbucket::bb_pr_annotations,
             commands::bitbucket::bb_convert_draft_to_ready,
             // ── MCP catalog ──
             commands::mcp_catalog::mcp_detect_configs,

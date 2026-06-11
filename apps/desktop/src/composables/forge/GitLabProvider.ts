@@ -28,6 +28,7 @@ import {
   glGetMr,
   glMrDiff,
   glMrPipelines,
+  glMrAnnotations,
   glCreateMr,
   glMergeMr,
   glCheckoutMr,
@@ -54,6 +55,7 @@ import type {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
   PrReviewComment,
   CreatePrCommentParams,
   PrReview,
@@ -117,6 +119,10 @@ export class GitLabProvider implements ForgeProvider {
 
   getCIChecks(cwd: string, number: number): Promise<CICheck[]> {
     return glMrPipelines(cwd, number);
+  }
+
+  getCheckAnnotations(cwd: string, number: number): Promise<CIAnnotation[]> {
+    return glMrAnnotations(cwd, number);
   }
 
   // ── MR actions ─────────────────────────────────────────────────────────────

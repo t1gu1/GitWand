@@ -486,6 +486,27 @@ pub struct CICheck {
     pub details_url: String,
 }
 
+// ─── CI Annotation (v2.18) ─────────────────────────────────────────
+
+/// A single check-run / code-quality annotation anchored to a file line.
+///
+/// Forge-agnostic shape:
+///   - GitHub  : check-runs annotations API (`annotation_level`)
+///   - GitLab  : codequality report artifact (Code Climate severity)
+///   - Bitbucket: Reports API annotations (severity)
+#[derive(Serialize)]
+pub struct CIAnnotation {
+    /// Name of the check-run / job / report that produced the annotation.
+    pub check_name: String,
+    pub path: String,
+    pub start_line: i64,
+    pub end_line: i64,
+    /// "failure" | "warning" | "notice"
+    pub level: String,
+    pub title: String,
+    pub message: String,
+}
+
 // ─── Reviewer candidate ────────────────────────────────────────────
 
 #[derive(Serialize)]

@@ -36,6 +36,7 @@ import {
   bbUpdateComment,
   bbDeleteComment,
   bbPrCiChecks,
+  bbPrAnnotations,
   bbConvertDraftToReady,
   bbApprovePr,
   bbPrFiles,
@@ -53,6 +54,7 @@ import type {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
   PrReviewComment,
   CreatePrCommentParams,
   PrReview,
@@ -120,6 +122,10 @@ export class BitbucketProvider implements ForgeProvider {
 
   getCIChecks(cwd: string, number: number): Promise<CICheck[]> {
     return bbPrCiChecks(cwd, number);
+  }
+
+  getCheckAnnotations(cwd: string, number: number): Promise<CIAnnotation[]> {
+    return bbPrAnnotations(cwd, number);
   }
 
   // ── PR actions ─────────────────────────────────────────────────────────────

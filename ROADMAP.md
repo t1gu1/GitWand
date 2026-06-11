@@ -6,25 +6,6 @@
 
 ## What's Next
 
-### v2.18.0 — Inline CI Check Annotations
-
-Overlay check-run annotations in the diff — the exact line that failed the linter or typecheck, right where you need it in the review.
-
-**Backend**
-
-- GitHub: `GET /repos/{owner}/{repo}/check-runs/{check_run_id}/annotations`
-- GitLab: pipeline job trace + `artifacts:reports:codequality` (common JSON format)
-- Bitbucket: `/commit/{commit}/statuses` enriched with Pipelines annotations
-- New type `CIAnnotation { path, line, level: "failure"|"warning"|"notice", title, message }`
-
-**UI — DiffViewer**
-
-- Gutter icons (❌ failure, ⚠ warning, ℹ notice) on affected lines
-- On hover: tooltip with `title` + `message` — same pattern as inline comments
-- In the CI tab: check-runs with annotations show a clickable "N annotations" badge
-
----
-
 ### v2.19.0 — Scratch worktree + extended Conflict Predictor
 
 _Inspired by GitSquid. A natural extension of the GitWand engine and Worktree first-class (v2.7)._
@@ -153,6 +134,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.18.0** | Inline CI Check Annotations — check-run annotations overlaid in the PR diff across the three forges (GitHub check-runs API, GitLab `artifacts:reports:codequality`, Bitbucket Reports API), gutter icons ❌/⚠/ℹ with hover tooltip, clickable "N annotations" badge in the CI tab, per-file ⚠ count in the diff sidebar, forge-agnostic `CIAnnotation` type + `ForgeProvider.getCheckAnnotations()`, lazy one-shot fetch per PR; Copilot CLI as a fourth AI provider (text-only sandbox) |
 | **v2.17.0** | opencode provider + per-CLI model picker — `opencode-cli` as a first-class AI provider (`opencode run`, binary discovery, Settings status), second model select under the provider picker for the three CLI agents (opencode enumerates via `opencode models`, Claude Code aliases, Codex free-text), `aiModelByProvider` persisted per provider, `--model` threaded through all three CLIs |
 | **v2.16.0** | PR Activity Notifications — background Launchpad poller, zero-network snapshot diff (`useLaunchpadNotifications`) for CI flips / review requests / new comments / merge-close, native OS notifications via `tauri-plugin-notification` (background-only), Settings granularity (All · Reviews & comments · CI failures only · None) + "by people" bot filter, enriched `workspace_prs_all` (CI/review/comment fields) |
 | **v2.15.1** | Git Tree polish & quick actions — Force push (branch context menu + protected-trunk/diverged-remote guard), Quick Stash `⌘⇧,` (instant, AI label) + pending badge in the commit area, Submodules in the Git Tree (branch-picker section, per-commit pointed-SHA badge, click-to-navigate) |

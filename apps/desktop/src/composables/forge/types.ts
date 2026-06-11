@@ -16,6 +16,7 @@ import type {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
   PrReviewComment,
   CreatePrCommentParams,
   PrReview,
@@ -32,6 +33,7 @@ export type {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
   PrReviewComment,
   CreatePrCommentParams,
   PrReview,
@@ -121,6 +123,13 @@ export interface ForgeProvider {
   getPRDiff(cwd: string, number: number): Promise<string>;
 
   getCIChecks(cwd: string, number: number): Promise<CICheck[]>;
+
+  /**
+   * Annotations de check-runs ancrées sur des lignes de fichiers (v2.18).
+   * GitHub: check-runs annotations · GitLab: codequality report ·
+   * Bitbucket: Reports API. Retourne `[]` si la forge n'a rien à offrir.
+   */
+  getCheckAnnotations(cwd: string, number: number): Promise<CIAnnotation[]>;
 
   // ── PR / MR actions ───────────────────────────────────────────────────────
 

@@ -5,14 +5,31 @@ All notable changes to GitWand will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.18.0] - 2026-06-12
+
+v2.18 brings the CI back to the code: check-run annotations now overlay the PR diff — the exact line that failed the linter or typecheck, right where you review — across all three forges. GitHub Copilot CLI also joins the AI-provider lineup.
 
 ### Added
 
+- **Inline CI check annotations** — check-run annotations are fetched per PR and anchored to the diff:
+  - **Gutter icons** (❌ failure, ⚠ warning, ℹ notice) on affected lines in the PR inline diff, with a subtle colored edge on annotated rows. Hovering shows a tooltip with the annotation title, message, and the check that produced it. Multi-line annotations flag their whole range (capped at 20 lines); when several annotations hit the same line, the worst level wins the icon.
+  - **"N annotations" badge in the CI tab** — check-runs that produced annotations show a clickable badge that jumps straight to the diff.
+  - **Per-file ⚠ count in the diff file sidebar** — spot which files the CI flagged before opening them.
+  - **All three forges**: GitHub (check-runs annotations API), GitLab (`artifacts:reports:codequality` — Code Climate severities mapped to failure/warning/notice), Bitbucket (Reports API annotations). Everything is non-fatal: a repo with no checks, an expired report, or a forge with nothing to offer simply shows no annotations.
+  - **Lazy by design** — annotations are fetched once per PR, the first time the Diff or CI tab is opened; never during PR-list browsing.
 - **GitHub Copilot CLI as an AI provider** — `copilot-cli` joins `claude-code-cli`, `codex-cli`, and `opencode-cli` in the `AIProvider` union. It piggybacks on the user's locally-installed `copilot` binary and their GitHub Copilot subscription — no API key required. Detection mirrors the existing CLI providers (binary discovery across PATH + common install locations) and it appears in Settings → AI with the same status/re-detect pattern. Prompts run one-shot via `copilot -p` (model selectable via the per-provider model picker, free-text since Copilot has no enumeration command). Tool permissions are deliberately restricted (`--deny-tool=shell`, `--deny-tool=write`, `--no-ask-user`, and `COPILOT_ALLOW_ALL` stripped from the child env) so Copilot only produces text and cannot edit files, run shell commands, or block on interactive prompts.
+
+### Changed
+
+- **Sidebar quick actions trimmed** — the Changes and History quick actions were removed from the repo sidebar (#39); both remain reachable from their primary surfaces (commit area, Git Tree).
 
 ### Technical
 
+- New forge-agnostic type `CIAnnotation { check_name, path, start_line, end_line, level, title, message }` (`types.rs`, mirrored as camelCase in `backend-pr.ts` with a shared `mapAnnotation` normalizer — unknown levels degrade to `notice`).
+- Three new Rust commands following the per-forge pattern: `gh_check_annotations` (head SHA → `commits/{sha}/check-runs` → `check-runs/{id}/annotations`, capped at 20 annotated runs), `gl_mr_annotations` (MR pipelines → jobs with a `codequality` artifact → `gl-code-quality-report.json`), `bb_pr_annotations` (commit Reports → per-report annotations). Registered in `lib.rs`; GitHub path mirrored in `dev-server.mjs` (`/api/gh-check-annotations`); TS wrappers in `backend-pr.ts` / `backend-gitlab.ts` / `backend-bitbucket.ts`.
+- `ForgeProvider.getCheckAnnotations()` added to the forge contract and implemented by the three providers. `usePrPanel` gains `prAnnotations` (lazy, one flight per PR), `annotationCountByCheck`, and `annotationsByFile`.
+- Gutter rendering in `PrInlineDiff` is anchored on `newLineNo` (annotations target the head commit); CSS-only hover tooltip, no new dependency.
+- i18n: `pr.annotations.{badge,badgeTooltip}` across all five locales; unit tests in `v2.18-ci-annotations.test.ts`.
 - New Rust commands `detect_copilot_cli` and `copilot_cli_prompt` (`copilot --no-color --deny-tool=shell --deny-tool=write --no-ask-user [--model …] -p <prompt>`), plus a `CopilotCliInfo` type; registered in `lib.rs`. Mirrored across all three layers: `commands/ai.rs`, `dev-server.mjs`, and the `backend-ai.ts` wrapper.
 - `useAIProvider` adds `copilot-cli` to `CLI_AGENT_PROVIDERS`, dispatches it in `suggest()` / `rawPrompt()`, and forwards the per-provider model. `SettingsPanel` gains the provider option, detection state, and status block.
 - i18n: `aiProviderCopilotCli`, `aiProviderCopilotCliNotFound`, `aiCopilotCliDetectedHint`, `aiCopilotCliInfoBox` across all five locales (en, fr, es, pt-BR, zh-CN).
@@ -984,7 +1001,11 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v2.15.0...HEAD
+[Unreleased]: https://github.com/devlint/GitWand/compare/v2.18.0...HEAD
+[2.18.0]: https://github.com/devlint/GitWand/compare/v2.17.0...v2.18.0
+[2.17.0]: https://github.com/devlint/GitWand/compare/v2.16.0...v2.17.0
+[2.16.0]: https://github.com/devlint/GitWand/compare/v2.15.1...v2.16.0
+[2.15.1]: https://github.com/devlint/GitWand/compare/v2.15.0...v2.15.1
 [2.15.0]: https://github.com/devlint/GitWand/compare/v2.14.0...v2.15.0
 [2.14.0]: https://github.com/devlint/GitWand/compare/v2.13.0...v2.14.0
 [2.13.0]: https://github.com/devlint/GitWand/compare/v2.12.0...v2.13.0

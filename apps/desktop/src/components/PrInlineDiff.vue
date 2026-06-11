@@ -10,7 +10,7 @@
  *  - Code suggestion apply support
  */
 import { ref, computed } from "vue";
-import type { GitDiff, DiffLine, PrReviewComment } from "../utils/backend";
+import type { GitDiff, DiffLine, PrReviewComment, CIAnnotation } from "../utils/backend";
 import PrCommentThread from "./PrCommentThread.vue";
 import AiSparkle from "./AiSparkle.vue";
 import { detectLanguage, highlightLine } from "../utils/highlight";
@@ -28,6 +28,8 @@ const props = defineProps<{
   currentUser?: string;
   /** Number of comments already staged in the pending review draft. */
   reviewDraftCount?: number;
+  /** CI check-run annotations for this file (v2.18). */
+  annotations?: CIAnnotation[];
 }>();
 
 interface CommentParams {
@@ -151,6 +153,42 @@ function threadsForLine(line: DiffLine): Thread[] {
     if (t.side === "LEFT") return t.line === line.oldLineNo;
     return false;
   });
+}
+
+// ─── CI annotations (v2.18) ──────────────────────────────
+// Annotations are anchored on the head commit → matched on `newLineNo`.
+// Ranges are expanded line-by-line, capped so a report spanning a whole
+// file doesn't flag hundreds of rows.
+const ANN_RANGE_CAP = 20;
+const ANN_ICONS: Record<CIAnnotation["level"], string> = {
+  failure: "❌",
+  warning: "⚠",
+  notice: "ℹ",
+};
+
+const annotationsByLine = computed<Map<number, CIAnnotation[]>>(() => {
+  const map = new Map<number, CIAnnotation[]>();
+  for (const a of props.annotations ?? []) {
+    const end = Math.min(a.endLine, a.startLine + ANN_RANGE_CAP - 1);
+    for (let l = a.startLine; l <= end; l++) {
+      const list = map.get(l);
+      if (list) list.push(a);
+      else map.set(l, [a]);
+    }
+  }
+  return map;
+});
+
+function annotationsForLine(line: DiffLine): CIAnnotation[] {
+  if (line.newLineNo == null) return [];
+  return annotationsByLine.value.get(line.newLineNo) ?? [];
+}
+
+/** Worst level wins for the gutter icon: failure > warning > notice. */
+function annotationLevel(anns: CIAnnotation[]): CIAnnotation["level"] {
+  if (anns.some((a) => a.level === "failure")) return "failure";
+  if (anns.some((a) => a.level === "warning")) return "warning";
+  return "notice";
 }
 
 // ─── Compose new comment ─────────────────────────────────
@@ -354,8 +392,30 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
               'pid-row--add': dl.type === 'add',
               'pid-row--del': dl.type === 'delete',
               'pid-row--ctx': dl.type === 'context',
+              'pid-row--annotated': annotationsForLine(dl).length > 0,
             }"
           >
+            <!-- CI annotation gutter icon + hover tooltip (v2.18) -->
+            <div v-if="annotationsForLine(dl).length" class="pid-ann">
+              <span
+                class="pid-ann-icon"
+                :class="`pid-ann-icon--${annotationLevel(annotationsForLine(dl))}`"
+              >{{ ANN_ICONS[annotationLevel(annotationsForLine(dl))] }}</span>
+              <div class="pid-ann-tip">
+                <div
+                  v-for="(a, ai) in annotationsForLine(dl)"
+                  :key="ai"
+                  class="pid-ann-tip-item"
+                >
+                  <div class="pid-ann-tip-head">
+                    <span>{{ ANN_ICONS[a.level] }}</span>
+                    <span class="pid-ann-tip-title">{{ a.title || a.checkName }}</span>
+                  </div>
+                  <div v-if="a.message" class="pid-ann-tip-msg">{{ a.message }}</div>
+                  <div class="pid-ann-tip-src">{{ a.checkName }}</div>
+                </div>
+              </div>
+            </div>
             <!-- Old line number -->
             <div
               class="pid-lno mono"
@@ -620,6 +680,80 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
   min-height: 20px;
   line-height: 20px;
   border-bottom: 1px solid transparent;
+  position: relative; /* anchor for .pid-ann (v2.18) */
+}
+
+/* ─── CI annotation gutter (v2.18) ───────────────────────── */
+.pid-ann {
+  position: absolute;
+  left: 2px;
+  top: 0;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  z-index: 5;
+}
+.pid-ann-icon {
+  font-size: 11px;
+  line-height: 1;
+  cursor: default;
+}
+.pid-ann-icon--warning { color: var(--color-warning); }
+.pid-ann-icon--notice  { color: var(--color-info, var(--color-accent)); }
+/* The annotated line gets a subtle left accent so it stays visible
+   even when the emoji glyph blends with the theme. */
+.pid-row--annotated { box-shadow: inset 2px 0 0 var(--color-warning); }
+/* The "+" hover affordance of the old-lno cell would overlap the icon —
+   commenting stays available via the new-lno cell. */
+.pid-row--annotated .pid-lno:first-of-type .pid-lno-icon { display: none; }
+
+.pid-ann-tip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 20px;
+  z-index: 30;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 8px 10px;
+  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  border: 1px solid var(--color-border-strong, var(--color-border));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.35));
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+.pid-ann:hover .pid-ann-tip { display: block; }
+.pid-ann-tip-item + .pid-ann-tip-item {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.pid-ann-tip-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.pid-ann-tip-title {
+  overflow-wrap: anywhere;
+}
+.pid-ann-tip-msg {
+  margin-top: 2px;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.pid-ann-tip-src {
+  margin-top: 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
 }
 
 .pid-row--add { background: var(--color-success-soft); }

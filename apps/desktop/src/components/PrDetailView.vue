@@ -454,6 +454,12 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               >
                 <div class="pdv-diff-file-top">
                   <span class="pdv-diff-file-name">{{ file.path.split('/').pop() }}</span>
+                  <!-- v2.18 — CI annotations on this file -->
+                  <span
+                    v-if="p.annotationsByFile.value[file.path]?.length"
+                    class="pdv-diff-file-annotations"
+                    :title="t('pr.annotations.badge', p.annotationsByFile.value[file.path].length)"
+                  >⚠{{ p.annotationsByFile.value[file.path].length }}</span>
                   <span
                     v-if="p.prComments.value.filter(c => c.path === file.path).length"
                     class="pdv-diff-file-comments"
@@ -471,6 +477,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
                 :comments="p.commentsForFile.value"
                 :current-user="undefined"
                 :review-draft-count="p.draftReviewComments.value.length"
+                :annotations="p.selectedDiffFile.value ? (p.annotationsByFile.value[p.selectedDiffFile.value] ?? []) : []"
                 @create-comment="p.handleCreateComment"
                 @add-to-review="p.handleAddToReview"
                 @reply-comment="p.handleReplyComment"
@@ -490,6 +497,15 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
             <div v-for="c in p.prChecks.value" :key="c.name" class="pdv-check">
               <span class="pdv-check-icon">{{ p.checkIcon(c) }}</span>
               <span class="pdv-check-name">{{ c.name }}</span>
+              <!-- v2.18 — clickable "N annotations" badge → jump to the diff -->
+              <button
+                v-if="p.annotationCountByCheck.value[c.name]"
+                class="pdv-check-annotations"
+                :title="t('pr.annotations.badgeTooltip')"
+                @click="p.detailTab.value = 'diff'"
+              >
+                {{ t('pr.annotations.badge', p.annotationCountByCheck.value[c.name]) }}
+              </button>
               <span class="pdv-check-state">{{ c.conclusion || c.state }}</span>
               <button v-if="c.detailsUrl" class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(c.detailsUrl)">↗</button>
             </div>
@@ -1358,6 +1374,12 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   color: var(--color-accent);
   flex-shrink: 0;
 }
+/* v2.18 — CI annotations count on a file */
+.pdv-diff-file-annotations {
+  font-size: var(--font-size-xs);
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
 .pdv-diff-file-path {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
@@ -1409,6 +1431,23 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: var(--font-weight-semibold);
+}
+/* v2.18 — "N annotations" badge */
+.pdv-check-annotations {
+  flex-shrink: 0;
+  padding: 1px var(--space-3);
+  background: transparent;
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-full, 999px);
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.pdv-check-annotations:hover {
+  background: var(--color-warning);
+  color: var(--color-bg-primary);
 }
 
 /* ─── Intelligence tab ───────────────────────────────────── */
