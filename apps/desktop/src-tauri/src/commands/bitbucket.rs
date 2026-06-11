@@ -16,16 +16,15 @@
 //! **Pagination**: Bitbucket uses page-based pagination with `?page=N&pagelen=M`
 //! and a `size` field in the response envelope.
 //!
-//! **Security note**: credentials are injected via the `Authorization: Basic`
-//! header, which is visible in process arguments. This is acceptable for v2.10
-//! (same profile as `gh`/`glab` token propagation). Use stdin piping via
-//! `curl --config -` in v2.11 to harden this.
+//! **Security note**: credentials are injected via `curl --config -` (stdin),
+//! keeping the `Authorization: Basic` header off the process argv.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use crate::git::hidden_cmd;
 use crate::types::*;
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::io::Write;
 
 // ─── Credential helpers ────────────────────────────────────────────────────────
 
@@ -60,10 +59,35 @@ fn get_bb_creds(cwd: &str) -> Result<(String, String), String> {
     Ok((username, app_password))
 }
 
-/// Build the `Authorization: Basic <base64(user:pass)>` header value.
-fn basic_auth_header(username: &str, app_password: &str) -> String {
+/// Build curl `--config -` file contents that carry the Basic auth header,
+/// keeping the credential off the process argv.
+fn basic_auth_config(username: &str, app_password: &str) -> String {
     let encoded = B64.encode(format!("{}:{}", username, app_password));
-    format!("Basic {}", encoded)
+    format!("header = \"Authorization: Basic {}\"\n", encoded)
+}
+
+/// Spawn `curl` with `args`, feeding `stdin_config` to its stdin when provided.
+fn run_curl(args: &[String], stdin_config: Option<&str>) -> Result<std::process::Output, String> {
+    use std::process::Stdio;
+    let mut cmd = hidden_cmd("curl");
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if stdin_config.is_some() {
+        cmd.stdin(Stdio::piped());
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
+    if let Some(cfg) = stdin_config {
+        child
+            .stdin
+            .take()
+            .ok_or_else(|| "failed to open curl stdin".to_string())?
+            .write_all(cfg.as_bytes())
+            .map_err(|e| format!("failed to write curl config: {}", e))?;
+    }
+    child
+        .wait_with_output()
+        .map_err(|e| format!("curl failed: {}", e))
 }
 
 // ─── Project resolution ────────────────────────────────────────────────────────
@@ -126,22 +150,23 @@ fn repo_api(workspace: &str, slug: &str) -> String {
 
 /// Perform a Bitbucket API call via `curl`.
 ///
-/// - `method`   : "GET", "POST", "PUT", "DELETE"
-/// - `url`      : full API URL
-/// - `body_json`: optional JSON body as a pre-serialized string
-/// - `auth`     : `"Basic <b64>"` header value
+/// - `method`     : "GET", "POST", "PUT", "DELETE"
+/// - `url`        : full API URL
+/// - `body_json`  : optional JSON body as a pre-serialized string
+/// - `auth_config`: curl config-file contents (from `basic_auth_config`),
+///                  fed via `--config -` so the credential stays off argv
 ///
 /// Returns the parsed JSON response on success, or an error string on failure.
 fn bb_curl(
     method: &str,
     url: &str,
     body_json: Option<&str>,
-    auth: &str,
+    auth_config: &str,
 ) -> Result<serde_json::Value, String> {
     let mut args: Vec<String> = vec![
         "-s".to_string(),
         "-X".to_string(), method.to_string(),
-        "-H".to_string(), format!("Authorization: {}", auth),
+        "--config".to_string(), "-".to_string(),
         "-H".to_string(), "Accept: application/json".to_string(),
         "-H".to_string(), "Content-Type: application/json".to_string(),
     ];
@@ -153,10 +178,7 @@ fn bb_curl(
 
     args.push(url.to_string());
 
-    let output = hidden_cmd("curl")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
+    let output = run_curl(&args, Some(auth_config))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     if stdout.trim().is_empty() {
@@ -418,7 +440,7 @@ pub(crate) async fn bb_list_prs(
 ) -> Result<Vec<PullRequest>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let st = match state.to_uppercase().as_str() {
         "MERGED" => "MERGED",
@@ -450,7 +472,7 @@ pub(crate) async fn bb_list_prs(
         )
     };
 
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -476,7 +498,7 @@ pub(crate) async fn bb_list_prs(
         .par_iter()
         .filter_map(|pr| {
             let sha = sha_by_num.get(&pr.number)?;
-            let rollup = bb_rollup_for_sha(&workspace, &slug, sha, &auth);
+            let rollup = bb_rollup_for_sha(&workspace, &slug, sha, &auth_config);
             if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
         })
         .collect();
@@ -494,7 +516,7 @@ pub(crate) async fn bb_list_prs(
 pub(crate) async fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let st = match state.to_uppercase().as_str() {
         "MERGED" => "MERGED",
@@ -508,7 +530,7 @@ pub(crate) async fn bb_pr_count(cwd: String, state: String) -> Result<i64, Strin
         st
     );
 
-    let resp = bb_curl("GET", &url, None, &auth).unwrap_or(serde_json::Value::Null);
+    let resp = bb_curl("GET", &url, None, &auth_config).unwrap_or(serde_json::Value::Null);
     Ok(resp.get("size").and_then(|v| v.as_i64()).unwrap_or(0))
 }
 
@@ -517,14 +539,14 @@ pub(crate) async fn bb_pr_count(cwd: String, state: String) -> Result<i64, Strin
 pub(crate) async fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     let mut detail = bb_pr_to_detail(&resp);
     // Aggregate the head commit's build statuses so the CI tab can colour itself.
     let sha = jdeep(&resp, "source", "commit", "hash");
-    detail.checks_status = bb_rollup_for_sha(&workspace, &slug, &sha, &auth);
+    detail.checks_status = bb_rollup_for_sha(&workspace, &slug, &sha, &auth_config);
     Ok(detail)
 }
 
@@ -533,18 +555,15 @@ pub(crate) async fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDeta
 pub(crate) async fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Bitbucket /diff endpoint returns plain-text unified diff — not JSON.
     let url = format!("{}/pullrequests/{}/diff", repo_api(&workspace, &slug), pr_id);
-    let output = hidden_cmd("curl")
-        .args([
-            "-s",
-            "-H", &format!("Authorization: {}", auth),
-            &url,
-        ])
-        .output()
-        .map_err(|e| format!("curl diff: {}", e))?;
+    let output = run_curl(
+        &["-s".to_string(), "--config".to_string(), "-".to_string(), url],
+        Some(&auth_config),
+    )
+    .map_err(|e| format!("curl diff: {}", e))?;
 
     if !output.status.success() {
         return Err(format!(
@@ -570,7 +589,7 @@ pub(crate) async fn bb_create_pr(
 ) -> Result<PullRequest, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Resolve source branch from HEAD if not provided.
     let source_branch = if source_branch.is_empty() {
@@ -600,7 +619,7 @@ pub(crate) async fn bb_create_pr(
     });
 
     let url = format!("{}/pullrequests", repo_api(&workspace, &slug));
-    let resp = bb_curl("POST", &url, Some(&payload.to_string()), &auth)?;
+    let resp = bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(bb_pr_to_pr(&resp))
 }
 
@@ -611,7 +630,7 @@ pub(crate) async fn bb_create_pr(
 pub(crate) async fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let merge_strategy = match method.as_str() {
         "squash" => "squash",
@@ -625,7 +644,7 @@ pub(crate) async fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Resu
     });
 
     let url = format!("{}/pullrequests/{}/merge", repo_api(&workspace, &slug), pr_id);
-    bb_curl("POST", &url, Some(&payload.to_string()), &auth)?;
+    bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(())
 }
 
@@ -638,11 +657,11 @@ pub(crate) async fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Resu
 pub(crate) async fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Fetch PR detail to get the source branch name.
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &url, None, &auth)?;
+    let pr = bb_curl("GET", &url, None, &auth_config)?;
     let branch = jdeep(&pr, "source", "branch", "name");
     if branch.is_empty() {
         return Err(format!("Could not determine source branch for PR #{}", pr_id));
@@ -691,14 +710,14 @@ pub(crate) async fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String
 pub(crate) async fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Value, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/comments?pagelen=100",
         repo_api(&workspace, &slug),
         pr_id
     );
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     Ok(resp.get("values").cloned().unwrap_or(serde_json::Value::Array(vec![])))
 }
 
@@ -711,7 +730,7 @@ pub(crate) async fn bb_create_comment(
 ) -> Result<serde_json::Value, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let payload = serde_json::json!({ "content": { "raw": body } });
     let url = format!(
@@ -719,7 +738,7 @@ pub(crate) async fn bb_create_comment(
         repo_api(&workspace, &slug),
         pr_id
     );
-    bb_curl("POST", &url, Some(&payload.to_string()), &auth)
+    bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)
 }
 
 /// Update a comment on a PR.
@@ -732,7 +751,7 @@ pub(crate) async fn bb_update_comment(
 ) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let payload = serde_json::json!({ "content": { "raw": body } });
     let url = format!(
@@ -741,7 +760,7 @@ pub(crate) async fn bb_update_comment(
         pr_id,
         comment_id
     );
-    bb_curl("PUT", &url, Some(&payload.to_string()), &auth)?;
+    bb_curl("PUT", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(())
 }
 
@@ -754,7 +773,7 @@ pub(crate) async fn bb_delete_comment(
 ) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/comments/{}",
@@ -762,7 +781,7 @@ pub(crate) async fn bb_delete_comment(
         pr_id,
         comment_id
     );
-    bb_curl("DELETE", &url, None, &auth)?;
+    bb_curl("DELETE", &url, None, &auth_config)?;
     Ok(())
 }
 
@@ -777,10 +796,10 @@ pub(crate) async fn bb_list_reviews(
 ) -> Result<Vec<serde_json::Value>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
 
     let participants = resp
         .get("participants")
@@ -845,14 +864,14 @@ pub(crate) async fn bb_list_reviews(
 pub(crate) async fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/approve",
         repo_api(&workspace, &slug),
         pr_id
     );
-    bb_curl("POST", &url, None, &auth)?;
+    bb_curl("POST", &url, None, &auth_config)?;
     Ok(())
 }
 
@@ -861,14 +880,14 @@ pub(crate) async fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String>
 pub(crate) async fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/diffstat",
         repo_api(&workspace, &slug),
         pr_id
     );
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -895,9 +914,9 @@ pub(crate) async fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, 
 #[tauri::command]
 pub(crate) async fn bb_current_user(cwd: String) -> Result<String, String> {
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
-    let resp = bb_curl("GET", "https://api.bitbucket.org/2.0/user", None, &auth)?;
+    let resp = bb_curl("GET", "https://api.bitbucket.org/2.0/user", None, &auth_config)?;
     Ok(resp
         .get("nickname")
         .or_else(|| resp.get("display_name"))
@@ -911,13 +930,13 @@ pub(crate) async fn bb_current_user(cwd: String) -> Result<String, String> {
 pub(crate) async fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "https://api.bitbucket.org/2.0/repositories/{}/{}/permissions-config/users",
         workspace, slug
     );
-    let resp = bb_curl("GET", &url, None, &auth)
+    let resp = bb_curl("GET", &url, None, &auth_config)
         .unwrap_or(serde_json::Value::Null);
 
     let values = resp
@@ -975,7 +994,7 @@ fn bb_rollup_from_statuses(values: &[serde_json::Value]) -> String {
 
 /// Fetch + aggregate the build statuses of commit `sha`. Sync, best-effort
 /// (empty on any error) so it's safe to fan out under rayon.
-fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth: &str) -> String {
+fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth_config: &str) -> String {
     if sha.is_empty() {
         return String::new();
     }
@@ -983,7 +1002,7 @@ fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth: &str) -> Stri
         "https://api.bitbucket.org/2.0/repositories/{}/{}/commit/{}/statuses?pagelen=100",
         workspace, slug, sha
     );
-    let resp = bb_curl("GET", &url, None, auth).unwrap_or(serde_json::Value::Null);
+    let resp = bb_curl("GET", &url, None, auth_config).unwrap_or(serde_json::Value::Null);
     let values = resp.get("values").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     bb_rollup_from_statuses(&values)
 }
@@ -996,11 +1015,11 @@ fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth: &str) -> Stri
 pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Step 1: get the PR to find the head commit SHA.
     let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &pr_url, None, &auth)?;
+    let pr = bb_curl("GET", &pr_url, None, &auth_config)?;
     let head_sha = jdeep(&pr, "source", "commit", "hash");
     if head_sha.is_empty() {
         return Ok(Vec::new());
@@ -1011,7 +1030,7 @@ pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CIChe
         "https://api.bitbucket.org/2.0/repositories/{}/{}/commit/{}/statuses?pagelen=30",
         workspace, slug, head_sha
     );
-    let resp = bb_curl("GET", &url, None, &auth).unwrap_or(serde_json::Value::Null);
+    let resp = bb_curl("GET", &url, None, &auth_config).unwrap_or(serde_json::Value::Null);
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -1057,11 +1076,11 @@ pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CIChe
 pub(crate) async fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Step 1: get current title.
     let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &pr_url, None, &auth)?;
+    let pr = bb_curl("GET", &pr_url, None, &auth_config)?;
     let title = js(&pr, "title");
 
     // Step 2: strip "Draft: " prefix (case-insensitive).
@@ -1080,6 +1099,6 @@ pub(crate) async fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result
 
     // Step 3: PATCH the title via PUT (Bitbucket uses PUT for PR updates).
     let body = serde_json::json!({ "title": ready_title }).to_string();
-    bb_curl("PUT", &pr_url, Some(&body), &auth)?;
+    bb_curl("PUT", &pr_url, Some(&body), &auth_config)?;
     Ok(())
 }
