@@ -99,11 +99,12 @@ export interface PullRequest {
  * for the typical 10/20/30 windows the UI uses. TODO Phase 2: cursor-based
  * GraphQL pagination so already-loaded pages are not re-fetched.
  *
- * The heavy fields (`reviewDecision`, `mergeStateStatus`, `checksRollup`,
- * `additions`, `deletions`, `reviewRequested`) are NOT populated by this
- * call anymore — they're returned as empty strings / zeros. Callers that
- * need them must fetch the PR detail lazily (per-PR enrichment on hover
- * or select).
+ * The heavy fields (`reviewDecision`, `additions`, `deletions`,
+ * `reviewRequested`) are NOT populated by this call (gh CLI path) — empty
+ * strings / zeros. `mergeStateStatus` and `checksRollup` ARE populated so
+ * the sidebar dot turns red on conflicts and CI failures. Callers that need
+ * the other fields must fetch the PR detail lazily (per-PR enrichment on
+ * hover or select).
  */
 export async function ghListPrs(
   cwd: string,

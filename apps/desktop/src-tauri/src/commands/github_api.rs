@@ -459,17 +459,24 @@ pub(crate) fn rest_list_prs(
                 Some((n, jnested(pr, "head", "sha")))
             })
             .collect();
-        let rollups: std::collections::HashMap<i64, String> = prs
+        // Combine CI rollup + mergeable-state into one parallel pass so we only
+        // spin up one rayon task per PR instead of two separate par_iter rounds.
+        // `rest_mergeable_state` fetches the single-PR endpoint — the list
+        // endpoint returns null/unknown for mergeable_state (GitHub computes it
+        // lazily and only exposes the result on the per-PR detail endpoint).
+        let enrich: std::collections::HashMap<i64, (String, String)> = prs
             .par_iter()
-            .filter_map(|pr| {
-                let sha = sha_by_num.get(&pr.number)?;
-                let rollup = rest_rollup_for_sha(&base, sha, token);
-                if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
+            .map(|pr| {
+                let sha = sha_by_num.get(&pr.number).map(|s| s.as_str()).unwrap_or("");
+                let rollup = if sha.is_empty() { String::new() } else { rest_rollup_for_sha(&base, sha, token) };
+                let merge_state = rest_mergeable_state(&base, pr.number, token);
+                (pr.number, (rollup, merge_state))
             })
             .collect();
         for pr in &mut prs {
-            if let Some(state) = rollups.get(&pr.number) {
-                pr.checks_rollup = state.clone();
+            if let Some((rollup, merge_state)) = enrich.get(&pr.number) {
+                if !rollup.is_empty() { pr.checks_rollup = rollup.clone(); }
+                if !merge_state.is_empty() { pr.merge_state_status = merge_state.clone(); }
             }
         }
     }
@@ -494,6 +501,21 @@ fn rest_rollup_for_sha(repo: &str, sha: &str, token: &str) -> String {
     };
     let runs = v.get("check_runs").and_then(|r| r.as_array()).cloned().unwrap_or_default();
     rollup_from_check_runs(&runs)
+}
+
+/// Fetch the mergeable state of a single PR from the REST detail endpoint.
+/// Returns `"DIRTY"` (conflicts), `"BLOCKED"`, `"CLEAN"`, etc., or `""` on
+/// error / when GitHub hasn't computed it yet (`"unknown"`).
+/// The list endpoint returns `mergeable_state: null` or `"unknown"` — callers
+/// must hit the per-PR endpoint to get a reliable value.
+fn rest_mergeable_state(repo: &str, number: i64, token: &str) -> String {
+    let url = format!("{}/repos/{}/pulls/{}", API_BASE, repo, number);
+    let v = match api_json("GET", &url, token, None) {
+        Ok(v) => v,
+        Err(_) => return String::new(),
+    };
+    let state = js(&v, "mergeable_state").to_uppercase();
+    if state.is_empty() || state == "UNKNOWN" { String::new() } else { state }
 }
 
 /// Reduce a set of check-run objects to one rollup state.

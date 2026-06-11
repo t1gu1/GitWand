@@ -71,7 +71,7 @@ pub(crate) async fn gh_list_prs(
     cmd.args([
         "pr", "list",
         "--state", st,
-        "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees",
+        "--json", "number,title,state,author,headRefName,baseRefName,isDraft,createdAt,updatedAt,url,labels,assignees,mergeStateStatus,statusCheckRollup",
         "--limit", &total,
     ]);
     if let Some(ref nwo) = target_repo {

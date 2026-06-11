@@ -2276,10 +2276,55 @@ async function handleRequest(req, res) {
           review_requested: (pr.requested_reviewers ?? []).map((r) => r.login).filter(Boolean),
           // GitHub REST API /pulls does not expose reviewDecision (GraphQL-only via gh CLI).
           review_decision: "",
-          // mergeable_state is the closest REST equivalent to mergeStateStatus.
-          merge_state_status: pr.mergeable_state ?? "",
-          // statusCheckRollup requires an extra API call per PR — not fetched here.
+          // mergeable_state from list is null/unknown — filled in below via per-PR fetch.
+          merge_state_status: "",
+          // filled in below via check-runs API (parallel, one call per PR).
           checks_rollup: "",
+          _head_sha: pr.head?.sha ?? "",
+          _pr_number: pr.number,
+        }));
+        // Parallel enrichment: CI check-runs + per-PR mergeable_state.
+        // The list endpoint returns mergeable_state null/unknown — need per-PR fetch.
+        // Mirrors Rust rest_rollup_for_sha + rest_mergeable_state in github_api.rs.
+        await Promise.all(prs.map(async (pr) => {
+          const sha = pr._head_sha;
+          const num = pr._pr_number;
+          delete pr._head_sha;
+          delete pr._pr_number;
+          await Promise.all([
+            // CI rollup
+            (async () => {
+              if (!sha) return;
+              try {
+                const r = await githubFetch(`/repos/${nwo}/commits/${sha}/check-runs?per_page=100`, token);
+                if (!r.ok) return;
+                const d = await r.json();
+                const runs = d.check_runs ?? [];
+                if (runs.length === 0) return;
+                let pending = false;
+                for (const run of runs) {
+                  const outcome = (run.conclusion ?? "").toUpperCase();
+                  if (["FAILURE","ERROR","CANCELLED","TIMED_OUT","ACTION_REQUIRED","STALE"].includes(outcome)) {
+                    pr.checks_rollup = "FAILURE"; return;
+                  }
+                  if (!["SUCCESS","NEUTRAL","SKIPPED"].includes(outcome)) pending = true;
+                  if (run.status && run.status !== "completed" && !run.conclusion) pending = true;
+                }
+                pr.checks_rollup = pending ? "PENDING" : "SUCCESS";
+              } catch { /* best-effort */ }
+            })(),
+            // Mergeable state (list returns null/unknown — fetch single PR)
+            (async () => {
+              if (!num) return;
+              try {
+                const r = await githubFetch(`/repos/${nwo}/pulls/${num}`, token);
+                if (!r.ok) return;
+                const d = await r.json();
+                const state = (d.mergeable_state ?? "").toUpperCase();
+                if (state && state !== "UNKNOWN") pr.merge_state_status = state;
+              } catch { /* best-effort */ }
+            })(),
+          ]);
         }));
         return jsonResponse(req, res, prs);
       } catch (err) {
