@@ -341,6 +341,7 @@ pub fn run() {
             commands::azure::azure_device_start,
             commands::azure::azure_device_poll,
             commands::azure::azure_token_present,
+            commands::azure::azure_sign_out,
             commands::azure::az_current_user,
             commands::azure::az_list_prs,
             commands::azure::az_pr_count,

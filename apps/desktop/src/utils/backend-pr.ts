@@ -907,6 +907,15 @@ export async function azureTokenPresent(): Promise<boolean> {
   return false;
 }
 
+/**
+ * Sign out of Azure DevOps: removes both the access token and the Entra refresh
+ * token from the OS keychain. Must be called on account removal — clearing only
+ * the access token would leave the refresh token able to mint new tokens.
+ */
+export async function azureSignOut(): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("azure_sign_out");
+}
+
 /** Map the Rust `PullRequest` serde shape (snake_case) to the camelCase type. */
 function mapRawPr(pr: any): PullRequest {
   return {

@@ -11,7 +11,7 @@ import { useAccounts } from "../composables/useAccounts";
 import { useCredentials } from "../composables/useCredentials";
 import { useGithubAuth, GITHUB_TOKEN_KEY } from "../composables/useGithubAuth";
 import { useAzureAuth, AZURE_TOKEN_KEY } from "../composables/useAzureAuth";
-import { isTauri } from "../utils/backend";
+import { isTauri, azureSignOut } from "../utils/backend";
 import type { ForgeName } from "../composables/forge/types";
 
 // In dev:web there is no Rust backend — the GitHub flow is a fake mock that
@@ -168,7 +168,12 @@ async function submitForm() {
 async function onRemove(id: string) {
   const acc = accounts.value.find((a) => a.id === id);
   if (!acc) return;
-  if (acc.tokenKey) {
+  if (acc.forge === "azure") {
+    // Azure stores two keychain entries (access token + Entra refresh token);
+    // the generic single-entry delete below would leave the refresh token
+    // behind, able to silently mint new access tokens after sign-out.
+    await azureSignOut();
+  } else if (acc.tokenKey) {
     const slash = acc.tokenKey.indexOf("/");
     if (slash !== -1) await removeCredential(acc.tokenKey.slice(0, slash), acc.tokenKey.slice(slash + 1));
   }

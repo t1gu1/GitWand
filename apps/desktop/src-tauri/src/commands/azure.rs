@@ -104,6 +104,18 @@ fn write_secret(account: &str, value: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to store Azure token: {}", e))
 }
 
+/// Delete a value from the keychain under `AZ_SERVICE` / `account`. A missing
+/// entry is not an error — sign-out is idempotent.
+fn delete_secret(account: &str) -> Result<(), String> {
+    let entry = keyring::Entry::new(AZ_SERVICE, account)
+        .map_err(|e| format!("keyring init failed: {}", e))?;
+    match entry.delete_password() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Failed to delete Azure token: {}", e)),
+    }
+}
+
 /// Read the Settings-managed Azure access token from the OS keychain.
 pub(crate) fn settings_azure_token() -> Option<String> {
     read_secret(AZ_ACCOUNT)
@@ -1501,6 +1513,17 @@ pub(crate) async fn azure_device_poll(device_code: String) -> Result<GithubDevic
 #[tauri::command]
 pub(crate) async fn azure_token_present() -> Result<bool, String> {
     Ok(settings_azure_token().is_some())
+}
+
+/// Sign out of Azure DevOps: remove BOTH the access token and the Entra refresh
+/// token from the OS keychain. Deleting only the access token would leave the
+/// refresh token behind, able to silently mint new access tokens after the user
+/// believed they had signed out.
+#[tauri::command]
+pub(crate) async fn azure_sign_out() -> Result<(), String> {
+    delete_secret(AZ_ACCOUNT)?;
+    delete_secret(AZ_ACCOUNT_REFRESH)?;
+    Ok(())
 }
 
 #[cfg(test)]
