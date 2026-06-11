@@ -38,7 +38,7 @@
 
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
-use super::curl_util::{auth_header_config, run_curl};
+use super::curl_util::{bearer_config, curl_with_status};
 use rayon::prelude::*;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -147,15 +147,10 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 // ─── HTTP transport (curl) ──────────────────────────────────────────────────
 
-fn bearer_config(tok: &str) -> String {
-    auth_header_config("Bearer", tok)
-}
-
-/// Run a `curl` request and return `(http_status, body_text)`.
+/// Run a GitHub `curl` request and return `(http_status, body_text)`.
 ///
 /// `accept` selects the representation (`application/vnd.github+json` for JSON,
-/// `application/vnd.github.v3.diff` for raw diffs). The token, when present,
-/// is sent as a Bearer credential.
+/// `application/vnd.github.v3.diff` for raw diffs).
 fn curl_raw(
     method: &str,
     url: &str,
@@ -163,42 +158,13 @@ fn curl_raw(
     body_json: Option<&str>,
     accept: &str,
 ) -> Result<(i32, String), String> {
-    // `-w` appends the HTTP status on its own marker line so we can split it
-    // off the body without a second request.
-    const MARKER: &str = "\n__GW_HTTP_STATUS__";
-    let mut args: Vec<String> = vec![
-        "-s".to_string(),
-        "-X".to_string(), method.to_string(),
-        "-H".to_string(), format!("Accept: {}", accept),
-        "-H".to_string(), "User-Agent: GitWand".to_string(),
-        "-H".to_string(), "X-GitHub-Api-Version: 2022-11-28".to_string(),
-    ];
-    // The Authorization header carries the token. Passing it as a `-H` argv
-    // entry would expose the secret to `ps` / process listings, so feed it
-    // through a `--config -` file read from stdin instead (curl's `header =`
-    // directive is the long form of `-H`). Keeps the token off argv.
-    if token.is_some() {
-        args.push("--config".to_string());
-        args.push("-".to_string());
-    }
-    if let Some(b) = body_json {
-        args.push("-H".to_string());
-        args.push("Content-Type: application/json".to_string());
-        args.push("-d".to_string());
-        args.push(b.to_string());
-    }
-    args.push("-w".to_string());
-    args.push(format!("{}%{{http_code}}", MARKER));
-    args.push(url.to_string());
-
-    let output = run_curl(&args, token.map(bearer_config).as_deref())?;
-
-    let combined = String::from_utf8_lossy(&output.stdout).to_string();
-    let (body, status) = match combined.rsplit_once(MARKER) {
-        Some((b, s)) => (b.to_string(), s.trim().parse::<i32>().unwrap_or(0)),
-        None => (combined, 0),
-    };
-    Ok((status, body))
+    curl_with_status(
+        method, url,
+        token.map(bearer_config).as_deref(),
+        body_json,
+        &["User-Agent: GitWand", "X-GitHub-Api-Version: 2022-11-28"],
+        accept,
+    )
 }
 
 /// Perform a GitHub JSON API call. Maps HTTP ≥ 400 to a user-facing error,

@@ -22,7 +22,7 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use crate::git::hidden_cmd;
 use crate::types::*;
-use super::curl_util::{auth_header_config, run_curl};
+use super::curl_util::{auth_header_config, curl_with_status};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -123,67 +123,48 @@ fn repo_api(workspace: &str, slug: &str) -> String {
 
 // ─── HTTP helper ───────────────────────────────────────────────────────────────
 
-/// Transport layer: execute a curl request and return the raw response body.
-///
-/// `accept` selects the representation (`"application/json"` for API calls,
-/// `"*/*"` for plain-text endpoints like `/diff`). `Content-Type` is added
-/// automatically when `body_json` is present. The credential is fed via
-/// `--config -` stdin so it never appears on the process argv.
-///
-/// Returns the stdout body. Returns `Err` only on curl process failures
-/// (network error, spawn failure) when there is no body to inspect; HTTP-level
-/// errors are surfaced as a body (Bitbucket always returns a JSON error envelope)
-/// and handled by callers.
+/// Transport layer: delegate to `curl_with_status` with no forge-specific
+/// extra headers (Bitbucket needs none beyond `Accept` and auth).
 fn bb_curl_raw(
     method: &str,
     url: &str,
     body_json: Option<&str>,
     auth_config: &str,
     accept: &str,
-) -> Result<String, String> {
-    let mut args: Vec<String> = vec![
-        "-s".to_string(),
-        "-X".to_string(), method.to_string(),
-        "--config".to_string(), "-".to_string(),
-        "-H".to_string(), format!("Accept: {}", accept),
-    ];
-    if let Some(body) = body_json {
-        args.push("-H".to_string());
-        args.push("Content-Type: application/json".to_string());
-        args.push("-d".to_string());
-        args.push(body.to_string());
-    }
-    args.push(url.to_string());
-
-    let output = run_curl(&args, Some(auth_config))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    // Only treat an empty body as an error when curl itself reports failure
-    // (network/spawn issue). DELETE and some PUT calls legitimately return no body.
-    if stdout.trim().is_empty() && !output.status.success() {
-        return Err(format!(
-            "Bitbucket API call failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
-    }
-    Ok(stdout)
+) -> Result<(i32, String), String> {
+    curl_with_status(method, url, Some(auth_config), body_json, &[], accept)
 }
 
-/// JSON API call: thin interpreter on top of `bb_curl_raw`.
+/// JSON API call: interprets the `(status, body)` from `bb_curl_raw`.
 ///
-/// Parses the response body as JSON and maps Bitbucket's `{"error":{...}}`
-/// envelope to a Rust error. Empty bodies (DELETE / some PUT) return `Null`.
+/// HTTP ≥ 400 maps to an error (preferring the JSON `message` field).
+/// Empty bodies (DELETE / some PUT) return `Null`. Application-level errors
+/// surfaced in a 2xx `{"error":{...}}` envelope are also mapped to errors.
 fn bb_curl(
     method: &str,
     url: &str,
     body_json: Option<&str>,
     auth_config: &str,
 ) -> Result<serde_json::Value, String> {
-    let body = bb_curl_raw(method, url, body_json, auth_config, "application/json")?;
+    let (status, body) = bb_curl_raw(method, url, body_json, auth_config, "application/json")?;
+    if status >= 400 {
+        let msg = serde_json::from_str::<serde_json::Value>(body.trim())
+            .ok()
+            .and_then(|v| {
+                v.get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|m| m.as_str())
+                    .map(String::from)
+            })
+            .unwrap_or_else(|| format!("HTTP {}", status));
+        return Err(format!("Bitbucket API error: {}", msg));
+    }
     if body.trim().is_empty() {
         return Ok(serde_json::Value::Null);
     }
     let json: serde_json::Value = serde_json::from_str(body.trim())
         .map_err(|e| format!("Failed to parse Bitbucket response: {} — raw: {}", e, &body[..body.len().min(300)]))?;
+    // Secondary check: Bitbucket sometimes returns 2xx with an error envelope.
     if let Some(error) = json.get("error") {
         let msg = error
             .get("message")
@@ -546,7 +527,11 @@ pub(crate) async fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String
 
     // Bitbucket /diff endpoint returns plain-text unified diff — not JSON.
     let url = format!("{}/pullrequests/{}/diff", repo_api(&workspace, &slug), pr_id);
-    bb_curl_raw("GET", &url, None, &auth_config, "*/*")
+    let (status, body) = bb_curl_raw("GET", &url, None, &auth_config, "*/*")?;
+    if status >= 400 {
+        return Err(format!("Bitbucket diff failed (HTTP {}): {}", status, body.trim()));
+    }
+    Ok(body)
 }
 
 /// Create a PR via Bitbucket REST API.

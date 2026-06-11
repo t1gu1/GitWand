@@ -35,7 +35,7 @@
 
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
-use super::curl_util::{auth_header_config, run_curl};
+use super::curl_util::{bearer_config, curl_with_status, run_curl};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -290,10 +290,6 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 // ─── HTTP transport (curl) ──────────────────────────────────────────────────
 
-fn bearer_config(tok: &str) -> String {
-    auth_header_config("Bearer", tok)
-}
-
 /// curl config-file contents that carry form fields as `data-urlencode`
 /// directives, so secrets (refresh_token, device_code) stay off argv. Used with
 /// `--config -`. Field values here never contain a double-quote.
@@ -305,44 +301,20 @@ fn form_config(fields: &[(&str, &str)]) -> String {
     cfg
 }
 
-/// Run a `curl` request and return `(http_status, body_text)`.
+/// Run an Azure DevOps `curl` request and return `(http_status, body_text)`.
 fn curl_raw(
     method: &str,
     url: &str,
     token: Option<&str>,
     body_json: Option<&str>,
 ) -> Result<(i32, String), String> {
-    const MARKER: &str = "\n__GW_HTTP_STATUS__";
-    let mut args: Vec<String> = vec![
-        "-s".to_string(),
-        "-X".to_string(), method.to_string(),
-        "-H".to_string(), "Accept: application/json".to_string(),
-        "-H".to_string(), "User-Agent: GitWand".to_string(),
-    ];
-    // Bearer token via `--config -` (stdin) rather than a `-H` argv entry, so
-    // the secret never appears in process listings.
-    if token.is_some() {
-        args.push("--config".to_string());
-        args.push("-".to_string());
-    }
-    if let Some(b) = body_json {
-        args.push("-H".to_string());
-        args.push("Content-Type: application/json".to_string());
-        args.push("-d".to_string());
-        args.push(b.to_string());
-    }
-    args.push("-w".to_string());
-    args.push(format!("{}%{{http_code}}", MARKER));
-    args.push(url.to_string());
-
-    let output = run_curl(&args, token.map(bearer_config).as_deref())?;
-
-    let combined = String::from_utf8_lossy(&output.stdout).to_string();
-    let (body, status) = match combined.rsplit_once(MARKER) {
-        Some((b, s)) => (b.to_string(), s.trim().parse::<i32>().unwrap_or(0)),
-        None => (combined, 0),
-    };
-    Ok((status, body))
+    curl_with_status(
+        method, url,
+        token.map(bearer_config).as_deref(),
+        body_json,
+        &["User-Agent: GitWand"],
+        "application/json",
+    )
 }
 
 /// Form-encoded POST (Entra token/devicecode endpoints expect this), returns
@@ -364,7 +336,8 @@ fn curl_form(url: &str, fields: &[(&str, &str)]) -> Result<(i32, String), String
     args.push(url.to_string());
 
     let output = run_curl(&args, Some(&form_config(fields)))?;
-    let combined = String::from_utf8_lossy(&output.stdout).to_string();
+    let combined = String::from_utf8(output.stdout)
+        .map_err(|e| format!("curl returned invalid UTF-8: {}", e))?;
     let (body, status) = match combined.rsplit_once(MARKER) {
         Some((b, s)) => (b.to_string(), s.trim().parse::<i32>().unwrap_or(0)),
         None => (combined, 0),
