@@ -196,6 +196,23 @@ fn js(v: &serde_json::Value, key: &str) -> String {
     v.get(key).and_then(|x| x.as_str()).unwrap_or("").to_string()
 }
 
+/// Percent-encode an `owner/repo` slug for use inside a search query value,
+/// keeping the `/` separator literal. GitHub.com names only use unreserved
+/// characters, but GitHub Enterprise can surface unexpected ones; encoding
+/// here avoids a malformed query that would silently return wrong counts.
+fn enc_nwo(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' | b'/' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
+
 fn ji(v: &serde_json::Value, key: &str) -> i64 {
     v.get(key).and_then(|x| x.as_i64()).unwrap_or(0)
 }
@@ -563,7 +580,7 @@ pub(crate) fn rest_pr_count(cwd: &str, state: &str, token: &str) -> Result<i64, 
     // /search/issues returns total_count without expanding every item.
     let url = format!(
         "{}/search/issues?q=repo:{}+type:pr{}&per_page=1",
-        API_BASE, base, qualifier
+        API_BASE, enc_nwo(&base), qualifier
     );
     let v = api_json("GET", &url, token, None)?;
     Ok(v.get("total_count").and_then(|c| c.as_i64()).unwrap_or(0))
