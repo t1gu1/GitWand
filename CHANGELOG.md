@@ -24,8 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23licwiCpPiRPRodWN`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
-- Azure DevOps sign-in ships with a **temporary** default Entra ID client id — the well-known Azure CLI public client (`04b07795-8ddb-461a-bbee-02f9e1bf7b46`, device flow enabled) — so it works without registering an app. Stop-gap only: the consent screen reads "Microsoft Azure CLI" and Microsoft may restrict reuse. Override with a dedicated GitWand Entra app via `GITWAND_AZURE_CLIENT_ID` (runtime or build time) before shipping.
+- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23li1JPkwPsqdFrJ76`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
+- Ships with GitWand's registered Entra ID public client (`e26aa15d-856c-4a64-98ed-d44d4c7b3a18`, device flow enabled) baked into `azure.rs` for Azure DevOps sign-in. Override with a different Entra app via `GITWAND_AZURE_CLIENT_ID` (runtime or build time) if needed.
 
 ## [2.17.0] - 2026-06-04
 
