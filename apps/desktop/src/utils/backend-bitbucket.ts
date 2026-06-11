@@ -7,6 +7,9 @@ import {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
+  CIAnnotationRaw,
+  mapAnnotation,
   PrReviewComment,
   PrReview,
   ReviewerCandidate,
@@ -162,6 +165,13 @@ export async function bbPrFiles(cwd: string, prId: number): Promise<string[]> {
 export async function bbPrCiChecks(cwd: string, prId: number): Promise<CICheck[]> {
   if (!isTauri()) return [];
   return tauriInvoke<CICheck[]>("bb_pr_ci_checks", { cwd, prId });
+}
+
+/** Get report annotations for a PR via the Bitbucket Reports API (v2.18). */
+export async function bbPrAnnotations(cwd: string, prId: number): Promise<CIAnnotation[]> {
+  if (!isTauri()) return [];
+  const raw = await tauriInvoke<CIAnnotationRaw[]>("bb_pr_annotations", { cwd, prId });
+  return raw.map(mapAnnotation);
 }
 
 /** Convert a "Draft: …" Bitbucket PR to ready-for-review (strips title prefix). */

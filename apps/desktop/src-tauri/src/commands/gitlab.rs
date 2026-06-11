@@ -458,6 +458,129 @@ fn gl_pipeline_rollup(cwd: &str, iid: i64) -> String {
     gl_status_to_rollup(&status)
 }
 
+/// Helper — run `glab api <endpoint>` and parse the JSON response.
+/// Returns `None` on any failure (non-fatal pattern, like gl_mr_pipelines).
+fn glab_api_json(cwd: &str, endpoint: &str) -> Option<serde_json::Value> {
+    let output = hidden_cmd("glab")
+        .args(["api", endpoint])
+        .current_dir(cwd)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    serde_json::from_str(stdout.trim()).ok()
+}
+
+/// Get code-quality annotations for a MR (v2.18 — Inline CI Check Annotations).
+///
+/// GitLab has no per-line check-runs API; the equivalent signal is the
+/// `artifacts:reports:codequality` report (Code Climate JSON format).
+///
+/// Flow:
+///   1. Latest pipeline of the MR
+///   2. Pipeline jobs → those exposing a `codequality` artifact
+///   3. Download `gl-code-quality-report.json` from the job artifacts
+///   4. Map Code Climate severity → failure / warning / notice
+///
+/// Non-fatal everywhere: no pipeline / no report → `[]`.
+#[tauri::command]
+pub(crate) fn gl_mr_annotations(cwd: String, iid: i64) -> Result<Vec<CIAnnotation>, String> {
+    // 1. Latest pipeline.
+    let pipelines = match glab_api_json(
+        &cwd,
+        &format!("projects/:fullpath/merge_requests/{}/pipelines", iid),
+    ) {
+        Some(v) => v,
+        None => return Ok(Vec::new()),
+    };
+    let pipeline_id = match pipelines.as_array().and_then(|a| a.first()).map(|p| ji(p, "id")) {
+        Some(id) if id > 0 => id,
+        _ => return Ok(Vec::new()),
+    };
+
+    // 2. Jobs of that pipeline, keep those with a codequality report artifact.
+    let jobs = match glab_api_json(
+        &cwd,
+        &format!("projects/:fullpath/pipelines/{}/jobs?per_page=100", pipeline_id),
+    ) {
+        Some(v) => v,
+        None => return Ok(Vec::new()),
+    };
+    let empty = vec![];
+    let jobs = jobs.as_array().unwrap_or(&empty);
+
+    let mut annotations = Vec::new();
+    for job in jobs {
+        let has_codequality = job
+            .get("artifacts")
+            .and_then(|a| a.as_array())
+            .map(|arts| arts.iter().any(|f| js(f, "file_type") == "codequality"))
+            .unwrap_or(false);
+        if !has_codequality {
+            continue;
+        }
+        let job_id = ji(job, "id");
+        let job_name = js(job, "name");
+
+        // 3. Report file. Default filename produced by `artifacts:reports:codequality`.
+        let report = match glab_api_json(
+            &cwd,
+            &format!(
+                "projects/:fullpath/jobs/{}/artifacts/gl-code-quality-report.json",
+                job_id
+            ),
+        ) {
+            Some(v) => v,
+            None => continue, // report expired or custom filename — skip
+        };
+        let Some(entries) = report.as_array() else { continue };
+
+        // 4. Code Climate format:
+        //    { description, check_name, severity, location: { path, lines: { begin, end? } } }
+        for e in entries {
+            let begin = e
+                .get("location")
+                .and_then(|l| l.get("lines"))
+                .and_then(|l| l.get("begin"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let end = e
+                .get("location")
+                .and_then(|l| l.get("lines"))
+                .and_then(|l| l.get("end"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(begin);
+            let path = e
+                .get("location")
+                .and_then(|l| l.get("path"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            if path.is_empty() || begin == 0 {
+                continue;
+            }
+            let level = match js(e, "severity").as_str() {
+                "blocker" | "critical" | "major" => "failure",
+                "minor" => "warning",
+                _ => "notice", // "info" + unknown
+            };
+            annotations.push(CIAnnotation {
+                check_name: job_name.clone(),
+                path,
+                start_line: begin,
+                end_line: end.max(begin),
+                level: level.to_string(),
+                title: js(e, "check_name"),
+                message: js(e, "description"),
+            });
+        }
+    }
+
+    Ok(annotations)
+}
+
 /// Create a MR using `glab mr create`.
 #[tauri::command]
 pub(crate) async fn gl_create_mr(

@@ -829,6 +829,10 @@ const fr: Locale = {
       noDiff: "Aucun diff disponible.",
       noChecks: "Aucun check CI trouvé.",
     },
+    annotations: {
+      badge: "{0} annotation(s)",
+      badgeTooltip: "Voir les annotations dans le diff",
+    },
     comment: {
       edit: "Modifier",
       delete: "Supprimer",

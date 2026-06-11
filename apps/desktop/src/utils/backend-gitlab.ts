@@ -7,6 +7,9 @@ import {
   PullRequest,
   PullRequestDetail,
   CICheck,
+  CIAnnotation,
+  CIAnnotationRaw,
+  mapAnnotation,
   PrReviewComment,
   PrReview,
   ReviewerCandidate,
@@ -78,6 +81,13 @@ export async function glMrDiff(cwd: string, iid: number): Promise<string> {
 export async function glMrPipelines(cwd: string, iid: number): Promise<CICheck[]> {
   if (!isTauri()) return [];
   return tauriInvoke<CICheck[]>("gl_mr_pipelines", { cwd, iid });
+}
+
+/** Get codequality annotations for a MR (v2.18). Returns [] when no report exists. */
+export async function glMrAnnotations(cwd: string, iid: number): Promise<CIAnnotation[]> {
+  if (!isTauri()) return [];
+  const raw = await tauriInvoke<CIAnnotationRaw[]>("gl_mr_annotations", { cwd, iid });
+  return raw.map(mapAnnotation);
 }
 
 /** Create a MR. */

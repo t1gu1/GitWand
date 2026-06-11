@@ -865,3 +865,115 @@ pub(crate) async fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
         .await
         .map_err(|e| e.to_string())?
 }
+
+/// Get check-run annotations for a PR (v2.18 — Inline CI Check Annotations).
+///
+/// Flow:
+///   1. `gh pr view --json headRefOid` → head commit SHA
+///   2. `gh api repos/{owner}/{repo}/commits/{sha}/check-runs` → runs with
+///      `output.annotations_count` (gh resolves `{owner}/{repo}` from cwd)
+///   3. For each run with annotations: `gh api .../check-runs/{id}/annotations`
+///
+/// Non-fatal everywhere: a repo without checks/annotations returns `[]`.
+#[tauri::command]
+pub(crate) fn gh_check_annotations(cwd: String, number: i64) -> Result<Vec<CIAnnotation>, String> {
+    // 1. Head SHA of the PR.
+    let output = hidden_cmd("gh")
+        .args(["pr", "view", &number.to_string(), "--json", "headRefOid"])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh pr view: {}", e))?;
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let sha = match extract_json_string(stdout.trim(), "headRefOid") {
+        Some(s) if !s.is_empty() => s,
+        _ => return Ok(Vec::new()),
+    };
+
+    // 2. Check-runs for that commit (id + annotations_count).
+    let output = hidden_cmd("gh")
+        .args([
+            "api",
+            &format!("repos/{{owner}}/{{repo}}/commits/{}/check-runs?per_page=100", sha),
+        ])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("gh api check-runs: {}", e))?;
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(stdout.trim()).unwrap_or(serde_json::Value::Null);
+    let runs = parsed
+        .get("check_runs")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // 3. Fetch annotations for runs that have any. Cap the number of runs
+    //    queried so a pathological CI setup can't fan out dozens of API calls.
+    const MAX_ANNOTATED_RUNS: usize = 20;
+    let mut annotations = Vec::new();
+    for run in runs
+        .iter()
+        .filter(|r| {
+            r.get("output")
+                .and_then(|o| o.get("annotations_count"))
+                .and_then(|c| c.as_i64())
+                .unwrap_or(0)
+                > 0
+        })
+        .take(MAX_ANNOTATED_RUNS)
+    {
+        let run_id = match run.get("id").and_then(|v| v.as_i64()) {
+            Some(id) => id,
+            None => continue,
+        };
+        let check_name = run
+            .get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let output = hidden_cmd("gh")
+            .args([
+                "api",
+                &format!("repos/{{owner}}/{{repo}}/check-runs/{}/annotations?per_page=100", run_id),
+            ])
+            .current_dir(&cwd)
+            .output();
+        let output = match output {
+            Ok(o) if o.status.success() => o,
+            _ => continue, // annotations gone (e.g. expired) — skip this run
+        };
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let arr: serde_json::Value =
+            serde_json::from_str(stdout.trim()).unwrap_or(serde_json::Value::Array(vec![]));
+        let Some(items) = arr.as_array() else { continue };
+
+        for a in items {
+            let s = |k: &str| a.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let n = |k: &str| a.get(k).and_then(|v| v.as_i64()).unwrap_or(0);
+            // GitHub levels are already our canonical set.
+            let level = match s("annotation_level").as_str() {
+                "failure" => "failure",
+                "warning" => "warning",
+                _ => "notice",
+            };
+            annotations.push(CIAnnotation {
+                check_name: check_name.clone(),
+                path: s("path"),
+                start_line: n("start_line"),
+                end_line: n("end_line").max(n("start_line")),
+                level: level.to_string(),
+                title: s("title"),
+                message: s("message"),
+            });
+        }
+    }
+
+    Ok(annotations)
+}

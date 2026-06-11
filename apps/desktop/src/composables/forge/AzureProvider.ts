@@ -48,6 +48,7 @@ import {
   type PullRequest,
   type PullRequestDetail,
   type CICheck,
+  type CIAnnotation,
   type PrReviewComment,
   type CreatePrCommentParams,
   type PrReview,
@@ -110,6 +111,12 @@ export class AzureProvider implements ForgeProvider {
   getCIChecks(cwd: string, number: number): Promise<CICheck[]> {
     // Azure branch-policy evaluations (build validation, reviewers, etc.).
     return azPrChecks(cwd, number);
+  }
+
+  getCheckAnnotations(_cwd: string, _number: number): Promise<CIAnnotation[]> {
+    // Azure DevOps has no wired per-line check-annotation source yet; degrade
+    // gracefully with an empty list (same pattern as other unwired Azure bits).
+    return Promise.resolve([]);
   }
 
   // ── PR actions ─────────────────────────────────────────────────────────────

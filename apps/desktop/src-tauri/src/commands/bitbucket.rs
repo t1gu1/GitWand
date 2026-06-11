@@ -1028,6 +1028,95 @@ pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CIChe
     Ok(checks)
 }
 
+/// Get report annotations for a PR (v2.18 — Inline CI Check Annotations).
+///
+/// Uses the Bitbucket Reports API:
+///   1. PR → head commit SHA
+///   2. `GET /commit/{sha}/reports` → reports created by Pipelines / linters
+///   3. `GET /commit/{sha}/reports/{id}/annotations` per report
+///
+/// Severity mapping: CRITICAL|HIGH → failure, MEDIUM → warning, LOW → notice.
+/// Non-fatal everywhere: no reports → `[]`.
+#[tauri::command]
+pub(crate) fn bb_pr_annotations(cwd: String, pr_id: i64) -> Result<Vec<CIAnnotation>, String> {
+    let (workspace, slug) = parse_workspace_slug(&cwd)?;
+    let (username, app_password) = get_bb_creds(&cwd)?;
+    let auth = basic_auth_config(&username, &app_password);
+
+    // 1. Head commit SHA.
+    let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
+    let pr = bb_curl("GET", &pr_url, None, &auth)?;
+    let head_sha = jdeep(&pr, "source", "commit", "hash");
+    if head_sha.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 2. Reports on that commit.
+    let reports_url = format!(
+        "{}/commit/{}/reports?pagelen=20",
+        repo_api(&workspace, &slug),
+        head_sha
+    );
+    let resp = bb_curl("GET", &reports_url, None, &auth).unwrap_or(serde_json::Value::Null);
+    let reports = resp
+        .get("values")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    // 3. Annotations per report.
+    let mut annotations = Vec::new();
+    for report in &reports {
+        let report_id = js(report, "uuid");
+        if report_id.is_empty() {
+            continue;
+        }
+        let report_title = js(report, "title");
+        let ann_url = format!(
+            "{}/commit/{}/reports/{}/annotations?pagelen=100",
+            repo_api(&workspace, &slug),
+            head_sha,
+            report_id
+        );
+        let resp = match bb_curl("GET", &ann_url, None, &auth) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        let values = resp
+            .get("values")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        for a in &values {
+            let path = js(a, "path");
+            let line = ji(a, "line");
+            if path.is_empty() || line == 0 {
+                continue; // commit-level annotation — nothing to anchor in the diff
+            }
+            let level = match js(a, "severity").as_str() {
+                "CRITICAL" | "HIGH" => "failure",
+                "MEDIUM" => "warning",
+                _ => "notice", // LOW + unknown
+            };
+            annotations.push(CIAnnotation {
+                check_name: report_title.clone(),
+                path,
+                start_line: line,
+                end_line: line,
+                level: level.to_string(),
+                title: js(a, "summary"),
+                message: {
+                    let d = js(a, "details");
+                    if d.is_empty() { js(a, "summary") } else { d }
+                },
+            });
+        }
+    }
+
+    Ok(annotations)
+}
+
 /// Convert a "Draft: …" Bitbucket PR to ready-for-review by stripping the prefix.
 ///
 /// Bitbucket has no native draft concept — the convention is a "Draft: " title

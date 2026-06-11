@@ -819,6 +819,10 @@ const ptBR: Locale = {
       noDiff: "Sem diff disponível.",
       noChecks: "Nenhum check de CI encontrado.",
     },
+    annotations: {
+      badge: "{0} anotação(ões)",
+      badgeTooltip: "Ver as anotações no diff",
+    },
     comment: {
       edit: "Editar",
       delete: "Excluir",

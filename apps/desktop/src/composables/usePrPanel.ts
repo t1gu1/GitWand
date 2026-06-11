@@ -13,6 +13,7 @@ import {
   type PullRequest,
   type PullRequestDetail,
   type CICheck,
+  type CIAnnotation,
   type RemoteInfo,
   type GitDiff,
   type DiffHunk,
@@ -109,6 +110,11 @@ export function usePrPanel(cwd: Ref<string>) {
   const selectedPr = ref<PullRequest | null>(null);
   const prDetail = ref<PullRequestDetail | null>(null);
   const prChecks = ref<CICheck[]>([]);
+  // ─── CI annotations (v2.18) ─────────────────────────────
+  // Lazy-loaded once per PR, when the Diff or Checks tab is opened.
+  const prAnnotations = ref<CIAnnotation[]>([]);
+  const annotationsLoading = ref(false);
+  const annotationsLoaded = ref(false);
   const prDiffFiles = ref<GitDiff[]>([]);
   const prComments = ref<PrReviewComment[]>([]);
   const prIssueComments = ref<PrReviewComment[]>([]);
@@ -477,6 +483,8 @@ export function usePrPanel(cwd: Ref<string>) {
   function resetDetail() {
     prDetail.value = null;
     prChecks.value = [];
+    prAnnotations.value = [];
+    annotationsLoaded.value = false;
     prDiffFiles.value = [];
     prComments.value = [];
     prIssueComments.value = [];
@@ -597,8 +605,54 @@ export function usePrPanel(cwd: Ref<string>) {
     }
   }
 
+  /**
+   * Load check-run annotations (v2.18). Lazy: fired the first time the
+   * Diff or Checks tab is opened for the selected PR. One flight max —
+   * `annotationsLoaded` stays true even on an empty result, so a CI
+   * without annotations doesn't re-trigger the forge call on every
+   * tab switch.
+   */
+  async function loadAnnotations() {
+    if (!selectedPr.value || annotationsLoaded.value || annotationsLoading.value) return;
+    annotationsLoading.value = true;
+    try {
+      prAnnotations.value = await forge.value.getCheckAnnotations(
+        cwd.value,
+        selectedPr.value.number,
+      );
+      annotationsLoaded.value = true;
+    } catch {
+      // Non-fatal — gutter and badges simply stay empty.
+      annotationsLoaded.value = true;
+    } finally {
+      annotationsLoading.value = false;
+    }
+  }
+
+  /** Annotation count per check name — feeds the "N annotations" badge (CI tab). */
+  const annotationCountByCheck = computed<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    for (const a of prAnnotations.value) {
+      counts[a.checkName] = (counts[a.checkName] ?? 0) + 1;
+    }
+    return counts;
+  });
+
+  /** Annotations grouped by file path — feeds the diff gutter icons. */
+  const annotationsByFile = computed<Record<string, CIAnnotation[]>>(() => {
+    const map: Record<string, CIAnnotation[]> = {};
+    for (const a of prAnnotations.value) {
+      (map[a.path] ??= []).push(a);
+    }
+    return map;
+  });
+
   watch(detailTab, async (tab) => {
-    if (tab === "diff") loadDiff();
+    if (tab === "diff") {
+      loadDiff();
+      loadAnnotations();
+    }
+    if (tab === "checks") loadAnnotations();
     if (tab === "intelligence") {
       if (prDiffFiles.value.length === 0) await loadDiff();
       if (!hotspots.value.length) loadHotspots();
@@ -971,6 +1025,9 @@ export function usePrPanel(cwd: Ref<string>) {
     mergingPr, mergeMethod,
     selectedPr, prDetail, prChecks, checksWithConflict, prDiffFiles, prComments, prIssueComments, prReviews,
     detailLoading, detailRefreshing, detailError, detailTab, selectedDiffFile, diffMode,
+    // CI annotations (v2.18)
+    prAnnotations, annotationsLoading, annotationsLoaded,
+    annotationCountByCheck, annotationsByFile, loadAnnotations,
     draftReviewComments, showReviewModal, submittingReview,
     conflictPreview, conflictLoading, conflictError,
     hotspots, hotspotsLoading, totalRepoFiles, fileHistory, fileHistoryLoading,

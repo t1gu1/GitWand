@@ -5,6 +5,22 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.18.0 — June 2026
+
+### Your CI, inside the diff
+
+When a linter or typecheck fails, you no longer have to dig through CI logs to find the offending line. Check-run annotations now appear directly in the PR diff: a ❌, ⚠ or ℹ icon in the gutter marks each affected line, and hovering shows the full message and which check produced it. Files flagged by the CI carry a ⚠ count in the diff sidebar, and in the CI tab, any check that produced annotations gets an "N annotations" badge — click it to jump straight to the diff.
+
+### All three forges
+
+GitHub check-run annotations, GitLab code-quality reports (`artifacts:reports:codequality`), and Bitbucket report annotations all feed the same overlay. No configuration: if your pipeline already publishes annotations, GitWand shows them. Annotations load once per pull request, the first time you open the Diff or CI tab — browsing your PR list costs nothing extra.
+
+### Copilot CLI as an AI provider
+
+GitHub Copilot's CLI joins Claude Code, Codex and opencode as an AI provider. If you have the `copilot` binary and a Copilot subscription, pick it in Settings → AI — no API key needed. GitWand runs it in a text-only sandbox: it can write your commit messages, but it can't touch your files or run shell commands.
+
+---
+
 ## v2.17.0 — June 2026
 
 ### opencode joins the lineup

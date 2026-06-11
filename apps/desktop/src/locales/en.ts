@@ -835,6 +835,10 @@ const en = {
       noDiff: "No diff available.",
       noChecks: "No CI checks found.",
     },
+    annotations: {
+      badge: "{0} annotation(s)",
+      badgeTooltip: "View annotations in the diff",
+    },
     comment: {
       edit: "Edit",
       delete: "Delete",
