@@ -12,36 +12,25 @@
 //!     deserialization (already centralized in §3.4a).
 //!   - `crate::types::{PullRequest, PullRequestDetail, ReviewerCandidate,
 //!     CICheck, GhPrRaw, GhPrDetailRaw}` for the IPC shapes.
+//!
+//! ## Async / blocking note
+//!
+//! All Tauri commands here do blocking I/O (subprocess spawns via `gh`/`curl`
+//! or OS keychain reads). They are declared `async` and offloaded with
+//! `spawn_blocking` — matching `azure.rs` — so the Tokio executor thread is
+//! never held by a synchronous wait.
 
 use crate::git::*;
 use crate::types::*;
 use crate::commands::github_api;
 use serde_json;
 
-/// List pull requests using `gh` CLI.
-///
-/// **Perf note** : `statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
-/// `reviewDecision`, `additions` and `deletions` each cost a per-PR roundtrip
-/// to the GitHub API internally — gh expands the GraphQL edge by issuing a
-/// checks endpoint hit per PR. For a repo with 100+ open PRs (e.g. dendreo),
-/// the full query took >30s and tripped the IPC timeout.
-///
-/// v2.8.5 — Boot perf chantier:
-///   - `--limit 50 → 10` (first page); pagination handled via the `offset`
-///     parameter from the frontend (`PrListSidebar` IntersectionObserver).
-///   - JSON field list shrunk to 12 cheap fields. The heavy fields
-///     (`statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
-///     `reviewDecision`, `additions`, `deletions`) are now fetched lazily
-///     per-PR when the user opens the detail view. Sidebar badges that
-///     relied on them gracefully fall back to empty values until the user
-///     selects the PR. See `PrListSidebar.vue` for the UI side.
-///
-/// TODO Phase 2 (v2.9): lazy per-PR enrichment via a dedicated
-/// `gh_pr_status_rollup(cwd, numbers)` batched call that returns just the
-/// CI/merge state pieces — keeps the list query light while still letting
-/// the sidebar render CI/merge dots without a click.
-#[tauri::command]
-pub(crate) async fn gh_list_prs(
+// ─── Inner (sync) implementations ───────────────────────────────────────────
+//
+// Each Tauri command delegates to a private sync fn so the async wrapper
+// can offload all blocking work via `spawn_blocking` without deep nesting.
+
+fn gh_list_prs_inner(
     cwd: String,
     state: String,
     limit: Option<i64>,
@@ -109,25 +98,41 @@ pub(crate) async fn gh_list_prs(
     Ok(prs)
 }
 
-/// Lightweight PR count — single GraphQL `totalCount` call, no per-PR roundtrip.
+/// List pull requests using `gh` CLI.
 ///
-/// Used at app boot (DashboardView) and as the sidebar badge source: the
-/// dashboard only needs the number of open PRs, not the full list. Falling
-/// back to the heavy `gh_list_prs` for a count was costing 1 roundtrip per
-/// PR × 2 calls (open + merged) at every repo open (v2.8.4 → v2.8.5 perf
-/// chantier).
+/// **Perf note** : `statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
+/// `reviewDecision`, `additions` and `deletions` each cost a per-PR roundtrip
+/// to the GitHub API internally — gh expands the GraphQL edge by issuing a
+/// checks endpoint hit per PR. For a repo with 100+ open PRs (e.g. dendreo),
+/// the full query took >30s and tripped the IPC timeout.
 ///
-/// Implementation: `gh api graphql` with the `pullRequests.totalCount` edge
-/// after resolving `owner/name` via `gh repo view --json nameWithOwner`.
-/// Both calls are cheap (<200 ms) and avoid expanding the PR objects.
+/// v2.8.5 — Boot perf chantier:
+///   - `--limit 50 → 10` (first page); pagination handled via the `offset`
+///     parameter from the frontend (`PrListSidebar` IntersectionObserver).
+///   - JSON field list shrunk to 12 cheap fields. The heavy fields
+///     (`statusCheckRollup`, `mergeStateStatus`, `reviewRequests`,
+///     `reviewDecision`, `additions`, `deletions`) are now fetched lazily
+///     per-PR when the user opens the detail view. Sidebar badges that
+///     relied on them gracefully fall back to empty values until the user
+///     selects the PR. See `PrListSidebar.vue` for the UI side.
 ///
-/// `state` accepts "open" (default), "closed", "merged" or "all". `all`
-/// maps to GraphQL `[OPEN, CLOSED, MERGED]`.
-///
-/// Returns 0 on any non-fatal failure (no remote, no token, etc.) so the
-/// dashboard can still render — the caller decides whether to surface.
+/// TODO Phase 2 (v2.9): lazy per-PR enrichment via a dedicated
+/// `gh_pr_status_rollup(cwd, numbers)` batched call that returns just the
+/// CI/merge state pieces — keeps the list query light while still letting
+/// the sidebar render CI/merge dots without a click.
 #[tauri::command]
-pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
+pub(crate) async fn gh_list_prs(
+    cwd: String,
+    state: String,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<PullRequest>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_list_prs_inner(cwd, state, limit, offset))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_count_inner(cwd: String, state: String) -> Result<i64, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_count(&cwd, &state, &tok);
     }
@@ -216,9 +221,31 @@ pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, Strin
         .map_err(|e| format!("totalCount parse: {}", e))
 }
 
-/// Create a pull request using `gh` CLI.
+/// Lightweight PR count — single GraphQL `totalCount` call, no per-PR roundtrip.
+///
+/// Used at app boot (DashboardView) and as the sidebar badge source: the
+/// dashboard only needs the number of open PRs, not the full list. Falling
+/// back to the heavy `gh_list_prs` for a count was costing 1 roundtrip per
+/// PR × 2 calls (open + merged) at every repo open (v2.8.4 → v2.8.5 perf
+/// chantier).
+///
+/// Implementation: `gh api graphql` with the `pullRequests.totalCount` edge
+/// after resolving `owner/name` via `gh repo view --json nameWithOwner`.
+/// Both calls are cheap (<200 ms) and avoid expanding the PR objects.
+///
+/// `state` accepts "open" (default), "closed", "merged" or "all". `all`
+/// maps to GraphQL `[OPEN, CLOSED, MERGED]`.
+///
+/// Returns 0 on any non-fatal failure (no remote, no token, etc.) so the
+/// dashboard can still render — the caller decides whether to surface.
 #[tauri::command]
-pub(crate) async fn gh_create_pr(
+pub(crate) async fn gh_pr_count(cwd: String, state: String) -> Result<i64, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_count_inner(cwd, state))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_create_pr_inner(
     cwd: String,
     title: String,
     body: String,
@@ -271,8 +298,7 @@ pub(crate) async fn gh_create_pr(
         }
     }
 
-    // Add JSON output
-    // Note: gh pr create doesn't support --json, but returns the URL
+    // Note: gh pr create doesn't support --json, but returns the URL.
     let output = hidden_cmd("gh")
         .args(&args)
         .current_dir(&cwd)
@@ -286,7 +312,7 @@ pub(crate) async fn gh_create_pr(
 
     let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-    // Fetch the PR details using the URL
+    // Fetch the PR details using the URL.
     let view_output = hidden_cmd("gh")
         .args([
             "pr", "view",
@@ -337,12 +363,25 @@ pub(crate) async fn gh_create_pr(
     })
 }
 
-/// List candidate reviewers for the current repo using `gh` CLI.
-///
-/// Calls `gh api /repos/:owner/:repo/assignees` (paginated) which returns
-/// users with push access — exactly the set GitHub allows as reviewers.
+/// Create a pull request using `gh` CLI.
 #[tauri::command]
-pub(crate) async fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+pub(crate) async fn gh_create_pr(
+    cwd: String,
+    title: String,
+    body: String,
+    base: String,
+    base_repo: Option<String>,
+    draft: bool,
+    reviewers: Option<Vec<String>>,
+) -> Result<PullRequest, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        gh_create_pr_inner(cwd, title, body, base, base_repo, draft, reviewers)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn gh_list_reviewer_candidates_inner(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     // Discover owner/repo from the current repo.
     let view = hidden_cmd("gh")
         .args(["repo", "view", "--json", "owner,name"])
@@ -413,9 +452,18 @@ pub(crate) async fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<Revie
     Ok(all)
 }
 
-/// Checkout a PR branch locally using `gh` CLI.
+/// List candidate reviewers for the current repo using `gh` CLI.
+///
+/// Calls `gh api /repos/:owner/:repo/assignees` (paginated) which returns
+/// users with push access — exactly the set GitHub allows as reviewers.
 #[tauri::command]
-pub(crate) async fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
+pub(crate) async fn gh_list_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_list_reviewer_candidates_inner(cwd))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_checkout_pr_inner(cwd: String, number: i64) -> Result<(), String> {
     if github_api::settings_github_token().is_some() {
         return github_api::rest_checkout_pr(&cwd, number);
     }
@@ -433,9 +481,15 @@ pub(crate) async fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), Strin
     Ok(())
 }
 
-/// Merge a PR using `gh` CLI.
+/// Checkout a PR branch locally using `gh` CLI.
 #[tauri::command]
-pub(crate) async fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<(), String> {
+pub(crate) async fn gh_checkout_pr(cwd: String, number: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || gh_checkout_pr_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_merge_pr_inner(cwd: String, number: i64, method: String) -> Result<(), String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_merge_pr(&cwd, number, &method, &tok);
     }
@@ -459,12 +513,15 @@ pub(crate) async fn gh_merge_pr(cwd: String, number: i64, method: String) -> Res
     Ok(())
 }
 
-/// Convert a draft PR to a ready-for-review PR via `gh pr ready`.
-///
-/// Idempotent — `gh pr ready` on a non-draft PR exits 0 with a message like
-/// "Pull request #N is already marked as ready for review."
+/// Merge a PR using `gh` CLI.
 #[tauri::command]
-pub(crate) async fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+pub(crate) async fn gh_merge_pr(cwd: String, number: i64, method: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || gh_merge_pr_inner(cwd, number, method))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_ready_inner(cwd: String, number: i64) -> Result<(), String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_ready(&cwd, number, &tok);
     }
@@ -482,9 +539,18 @@ pub(crate) async fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> 
     Ok(())
 }
 
-/// Get detailed PR information using `gh` CLI.
+/// Convert a draft PR to a ready-for-review PR via `gh pr ready`.
+///
+/// Idempotent — `gh pr ready` on a non-draft PR exits 0 with a message like
+/// "Pull request #N is already marked as ready for review."
 #[tauri::command]
-pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
+pub(crate) async fn gh_pr_ready(cwd: String, number: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_ready_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_detail_inner(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_detail(&cwd, number, &tok);
     }
@@ -515,6 +581,16 @@ pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequest
     detail.can_merge = gh_viewer_can_merge(&cwd, &detail.url);
     Ok(detail)
 }
+
+/// Get detailed PR information using `gh` CLI.
+#[tauri::command]
+pub(crate) async fn gh_pr_detail(cwd: String, number: i64) -> Result<PullRequestDetail, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_detail_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+// ─── Private sync helpers ────────────────────────────────────────────────────
 
 /// When `cwd` is a GitHub fork, returns the upstream parent `owner/repo` slug.
 /// Returns `None` for regular (non-fork) repos or on any failure — callers
@@ -572,9 +648,7 @@ fn github_nwo_from_pr_url(url: &str) -> Option<String> {
     Some(format!("{}/{}", owner, repo))
 }
 
-/// Get the diff of a PR using `gh` CLI.
-#[tauri::command]
-pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
+fn gh_pr_diff_inner(cwd: String, number: i64) -> Result<String, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_diff(&cwd, number, &tok);
     }
@@ -597,14 +671,15 @@ pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, Strin
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
-/// Get CI checks for a PR using `gh api` (mirrors REST path and dev-server).
-///
-/// `gh pr checks --json` is unreliable across gh CLI versions and its field
-/// names differ from the GitHub REST API. Instead we call the check-runs
-/// REST endpoint via `gh api`, exactly like `rest_pr_checks` and the dev-server
-/// do, to guarantee consistent field names and output.
+/// Get the diff of a PR using `gh` CLI.
 #[tauri::command]
-pub(crate) async fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+pub(crate) async fn gh_pr_diff(cwd: String, number: i64) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_diff_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_checks_inner(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_checks(&cwd, number, &tok);
     }
@@ -657,10 +732,20 @@ pub(crate) async fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck
     Ok(checks)
 }
 
-/// List inline review comments (anchored to diff lines) for a PR.
-/// Token present → REST; otherwise `gh api`.
+/// Get CI checks for a PR using `gh api` (mirrors REST path and dev-server).
+///
+/// `gh pr checks --json` is unreliable across gh CLI versions and its field
+/// names differ from the GitHub REST API. Instead we call the check-runs
+/// REST endpoint via `gh api`, exactly like `rest_pr_checks` and the dev-server
+/// do, to guarantee consistent field names and output.
 #[tauri::command]
-pub(crate) async fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+pub(crate) async fn gh_pr_checks(cwd: String, number: i64) -> Result<Vec<CICheck>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_checks_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_comments_inner(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_comments(&cwd, number, &tok);
     }
@@ -673,10 +758,16 @@ pub(crate) async fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde
     Ok(github_api::map_comments(&json, false))
 }
 
-/// List issue-level (conversation) comments for a PR.
+/// List inline review comments (anchored to diff lines) for a PR.
 /// Token present → REST; otherwise `gh api`.
 #[tauri::command]
-pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+pub(crate) async fn gh_pr_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_comments_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_pr_issue_comments_inner(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_pr_issue_comments(&cwd, number, &tok);
     }
@@ -687,6 +778,15 @@ pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec
         &format!("repos/{}/issues/{}/comments?per_page=100", nwo, number),
     )?;
     Ok(github_api::map_comments(&json, true))
+}
+
+/// List issue-level (conversation) comments for a PR.
+/// Token present → REST; otherwise `gh api`.
+#[tauri::command]
+pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_issue_comments_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Run `gh api <path>` in `cwd` and parse stdout as JSON. Shared by the
@@ -708,10 +808,7 @@ fn gh_api_json(cwd: &str, path: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(trimmed).map_err(|e| format!("parse gh api response: {}", e))
 }
 
-/// Report the current repo's fork relationship so the PR create view can offer
-/// "open against upstream". Token present → REST; otherwise `gh repo view`.
-#[tauri::command]
-pub(crate) async fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
+fn gh_fork_info_inner(cwd: String) -> Result<ForkInfo, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_fork_info(&cwd, &tok);
     }
@@ -739,4 +836,13 @@ pub(crate) async fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
         })
         .unwrap_or_default();
     Ok(ForkInfo { is_fork, origin, parent })
+}
+
+/// Report the current repo's fork relationship so the PR create view can offer
+/// "open against upstream". Token present → REST; otherwise `gh repo view`.
+#[tauri::command]
+pub(crate) async fn gh_fork_info(cwd: String) -> Result<ForkInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_fork_info_inner(cwd))
+        .await
+        .map_err(|e| e.to_string())?
 }

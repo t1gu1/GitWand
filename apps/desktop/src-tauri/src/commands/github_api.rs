@@ -938,10 +938,7 @@ pub(crate) fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
 
 // ─── OAuth device flow ──────────────────────────────────────────────────────
 
-/// Begin the OAuth device flow. Returns the user code + verification URL the
-/// frontend shows, plus the `device_code` used for polling.
-#[tauri::command]
-pub(crate) async fn github_device_start() -> Result<GithubDeviceCode, String> {
+fn github_device_start_inner() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
     // GitHub's OAuth endpoints accept a JSON body when Content-Type is JSON
     // (which `curl_raw` sets whenever a body is present).
@@ -971,14 +968,16 @@ pub(crate) async fn github_device_start() -> Result<GithubDeviceCode, String> {
     })
 }
 
-/// Poll once for the OAuth access token.
-///
-/// `status` is one of: `"pending"` (keep polling), `"slow_down"` (back off),
-/// `"success"` (token stored, `login` populated), or `"error"`.
-/// On success the token is persisted to the OS keychain so the REST path can
-/// pick it up; the secret is never returned to the frontend.
+/// Begin the OAuth device flow. Returns the user code + verification URL the
+/// frontend shows, plus the `device_code` used for polling.
 #[tauri::command]
-pub(crate) async fn github_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
+pub(crate) async fn github_device_start() -> Result<GithubDeviceCode, String> {
+    tauri::async_runtime::spawn_blocking(github_device_start_inner)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn github_device_poll_inner(device_code: String) -> Result<GithubDevicePoll, String> {
     let cid = client_id();
     let body = serde_json::json!({
         "client_id": cid,
@@ -1034,6 +1033,19 @@ pub(crate) async fn github_device_poll(device_code: String) -> Result<GithubDevi
         login,
         error: String::new(),
     })
+}
+
+/// Poll once for the OAuth access token.
+///
+/// `status` is one of: `"pending"` (keep polling), `"slow_down"` (back off),
+/// `"success"` (token stored, `login` populated), or `"error"`.
+/// On success the token is persisted to the OS keychain so the REST path can
+/// pick it up; the secret is never returned to the frontend.
+#[tauri::command]
+pub(crate) async fn github_device_poll(device_code: String) -> Result<GithubDevicePoll, String> {
+    tauri::async_runtime::spawn_blocking(move || github_device_poll_inner(device_code))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Whether a Settings-managed GitHub token is currently stored.
