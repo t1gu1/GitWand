@@ -51,16 +51,15 @@ pub(crate) const GH_ACCOUNT: &str = "oauth";
 
 /// GitHub OAuth App client_id (public, not a secret — safe to ship).
 ///
-/// **Must be replaced** with a real client_id from a registered GitHub OAuth
-/// App that has *device flow* enabled
-/// (github.com/settings/developers → New OAuth App → "Enable Device Flow").
+/// GitWand's registered OAuth App (device flow enabled). Overridable via
+/// `GITWAND_GH_CLIENT_ID` at runtime or build time for self-hosted deployments.
 ///
 /// Resolution order:
 ///   1. `GITWAND_GH_CLIENT_ID` at **runtime** (env var of the running app) —
 ///      lets `GITWAND_GH_CLIENT_ID=… pnpm tauri dev` work without fighting
 ///      cargo's build cache.
 ///   2. `GITWAND_GH_CLIENT_ID` baked in at **build time** (release builds).
-///   3. Placeholder — surfaces a clear "not configured" error.
+///   3. Built-in default — GitWand's registered OAuth App.
 fn client_id() -> String {
     if let Ok(v) = std::env::var("GITWAND_GH_CLIENT_ID") {
         let v = v.trim().to_string();

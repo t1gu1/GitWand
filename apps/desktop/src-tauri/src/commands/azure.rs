@@ -21,8 +21,11 @@
 //! Azure DevOps is a first-party Entra resource (app id
 //! `499b84ac-1321-427f-aa17-267ca6975798`). We request its `user_impersonation`
 //! delegated scope plus `offline_access` so a refresh token is available for
-//! follow-up work. (`user_impersonation` rather than `.default` so a standard
-//! user can consent without a tenant admin in locked-down enterprise tenants.)
+//! follow-up work. (`user_impersonation` rather than `.default` minimises the
+//! chance of triggering admin consent — in standard Entra tenants users can
+//! self-consent to a single delegated permission; in fully locked-down tenants
+//! where user consent is disabled entirely a tenant admin must grant consent
+//! once via Azure Portal → Enterprise Applications → GitWand → Permissions.)
 //!
 //! ## Security note
 //!
@@ -131,10 +134,11 @@ fn refresh_access_token() -> Result<String, String> {
             .to_string()
     })?;
     let cid = client_id();
-    // Use the specific delegated scope (`user_impersonation`) rather than
-    // `.default`: `.default` requests every permission configured on the app
-    // registration and triggers *admin* consent in locked-down enterprise
-    // tenants. A single delegated scope can usually be granted by the user.
+    // `user_impersonation` rather than `.default`: `.default` requests every
+    // permission on the app registration and is more likely to require admin
+    // consent. A single delegated scope can be self-consented in standard
+    // tenants; fully locked-down tenants (user consent disabled) still need a
+    // one-time admin grant via Azure Portal → Enterprise Applications.
     let scope = format!("{}/user_impersonation offline_access", AZURE_DEVOPS_RESOURCE);
     let (_status, text) = curl_form(
         TOKEN_URL,
@@ -1465,10 +1469,11 @@ pub(crate) async fn az_submit_review(
 #[tauri::command]
 pub(crate) async fn azure_device_start() -> Result<GithubDeviceCode, String> {
     let cid = client_id();
-    // Use the specific delegated scope (`user_impersonation`) rather than
-    // `.default`: `.default` requests every permission configured on the app
-    // registration and triggers *admin* consent in locked-down enterprise
-    // tenants. A single delegated scope can usually be granted by the user.
+    // `user_impersonation` rather than `.default`: `.default` requests every
+    // permission on the app registration and is more likely to require admin
+    // consent. A single delegated scope can be self-consented in standard
+    // tenants; fully locked-down tenants (user consent disabled) still need a
+    // one-time admin grant via Azure Portal → Enterprise Applications.
     let scope = format!("{}/user_impersonation offline_access", AZURE_DEVOPS_RESOURCE);
     let (status, text) = curl_form(DEVICECODE_URL, &[("client_id", &cid), ("scope", &scope)])?;
     if status >= 400 {
