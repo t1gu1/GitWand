@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-fork pull requests** — when the repo's `origin` is a fork, the PR create view shows a target-repository selector (upstream parent vs your fork), defaulting to upstream. Works on both the REST (token) path — head is qualified as `fork-owner:branch` — and the `gh` path (`--repo`). New `gh_fork_info` command detects the relationship.
+- **Fork PRs in the list** — on the REST (token) path, the PR list for a fork now also includes the PRs you opened on the upstream repo (head repo == your fork), merged and sorted with origin's own PRs. PR detail/diff/checks/merge transparently resolve to the upstream repo for those entries.
+- **Sign in with GitHub (no `gh` CLI required)** — Settings → Accounts now offers a "Sign in with GitHub" button using the OAuth device flow. The resulting token is stored in the OS keychain; once present, the GitHub PR workflow (list, count, detail, diff, checks, files, create, merge, checkout, mark-ready) routes through the GitHub REST API instead of shelling out to `gh`. The `gh` CLI still works as before when no Settings token is configured — the ambient `GH_TOKEN`/`GITHUB_TOKEN` env path is unchanged.
+- **Azure DevOps support (new forge)** — Settings → Accounts now offers "Sign in with Azure" using the Entra ID OAuth device flow (same UX as GitHub), with automatic access-token refresh via the stored refresh token. The tokens are stored in the OS keychain (`gitwand:azure/oauth` + `oauth-refresh`). Azure DevOps remotes (`dev.azure.com`, `*.visualstudio.com`) are auto-detected and routed to a new `AzureProvider` backed by the Azure DevOps REST API (api-version 7.1): PR list/count/detail/diff/files/create/merge/checkout, draft→ready, comments (threads), CI checks (branch-policy evaluations) and reviewer-vote reviews — so the merge-readiness chip reflects real build + approval state. Diff, file lists and change stats are produced from local git (Azure has no unified-patch endpoint). Comment edit/delete, line-anchored comment creation, reviewer pickers and submitting reviews are not wired yet and degrade gracefully.
+
 ### Technical
 
 - **CI: npm publishing switched to OIDC trusted publishing** — the three `@gitwand/*` packages now have a Trusted Publisher configured on npmjs.com (GitHub Actions, repo `devlint/GitWand`, workflow `publish.yml`); pnpm exchanges the workflow's OIDC id-token for a short-lived publish token. The long-lived `NPM_TOKEN` secret is gone — its silent expiry had caused npm publishes to fail unnoticed from v2.15 to v2.17 (npm users jumped straight from 2.14.0 to 2.18.0). Provenance attestations are still emitted (automatic with OIDC).
+
+### Notes
+
+- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23li1JPkwPsqdFrJ76`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
+- Ships with GitWand's registered Entra ID public client (`e26aa15d-856c-4a64-98ed-d44d4c7b3a18`, device flow enabled) baked into `azure.rs` for Azure DevOps sign-in. Override with a different Entra app via `GITWAND_AZURE_CLIENT_ID` (runtime or build time) if needed.
 
 ## [2.18.0] - 2026-06-12
 
@@ -24,11 +36,6 @@ v2.18 brings the CI back to the code: check-run annotations now overlay the PR d
   - **All three forges**: GitHub (check-runs annotations API), GitLab (`artifacts:reports:codequality` — Code Climate severities mapped to failure/warning/notice), Bitbucket (Reports API annotations). Everything is non-fatal: a repo with no checks, an expired report, or a forge with nothing to offer simply shows no annotations.
   - **Lazy by design** — annotations are fetched once per PR, the first time the Diff or CI tab is opened; never during PR-list browsing.
 - **GitHub Copilot CLI as an AI provider** — `copilot-cli` joins `claude-code-cli`, `codex-cli`, and `opencode-cli` in the `AIProvider` union. It piggybacks on the user's locally-installed `copilot` binary and their GitHub Copilot subscription — no API key required. Detection mirrors the existing CLI providers (binary discovery across PATH + common install locations) and it appears in Settings → AI with the same status/re-detect pattern. Prompts run one-shot via `copilot -p` (model selectable via the per-provider model picker, free-text since Copilot has no enumeration command). Tool permissions are deliberately restricted (`--deny-tool=shell`, `--deny-tool=write`, `--no-ask-user`, and `COPILOT_ALLOW_ALL` stripped from the child env) so Copilot only produces text and cannot edit files, run shell commands, or block on interactive prompts.
-- **Cross-fork pull requests** — when the repo's `origin` is a fork, the PR create view shows a target-repository selector (upstream parent vs your fork), defaulting to upstream. Works on both the REST (token) path — head is qualified as `fork-owner:branch` — and the `gh` path (`--repo`). New `gh_fork_info` command detects the relationship.
-- **Fork PRs in the list** — on the REST (token) path, the PR list for a fork now also includes the PRs you opened on the upstream repo (head repo == your fork), merged and sorted with origin's own PRs. PR detail/diff/checks/merge transparently resolve to the upstream repo for those entries.
-- **Sign in with GitHub (no `gh` CLI required)** — Settings → Accounts now offers a "Sign in with GitHub" button using the OAuth device flow. The resulting token is stored in the OS keychain; once present, the GitHub PR workflow (list, count, detail, diff, checks, files, create, merge, checkout, mark-ready) routes through the GitHub REST API instead of shelling out to `gh`. The `gh` CLI still works as before when no Settings token is configured — the ambient `GH_TOKEN`/`GITHUB_TOKEN` env path is unchanged.
-- **Azure DevOps support (new forge)** — Settings → Accounts now offers "Sign in with Azure" using the Entra ID OAuth device flow (same UX as GitHub), with automatic access-token refresh via the stored refresh token. The tokens are stored in the OS keychain (`gitwand:azure/oauth` + `oauth-refresh`). Azure DevOps remotes (`dev.azure.com`, `*.visualstudio.com`) are auto-detected and routed to a new `AzureProvider` backed by the Azure DevOps REST API (api-version 7.1): PR list/count/detail/diff/files/create/merge/checkout, draft→ready, comments (threads), CI checks (branch-policy evaluations) and reviewer-vote reviews — so the merge-readiness chip reflects real build + approval state. Diff, file lists and change stats are produced from local git (Azure has no unified-patch endpoint). Comment edit/delete, line-anchored comment creation, reviewer pickers and submitting reviews are not wired yet and degrade gracefully.
-
 ### Changed
 
 - **Sidebar quick actions trimmed** — the Changes and History quick actions were removed from the repo sidebar (#39); both remain reachable from their primary surfaces (commit area, Git Tree).
@@ -44,11 +51,6 @@ v2.18 brings the CI back to the code: check-run annotations now overlay the PR d
 - `useAIProvider` adds `copilot-cli` to `CLI_AGENT_PROVIDERS`, dispatches it in `suggest()` / `rawPrompt()`, and forwards the per-provider model. `SettingsPanel` gains the provider option, detection state, and status block.
 - i18n: `aiProviderCopilotCli`, `aiProviderCopilotCliNotFound`, `aiCopilotCliDetectedHint`, `aiCopilotCliInfoBox` across all five locales (en, fr, es, pt-BR, zh-CN).
 - Unit tests extended in `useAIProvider-opencode.test.ts` for the Copilot dispatch and model fallback.
-
-### Notes
-
-- Ships with GitWand's registered GitHub OAuth App `client_id` (`Ov23li1JPkwPsqdFrJ76`, public — device flow enabled) baked into `github_api.rs`. Override at runtime or build time via `GITWAND_GH_CLIENT_ID` if needed.
-- Ships with GitWand's registered Entra ID public client (`e26aa15d-856c-4a64-98ed-d44d4c7b3a18`, device flow enabled) baked into `azure.rs` for Azure DevOps sign-in. Override with a different Entra app via `GITWAND_AZURE_CLIENT_ID` (runtime or build time) if needed.
 
 ## [2.17.0] - 2026-06-04
 
