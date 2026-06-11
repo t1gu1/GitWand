@@ -2762,16 +2762,24 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("Refusing to open non-http(s) URL".to_string());
     }
+    // Reject whitespace and control characters. A real URL percent-encodes
+    // these; their presence signals a malformed or hostile value. Notably this
+    // blocks any newline that could be reinterpreted by a handler.
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("Refusing to open URL with whitespace or control characters".to_string());
+    }
     #[cfg(target_os = "macos")]
     let mut cmd = hidden_cmd("open");
     #[cfg(target_os = "linux")]
     let mut cmd = hidden_cmd("xdg-open");
+    // Windows: invoke `explorer.exe <url>` directly rather than `cmd /C start`.
+    // `cmd.exe` re-parses its command line and treats `& | ^ < >` as shell
+    // metacharacters, so a link like `https://x/&calc` (legitimate query
+    // strings use `&`) would split into a second command and execute it.
+    // `explorer.exe` is not a shell — it receives the URL as a single argv
+    // entry via the standard CommandLineToArgvW rules, with no `&` splitting.
     #[cfg(target_os = "windows")]
-    let mut cmd = {
-        let mut c = hidden_cmd("cmd");
-        c.args(["/C", "start", ""]);
-        c
-    };
+    let mut cmd = hidden_cmd("explorer");
     cmd.arg(&url)
         .spawn()
         .map_err(|e| format!("Failed to open URL: {}", e))?;
