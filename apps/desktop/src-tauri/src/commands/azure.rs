@@ -304,13 +304,22 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 /// curl config-file contents that carry form fields as `data-urlencode`
 /// directives, so secrets (refresh_token, device_code) stay off argv. Used with
-/// `--config -`. Field values here never contain a double-quote.
-fn form_config(fields: &[(&str, &str)]) -> String {
+/// `--config -`.
+///
+/// Each value is wrapped in double-quotes inside the config, so a value
+/// containing `"` or a newline could break out of the quoted string and inject
+/// an arbitrary curl directive (e.g. `url = …`). Values here come from Entra
+/// responses (opaque base64url tokens) and never contain those characters in
+/// practice, but we reject them defensively rather than trust that invariant.
+fn form_config(fields: &[(&str, &str)]) -> Result<String, String> {
     let mut cfg = String::new();
     for (k, v) in fields {
+        if v.contains('"') || v.contains('\n') || v.contains('\r') {
+            return Err(format!("Refusing to build curl config: field '{}' contains a quote or newline", k));
+        }
         cfg.push_str(&format!("data-urlencode = \"{}={}\"\n", k, v));
     }
-    cfg
+    Ok(cfg)
 }
 
 /// Run an Azure DevOps `curl` request and return `(http_status, body_text)`.
@@ -347,7 +356,7 @@ fn curl_form(url: &str, fields: &[(&str, &str)]) -> Result<(i32, String), String
     args.push(format!("{}%{{http_code}}", MARKER));
     args.push(url.to_string());
 
-    let output = run_curl(&args, Some(&form_config(fields)))?;
+    let output = run_curl(&args, Some(&form_config(fields)?))?;
     let combined = String::from_utf8(output.stdout)
         .map_err(|e| format!("curl returned invalid UTF-8: {}", e))?;
     let (body, status) = match combined.rsplit_once(MARKER) {
@@ -1681,8 +1690,17 @@ mod tests {
 
     #[test]
     fn form_config_emits_data_urlencode_lines() {
-        let cfg = form_config(&[("grant_type", "refresh_token"), ("client_id", "abc")]);
+        let cfg = form_config(&[("grant_type", "refresh_token"), ("client_id", "abc")]).unwrap();
         assert!(cfg.contains("data-urlencode = \"grant_type=refresh_token\""));
         assert!(cfg.contains("data-urlencode = \"client_id=abc\""));
+    }
+
+    #[test]
+    fn form_config_rejects_quote_or_newline_in_value() {
+        assert!(form_config(&[("code", "a\"b")]).is_err());
+        assert!(form_config(&[("code", "a\nurl = http://evil")]).is_err());
+        assert!(form_config(&[("code", "a\rb")]).is_err());
+        // A normal opaque token value is accepted.
+        assert!(form_config(&[("code", "AQABbase64url-_token")]).is_ok());
     }
 }
