@@ -613,6 +613,22 @@ fn gh_fork_upstream(cwd: &str) -> Option<String> {
     })
 }
 
+/// Resolve the current repo's `owner/repo` via `gh repo view`. Used as the
+/// fallback for non-fork repos instead of the literal placeholder string
+/// `"{owner}/{repo}"`: that string only "works" because `gh api` happens to
+/// expand `{owner}`/`{repo}` templates from the cwd, which is fragile and
+/// reads like unfinished code. Returns `None` on any failure.
+fn gh_current_nwo(cwd: &str) -> Option<String> {
+    let out = hidden_cmd("gh")
+        .args(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"])
+        .current_dir(cwd)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    let nwo = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if nwo.is_empty() { None } else { Some(nwo) }
+}
+
 /// Resolve whether the current viewer can merge this PR. A PR merges into its
 /// **base** repository — which, for a fork, is the upstream repo and not the
 /// fork the working copy points at. So permission must be checked against the
@@ -685,6 +701,7 @@ fn gh_pr_checks_inner(cwd: String, number: i64) -> Result<Vec<CICheck>, String> 
     }
     // Resolve the canonical repo NWO (upstream for forks, own for regular repos).
     let nwo = gh_fork_upstream(&cwd)
+        .or_else(|| gh_current_nwo(&cwd))
         .unwrap_or_else(|| "{owner}/{repo}".to_string());
 
     // Step 1 — head commit SHA for this PR.
@@ -750,6 +767,7 @@ fn gh_pr_comments_inner(cwd: String, number: i64) -> Result<Vec<serde_json::Valu
         return github_api::rest_pr_comments(&cwd, number, &tok);
     }
     let nwo = gh_fork_upstream(&cwd)
+        .or_else(|| gh_current_nwo(&cwd))
         .unwrap_or_else(|| "{owner}/{repo}".to_string());
     let json = gh_api_json(
         &cwd,
@@ -772,6 +790,7 @@ fn gh_pr_issue_comments_inner(cwd: String, number: i64) -> Result<Vec<serde_json
         return github_api::rest_pr_issue_comments(&cwd, number, &tok);
     }
     let nwo = gh_fork_upstream(&cwd)
+        .or_else(|| gh_current_nwo(&cwd))
         .unwrap_or_else(|| "{owner}/{repo}".to_string());
     let json = gh_api_json(
         &cwd,
