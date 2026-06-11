@@ -38,6 +38,8 @@ use crate::types::*;
 use super::curl_util::{bearer_config, curl_with_status, run_curl};
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -298,6 +300,36 @@ fn current_branch(cwd: &str) -> Result<String, String> {
         return Err("Could not determine current branch.".to_string());
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+// ─── Fetch throttle ──────────────────────────────────────────────────────────
+
+/// Minimum interval between `git fetch origin` calls per repo. The Azure PR
+/// list refreshes remote-tracking branches to compute +/- stats locally; without
+/// a guard this fired a blocking network fetch on every list open.
+const FETCH_MIN_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Per-cwd timestamp of the last `git fetch origin` issued by the Azure PR list.
+fn last_fetch_map() -> &'static Mutex<HashMap<String, Instant>> {
+    static MAP: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
+    MAP.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Returns `true` (and records `now`) when `cwd` has not been fetched within
+/// `FETCH_MIN_INTERVAL`; otherwise `false` so callers can skip the network call.
+fn should_fetch_origin(cwd: &str) -> bool {
+    let now = Instant::now();
+    let mut map = match last_fetch_map().lock() {
+        Ok(m) => m,
+        Err(p) => p.into_inner(), // a poisoned lock must not block PR loading
+    };
+    match map.get(cwd) {
+        Some(prev) if now.duration_since(*prev) < FETCH_MIN_INTERVAL => false,
+        _ => {
+            map.insert(cwd.to_string(), now);
+            true
+        }
+    }
 }
 
 // ─── HTTP transport (curl) ──────────────────────────────────────────────────
@@ -615,7 +647,7 @@ fn rest_list_prs(cwd: &str, state: &str, limit: i64, offset: i64) -> Result<Vec<
     // avoid a `git fetch` on every scroll. Branches that no longer exist
     // (merged/closed) leave the stats at 0.
     if !prs.is_empty() {
-        if offset == 0 {
+        if offset == 0 && should_fetch_origin(cwd) {
             let _ = git_cmd().args(["fetch", "origin"]).current_dir(cwd).output();
         }
         prs.par_iter_mut().for_each(|pr| {
@@ -1693,6 +1725,15 @@ mod tests {
         let cfg = form_config(&[("grant_type", "refresh_token"), ("client_id", "abc")]).unwrap();
         assert!(cfg.contains("data-urlencode = \"grant_type=refresh_token\""));
         assert!(cfg.contains("data-urlencode = \"client_id=abc\""));
+    }
+
+    #[test]
+    fn should_fetch_origin_throttles_repeated_calls() {
+        let cwd = "/tmp/gitwand-test-throttle-unique-xyz";
+        // First call records the timestamp and allows the fetch.
+        assert!(should_fetch_origin(cwd));
+        // An immediate second call is within the interval and is skipped.
+        assert!(!should_fetch_origin(cwd));
     }
 
     #[test]
