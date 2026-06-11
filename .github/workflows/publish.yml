@@ -62,13 +62,13 @@ jobs:
       - name: Publish @gitwand/core
         working-directory: packages/core
         env:
+          # npm auth: OIDC trusted publishing. Each @gitwand package has a
+          # Trusted Publisher configured on npmjs.com (GitHub Actions, repo
+          # devlint/GitWand, workflow publish.yml); pnpm exchanges the OIDC
+          # id-token (id-token: write above) for a short-lived publish token.
+          # No long-lived NPM_TOKEN secret anymore (v2.18 — expired tokens
+          # caused silent publish failures from v2.15 to v2.17).
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          # npm auth. setup-node wrote ~/.npmrc with
-          # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}; pnpm publish
-          # reads it. Kept alongside --provenance (id-token: write above) —
-          # OIDC trusted publishing isn't configured for these packages, so
-          # pnpm warns "Skipped OIDC" and falls back to this token.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PKG=$(node -p "require('./package.json').name")
           VER=$(node -p "require('./package.json').version")
@@ -86,13 +86,13 @@ jobs:
       - name: Publish @gitwand/cli
         working-directory: packages/cli
         env:
+          # npm auth: OIDC trusted publishing. Each @gitwand package has a
+          # Trusted Publisher configured on npmjs.com (GitHub Actions, repo
+          # devlint/GitWand, workflow publish.yml); pnpm exchanges the OIDC
+          # id-token (id-token: write above) for a short-lived publish token.
+          # No long-lived NPM_TOKEN secret anymore (v2.18 — expired tokens
+          # caused silent publish failures from v2.15 to v2.17).
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          # npm auth. setup-node wrote ~/.npmrc with
-          # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}; pnpm publish
-          # reads it. Kept alongside --provenance (id-token: write above) —
-          # OIDC trusted publishing isn't configured for these packages, so
-          # pnpm warns "Skipped OIDC" and falls back to this token.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PKG=$(node -p "require('./package.json').name")
           VER=$(node -p "require('./package.json').version")
@@ -110,13 +110,13 @@ jobs:
       - name: Publish @gitwand/mcp
         working-directory: packages/mcp
         env:
+          # npm auth: OIDC trusted publishing. Each @gitwand package has a
+          # Trusted Publisher configured on npmjs.com (GitHub Actions, repo
+          # devlint/GitWand, workflow publish.yml); pnpm exchanges the OIDC
+          # id-token (id-token: write above) for a short-lived publish token.
+          # No long-lived NPM_TOKEN secret anymore (v2.18 — expired tokens
+          # caused silent publish failures from v2.15 to v2.17).
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          # npm auth. setup-node wrote ~/.npmrc with
-          # //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}; pnpm publish
-          # reads it. Kept alongside --provenance (id-token: write above) —
-          # OIDC trusted publishing isn't configured for these packages, so
-          # pnpm warns "Skipped OIDC" and falls back to this token.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           PKG=$(node -p "require('./package.json').name")
           VER=$(node -p "require('./package.json').version")

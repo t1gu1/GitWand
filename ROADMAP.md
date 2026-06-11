@@ -92,17 +92,6 @@ _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand 
 
 ---
 
-### Chore — CI: OIDC trusted publishing (token-less npm)
-
-_Remove the long-lived `NPM_TOKEN` secret once trusted publishing is proven._
-
-- Configure a Trusted Publisher on npmjs.org for each package (`@gitwand/core`, `@gitwand/cli`, `@gitwand/mcp`): GitHub Actions, repo `devlint/GitWand`, workflow `publish.yml`
-- Once verified, drop `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` from the three publish steps and let pnpm's OIDC exchange authenticate (keeps `--provenance`, which already needs `id-token: write`)
-- Delete the `NPM_TOKEN` repo secret after a successful token-less release
-- Net effect: no rotating secret to maintain, provenance attestations still emitted
-
----
-
 ## Vision
 
 GitWand is a native Git client that **understands** code, resolves trivial conflicts on its own, and makes visible what the terminal hides.

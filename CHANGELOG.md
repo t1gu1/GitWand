@@ -5,6 +5,12 @@ All notable changes to GitWand will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Technical
+
+- **CI: npm publishing switched to OIDC trusted publishing** — the three `@gitwand/*` packages now have a Trusted Publisher configured on npmjs.com (GitHub Actions, repo `devlint/GitWand`, workflow `publish.yml`); pnpm exchanges the workflow's OIDC id-token for a short-lived publish token. The long-lived `NPM_TOKEN` secret is gone — its silent expiry had caused npm publishes to fail unnoticed from v2.15 to v2.17 (npm users jumped straight from 2.14.0 to 2.18.0). Provenance attestations are still emitted (automatic with OIDC).
+
 ## [2.18.0] - 2026-06-12
 
 v2.18 brings the CI back to the code: check-run annotations now overlay the PR diff — the exact line that failed the linter or typecheck, right where you review — across all three forges. GitHub Copilot CLI also joins the AI-provider lineup.
