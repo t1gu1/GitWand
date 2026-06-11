@@ -74,7 +74,7 @@ export function getProviderByUrl(remoteUrl: string): ForgeProvider {
 export async function useForge(cwd: string): Promise<ForgeProvider> {
   try {
     const info = await gitRemoteInfo(cwd);
-    return getProviderByName(info.provider as ForgeName);
+    return getProviderByName(info.provider);
   } catch {
     return githubProvider;
   }

@@ -1909,7 +1909,7 @@ export async function gitAutocomplete(cwd: string, partial: string): Promise<str
 export interface RemoteInfo {
   name: string;
   url: string;
-  provider: "github" | "gitlab" | "bitbucket" | "unknown";
+  provider: "github" | "gitlab" | "bitbucket" | "azure" | "unknown";
   owner: string;
   repo: string;
 }

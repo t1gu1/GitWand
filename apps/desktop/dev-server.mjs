@@ -4466,6 +4466,7 @@ async function handleRequest(req, res) {
         if (remoteUrl.includes("github.com")) provider = "github";
         else if (remoteUrl.includes("gitlab")) provider = "gitlab";
         else if (remoteUrl.includes("bitbucket")) provider = "bitbucket";
+        else if (remoteUrl.includes("dev.azure.com") || remoteUrl.includes("visualstudio.com")) provider = "azure";
 
         // Extract owner/repo — SSH (git@host:owner/repo.git) or HTTPS.
         let owner = "";
