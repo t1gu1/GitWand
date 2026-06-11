@@ -1372,6 +1372,27 @@ function commentTimeAgo(dateStr: string): string {
   margin: var(--space-4) 0;
 }
 
+.pdv-comment-body :deep(.md-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: var(--space-5);
+  font-size: var(--font-size-sm);
+}
+.pdv-comment-body :deep(.md-table th),
+.pdv-comment-body :deep(.md-table td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.pdv-comment-body :deep(.md-table thead th) {
+  background: var(--color-bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.pdv-comment-body :deep(.md-table tbody tr:nth-child(even)) {
+  background: var(--color-bg-secondary);
+}
+
 .pdv-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1529,6 +1550,27 @@ function commentTimeAgo(dateStr: string): string {
   text-decoration: none;
 }
 .pdv-body-formatted :deep(.md-link:hover) { text-decoration: underline; }
+
+.pdv-body-formatted :deep(.md-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+.pdv-body-formatted :deep(.md-table th),
+.pdv-body-formatted :deep(.md-table td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.pdv-body-formatted :deep(.md-table thead th) {
+  background: var(--color-bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.pdv-body-formatted :deep(.md-table tbody tr:nth-child(even)) {
+  background: var(--color-bg-secondary);
+}
 .pdv-body-formatted :deep(.md-blockquote) {
   border-left: 3px solid var(--color-accent-soft);
   padding-left: var(--space-5);

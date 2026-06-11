@@ -355,6 +355,27 @@ function timeAgo(dateStr: string): string {
   margin: 12px 0;
 }
 
+.pct-body :deep(.md-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 12px;
+  font-size: var(--font-size-sm);
+}
+.pct-body :deep(.md-table th),
+.pct-body :deep(.md-table td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.pct-body :deep(.md-table thead th) {
+  background: var(--color-bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.pct-body :deep(.md-table tbody tr:nth-child(even)) {
+  background: var(--color-bg-secondary);
+}
+
 /* Suggestion apply button */
 .pct-suggestion-actions {
   margin-top: 6px;
