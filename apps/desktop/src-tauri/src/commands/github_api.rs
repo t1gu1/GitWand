@@ -841,11 +841,11 @@ pub(crate) fn rest_pr_ready(cwd: &str, number: i64, token: &str) -> Result<(), S
     if node_id.is_empty() {
         return Err("Could not resolve PR node_id for ready conversion.".to_string());
     }
-    let query = format!(
-        "mutation {{ markPullRequestReadyForReview(input: {{ pullRequestId: \"{}\" }}) {{ pullRequest {{ isDraft }} }} }}",
-        node_id
-    );
-    let payload = serde_json::json!({ "query": query });
+    // Pass node_id as a GraphQL variable instead of interpolating it into the
+    // query string, so a value with quotes/backslashes can never break out of
+    // the mutation (node IDs are opaque API-supplied values — treat as untrusted).
+    let query = "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { isDraft } } }";
+    let payload = serde_json::json!({ "query": query, "variables": { "id": node_id } });
     let v = api_json("POST", &format!("{}/graphql", API_BASE), token, Some(&payload.to_string()))?;
     if let Some(errors) = v.get("errors").and_then(|e| e.as_array()) {
         if !errors.is_empty() {
