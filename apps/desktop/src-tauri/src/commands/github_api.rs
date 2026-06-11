@@ -38,8 +38,8 @@
 
 use crate::git::{git_cmd, hidden_cmd};
 use crate::types::*;
+use super::curl_util::{auth_header_config, run_curl};
 use rayon::prelude::*;
-use std::io::Write;
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -147,38 +147,8 @@ fn current_branch(cwd: &str) -> Result<String, String> {
 
 // ─── HTTP transport (curl) ──────────────────────────────────────────────────
 
-/// curl config-file contents that inject the bearer token as an `Authorization`
-/// header without putting it on the command line. `header =` is the config-file
-/// long form of `-H`; token chars (alnum / `_`) never contain a quote.
 fn bearer_config(tok: &str) -> String {
-    format!("header = \"Authorization: Bearer {}\"\n", tok)
-}
-
-/// Spawn `curl` with `args`, optionally feeding `stdin_config` to its stdin
-/// (used with `--config -` so secrets stay off argv), and return its `Output`.
-fn run_curl(args: &[String], stdin_config: Option<&str>) -> Result<std::process::Output, String> {
-    use std::process::Stdio;
-    let mut cmd = hidden_cmd("curl");
-    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if stdin_config.is_some() {
-        cmd.stdin(Stdio::piped());
-    }
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
-    if let Some(cfg) = stdin_config {
-        // Config is tiny and curl drains stdin before producing output, so a
-        // synchronous write here can't deadlock against the stdout pipe.
-        child
-            .stdin
-            .take()
-            .ok_or_else(|| "failed to open curl stdin".to_string())?
-            .write_all(cfg.as_bytes())
-            .map_err(|e| format!("failed to write curl config: {}", e))?;
-    }
-    child
-        .wait_with_output()
-        .map_err(|e| format!("curl failed: {}", e))
+    auth_header_config("Bearer", tok)
 }
 
 /// Run a `curl` request and return `(http_status, body_text)`.

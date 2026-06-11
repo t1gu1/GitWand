@@ -22,9 +22,9 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use crate::git::hidden_cmd;
 use crate::types::*;
+use super::curl_util::{auth_header_config, run_curl};
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::io::Write;
 
 // ─── Credential helpers ────────────────────────────────────────────────────────
 
@@ -59,35 +59,10 @@ fn get_bb_creds(cwd: &str) -> Result<(String, String), String> {
     Ok((username, app_password))
 }
 
-/// Build curl `--config -` file contents that carry the Basic auth header,
-/// keeping the credential off the process argv.
+/// Build curl `--config -` file contents for Bitbucket Basic auth.
 fn basic_auth_config(username: &str, app_password: &str) -> String {
     let encoded = B64.encode(format!("{}:{}", username, app_password));
-    format!("header = \"Authorization: Basic {}\"\n", encoded)
-}
-
-/// Spawn `curl` with `args`, feeding `stdin_config` to its stdin when provided.
-fn run_curl(args: &[String], stdin_config: Option<&str>) -> Result<std::process::Output, String> {
-    use std::process::Stdio;
-    let mut cmd = hidden_cmd("curl");
-    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
-    if stdin_config.is_some() {
-        cmd.stdin(Stdio::piped());
-    }
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
-    if let Some(cfg) = stdin_config {
-        child
-            .stdin
-            .take()
-            .ok_or_else(|| "failed to open curl stdin".to_string())?
-            .write_all(cfg.as_bytes())
-            .map_err(|e| format!("failed to write curl config: {}", e))?;
-    }
-    child
-        .wait_with_output()
-        .map_err(|e| format!("curl failed: {}", e))
+    auth_header_config("Basic", &encoded)
 }
 
 // ─── Project resolution ────────────────────────────────────────────────────────
@@ -562,8 +537,7 @@ pub(crate) async fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String
     let output = run_curl(
         &["-s".to_string(), "--config".to_string(), "-".to_string(), url],
         Some(&auth_config),
-    )
-    .map_err(|e| format!("curl diff: {}", e))?;
+    )?;
 
     if !output.status.success() {
         return Err(format!(
