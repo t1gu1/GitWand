@@ -465,7 +465,9 @@ function renderReadme(md: string): string {
   // dividers, and we don't want them rendered as text. markdown-it's
   // `html: false` mode escapes them, which looks noisy in the UI.
   const cleaned = rest.replace(/<!--[\s\S]*?-->/g, "");
-  return headerHtml + renderMarkdown(cleaned);
+  // READMEs soft-wrap single newlines (GitHub behaviour) — disable `breaks` so
+  // wrapped prose isn't broken up with spurious <br> tags.
+  return headerHtml + renderMarkdown(cleaned, { breaks: false });
 }
 
 function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {

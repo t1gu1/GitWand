@@ -175,6 +175,16 @@ describe("renderMarkdown — markdown → sanitized HTML", () => {
     expect(out).toMatch(/id="whats-new-2026"/);
   });
 
+  it("renders single newlines as <br> by default (comment/PR behaviour)", () => {
+    const out = renderMarkdown("line one\nline two");
+    expect(out).toContain("<br>");
+  });
+
+  it("does not render single newlines as <br> when breaks is false (README behaviour)", () => {
+    const out = renderMarkdown("line one\nline two", { breaks: false });
+    expect(out).not.toContain("<br>");
+  });
+
   it("returns empty string for nullish input", () => {
     expect(renderMarkdown(null)).toBe("");
     expect(renderMarkdown(undefined)).toBe("");

@@ -219,9 +219,22 @@ rules.link_open = (tokens, idx, options, env, self) => {
 
 /**
  * Parse markdown and sanitize the result. Safe to feed to `v-html`.
+ *
+ * `breaks` controls whether a single newline becomes a `<br>`. Default `true`
+ * matches GitHub's comment/PR-body rendering (soft line breaks are honoured).
+ * Pass `false` for README-style documents, where GitHub soft-wraps single
+ * newlines as spaces and rendering them as `<br>` would mangle the layout.
+ *
+ * The single shared `md` instance is toggled per call. Rendering is synchronous
+ * and JS is single-threaded, so there is no interleaving between the toggle and
+ * the render.
  */
-export function renderMarkdown(src: string | null | undefined): string {
+export function renderMarkdown(
+  src: string | null | undefined,
+  options: { breaks?: boolean } = {},
+): string {
   if (!src) return "";
+  md.set({ breaks: options.breaks ?? true });
   const rawHtml = md.render(src);
   return safeHtml(rawHtml);
 }
