@@ -213,31 +213,41 @@ const prNwoCache = new Map();
 
 /**
  * Resolve the repo where PR `number` actually lives. Mirrors the Rust
- * `get_pr_json` resolution: try origin first; on 404, fall back to the fork's
- * upstream parent. Without this, cross-fork PRs (branch pushed to a fork, PR
- * opened against the upstream repo) resolve to the fork — where the PR number
- * doesn't exist — and per-PR endpoints 404. Returns the origin nwo as a last
- * resort so callers still get a usable (if wrong) value.
+ * `get_pr_json` resolution: try origin first; if the PR isn't there, fall back
+ * to the fork's upstream parent. Without this, cross-fork PRs (branch pushed to
+ * a fork, PR opened against the upstream repo) resolve to the fork — where the
+ * PR number doesn't exist — and per-PR endpoints 404.
+ *
+ * Only a *definitive* answer (origin or parent confirmed) is cached; a transient
+ * failure (5xx / rate limit / network) falls back to origin for this request but
+ * stays uncached so a later call can re-resolve instead of pinning the wrong repo.
  */
 async function resolvePrNwo(cwd, number, token) {
   const origin = getRepoNwo(cwd);
   if (!origin) return null;
   const cacheKey = `${origin}#${number}`;
   if (prNwoCache.has(cacheKey)) return prNwoCache.get(cacheKey);
-  let resolved = origin;
   try {
     const resp = await githubFetch(`/repos/${origin}/pulls/${number}`, token);
-    if (!resp.ok && resp.status === 404) {
+    if (resp.ok) {
+      prNwoCache.set(cacheKey, origin);
+      return origin;
+    }
+    // PR not visible on origin (404 missing / 403 private / 410 gone) → try the
+    // fork's upstream parent. Other statuses are treated as transient.
+    if ([403, 404, 410].includes(resp.status)) {
       const info = await githubFetch(`/repos/${origin}`, token);
       const parent = info.ok ? (await info.json()).parent?.full_name : null;
       if (parent) {
         const r2 = await githubFetch(`/repos/${parent}/pulls/${number}`, token);
-        if (r2.ok) resolved = parent;
+        if (r2.ok) {
+          prNwoCache.set(cacheKey, parent);
+          return parent;
+        }
       }
     }
-  } catch { /* fall through to origin */ }
-  prNwoCache.set(cacheKey, resolved);
-  return resolved;
+  } catch { /* transient — fall through without caching */ }
+  return origin;
 }
 
 /** Fetch from GitHub REST API with auth. `accept` overrides the default JSON accept header. */
@@ -2889,8 +2899,17 @@ async function handleRequest(req, res) {
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews?per_page=100`, token);
         if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
-        const reviews = await resp.json();
-        return jsonResponse(req, res, reviews);
+        const raw = await resp.json();
+        // Map to the frontend `PrReview` shape (parity with the Tauri
+        // `map_reviews`), instead of leaking the raw GitHub object.
+        return jsonResponse(req, res, raw.map((r) => ({
+          id: r.id,
+          state: r.state,
+          body: r.body ?? "",
+          user: { login: r.user?.login ?? "", avatar_url: r.user?.avatar_url ?? "" },
+          submitted_at: r.submitted_at,
+          html_url: r.html_url,
+        })));
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }

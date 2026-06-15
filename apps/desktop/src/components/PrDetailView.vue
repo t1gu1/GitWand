@@ -124,7 +124,8 @@ type TimelineReview = {
   kind: "review";
   id: number;
   author: string;
-  state: string;
+  verdictLabel: string;
+  verdictCls: string;
   bodyHtml: string;
   ts: string;
   href: string;
@@ -150,15 +151,19 @@ const timeline = computed<TimelineItem[]>(() => {
       if (s === "COMMENTED") return !!r.body?.trim();
       return true;
     })
-    .map((r) => ({
-      kind: "review" as const,
-      id: r.id,
-      author: r.user.login,
-      state: r.state,
-      bodyHtml: r.body?.trim() ? renderMarkdown(r.body) : "",
-      ts: r.submitted_at,
-      href: r.html_url,
-    }));
+    .map((r) => {
+      const meta = reviewStateMeta(r.state);
+      return {
+        kind: "review" as const,
+        id: r.id,
+        author: r.user?.login ?? "",
+        verdictLabel: meta.label,
+        verdictCls: meta.cls,
+        bodyHtml: r.body?.trim() ? renderMarkdown(r.body) : "",
+        ts: r.submitted_at,
+        href: r.html_url,
+      };
+    });
   return [...comments, ...reviews].sort((a, b) => {
     const ta = a.kind === "review" ? a.ts : a.created_at;
     const tb = b.kind === "review" ? b.ts : b.created_at;
@@ -625,14 +630,14 @@ function commentTimeAgo(dateStr: string): string {
                   v-if="item.kind === 'review'"
                   :key="`review-${item.id}`"
                   class="pdv-comment pdv-review"
-                  :class="reviewStateMeta(item.state).cls"
+                  :class="item.verdictCls"
                 >
                   <div class="pdv-comment-head">
                     <span class="pdv-comment-avatar" :style="avatarStyle(item.author)" aria-hidden="true">
                       {{ authorInitials(item.author) }}
                     </span>
                     <span class="pdv-comment-author">{{ item.author }}</span>
-                    <span class="pdv-review-verdict">{{ reviewStateMeta(item.state).label }}</span>
+                    <span class="pdv-review-verdict">{{ item.verdictLabel }}</span>
                     <button
                       v-if="item.href"
                       type="button"
@@ -1404,8 +1409,11 @@ function commentTimeAgo(dateStr: string): string {
   border-left-width: 3px;
 }
 
+/* Electric blue for "changes requested" — intentional brand accent, defined
+   once here and reused for the border + verdict text below. */
+.pdv-review--changes { --pdv-review-changes: #2f81f7; }
 .pdv-review--approved { border-left-color: var(--color-success); }
-.pdv-review--changes { border-left-color: #2f81f7; }
+.pdv-review--changes { border-left-color: var(--pdv-review-changes); }
 .pdv-review--dismissed { border-left-color: var(--color-danger); }
 .pdv-review--commented { border-left-color: var(--color-accent); }
 
@@ -1417,7 +1425,7 @@ function commentTimeAgo(dateStr: string): string {
 
 /* Verdict text colors + glow, keyed on the review state */
 .pdv-review--changes .pdv-review-verdict {
-  color: #2f81f7; /* electric blue — intentional brand accent, not a theme token */
+  color: var(--pdv-review-changes);
   text-shadow: 0 0 6px rgba(47, 129, 247, 0.7), 0 0 12px rgba(47, 129, 247, 0.4);
 }
 .pdv-review--approved .pdv-review-verdict {

@@ -207,8 +207,12 @@ export function usePrPanel(cwd: Ref<string>) {
       (a.submitted_at || "").localeCompare(b.submitted_at || ""),
     )) {
       const s = (r.state || "").toUpperCase();
+      const login = r.user?.login;
+      // Ghost/deleted reviewer has no stable identity to collapse on — skip it
+      // rather than treating each of its reviews as a distinct verdict.
+      if (!login) continue;
       if (s === "APPROVED" || s === "CHANGES_REQUESTED" || s === "DISMISSED") {
-        latestVerdictByUser.set(r.user?.login ?? String(r.id), s);
+        latestVerdictByUser.set(login, s);
       }
     }
     const verdicts = [...latestVerdictByUser.values()];
