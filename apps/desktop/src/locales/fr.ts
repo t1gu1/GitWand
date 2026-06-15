@@ -844,6 +844,9 @@ const fr: Locale = {
       applySuggestion: "\u2705 Appliquer la suggestion",
       suggestionLabel: "\u{1F4A1} Suggestion",
     },
+    reactions: {
+      addReaction: "Ajouter une r\u00e9action",
+    },
     review: {
       modalTitle: "Review des modifications",
       modalAria: "Soumettre la review",

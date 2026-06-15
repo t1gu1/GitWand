@@ -827,6 +827,87 @@ fn gh_api_json(cwd: &str, path: &str) -> Result<serde_json::Value, String> {
     serde_json::from_str(trimmed).map_err(|e| format!("parse gh api response: {}", e))
 }
 
+/// Run a mutating `gh api` call (`POST`/`DELETE`) with optional `-f key=value` fields.
+/// Returns the parsed JSON body, or `Null` for 204 No Content responses.
+fn gh_api_write(cwd: &str, method: &str, path: &str, fields: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    let mut cmd = hidden_cmd("gh");
+    cmd.args(["api", "-X", method, path]);
+    for (k, v) in fields {
+        cmd.args(["-f", &format!("{}={}", k, v)]);
+    }
+    let output = cmd.current_dir(cwd).output().map_err(|e| format!("gh api write: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("gh api {}: {}", method, String::from_utf8_lossy(&output.stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() { return Ok(serde_json::Value::Null); }
+    serde_json::from_str(trimmed).map_err(|e| format!("parse gh api write response: {}", e))
+}
+
+fn reactions_api_path(nwo: &str, target_type: &str, target_id: i64) -> String {
+    match target_type {
+        "pr" => format!("repos/{}/issues/{}/reactions", nwo, target_id),
+        "review_comment" => format!("repos/{}/pulls/comments/{}/reactions", nwo, target_id),
+        _ => format!("repos/{}/issues/comments/{}/reactions", nwo, target_id),
+    }
+}
+
+fn gh_list_reactions_inner(cwd: String, number: i64, target_type: String, target_id: i64) -> Result<Vec<serde_json::Value>, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_list_reactions(&cwd, number, &target_type, target_id, &tok);
+    }
+    let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());
+    let path = reactions_api_path(&nwo, &target_type, target_id);
+    let json = gh_api_json(&cwd, &path)?;
+    Ok(json.as_array().map(|a| a.iter().map(|r| github_api::map_reaction(r)).collect()).unwrap_or_default())
+}
+
+/// List reactions on a PR or one of its comments.
+/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+/// `target_id`: PR number for `"pr"`, comment id otherwise.
+#[tauri::command]
+pub(crate) async fn gh_list_reactions(cwd: String, number: i64, target_type: String, target_id: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_list_reactions_inner(cwd, number, target_type, target_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_add_reaction_inner(cwd: String, number: i64, target_type: String, target_id: i64, content: String) -> Result<serde_json::Value, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_add_reaction(&cwd, number, &target_type, target_id, &content, &tok);
+    }
+    let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());
+    let path = reactions_api_path(&nwo, &target_type, target_id);
+    gh_api_write(&cwd, "POST", &path, &[("content", &content)])
+}
+
+/// Add a reaction to a PR or comment.
+#[tauri::command]
+pub(crate) async fn gh_add_reaction(cwd: String, number: i64, target_type: String, target_id: i64, content: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_add_reaction_inner(cwd, number, target_type, target_id, content))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn gh_delete_reaction_inner(cwd: String, number: i64, target_type: String, target_id: i64, reaction_id: i64) -> Result<(), String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_delete_reaction(&cwd, number, &target_type, target_id, reaction_id, &tok);
+    }
+    let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());
+    let path = format!("{}/{}", reactions_api_path(&nwo, &target_type, target_id), reaction_id);
+    gh_api_write(&cwd, "DELETE", &path, &[])?;
+    Ok(())
+}
+
+/// Delete a reaction from a PR or comment.
+#[tauri::command]
+pub(crate) async fn gh_delete_reaction(cwd: String, number: i64, target_type: String, target_id: i64, reaction_id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || gh_delete_reaction_inner(cwd, number, target_type, target_id, reaction_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn gh_fork_info_inner(cwd: String) -> Result<ForkInfo, String> {
     if let Some(tok) = github_api::settings_github_token() {
         return github_api::rest_fork_info(&cwd, &tok);

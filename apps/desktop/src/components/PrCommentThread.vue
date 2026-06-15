@@ -12,6 +12,7 @@ import type { PrReviewComment } from "../utils/backend";
 import { renderMarkdown, onMarkdownLinkClick } from "../composables/useSafeHtml";
 import { useI18n } from "../composables/useI18n";
 import { useAvatar } from "../composables/useAvatar";
+import PrReactions from "./PrReactions.vue";
 
 const { t } = useI18n();
 
@@ -22,6 +23,12 @@ const props = defineProps<{
   currentUser?: string;
   /** Whether to show the compose box for a new reply immediately. */
   autoFocus?: boolean;
+  /** Repo working directory — required for reactions. */
+  cwd?: string;
+  /** PR number — required for reactions. */
+  prNumber?: number;
+  /** Forge name — routes reactions to the right backend. */
+  forgeName?: string;
 }>();
 
 const emit = defineEmits<{
@@ -157,6 +164,15 @@ function timeAgo(dateStr: string): string {
         :style="{ '--suggestion-label': `'${suggLabel}'` }"
         @click="onMarkdownLinkClick"
         v-html="bodyHtmlById.get(comment.id)"
+      />
+      <PrReactions
+        v-if="cwd && prNumber"
+        :cwd="cwd"
+        :pr-number="prNumber"
+        target-type="review_comment"
+        :target-id="comment.id"
+        :current-user="currentUser"
+        :forge-name="forgeName"
       />
 
       <!-- Apply suggestion button -->

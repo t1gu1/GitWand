@@ -834,6 +834,9 @@ const ptBR: Locale = {
       applySuggestion: "\u2705 Aplicar sugestão",
       suggestionLabel: "\u{1F4A1} Sugestão",
     },
+    reactions: {
+      addReaction: "Adicionar reação",
+    },
     review: {
       modalTitle: "Review das alterações",
       modalAria: "Enviar a review",

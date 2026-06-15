@@ -20,6 +20,7 @@ import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
 import PrIntelligencePanel from "./PrIntelligencePanel.vue";
+import PrReactions from "./PrReactions.vue";
 
 const { t } = useI18n();
 
@@ -536,6 +537,16 @@ function commentTimeAgo(dateStr: string): string {
                 v-html="descriptionHtml"
               />
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
+              <div v-if="p.selectedPr.value" class="pdv-desc-reactions">
+                <PrReactions
+                  :cwd="p.cwd.value"
+                  :pr-number="p.selectedPr.value.number"
+                  target-type="pr"
+                  :target-id="p.selectedPr.value.number"
+                  :current-user="p.currentUser.value"
+                  :forge-name="p.forge.value.name"
+                />
+              </div>
             </div>
             <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
           </section>
@@ -569,6 +580,15 @@ function commentTimeAgo(dateStr: string): string {
                   <span class="pdv-comment-time" :title="c.created_at">{{ commentTimeAgo(c.created_at) }}</span>
                 </div>
                 <div class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="c.bodyHtml" />
+                <PrReactions
+                  v-if="p.selectedPr.value"
+                  :cwd="p.cwd.value"
+                  :pr-number="p.selectedPr.value.number"
+                  :target-type="c.path ? 'review_comment' : 'issue_comment'"
+                  :target-id="c.id"
+                  :current-user="p.currentUser.value"
+                  :forge-name="p.forge.value.name"
+                />
               </li>
             </ul>
             <div ref="commentsEnd"></div>
@@ -614,8 +634,11 @@ function commentTimeAgo(dateStr: string): string {
                 :diff="p.selectedDiff.value"
                 :file-path="p.selectedDiffFile.value"
                 :comments="p.commentsForFile.value"
-                :current-user="undefined"
+                :current-user="p.currentUser.value ?? undefined"
                 :review-draft-count="p.draftReviewComments.value.length"
+                :cwd="p.cwd.value"
+                :pr-number="p.selectedPr.value?.number"
+                :forge-name="p.forge.value.name"
                 :annotations="p.selectedDiffFile.value ? (p.annotationsByFile.value[p.selectedDiffFile.value] ?? []) : []"
                 @create-comment="p.handleCreateComment"
                 @add-to-review="p.handleAddToReview"
@@ -1504,6 +1527,16 @@ function commentTimeAgo(dateStr: string): string {
   line-height: var(--line-height-normal);
   padding: var(--space-5) var(--space-6);
   word-break: break-word;
+}
+
+/* Reaction strip reserved at the bottom of the description box, mirroring
+   how reactions sit inside each PR comment. Extra bottom padding gives the
+   strip a bit of breathing room. */
+.pdv-desc-reactions {
+  padding: 0 var(--space-6) var(--space-5);
+}
+.pdv-desc-reactions :deep(.prt-reactions) {
+  margin-top: 0;
 }
 
 /* Markdown primitives inside the PR description. Mirrors the README

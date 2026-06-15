@@ -1459,6 +1459,78 @@ pub(crate) async fn az_submit_review(
     .map_err(|e| e.to_string())?
 }
 
+// ─── Likes (Azure comment reactions) ────────────────────────────────────────
+//
+// Azure DevOps supports a single reaction type per comment: a "like" (👍).
+// The API lives under `/threads/{threadId}/comments/{commentId}/likes`.
+// Comment IDs stored in the frontend are composite (thread_id * COMMENT_ID_STRIDE
+// + comment_id), so we decompose them here before calling the REST endpoint.
+//
+// The likes list endpoint returns an array of IdentityRef objects; we map each
+// one to a PrReaction with content="+1" so the shared PrReactions.vue component
+// can handle Azure uniformly with a simpler UI branch.
+
+/// Build the `.../comments/{commentId}/likes` REST URL, decomposing the
+/// composite comment id into its thread / comment parts.
+fn likes_url(cwd: &str, pr_number: i64, composite_id: i64) -> Result<String, String> {
+    let r = azure_repo(cwd)?;
+    let thread_id = composite_id / COMMENT_ID_STRIDE;
+    let comment_id = composite_id % COMMENT_ID_STRIDE;
+    Ok(with_api_version(&format!(
+        "{}/pullrequests/{}/threads/{}/comments/{}/likes",
+        r.api_base(), pr_number, thread_id, comment_id
+    )))
+}
+
+fn rest_list_likes(cwd: &str, pr_number: i64, composite_id: i64) -> Result<Vec<serde_json::Value>, String> {
+    let url = likes_url(cwd, pr_number, composite_id)?;
+    let v = az_json("GET", &url, None)?;
+    let empty = vec![];
+    let arr = v.as_array().unwrap_or(&empty);
+    let result = arr.iter().enumerate().map(|(i, user)| {
+        serde_json::json!({
+            "id": i as i64,
+            "content": "+1",
+            "user": js(user, "displayName"),
+        })
+    }).collect();
+    Ok(result)
+}
+
+fn rest_add_like(cwd: &str, pr_number: i64, composite_id: i64) -> Result<serde_json::Value, String> {
+    let url = likes_url(cwd, pr_number, composite_id)?;
+    az_json("POST", &url, Some("{}"))?;
+    let current_user = rest_current_user()?;
+    Ok(serde_json::json!({ "id": 999_i64, "content": "+1", "user": current_user }))
+}
+
+fn rest_delete_like(cwd: &str, pr_number: i64, composite_id: i64) -> Result<(), String> {
+    let url = likes_url(cwd, pr_number, composite_id)?;
+    az_json("DELETE", &url, None)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn az_list_likes(cwd: String, pr_number: i64, composite_id: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_list_likes(&cwd, pr_number, composite_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn az_add_like(cwd: String, pr_number: i64, composite_id: i64) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || rest_add_like(&cwd, pr_number, composite_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn az_delete_like(cwd: String, pr_number: i64, composite_id: i64) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || rest_delete_like(&cwd, pr_number, composite_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 // ─── Entra ID device flow ───────────────────────────────────────────────────
 
 /// Begin the Entra ID device authorization grant.

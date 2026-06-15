@@ -1033,3 +1033,113 @@ pub(crate) async fn gl_mr_create_discussion(
     let stdout = String::from_utf8_lossy(&output.stdout);
     serde_json::from_str(stdout.trim()).map_err(|e| format!("Parse discussion: {}", e))
 }
+
+// ─── Award emoji (reactions) ─────────────────────────────────────────────────
+
+/// Map a GitLab emoji name to the equivalent GitHub reaction content string.
+fn gl_emoji_to_gh(name: &str) -> &str {
+    match name {
+        "thumbsup"   => "+1",
+        "thumbsdown" => "-1",
+        "laughing"   => "laugh",
+        "tada"       => "hooray",
+        // confused, heart, rocket, eyes share the same name on both platforms
+        other        => other,
+    }
+}
+
+/// Map a GitHub reaction content string to the GitLab emoji name.
+fn gh_content_to_gl(content: &str) -> &str {
+    match content {
+        "+1"    => "thumbsup",
+        "-1"    => "thumbsdown",
+        "laugh" => "laughing",
+        "hooray"=> "tada",
+        other   => other,
+    }
+}
+
+fn map_gl_reaction(r: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "id": ji(r, "id"),
+        "content": gl_emoji_to_gh(&js(r, "name")),
+        "user": juser(r, "user"),
+    })
+}
+
+/// Run any `glab api` call with optional `-f key=value` fields.
+fn glab_api(cwd: &str, method: &str, endpoint: &str, fields: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    let mut cmd = hidden_cmd("glab");
+    cmd.args(["api", "-X", method, endpoint]);
+    for (k, v) in fields {
+        cmd.args(["-f", &format!("{}={}", k, v)]);
+    }
+    let output = cmd.current_dir(cwd).output().map_err(|e| format!("glab api: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("glab api {} {}: {}", method, endpoint, String::from_utf8_lossy(&output.stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() { return Ok(serde_json::Value::Null); }
+    serde_json::from_str(trimmed).map_err(|e| format!("parse glab response: {}", e))
+}
+
+fn award_emoji_path(iid: i64, target_type: &str, target_id: i64) -> String {
+    match target_type {
+        "pr" => format!("projects/:fullpath/merge_requests/{}/award_emoji", iid),
+        _    => format!("projects/:fullpath/merge_requests/{}/notes/{}/award_emoji", iid, target_id),
+    }
+}
+
+/// List award emojis (reactions) on a MR or one of its notes.
+/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+/// `target_id`: ignored for `"pr"`, note id otherwise.
+/// Emoji names are normalised to GitHub reaction content strings.
+#[tauri::command]
+pub(crate) async fn gl_list_reactions(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = award_emoji_path(iid, &target_type, target_id);
+        let v = glab_api(&cwd, "GET", &path, &[])?;
+        Ok(v.as_array().map(|a| a.iter().map(map_gl_reaction).collect()).unwrap_or_default())
+    }).await.map_err(|e| e.to_string())?
+}
+
+/// Add an award emoji (reaction) to a MR or note.
+/// `content` uses GitHub reaction content strings (normalised to GitLab names internally).
+#[tauri::command]
+pub(crate) async fn gl_add_reaction(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+    content: String,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let gl_name = gh_content_to_gl(&content).to_string();
+        let path = award_emoji_path(iid, &target_type, target_id);
+        let v = glab_api(&cwd, "POST", &path, &[("name", &gl_name)])?;
+        Ok(map_gl_reaction(&v))
+    }).await.map_err(|e| e.to_string())?
+}
+
+/// Delete an award emoji (reaction) from a MR or note.
+#[tauri::command]
+pub(crate) async fn gl_delete_reaction(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+    reaction_id: i64,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = award_emoji_path(iid, &target_type, target_id);
+        let path = format!("{}/{}", base, reaction_id);
+        glab_api(&cwd, "DELETE", &path, &[])?;
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
+}

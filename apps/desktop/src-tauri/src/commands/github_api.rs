@@ -888,6 +888,74 @@ pub(crate) fn rest_checkout_pr(cwd: &str, number: i64) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Reactions ──────────────────────────────────────────────────────────────
+
+pub(crate) fn map_reaction(r: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "id": ji(r, "id"),
+        "content": js(r, "content"),
+        "user": jnested(r, "user", "login"),
+    })
+}
+
+fn reactions_url(repo: &str, target_type: &str, target_id: i64) -> String {
+    match target_type {
+        "pr" => format!("{}/repos/{}/issues/{}/reactions", API_BASE, repo, target_id),
+        "review_comment" => format!("{}/repos/{}/pulls/comments/{}/reactions", API_BASE, repo, target_id),
+        _ => format!("{}/repos/{}/issues/comments/{}/reactions", API_BASE, repo, target_id),
+    }
+}
+
+fn reaction_delete_url(repo: &str, target_type: &str, target_id: i64, reaction_id: i64) -> String {
+    format!("{}/{}", reactions_url(repo, target_type, target_id), reaction_id)
+}
+
+/// List reactions for a PR or one of its comments.
+/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+/// `target_id`: PR number for `"pr"`, comment id otherwise.
+/// Uses `get_pr_json` to resolve the correct repo (handles forks).
+pub(crate) fn rest_list_reactions(
+    cwd: &str,
+    number: i64,
+    target_type: &str,
+    target_id: i64,
+    token: &str,
+) -> Result<Vec<serde_json::Value>, String> {
+    let (repo, _) = get_pr_json(cwd, number, token)?;
+    let url = reactions_url(&repo, target_type, target_id);
+    let v = api_json("GET", &url, token, None)?;
+    Ok(v.as_array().map(|a| a.iter().map(|r| map_reaction(r)).collect()).unwrap_or_default())
+}
+
+pub(crate) fn rest_add_reaction(
+    cwd: &str,
+    number: i64,
+    target_type: &str,
+    target_id: i64,
+    content: &str,
+    token: &str,
+) -> Result<serde_json::Value, String> {
+    let (repo, _) = get_pr_json(cwd, number, token)?;
+    let url = reactions_url(&repo, target_type, target_id);
+    let payload = serde_json::json!({ "content": content });
+    let v = api_json("POST", &url, token, Some(&payload.to_string()))?;
+    Ok(map_reaction(&v))
+}
+
+pub(crate) fn rest_delete_reaction(
+    cwd: &str,
+    number: i64,
+    target_type: &str,
+    target_id: i64,
+    reaction_id: i64,
+    token: &str,
+) -> Result<(), String> {
+    let (repo, _) = get_pr_json(cwd, number, token)?;
+    let url = reaction_delete_url(&repo, target_type, target_id, reaction_id);
+    api_json("DELETE", &url, token, None)?;
+    Ok(())
+}
+
 // ─── OAuth device flow ──────────────────────────────────────────────────────
 
 fn github_device_start_inner() -> Result<GithubDeviceCode, String> {

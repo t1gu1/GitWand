@@ -28,6 +28,9 @@ const props = defineProps<{
   currentUser?: string;
   /** Number of comments already staged in the pending review draft. */
   reviewDraftCount?: number;
+  cwd?: string;
+  prNumber?: number;
+  forgeName?: string;
   /** CI check-run annotations for this file (v2.18). */
   annotations?: CIAnnotation[];
 }>();
@@ -466,6 +469,9 @@ function handleApplySuggestion(suggestion: string, startLine: number | null, end
               <PrCommentThread
                 :comments="thread.comments"
                 :current-user="currentUser"
+                :cwd="cwd"
+                :pr-number="prNumber"
+                :forge-name="forgeName"
                 @reply="(body) => handleReply(thread, body)"
                 @edit="handleEdit"
                 @delete="handleDelete"

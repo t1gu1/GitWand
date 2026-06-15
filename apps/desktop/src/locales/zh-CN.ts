@@ -822,6 +822,9 @@ const zhCN: Locale = {
       applySuggestion: "\u2705 应用建议",
       suggestionLabel: "\u{1F4A1} 建议",
     },
+    reactions: {
+      addReaction: "添加反应",
+    },
     review: {
       modalTitle: "变更 review",
       modalAria: "提交 review",

@@ -1018,6 +1018,7 @@ export function usePrPanel(cwd: Ref<string>) {
 
   return {
     // State
+    cwd,
     remote, prs, loading, refreshing, error, errorAction, success, filterState, filterMode,
     currentUser, currentUserLoading, currentUserError,
     showCreateForm, newPrTitle, newPrBody, newPrBase, newPrDraft, newPrReviewers, isCreating,

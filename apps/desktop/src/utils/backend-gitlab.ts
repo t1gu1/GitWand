@@ -13,6 +13,7 @@ import {
   PrReviewComment,
   PrReview,
   ReviewerCandidate,
+  PrReaction,
 } from "./backend-pr";
 
 // ─── GitLab / glab CLI wrappers (§2.x Forge integrations) ──────────────────
@@ -277,4 +278,41 @@ export async function glMrCreateDiscussion(
 export async function glMrFiles(cwd: string, iid: number): Promise<string[]> {
   if (!isTauri()) return [];
   return tauriInvoke<string[]>("gl_mr_files", { cwd, iid });
+}
+
+// ─── Award emoji (reactions) ──────────────────────────────────────────────────
+
+/** List award emojis (reactions) on a MR or one of its notes. */
+export async function glListReactions(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+): Promise<PrReaction[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<PrReaction[]>("gl_list_reactions", { cwd, iid, targetType, targetId });
+}
+
+/** Add an award emoji (reaction). Returns the created reaction. */
+export async function glAddReaction(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+  content: string,
+): Promise<PrReaction> {
+  if (!isTauri()) throw new Error("glAddReaction requires Tauri");
+  return tauriInvoke<PrReaction>("gl_add_reaction", { cwd, iid, targetType, targetId, content });
+}
+
+/** Delete an award emoji (reaction). */
+export async function glDeleteReaction(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+  reactionId: number,
+): Promise<void> {
+  if (!isTauri()) throw new Error("glDeleteReaction requires Tauri");
+  return tauriInvoke<void>("gl_delete_reaction", { cwd, iid, targetType, targetId, reactionId });
 }

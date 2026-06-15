@@ -655,6 +655,58 @@ export async function ghPrIssueComments(cwd: string, prNumber: number): Promise<
   return raw as PrReviewComment[];
 }
 
+// ─── Reactions ──────────────────────────────────────────────────────────────
+
+export interface PrReaction {
+  id: number;
+  content: string;
+  user: string;
+}
+
+/** List reactions on a PR or one of its comments.
+ * `targetType`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+ * `targetId`: PR number for `"pr"`, comment id otherwise.
+ */
+export async function ghListReactions(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+): Promise<PrReaction[]> {
+  if (isTauri()) {
+    return tauriInvoke<PrReaction[]>("gh_list_reactions", { cwd, number: prNumber, targetType, targetId });
+  }
+  return [];
+}
+
+/** Add a reaction to a PR or comment. Returns the created reaction. */
+export async function ghAddReaction(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+  content: string,
+): Promise<PrReaction> {
+  if (isTauri()) {
+    return tauriInvoke<PrReaction>("gh_add_reaction", { cwd, number: prNumber, targetType, targetId, content });
+  }
+  throw new Error("Reactions not supported in dev mode");
+}
+
+/** Delete a reaction from a PR or comment. */
+export async function ghDeleteReaction(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+  reactionId: number,
+): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke<void>("gh_delete_reaction", { cwd, number: prNumber, targetType, targetId, reactionId });
+  }
+  throw new Error("Reactions not supported in dev mode");
+}
+
 /** Create a new review comment (or reply to an existing one). */
 export async function ghPrCreateComment(
   cwd: string,
@@ -1127,5 +1179,20 @@ export async function azSubmitReview(
   if (isTauri()) {
     return tauriInvoke<PrReview>("az_submit_review", { cwd, number, event: opts.event, body: opts.body });
   }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azListLikes(cwd: string, prNumber: number, compositeId: number): Promise<PrReaction[]> {
+  if (isTauri()) return tauriInvoke<PrReaction[]>("az_list_likes", { cwd, prNumber, compositeId });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azAddLike(cwd: string, prNumber: number, compositeId: number): Promise<PrReaction> {
+  if (isTauri()) return tauriInvoke<PrReaction>("az_add_like", { cwd, prNumber, compositeId });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azDeleteLike(cwd: string, prNumber: number, compositeId: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_delete_like", { cwd, prNumber, compositeId });
   throw new Error(AZURE_WEB_ONLY);
 }

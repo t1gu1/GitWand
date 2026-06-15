@@ -850,6 +850,9 @@ const en = {
       applySuggestion: "\u2705 Apply suggestion",
       suggestionLabel: "\u{1F4A1} Suggestion",
     },
+    reactions: {
+      addReaction: "Add reaction",
+    },
     review: {
       modalTitle: "Review changes",
       modalAria: "Submit the review",
