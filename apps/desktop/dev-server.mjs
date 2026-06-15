@@ -205,6 +205,41 @@ function getRepoNwo(cwd) {
   return m ? `${m[1]}/${m[2]}` : null;
 }
 
+/** Cache of resolved PR repo nwo, keyed by `<origin>#<number>`. The repo a PR
+ *  lives in is stable for the PR's lifetime, so one resolution per dev-server
+ *  process is enough — without this the 3 per-PR endpoints each re-resolve
+ *  (up to ~9 redundant API roundtrips when a PR detail opens). */
+const prNwoCache = new Map();
+
+/**
+ * Resolve the repo where PR `number` actually lives. Mirrors the Rust
+ * `get_pr_json` resolution: try origin first; on 404, fall back to the fork's
+ * upstream parent. Without this, cross-fork PRs (branch pushed to a fork, PR
+ * opened against the upstream repo) resolve to the fork — where the PR number
+ * doesn't exist — and per-PR endpoints 404. Returns the origin nwo as a last
+ * resort so callers still get a usable (if wrong) value.
+ */
+async function resolvePrNwo(cwd, number, token) {
+  const origin = getRepoNwo(cwd);
+  if (!origin) return null;
+  const cacheKey = `${origin}#${number}`;
+  if (prNwoCache.has(cacheKey)) return prNwoCache.get(cacheKey);
+  let resolved = origin;
+  try {
+    const resp = await githubFetch(`/repos/${origin}/pulls/${number}`, token);
+    if (!resp.ok && resp.status === 404) {
+      const info = await githubFetch(`/repos/${origin}`, token);
+      const parent = info.ok ? (await info.json()).parent?.full_name : null;
+      if (parent) {
+        const r2 = await githubFetch(`/repos/${parent}/pulls/${number}`, token);
+        if (r2.ok) resolved = parent;
+      }
+    }
+  } catch { /* fall through to origin */ }
+  prNwoCache.set(cacheKey, resolved);
+  return resolved;
+}
+
 /** Fetch from GitHub REST API with auth. `accept` overrides the default JSON accept header. */
 async function githubFetch(path, token, accept = "application/vnd.github+json") {
   return fetch(`https://api.github.com${path}`, {
@@ -2676,7 +2711,7 @@ async function handleRequest(req, res) {
       try {
         const token = getGithubToken();
         if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
-        const nwo = getRepoNwo(resolve(cwd));
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Fetch all review comments (paginated — up to 200)
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/comments?per_page=100`, token);
@@ -2712,7 +2747,7 @@ async function handleRequest(req, res) {
       try {
         const token = getGithubToken();
         if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
-        const nwo = getRepoNwo(resolve(cwd));
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         const resp = await githubFetch(`/repos/${nwo}/issues/${number}/comments?per_page=100`, token);
         if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
@@ -2850,9 +2885,9 @@ async function handleRequest(req, res) {
       try {
         const token = getGithubToken();
         if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
-        const nwo = getRepoNwo(resolve(cwd));
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
-        const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews`, token);
+        const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews?per_page=100`, token);
         if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
         const reviews = await resp.json();
         return jsonResponse(req, res, reviews);

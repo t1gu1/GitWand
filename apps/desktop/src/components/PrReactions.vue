@@ -52,6 +52,10 @@ const groups = computed(() => {
 // Azure only supports likes on comments, not on the PR description itself.
 const isAzure = computed(() => props.forgeName === "azure");
 
+// A review *verdict* is reactable only on GitHub (via GraphQL); no other forge
+// exposes a reaction target for it. Centralised here so call sites stay forge-agnostic.
+const reviewUnsupported = computed(() => props.targetType === "review" && props.forgeName !== "github");
+
 // One adapter per forge resolves the list/add/delete calls. Azure ("likes")
 // ignores targetType/content and has no reaction id, so its add/delete take
 // no extra args — the differing signatures are hidden behind this table so
@@ -84,6 +88,7 @@ onMounted(async () => {
   if (!props.cwd || !props.prNumber || !SUPPORTED.has(props.forgeName ?? "")) return;
   // Azure has no PR-level likes — only comment threads support them.
   if (isAzure.value && props.targetType === "pr") return;
+  if (reviewUnsupported.value) return;
   try {
     reactions.value = await api.value.list();
   } catch {
@@ -135,7 +140,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   </div>
 
   <!-- GitHub / GitLab: full emoji picker -->
-  <div v-else-if="!isAzure && SUPPORTED.has(forgeName ?? '') && (groups.length > 0 || currentUser)" class="prt-reactions">
+  <div v-else-if="!isAzure && !reviewUnsupported && SUPPORTED.has(forgeName ?? '') && (groups.length > 0 || currentUser)" class="prt-reactions">
     <button
       v-for="g in groups"
       :key="g.content"

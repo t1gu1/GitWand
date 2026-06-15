@@ -808,6 +808,29 @@ pub(crate) async fn gh_pr_issue_comments(cwd: String, number: i64) -> Result<Vec
         .map_err(|e| e.to_string())?
 }
 
+fn gh_pr_reviews_inner(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    if let Some(tok) = github_api::settings_github_token() {
+        return github_api::rest_pr_reviews(&cwd, number, &tok);
+    }
+    let nwo = gh_fork_upstream(&cwd)
+        .or_else(|| gh_current_nwo(&cwd))
+        .unwrap_or_else(|| "{owner}/{repo}".to_string());
+    let json = gh_api_json(
+        &cwd,
+        &format!("repos/{}/pulls/{}/reviews?per_page=100", nwo, number),
+    )?;
+    Ok(github_api::map_reviews(&json))
+}
+
+/// List submitted reviews (Approve / Request changes / Comment verdicts) for a PR.
+/// Token present → REST; otherwise `gh api`.
+#[tauri::command]
+pub(crate) async fn gh_pr_reviews(cwd: String, number: i64) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || gh_pr_reviews_inner(cwd, number))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Run `gh api <path>` in `cwd` and parse stdout as JSON. Shared by the
 /// comment-list fallbacks when no token is configured.
 fn gh_api_json(cwd: &str, path: &str) -> Result<serde_json::Value, String> {
@@ -853,8 +876,26 @@ fn reactions_api_path(nwo: &str, target_type: &str, target_id: i64) -> String {
     }
 }
 
+/// gh CLI's own auth token, used to drive the GraphQL-only review-reaction path
+/// through the shared `github_api` helpers when no GitWand token is configured.
+fn gh_auth_token() -> Option<String> {
+    let out = hidden_cmd("gh").args(["auth", "token"]).output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let tok = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if tok.is_empty() { None } else { Some(tok) }
+}
+
+/// Token for reaction calls: the GitWand token if configured, else (only for the
+/// GraphQL-only `"review"` target) the gh CLI's own token. Other targets fall
+/// back to the plain `gh api` path below when this returns `None`.
+fn reaction_token(target_type: &str) -> Option<String> {
+    github_api::settings_github_token().or_else(|| (target_type == "review").then(gh_auth_token).flatten())
+}
+
 fn gh_list_reactions_inner(cwd: String, number: i64, target_type: String, target_id: i64) -> Result<Vec<serde_json::Value>, String> {
-    if let Some(tok) = github_api::settings_github_token() {
+    if let Some(tok) = reaction_token(&target_type) {
         return github_api::rest_list_reactions(&cwd, number, &target_type, target_id, &tok);
     }
     let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());
@@ -874,7 +915,7 @@ pub(crate) async fn gh_list_reactions(cwd: String, number: i64, target_type: Str
 }
 
 fn gh_add_reaction_inner(cwd: String, number: i64, target_type: String, target_id: i64, content: String) -> Result<serde_json::Value, String> {
-    if let Some(tok) = github_api::settings_github_token() {
+    if let Some(tok) = reaction_token(&target_type) {
         return github_api::rest_add_reaction(&cwd, number, &target_type, target_id, &content, &tok);
     }
     let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());
@@ -891,7 +932,7 @@ pub(crate) async fn gh_add_reaction(cwd: String, number: i64, target_type: Strin
 }
 
 fn gh_delete_reaction_inner(cwd: String, number: i64, target_type: String, target_id: i64, reaction_id: i64) -> Result<(), String> {
-    if let Some(tok) = github_api::settings_github_token() {
+    if let Some(tok) = reaction_token(&target_type) {
         return github_api::rest_delete_reaction(&cwd, number, &target_type, target_id, reaction_id, &tok);
     }
     let nwo = gh_fork_upstream(&cwd).unwrap_or_else(|| "{owner}/{repo}".to_string());

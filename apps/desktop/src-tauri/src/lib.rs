@@ -333,6 +333,7 @@ pub fn run() {
             commands::gh::gh_pr_checks,
             commands::gh::gh_pr_comments,
             commands::gh::gh_pr_issue_comments,
+            commands::gh::gh_pr_reviews,
             commands::gh::gh_check_annotations,
             commands::gh::gh_list_reactions,
             commands::gh::gh_add_reaction,

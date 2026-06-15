@@ -711,6 +711,37 @@ pub(crate) fn rest_pr_issue_comments(cwd: &str, number: i64, token: &str) -> Res
     Ok(map_comments(&v, true))
 }
 
+/// Map a GitHub review object to the snake_case shape the frontend `PrReview`
+/// interface expects.
+pub(crate) fn map_review(r: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "id": ji(r, "id"),
+        "state": js(r, "state"),
+        "body": js(r, "body"),
+        "user": {
+            "login": jnested(r, "user", "login"),
+            "avatar_url": jnested(r, "user", "avatar_url"),
+        },
+        "submitted_at": js(r, "submitted_at"),
+        "html_url": js(r, "html_url"),
+    })
+}
+
+/// Map a JSON array of GitHub reviews into frontend `PrReview` shape.
+pub(crate) fn map_reviews(v: &serde_json::Value) -> Vec<serde_json::Value> {
+    v.as_array()
+        .map(|arr| arr.iter().map(map_review).collect())
+        .unwrap_or_default()
+}
+
+/// List submitted reviews for a PR (REST).
+pub(crate) fn rest_pr_reviews(cwd: &str, number: i64, token: &str) -> Result<Vec<serde_json::Value>, String> {
+    let (repo, _pr) = get_pr_json(cwd, number, token)?;
+    let url = format!("{}/repos/{}/pulls/{}/reviews?per_page=100", API_BASE, repo, number);
+    let v = api_json("GET", &url, token, None)?;
+    Ok(map_reviews(&v))
+}
+
 /// Resolve the current repo's fork relationship (REST).
 pub(crate) fn rest_fork_info(cwd: &str, token: &str) -> Result<ForkInfo, String> {
     let (owner, repo) = owner_repo(cwd)?;
@@ -845,14 +876,7 @@ pub(crate) fn rest_pr_ready(cwd: &str, number: i64, token: &str) -> Result<(), S
     // query string, so a value with quotes/backslashes can never break out of
     // the mutation (node IDs are opaque API-supplied values — treat as untrusted).
     let query = "mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { isDraft } } }";
-    let payload = serde_json::json!({ "query": query, "variables": { "id": node_id } });
-    let v = api_json("POST", &format!("{}/graphql", API_BASE), token, Some(&payload.to_string()))?;
-    if let Some(errors) = v.get("errors").and_then(|e| e.as_array()) {
-        if !errors.is_empty() {
-            let msg = errors[0].get("message").and_then(|m| m.as_str()).unwrap_or("GraphQL error");
-            return Err(format!("Mark-ready failed: {}", msg));
-        }
-    }
+    graphql(token, query, serde_json::json!({ "id": node_id }))?;
     Ok(())
 }
 
@@ -910,9 +934,124 @@ fn reaction_delete_url(repo: &str, target_type: &str, target_id: i64, reaction_i
     format!("{}/{}", reactions_url(repo, target_type, target_id), reaction_id)
 }
 
+// ── Review-summary reactions (GraphQL) ──────────────────────────────────────
+// A pull-request *review* verdict isn't reactable through the REST reactions
+// API (it only covers issues, issue comments and inline review comments), but
+// `PullRequestReview` implements GraphQL's `Reactable`. The `"review"` target
+// type routes here; everything else stays on REST above.
+
+/// Map a REST reaction content string ("+1", "laugh"…) to the GraphQL
+/// `ReactionContent` enum. Returns `None` for an unknown emoji.
+fn reaction_content_to_gql(content: &str) -> Option<&'static str> {
+    Some(match content {
+        "+1" => "THUMBS_UP",
+        "-1" => "THUMBS_DOWN",
+        "laugh" => "LAUGH",
+        "confused" => "CONFUSED",
+        "heart" => "HEART",
+        "hooray" => "HOORAY",
+        "rocket" => "ROCKET",
+        "eyes" => "EYES",
+        _ => return None,
+    })
+}
+
+/// Map a GraphQL `ReactionContent` enum back to the REST content string the
+/// frontend `PrReaction` shape uses.
+fn reaction_content_from_gql(content: &str) -> &str {
+    match content {
+        "THUMBS_UP" => "+1",
+        "THUMBS_DOWN" => "-1",
+        "LAUGH" => "laugh",
+        "CONFUSED" => "confused",
+        "HEART" => "heart",
+        "HOORAY" => "hooray",
+        "ROCKET" => "rocket",
+        "EYES" => "eyes",
+        other => other,
+    }
+}
+
+/// Map a GraphQL reaction node (`{ databaseId, content, user { login } }`) into
+/// the same `PrReaction` shape `map_reaction` produces for REST.
+fn map_gql_reaction(r: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "id": ji(r, "databaseId"),
+        "content": reaction_content_from_gql(&js(r, "content")),
+        "user": jnested(r, "user", "login"),
+    })
+}
+
+/// Run a GraphQL operation and surface the first `errors[]` entry as an `Err`.
+fn graphql(token: &str, query: &str, variables: serde_json::Value) -> Result<serde_json::Value, String> {
+    let payload = serde_json::json!({ "query": query, "variables": variables });
+    let v = api_json("POST", &format!("{}/graphql", API_BASE), token, Some(&payload.to_string()))?;
+    if let Some(errors) = v.get("errors").and_then(|e| e.as_array()) {
+        if let Some(first) = errors.first() {
+            let msg = first.get("message").and_then(|m| m.as_str()).unwrap_or("GraphQL error");
+            return Err(format!("GraphQL error: {}", msg));
+        }
+    }
+    Ok(v)
+}
+
+/// Resolve a review's opaque GraphQL node id from its REST numeric id.
+fn review_node_id(repo: &str, number: i64, review_id: i64, token: &str) -> Result<String, String> {
+    let url = format!("{}/repos/{}/pulls/{}/reviews/{}", API_BASE, repo, number, review_id);
+    let v = api_json("GET", &url, token, None)?;
+    let id = js(&v, "node_id");
+    if id.is_empty() {
+        return Err("Could not resolve review node_id".to_string());
+    }
+    Ok(id)
+}
+
+/// Reactions on an already-resolved review node — shared by the public list
+/// and the delete lookup so the node id is resolved only once per operation.
+fn gql_reactions_for_node(node: &str, token: &str) -> Result<Vec<serde_json::Value>, String> {
+    let query = "query($id: ID!) { node(id: $id) { ... on PullRequestReview { reactions(first: 100) { nodes { databaseId content user { login } } } } } }";
+    let v = graphql(token, query, serde_json::json!({ "id": node }))?;
+    let nodes = v
+        .pointer("/data/node/reactions/nodes")
+        .and_then(|n| n.as_array())
+        .cloned()
+        .unwrap_or_default();
+    Ok(nodes.iter().map(map_gql_reaction).collect())
+}
+
+fn gql_list_review_reactions(repo: &str, number: i64, review_id: i64, token: &str) -> Result<Vec<serde_json::Value>, String> {
+    let node = review_node_id(repo, number, review_id, token)?;
+    gql_reactions_for_node(&node, token)
+}
+
+fn gql_add_review_reaction(repo: &str, number: i64, review_id: i64, content: &str, token: &str) -> Result<serde_json::Value, String> {
+    let gql_content = reaction_content_to_gql(content).ok_or_else(|| format!("Unsupported reaction: {}", content))?;
+    let node = review_node_id(repo, number, review_id, token)?;
+    let query = "mutation($id: ID!, $c: ReactionContent!) { addReaction(input: { subjectId: $id, content: $c }) { reaction { databaseId content user { login } } } }";
+    let v = graphql(token, query, serde_json::json!({ "id": node, "c": gql_content }))?;
+    let reaction = v.pointer("/data/addReaction/reaction").cloned().unwrap_or(serde_json::Value::Null);
+    Ok(map_gql_reaction(&reaction))
+}
+
+fn gql_delete_review_reaction(repo: &str, number: i64, review_id: i64, reaction_id: i64, token: &str) -> Result<(), String> {
+    // GraphQL's removeReaction keys off content, not the reaction id, so look up
+    // the content of the reaction being removed first. Resolve the node once and
+    // reuse it for both the lookup and the mutation.
+    let node = review_node_id(repo, number, review_id, token)?;
+    let existing = gql_reactions_for_node(&node, token)?;
+    let Some(target) = existing.iter().find(|r| r.get("id").and_then(|x| x.as_i64()) == Some(reaction_id)) else {
+        return Ok(()); // already gone
+    };
+    let rest_content = target.get("content").and_then(|c| c.as_str()).unwrap_or("");
+    let gql_content = reaction_content_to_gql(rest_content).ok_or_else(|| format!("Unsupported reaction: {}", rest_content))?;
+    let query = "mutation($id: ID!, $c: ReactionContent!) { removeReaction(input: { subjectId: $id, content: $c }) { reaction { databaseId } } }";
+    graphql(token, query, serde_json::json!({ "id": node, "c": gql_content }))?;
+    Ok(())
+}
+
 /// List reactions for a PR or one of its comments.
-/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"`.
-/// `target_id`: PR number for `"pr"`, comment id otherwise.
+/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"` | `"review"`.
+/// `target_id`: PR number for `"pr"`, comment/review id otherwise.
 /// Uses `get_pr_json` to resolve the correct repo (handles forks).
 pub(crate) fn rest_list_reactions(
     cwd: &str,
@@ -922,6 +1061,9 @@ pub(crate) fn rest_list_reactions(
     token: &str,
 ) -> Result<Vec<serde_json::Value>, String> {
     let (repo, _) = get_pr_json(cwd, number, token)?;
+    if target_type == "review" {
+        return gql_list_review_reactions(&repo, number, target_id, token);
+    }
     let url = reactions_url(&repo, target_type, target_id);
     let v = api_json("GET", &url, token, None)?;
     Ok(v.as_array().map(|a| a.iter().map(|r| map_reaction(r)).collect()).unwrap_or_default())
@@ -936,6 +1078,9 @@ pub(crate) fn rest_add_reaction(
     token: &str,
 ) -> Result<serde_json::Value, String> {
     let (repo, _) = get_pr_json(cwd, number, token)?;
+    if target_type == "review" {
+        return gql_add_review_reaction(&repo, number, target_id, content, token);
+    }
     let url = reactions_url(&repo, target_type, target_id);
     let payload = serde_json::json!({ "content": content });
     let v = api_json("POST", &url, token, Some(&payload.to_string()))?;
@@ -951,6 +1096,9 @@ pub(crate) fn rest_delete_reaction(
     token: &str,
 ) -> Result<(), String> {
     let (repo, _) = get_pr_json(cwd, number, token)?;
+    if target_type == "review" {
+        return gql_delete_review_reaction(&repo, number, target_id, reaction_id, token);
+    }
     let url = reaction_delete_url(&repo, target_type, target_id, reaction_id);
     api_json("DELETE", &url, token, None)?;
     Ok(())

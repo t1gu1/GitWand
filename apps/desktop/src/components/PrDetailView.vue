@@ -105,6 +105,67 @@ const sortedComments = computed(() =>
     .map((c) => ({ ...c, bodyHtml: renderMarkdown(c.body) })),
 );
 
+/** Translated verdict label + CSS modifier for a review state. */
+function reviewStateMeta(state: string): { label: string; cls: string } {
+  switch ((state || "").toUpperCase()) {
+    case "APPROVED":
+      return { label: t("pr.detail.reviewApproved"), cls: "pdv-review--approved" };
+    case "CHANGES_REQUESTED":
+      return { label: t("pr.detail.reviewChangesRequested"), cls: "pdv-review--changes" };
+    case "DISMISSED":
+      return { label: t("pr.detail.reviewDismissed"), cls: "pdv-review--dismissed" };
+    default:
+      return { label: t("pr.detail.reviewCommented"), cls: "pdv-review--commented" };
+  }
+}
+
+type TimelineComment = (typeof sortedComments.value)[number] & { kind: "comment" };
+type TimelineReview = {
+  kind: "review";
+  id: number;
+  author: string;
+  state: string;
+  bodyHtml: string;
+  ts: string;
+  href: string;
+};
+type TimelineItem = TimelineComment | TimelineReview;
+
+/**
+ * Unified conversation timeline: inline/issue comments interleaved with the
+ * review-level verdicts (Approve / Request changes / Comment), oldest-first.
+ * Lets the "requested changes" review show up in the comments list — with its
+ * summary body and a link back to the review on the forge — instead of being
+ * hidden in a separate block.
+ */
+const timeline = computed<TimelineItem[]>(() => {
+  const comments: TimelineItem[] = sortedComments.value.map((c) => ({ ...c, kind: "comment" as const }));
+  // PENDING reviews (unsubmitted drafts) are excluded; COMMENTED reviews with an
+  // empty body carry no standalone signal (their inline notes live in the
+  // comments thread). `bodyHtml` is rendered once, like `sortedComments`.
+  const reviews: TimelineItem[] = p.prReviews.value
+    .filter((r) => {
+      const s = (r.state || "").toUpperCase();
+      if (s === "PENDING") return false;
+      if (s === "COMMENTED") return !!r.body?.trim();
+      return true;
+    })
+    .map((r) => ({
+      kind: "review" as const,
+      id: r.id,
+      author: r.user.login,
+      state: r.state,
+      bodyHtml: r.body?.trim() ? renderMarkdown(r.body) : "",
+      ts: r.submitted_at,
+      href: r.html_url,
+    }));
+  return [...comments, ...reviews].sort((a, b) => {
+    const ta = a.kind === "review" ? a.ts : a.created_at;
+    const tb = b.kind === "review" ? b.ts : b.created_at;
+    return new Date(ta).getTime() - new Date(tb).getTime();
+  });
+});
+
 /** PR description rendered once (see `sortedComments` for the rationale). */
 const descriptionHtml = computed(() => renderMarkdown(p.prDetail.value?.body));
 
@@ -551,45 +612,89 @@ function commentTimeAgo(dateStr: string): string {
             <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
           </section>
 
-          <!-- Comments -->
-          <section v-if="sortedComments.length" class="pdv-section pdv-section--comments">
+          <!-- Conversation: comments + review verdicts, oldest-first -->
+          <section v-if="timeline.length" class="pdv-section pdv-section--comments">
             <h2 class="pdv-section-label">
               {{ t('pr.detail.statComments') }}
-              <span class="pdv-section-count">{{ sortedComments.length }}</span>
+              <span class="pdv-section-count">{{ timeline.length }}</span>
             </h2>
             <ul class="pdv-comments">
-              <li v-for="c in sortedComments" :key="`${c.path}#${c.id}`" class="pdv-comment">
-                <div class="pdv-comment-head">
-                  <span class="pdv-comment-avatar" :style="avatarStyle(c.author)" aria-hidden="true">
-                    {{ authorInitials(c.author) }}
-                  </span>
-                  <span class="pdv-comment-author">{{ c.author }}</span>
-                  <button
-                    v-if="commentHref(c)"
-                    type="button"
-                    class="pdv-comment-goto"
-                    :title="t('pr.detail.commentGoto')"
-                    @click="openInBrowser(commentHref(c))"
-                  >
-                    {{ t('pr.detail.commentGoto') }}
-                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
-                    </svg>
-                  </button>
-                  <span v-if="c.path" class="pdv-comment-anchor">{{ c.path.split('/').pop() }}<template v-if="c.line">:{{ c.line }}</template></span>
-                  <span class="pdv-comment-time" :title="c.created_at">{{ commentTimeAgo(c.created_at) }}</span>
-                </div>
-                <div class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="c.bodyHtml" />
-                <PrReactions
-                  v-if="p.selectedPr.value"
-                  :cwd="p.cwd.value"
-                  :pr-number="p.selectedPr.value.number"
-                  :target-type="c.path ? 'review_comment' : 'issue_comment'"
-                  :target-id="c.id"
-                  :current-user="p.currentUser.value"
-                  :forge-name="p.forge.value.name"
-                />
-              </li>
+              <template v-for="item in timeline">
+                <!-- Review verdict (Approve / Request changes / Comment) -->
+                <li
+                  v-if="item.kind === 'review'"
+                  :key="`review-${item.id}`"
+                  class="pdv-comment pdv-review"
+                  :class="reviewStateMeta(item.state).cls"
+                >
+                  <div class="pdv-comment-head">
+                    <span class="pdv-comment-avatar" :style="avatarStyle(item.author)" aria-hidden="true">
+                      {{ authorInitials(item.author) }}
+                    </span>
+                    <span class="pdv-comment-author">{{ item.author }}</span>
+                    <span class="pdv-review-verdict">{{ reviewStateMeta(item.state).label }}</span>
+                    <button
+                      v-if="item.href"
+                      type="button"
+                      class="pdv-comment-goto"
+                      :title="t('pr.detail.commentGoto')"
+                      @click="openInBrowser(item.href)"
+                    >
+                      {{ t('pr.detail.commentGoto') }}
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
+                      </svg>
+                    </button>
+                    <span class="pdv-comment-time" :title="item.ts">{{ commentTimeAgo(item.ts) }}</span>
+                  </div>
+                  <div v-if="item.bodyHtml" class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="item.bodyHtml" />
+                  <!-- Reactions only on reviews that carry a body — there is no
+                       reaction target for a bodyless verdict (e.g. a bare Approve).
+                       PrReactions itself gates which forges support a review target. -->
+                  <PrReactions
+                    v-if="item.bodyHtml && p.selectedPr.value"
+                    :cwd="p.cwd.value"
+                    :pr-number="p.selectedPr.value.number"
+                    target-type="review"
+                    :target-id="item.id"
+                    :current-user="p.currentUser.value"
+                    :forge-name="p.forge.value.name"
+                  />
+                </li>
+                <!-- Inline / issue comment -->
+                <li v-else :key="`comment-${item.path}#${item.id}`" class="pdv-comment">
+                  <div class="pdv-comment-head">
+                    <span class="pdv-comment-avatar" :style="avatarStyle(item.author)" aria-hidden="true">
+                      {{ authorInitials(item.author) }}
+                    </span>
+                    <span class="pdv-comment-author">{{ item.author }}</span>
+                    <button
+                      v-if="commentHref(item)"
+                      type="button"
+                      class="pdv-comment-goto"
+                      :title="t('pr.detail.commentGoto')"
+                      @click="openInBrowser(commentHref(item))"
+                    >
+                      {{ t('pr.detail.commentGoto') }}
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
+                      </svg>
+                    </button>
+                    <span v-if="item.path" class="pdv-comment-anchor">{{ item.path.split('/').pop() }}<template v-if="item.line">:{{ item.line }}</template></span>
+                    <span class="pdv-comment-time" :title="item.created_at">{{ commentTimeAgo(item.created_at) }}</span>
+                  </div>
+                  <div class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="item.bodyHtml" />
+                  <PrReactions
+                    v-if="p.selectedPr.value"
+                    :cwd="p.cwd.value"
+                    :pr-number="p.selectedPr.value.number"
+                    :target-type="item.path ? 'review_comment' : 'issue_comment'"
+                    :target-id="item.id"
+                    :current-user="p.currentUser.value"
+                    :forge-name="p.forge.value.name"
+                  />
+                </li>
+              </template>
             </ul>
             <div ref="commentsEnd"></div>
           </section>
@@ -1294,6 +1399,36 @@ function commentTimeAgo(dateStr: string): string {
   gap: var(--space-3);
 }
 
+/* Review verdict rows in the conversation timeline (extend .pdv-comment) */
+.pdv-review {
+  border-left-width: 3px;
+}
+
+.pdv-review--approved { border-left-color: var(--color-success); }
+.pdv-review--changes { border-left-color: #2f81f7; }
+.pdv-review--dismissed { border-left-color: var(--color-danger); }
+.pdv-review--commented { border-left-color: var(--color-accent); }
+
+.pdv-review-verdict {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+}
+
+/* Verdict text colors + glow, keyed on the review state */
+.pdv-review--changes .pdv-review-verdict {
+  color: #2f81f7; /* electric blue — intentional brand accent, not a theme token */
+  text-shadow: 0 0 6px rgba(47, 129, 247, 0.7), 0 0 12px rgba(47, 129, 247, 0.4);
+}
+.pdv-review--approved .pdv-review-verdict {
+  color: var(--color-success);
+  text-shadow: 0 0 6px rgba(46, 160, 67, 0.6);
+}
+.pdv-review--dismissed .pdv-review-verdict {
+  color: var(--color-danger);
+  text-shadow: 0 0 6px rgba(248, 81, 73, 0.6);
+}
+
 .pdv-comment {
   padding: var(--space-4);
   background: var(--color-bg-secondary);
@@ -1306,6 +1441,11 @@ function commentTimeAgo(dateStr: string): string {
   align-items: center;
   gap: var(--space-3);
   margin-bottom: var(--space-3);
+}
+/* Bodyless rows (e.g. an Approve verdict with no summary) — drop the head's
+   bottom margin so the row isn't padded unevenly at the bottom. */
+.pdv-comment-head:last-child {
+  margin-bottom: 0;
 }
 
 .pdv-comment-avatar {
@@ -1409,6 +1549,16 @@ function commentTimeAgo(dateStr: string): string {
   border: none;
   border-top: 1px solid var(--color-border);
   margin: var(--space-4) 0;
+}
+
+/* Lighter blue than --color-accent (purple), which read too dark on the bg. */
+.pdv-comment-body :deep(.md-link) {
+  color: #79c0ff;
+  text-decoration: none;
+}
+.pdv-comment-body :deep(.md-link:hover) {
+  color: #a5d6ff;
+  text-decoration: underline;
 }
 
 .pdv-comment-body :deep(.md-table) {

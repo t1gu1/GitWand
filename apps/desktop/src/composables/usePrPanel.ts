@@ -197,8 +197,23 @@ export function usePrPanel(cwd: Ref<string>) {
     // read clearly in the banner instead of a generic "checks failing".
     const unmet = prChecks.value.filter(isBlocking);
     const checksOk = unmet.length === 0;
-    const hasApproval = prReviews.value.some((r) => r.state === "APPROVED");
-    const hasChangesRequested = prReviews.value.some((r) => r.state === "CHANGES_REQUESTED");
+    // Only each reviewer's *latest* verdict counts — a later APPROVED supersedes
+    // an earlier CHANGES_REQUESTED (and vice versa). Scanning every historical
+    // review would keep flagging "changes requested" after the reviewer has
+    // since approved. COMMENTED / PENDING don't change a reviewer's verdict, so
+    // they're skipped; DISMISSED clears it (counts as neither).
+    const latestVerdictByUser = new Map<string, string>();
+    for (const r of [...prReviews.value].sort((a, b) =>
+      (a.submitted_at || "").localeCompare(b.submitted_at || ""),
+    )) {
+      const s = (r.state || "").toUpperCase();
+      if (s === "APPROVED" || s === "CHANGES_REQUESTED" || s === "DISMISSED") {
+        latestVerdictByUser.set(r.user?.login ?? String(r.id), s);
+      }
+    }
+    const verdicts = [...latestVerdictByUser.values()];
+    const hasApproval = verdicts.includes("APPROVED");
+    const hasChangesRequested = verdicts.includes("CHANGES_REQUESTED");
     if (checksOk && hasApproval && !hasChangesRequested && !hasConflict) {
       return { ready: true, reason: t("pr.ready.ready") };
     }

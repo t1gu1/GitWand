@@ -772,6 +772,7 @@ export interface PendingReviewComment {
 
 /** Fetch all reviews for a PR. */
 export async function ghPrListReviews(cwd: string, prNumber: number): Promise<PrReview[]> {
+  if (isTauri()) return tauriInvoke<PrReview[]>("gh_pr_reviews", { cwd, number: prNumber });
   const res = await fetch(
     `${DEV_SERVER}/api/gh-pr-reviews?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`,
   );
