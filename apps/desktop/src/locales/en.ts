@@ -1516,6 +1516,18 @@ const en = {
     rangeHistory: "History for lines {0}\u2013{1}",
   },
 
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Resolve in scratch worktree",
+    openIsolated: "Open isolated worktree",
+    mergeBack: "Bring changes back",
+    discard: "Discard scratch",
+    created: "Scratch worktree created",
+    mergedBack: "Changes merged back into the main checkout",
+    discarded: "Scratch worktree discarded",
+    mergeBackBlocked: "Cannot bring changes back: the main checkout has conflicting uncommitted changes.",
+  },
+
   // ─── Worktrees ──────────────────────────────────────────
   worktree: {
     title: "Worktrees",

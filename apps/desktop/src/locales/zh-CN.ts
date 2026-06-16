@@ -1459,6 +1459,18 @@ const zhCN: Locale = {
     analyzingCommit: "正在分析提交\u2026",
   },
 
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Resolve in scratch worktree", // TODO: translate
+    openIsolated: "Open isolated worktree", // TODO: translate
+    mergeBack: "Bring changes back", // TODO: translate
+    discard: "Discard scratch", // TODO: translate
+    created: "Scratch worktree created", // TODO: translate
+    mergedBack: "Changes merged back into the main checkout", // TODO: translate
+    discarded: "Scratch worktree discarded", // TODO: translate
+    mergeBackBlocked: "Cannot bring changes back: the main checkout has conflicting uncommitted changes.", // TODO: translate
+  },
+
   // ─── Worktrees ──────────────────────────────────────────
   worktree: {
     title: "工作树",

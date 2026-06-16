@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (scaffolding — v2.20.0, in progress)
+
+- **Scratch worktree for isolated resolution** — backend commands `scratch_worktree_create` / `merge_back` / `discard` (create a temporary `gitwand-scratch-<timestamp>` worktree, resolve away from the active checkout, bring changes back in one click, auto-cleanup), `useScratchWorktree` composable + `backend.ts` wrappers + `scratch.*` i18n keys in all 5 locales. Command bodies are stubbed pending implementation.
+- **Conflict Predictor extended to rebase & cherry-pick** — new side-effect-free `preview_rebase` / `preview_cherry_pick` commands (same `FileMergePreview` shape as `preview_merge`, which is left untouched), `useMergePreview` gains an `operation` parameter (`merge` | `rebase` | `cherry-pick`) and a `riskLevel` (low / medium / high) computed from the summary. Command bodies are stubbed pending implementation.
+
 ## [2.19.0] - 2026-06-16
 
 v2.19 takes the PR workflow off the `gh` CLI and opens it to more forges: sign in to GitHub with the OAuth device flow (tokens in the OS keychain, REST path with no CLI required), add Azure DevOps as a first-class forge, and open cross-fork pull requests against an upstream parent. Ships with a round of performance work on the backend (async Tauri commands, disk-persisted stale-while-revalidate PR cache, libgit2 `git_status` fast-path).

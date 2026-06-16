@@ -1486,6 +1486,18 @@ const fr: Locale = {
     analyzingCommit: "Analyse du commit en cours\u2026",
   },
 
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Résoudre dans un worktree scratch",
+    openIsolated: "Ouvrir un worktree isolé",
+    mergeBack: "Ramener les changements",
+    discard: "Abandonner le scratch",
+    created: "Worktree scratch créé",
+    mergedBack: "Changements ramenés dans le checkout principal",
+    discarded: "Worktree scratch abandonné",
+    mergeBackBlocked: "Impossible de ramener les changements : le checkout principal a des modifications non commitées en conflit.",
+  },
+
   // ─── Worktrees ──────────────────────────────────────────
   worktree: {
     title: "Worktrees",

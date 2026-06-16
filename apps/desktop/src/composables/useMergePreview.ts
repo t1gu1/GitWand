@@ -12,8 +12,18 @@
  */
 
 import { ref, computed } from "vue";
-import { previewMerge } from "../utils/backend.js";
+import { previewMerge, previewRebase, previewCherryPick } from "../utils/backend.js";
 import { resolve } from "@gitwand/core";
+
+// ─── Opérations prédictibles (v2.20.0) ───────────────────
+//
+// Le Conflict Predictor simule un merge, un rebase ou un cherry-pick sans
+// toucher au working tree. `merge` est la valeur par défaut (rétrocompatible).
+
+export type PreviewOperation = "merge" | "rebase" | "cherry-pick";
+
+/** Niveau de risque global d'une opération prédite. */
+export type RiskLevel = "low" | "medium" | "high";
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -59,13 +69,21 @@ export function useMergePreview(cwd: () => string) {
   const error = ref<string | null>(null);
   const summary = ref<MergePreviewSummary | null>(null);
 
-  async function computePreview(sourceBranch: string): Promise<void> {
+  async function computePreview(
+    ref_: string,
+    operation: PreviewOperation = "merge",
+  ): Promise<void> {
     loading.value = true;
     error.value = null;
     summary.value = null;
 
     try {
-      const rawFiles = await previewMerge(cwd(), sourceBranch);
+      const rawFiles =
+        operation === "rebase"
+          ? await previewRebase(cwd(), ref_)
+          : operation === "cherry-pick"
+            ? await previewCherryPick(cwd(), ref_)
+            : await previewMerge(cwd(), ref_);
 
       const files: PreviewFileResult[] = [];
 
@@ -135,7 +153,7 @@ export function useMergePreview(cwd: () => string) {
       const fullyAutoMergeable = conflictingFiles > 0 && manualFiles === 0;
 
       summary.value = {
-        sourceBranch,
+        sourceBranch: ref_,
         files,
         conflictingFiles,
         autoResolvableFiles,
@@ -161,11 +179,29 @@ export function useMergePreview(cwd: () => string) {
     summary.value?.files.filter(f => f.status !== "clean") ?? [],
   );
 
+  /**
+   * Niveau de risque global (v2.20.0), dérivé du résumé :
+   *  - low    : aucun fichier conflictuel, ou tous auto-résolus
+   *  - medium : des fichiers "partial" mais aucun "manual"/"add-delete"
+   *  - high   : au moins un fichier "manual" ou "add-delete"
+   */
+  const riskLevel = computed<RiskLevel>(() => {
+    const s = summary.value;
+    if (!s || s.conflictingFiles === 0) return "low";
+    const hasHard = s.files.some(
+      f => f.status === "manual" || f.status === "add-delete",
+    );
+    if (hasHard) return "high";
+    const hasPartial = s.files.some(f => f.status === "partial");
+    return hasPartial ? "medium" : "low";
+  });
+
   return {
     loading,
     error,
     summary,
     conflictingFiles,
+    riskLevel,
     computePreview,
     reset,
   };

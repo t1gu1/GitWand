@@ -1148,6 +1148,34 @@ pub(crate) async fn preview_merge(cwd: String, source_branch: String) -> Result<
     Ok(results)
 }
 
+// ─── Conflict Predictor — rebase & cherry-pick (v2.20.0) ──
+//
+// Generalize the side-effect-free predictor to simulate a rebase and a
+// cherry-pick without mutating the working tree. Both return the same
+// `Vec<FileMergePreview>` shape as `preview_merge` so the frontend resolver
+// path is reused verbatim; the per-operation risk level is derived frontend-side.
+//
+// Implementation reuses `merge_file_preview` with the operation's ancestor:
+//   - rebase: 3-way preview against merge-base(HEAD, onto)
+//   - cherry-pick: 3-way merge with `commit^` as ancestor, HEAD ours, commit theirs
+//
+// Scaffolding stubs — see design spec
+// docs/superpowers/specs/2026-06-16-v2.20.0-scratch-worktree-design.md
+
+/// Simulate rebasing HEAD onto `onto` without modifying the working tree.
+#[tauri::command]
+pub(crate) async fn preview_rebase(cwd: String, onto: String) -> Result<Vec<FileMergePreview>, String> {
+    let _ = (cwd, onto);
+    Err("preview_rebase not implemented (v2.20.0)".into())
+}
+
+/// Simulate cherry-picking `commit` onto HEAD without modifying the working tree.
+#[tauri::command]
+pub(crate) async fn preview_cherry_pick(cwd: String, commit: String) -> Result<Vec<FileMergePreview>, String> {
+    let _ = (cwd, commit);
+    Err("preview_cherry_pick not implemented (v2.20.0)".into())
+}
+
 /// Tente de merger les trois versions d'un fichier avec git merge-file.
 /// Retourne le contenu résultant (avec ou sans marqueurs de conflit).
 fn merge_file_preview(

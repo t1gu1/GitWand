@@ -2095,6 +2095,85 @@ export async function previewMerge(
   return [];
 }
 
+// ─── Conflict Predictor — rebase & cherry-pick (v2.20.0) ────
+
+/**
+ * Simule un rebase de HEAD sur `onto` sans toucher au working tree.
+ * Même forme de résultat que previewMerge → réutilise le résolveur frontend.
+ */
+export async function previewRebase(
+  cwd: string,
+  onto: string,
+): Promise<FileMergePreview[]> {
+  if (isTauri()) {
+    return tauriInvoke<FileMergePreview[]>("preview_rebase", { cwd, onto });
+  }
+  // Dev mode: pas d'endpoint mock → aperçu vide (stub-safe).
+  return [];
+}
+
+/**
+ * Simule un cherry-pick de `commit` sur HEAD sans toucher au working tree.
+ * Même forme de résultat que previewMerge → réutilise le résolveur frontend.
+ */
+export async function previewCherryPick(
+  cwd: string,
+  commit: string,
+): Promise<FileMergePreview[]> {
+  if (isTauri()) {
+    return tauriInvoke<FileMergePreview[]>("preview_cherry_pick", { cwd, commit });
+  }
+  // Dev mode: pas d'endpoint mock → aperçu vide (stub-safe).
+  return [];
+}
+
+// ─── Scratch worktree (v2.20.0) ─────────────────────────────
+
+/** Worktree temporaire isolé pour résoudre des conflits hors du checkout actif. */
+export interface ScratchWorktree {
+  /** Chemin absolu du worktree scratch sur le disque. */
+  path: string;
+  /** Branche créée pour le scratch (`gitwand-scratch-<timestamp>`). */
+  branch: string;
+  /** Branche/ref sur laquelle le scratch est basé. */
+  source_branch: string;
+  /** Date de création (epoch unix, secondes). */
+  created_at: number;
+}
+
+/**
+ * Crée `gitwand-scratch-<timestamp>` comme worktree frère, basé sur
+ * `sourceBranch` (HEAD courant par défaut). Ne touche pas au checkout actif.
+ */
+export async function scratchWorktreeCreate(
+  cwd: string,
+  sourceBranch?: string,
+): Promise<ScratchWorktree> {
+  return tauriInvoke<ScratchWorktree>("scratch_worktree_create", {
+    cwd,
+    sourceBranch: sourceBranch ?? null,
+  });
+}
+
+/**
+ * Ramène les changements résolus du worktree scratch dans le checkout principal
+ * en une opération, puis supprime + prune le scratch.
+ */
+export async function scratchWorktreeMergeBack(
+  cwd: string,
+  scratchPath: string,
+): Promise<void> {
+  await tauriInvoke<void>("scratch_worktree_merge_back", { cwd, scratchPath });
+}
+
+/** Abandonne le worktree scratch (remove --force + prune), sans rien ramener. */
+export async function scratchWorktreeDiscard(
+  cwd: string,
+  scratchPath: string,
+): Promise<void> {
+  await tauriInvoke<void>("scratch_worktree_discard", { cwd, scratchPath });
+}
+
 // ─── Git Hooks ──────────────────────────────────────────
 
 export interface HookEntry {

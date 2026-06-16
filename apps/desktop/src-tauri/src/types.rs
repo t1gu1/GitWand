@@ -593,6 +593,24 @@ pub struct FileMergePreview {
     pub is_add_delete: bool,
 }
 
+// ─── Scratch worktree (v2.20.0) ────────────────────────────────────
+//
+// A temporary isolated worktree (`gitwand-scratch-<timestamp>`) used to
+// resolve conflicts away from the active checkout, then merge the result
+// back in one click. See commands::scratch.
+
+#[derive(Serialize, Clone)]
+pub struct ScratchWorktree {
+    /// Absolute path of the scratch worktree on disk.
+    pub path: String,
+    /// Branch created for the scratch (`gitwand-scratch-<timestamp>`).
+    pub branch: String,
+    /// Branch/ref the scratch was based on.
+    pub source_branch: String,
+    /// Creation time (unix epoch seconds).
+    pub created_at: u64,
+}
+
 // ─── Claude CLI ────────────────────────────────────────────────────
 
 #[derive(Serialize)]
