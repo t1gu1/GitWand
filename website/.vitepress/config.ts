@@ -146,6 +146,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'GitHub & Azure DevOps sign-in, cross-fork PRs (v2.19)', link: '/blog/v2-19-github-oauth-azure' },
             { text: 'Forge completeness: inline discussions, CI checks (v2.14)', link: '/blog/v2-14-forge-completeness' },
             { text: 'AI code review in your PR diff (v2.13)', link: '/blog/v2-13-ai-inline-suggestions' },
             { text: 'GitHub, GitLab & Bitbucket support (v2.10)', link: '/blog/v2-10-forge-integrations' },

@@ -225,17 +225,19 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configurez des templates de commit par repo, chargés automatiquement à l\'ouverture. Choisissez un préfixe Conventional Commits (feat, fix, docs…) depuis un picker intégré.',
     featAISuggest: 'Suggestions de code IA inline',
     featAISuggestDesc: 'Sélectionnez un hunk dans le panneau Review, demandez une réécriture ciblée et acceptez la suggestion IA en un clic. Les presets de prompts ajoutent un contexte instantané.',
+    featOAuth: 'GitHub OAuth, Azure DevOps & PRs cross-fork',
+    featOAuthDesc: 'Connectez-vous à GitHub et Azure DevOps via OAuth device flow — tokens dans le trousseau de l\'OS, sans CLI gh. Azure DevOps devient une forge à part entière, et les PRs cross-fork ciblent le dépôt upstream.',
     // Encart Nouveautés
-    newReleaseBadge: 'Nouveau dans la v2.13',
-    newReleaseTitle: 'Revue de code IA, inline — directement dans votre diff PR',
-    newReleaseSub: 'Sélectionnez un hunk dans le panneau Review, demandez une réécriture ciblée et acceptez en un clic. Les presets de prompts ajoutent un contexte instantané sur chaque feature IA.',
+    newReleaseBadge: 'Nouveau dans la v2.19',
+    newReleaseTitle: 'Connexion GitHub & Azure DevOps — sans CLI',
+    newReleaseSub: 'Connexion OAuth device-flow pour GitHub et Azure DevOps, tokens stockés dans le trousseau de l\'OS, et pull requests cross-fork ouvertes directement vers le dépôt upstream. Fini la configuration de la CLI gh.',
     newReleaseCta: 'Voir les nouveautés',
     faqTitle: 'Questions fréquentes',
     faqItems: [
       { q: 'GitWand est-il vraiment gratuit ?', a: 'Oui, GitWand est entièrement open source sous licence MIT. Vous pouvez l\'utiliser, le modifier et le redistribuer librement.' },
       { q: 'Comment fonctionne la résolution intelligente des conflits ?', a: 'GitWand analyse la sémantique du code avec 10 patterns de résolution (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orchestrés par un pattern registry (v1.4) et un scoring de confiance par hunk. Les conflits triviaux sont résolus automatiquement ; les cas complexes sont remontés avec une trace d\'explication complète.' },
       { q: 'Qu\'est-ce que le serveur MCP et pourquoi l\'utiliser ?', a: 'Le serveur MCP expose le moteur de GitWand aux agents IA — Claude Code, Cursor, Windsurf, et d\'autres. Il tourne en local via stdio, sans clé API ni accès réseau. GitWand gère 95%+ des conflits triviaux, l\'agent IA s\'occupe des cas ambigus avec tout le contexte nécessaire.' },
-      { q: 'GitWand fonctionne-t-il avec n\'importe quel dépôt Git ?', a: 'Oui. GitWand fonctionne avec tous les dépôts Git locaux, quel que soit l\'hébergement (GitHub, GitLab, Bitbucket, Gitea…). La vue Pull Requests est pour l\'instant limitée à GitHub.' },
+      { q: 'GitWand fonctionne-t-il avec n\'importe quel dépôt Git ?', a: 'Oui. GitWand fonctionne avec tous les dépôts Git locaux, quel que soit l\'hébergement (GitHub, GitLab, Bitbucket, Gitea…). La vue Pull Requests prend en charge GitHub, GitLab, Bitbucket et Azure DevOps.' },
       { q: 'Quelle est la différence avec les autres clients Git ?', a: 'GitWand se distingue par son moteur de résolution intégré, son architecture native Tauri (pas d\'Electron), ses 3 interfaces cohérentes (desktop, CLI, VS Code), et son serveur MCP pour l\'intégration avec les agents IA.' },
       { q: 'Comment installer le serveur MCP ?', a: 'Avec Claude Code, une seule commande suffit : claude mcp add gitwand -- npx -y @gitwand/mcp. Pour Claude Desktop, Cursor ou Windsurf, ajoutez le bloc mcpServers à la config de votre client (voir la documentation). Le serveur est aussi listé sur le registre officiel MCP, donc les clients qui parcourent le registre le trouvent automatiquement.' },
     ],
@@ -363,17 +365,19 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configure per-repo commit templates loaded automatically on open. Pick a Conventional Commits prefix (feat, fix, docs…) from an inline chip picker.',
     featAISuggest: 'AI inline code suggestions',
     featAISuggestDesc: 'Select any hunk in the PR Review panel, request a targeted rewrite, and accept the AI suggestion in one click. Prompt presets add instant context across every AI feature.',
+    featOAuth: 'GitHub OAuth, Azure DevOps & cross-fork PRs',
+    featOAuthDesc: 'Sign in to GitHub and Azure DevOps with the OAuth device flow — tokens in your OS keychain, no gh CLI. Azure DevOps is a first-class forge, and cross-fork PRs target the upstream parent.',
     // Highlight banner
-    newReleaseBadge: 'New in v2.13',
-    newReleaseTitle: 'AI code review, inline — right in your PR diff',
-    newReleaseSub: 'Select a hunk in the Review panel, request a targeted rewrite, and accept in one click. Prompt presets add instant context across every AI feature.',
+    newReleaseBadge: 'New in v2.19',
+    newReleaseTitle: 'Sign in with GitHub & Azure DevOps — no CLI required',
+    newReleaseSub: 'OAuth device-flow sign-in for GitHub and Azure DevOps, tokens kept in your OS keychain, and cross-fork pull requests opened straight against the upstream parent. No more gh CLI setup.',
     newReleaseCta: 'See what\'s new',
     faqTitle: 'Frequently asked questions',
     faqItems: [
       { q: 'Is GitWand really free?', a: 'Yes, GitWand is fully open source under the MIT license. You can use, modify, and redistribute it freely.' },
       { q: 'How does smart conflict resolution work?', a: 'GitWand analyzes code semantics using 10 resolution patterns (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orchestrated by a pattern registry (v1.4) with per-hunk confidence scoring. Trivial conflicts are resolved automatically; complex cases are surfaced with a full explanation trace.' },
       { q: 'What is the MCP server and why use it?', a: 'The MCP server exposes GitWand\'s engine to AI agents — Claude Code, Cursor, Windsurf, and others. It runs locally over stdio, with no API key or network access required. GitWand handles 95%+ of trivial conflicts; the AI agent tackles the ambiguous ones with full context.' },
-      { q: 'Does GitWand work with any Git repository?', a: 'Yes. GitWand works with any local Git repository, regardless of hosting (GitHub, GitLab, Bitbucket, Gitea…). The Pull Request view is currently limited to GitHub.' },
+      { q: 'Does GitWand work with any Git repository?', a: 'Yes. GitWand works with any local Git repository, regardless of hosting (GitHub, GitLab, Bitbucket, Gitea…). The Pull Request view supports GitHub, GitLab, Bitbucket, and Azure DevOps.' },
       { q: 'What sets GitWand apart from other Git clients?', a: 'GitWand stands out with its built-in resolution engine, native Tauri architecture (no Electron), three consistent interfaces (desktop, CLI, VS Code), and an MCP server for AI agent integration.' },
       { q: 'How do I install the MCP server?', a: 'With Claude Code, a single command is enough: claude mcp add gitwand -- npx -y @gitwand/mcp. For Claude Desktop, Cursor, or Windsurf, add the mcpServers block to your client config (see the docs). The server is also listed on the official MCP Registry, so clients that browse the registry discover it automatically.' },
     ],
@@ -501,17 +505,19 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configura templates de commit por repo, cargados automáticamente al abrir. Elige un prefijo de Conventional Commits (feat, fix, docs…) desde un selector integrado.',
     featAISuggest: 'Sugerencias de código IA inline',
     featAISuggestDesc: 'Selecciona cualquier hunk en el panel Review, pide una reescritura enfocada y acepta la sugerencia IA con un clic. Los presets de prompts añaden contexto instantáneo.',
+    featOAuth: 'GitHub OAuth, Azure DevOps y PRs cross-fork',
+    featOAuthDesc: 'Inicia sesión en GitHub y Azure DevOps con OAuth device flow — tokens en el llavero del SO, sin CLI gh. Azure DevOps es una forge de primera clase y las PRs cross-fork apuntan al repo upstream.',
     // Encabezado Novedades
-    newReleaseBadge: 'Nuevo en v2.13',
-    newReleaseTitle: 'Revisión de código IA, inline — directamente en tu diff PR',
-    newReleaseSub: 'Selecciona un hunk en el panel Review, pide una reescritura enfocada y acepta con un clic. Los presets de prompts añaden contexto instantáneo en cada función IA.',
+    newReleaseBadge: 'Nuevo en v2.19',
+    newReleaseTitle: 'Inicia sesión con GitHub y Azure DevOps — sin CLI',
+    newReleaseSub: 'Inicio de sesión OAuth (device flow) para GitHub y Azure DevOps, tokens en el llavero del SO, y pull requests cross-fork abiertas directamente contra el repo upstream. Sin configurar la CLI gh.',
     newReleaseCta: 'Ver las novedades',
     faqTitle: 'Preguntas frecuentes',
     faqItems: [
       { q: '¿GitWand es realmente gratis?', a: 'Sí, GitWand es totalmente open source bajo licencia MIT. Puedes usarlo, modificarlo y redistribuirlo libremente.' },
       { q: '¿Cómo funciona la resolución inteligente de conflictos?', a: 'GitWand analiza la semántica del código con 10 patrones de resolución (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orquestados por un pattern registry (v1.4) y una puntuación de confianza por hunk. Los conflictos triviales se resuelven automáticamente; los casos complejos se presentan con una traza de explicación completa.' },
       { q: '¿Qué es el servidor MCP y por qué usarlo?', a: 'El servidor MCP expone el motor de GitWand a los agentes IA — Claude Code, Cursor, Windsurf y otros. Funciona en local vía stdio, sin clave API ni acceso a la red. GitWand gestiona el 95 %+ de los conflictos triviales; el agente IA se ocupa de los casos ambiguos con todo el contexto necesario.' },
-      { q: '¿GitWand funciona con cualquier repositorio Git?', a: 'Sí. GitWand funciona con cualquier repositorio Git local, sea cual sea el hosting (GitHub, GitLab, Bitbucket, Gitea…). La vista de Pull Requests está limitada a GitHub por ahora.' },
+      { q: '¿GitWand funciona con cualquier repositorio Git?', a: 'Sí. GitWand funciona con cualquier repositorio Git local, sea cual sea el hosting (GitHub, GitLab, Bitbucket, Gitea…). La vista de Pull Requests es compatible con GitHub, GitLab, Bitbucket y Azure DevOps.' },
       { q: '¿Qué lo diferencia de otros clientes Git?', a: 'GitWand destaca por su motor de resolución integrado, su arquitectura nativa Tauri (sin Electron), sus 3 interfaces coherentes (escritorio, CLI, VS Code) y su servidor MCP para la integración con agentes IA.' },
       { q: '¿Cómo se instala el servidor MCP?', a: 'Con Claude Code basta un solo comando: claude mcp add gitwand -- npx -y @gitwand/mcp. Para Claude Desktop, Cursor o Windsurf, añade el bloque mcpServers a la configuración de tu cliente (ver la documentación). El servidor también está listado en el registro oficial MCP, así que los clientes que exploran el registro lo encuentran automáticamente.' },
     ],
@@ -639,17 +645,19 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configure templates de commit por repo, carregados automaticamente ao abrir. Escolha um prefixo de Conventional Commits (feat, fix, docs…) a partir de um seletor integrado.',
     featAISuggest: 'Sugestões de código IA inline',
     featAISuggestDesc: 'Selecione qualquer hunk no painel Review, peça uma reescrita focada e aceite a sugestão de IA com um clique. Presets de prompts adicionam contexto instantâneo.',
+    featOAuth: 'GitHub OAuth, Azure DevOps e PRs cross-fork',
+    featOAuthDesc: 'Entre no GitHub e no Azure DevOps com OAuth device flow — tokens no keychain do SO, sem CLI gh. Azure DevOps é uma forge de primeira classe, e as PRs cross-fork miram o repositório upstream.',
     // Banner de Novidades
-    newReleaseBadge: 'Novo na v2.13',
-    newReleaseTitle: 'Review de código IA, inline — direto no seu diff de PR',
-    newReleaseSub: 'Selecione um hunk no painel Review, peça uma reescrita focada e aceite com um clique. Presets de prompts adicionam contexto instantâneo em cada funcionalidade IA.',
+    newReleaseBadge: 'Novo na v2.19',
+    newReleaseTitle: 'Entre com GitHub e Azure DevOps — sem CLI',
+    newReleaseSub: 'Login OAuth (device flow) para GitHub e Azure DevOps, tokens no keychain do SO, e pull requests cross-fork abertas direto contra o repositório upstream. Sem configurar a CLI gh.',
     newReleaseCta: 'Ver as novidades',
     faqTitle: 'Perguntas frequentes',
     faqItems: [
       { q: 'O GitWand é realmente gratuito?', a: 'Sim, o GitWand é totalmente open source sob licença MIT. Você pode usar, modificar e redistribuir livremente.' },
       { q: 'Como funciona a resolução inteligente de conflitos?', a: 'O GitWand analisa a semântica do código com 10 padrões de resolução (whitespace_only, same_change, one_side_change, reorder_only, insertion_at_boundary…) orquestrados por um pattern registry (v1.4) e pontuação de confiança por hunk. Conflitos triviais são resolvidos automaticamente; casos complexos são apresentados com trace de explicação completo.' },
       { q: 'O que é o servidor MCP e por que usá-lo?', a: 'O servidor MCP expõe o motor do GitWand a agentes de IA — Claude Code, Cursor, Windsurf e outros. Roda localmente via stdio, sem chave de API nem acesso à rede. O GitWand cuida de 95 %+ dos conflitos triviais; o agente de IA lida com os ambíguos com todo o contexto necessário.' },
-      { q: 'O GitWand funciona com qualquer repositório Git?', a: 'Sim. O GitWand funciona com qualquer repositório Git local, independente do hosting (GitHub, GitLab, Bitbucket, Gitea…). A view de Pull Requests está limitada ao GitHub por enquanto.' },
+      { q: 'O GitWand funciona com qualquer repositório Git?', a: 'Sim. O GitWand funciona com qualquer repositório Git local, independente do hosting (GitHub, GitLab, Bitbucket, Gitea…). A view de Pull Requests é compatível com GitHub, GitLab, Bitbucket e Azure DevOps.' },
       { q: 'Qual é a diferença para outros clientes Git?', a: 'O GitWand se destaca pelo motor de resolução integrado, arquitetura nativa Tauri (sem Electron), 3 interfaces coerentes (desktop, CLI, VS Code) e servidor MCP para integração com agentes de IA.' },
       { q: 'Como instalar o servidor MCP?', a: 'Com Claude Code basta um único comando: claude mcp add gitwand -- npx -y @gitwand/mcp. Para Claude Desktop, Cursor ou Windsurf, adicione o bloco mcpServers à configuração do seu cliente (veja a documentação). O servidor também está listado no registro oficial MCP, então clientes que navegam o registro o encontram automaticamente.' },
     ],
@@ -777,17 +785,19 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: '为每个仓库配置提交模板，打开时自动加载。通过内置选择器选择约定式提交前缀（feat、fix、docs…）。',
     featAISuggest: '内联 AI 代码建议',
     featAISuggestDesc: '在 Review 面板中选择任意 hunk，请求针对性重写，一键接受 AI 建议。提示词预设为所有 AI 功能即时注入上下文。',
+    featOAuth: 'GitHub OAuth、Azure DevOps 与跨 fork PR',
+    featOAuthDesc: '通过 OAuth 设备流登录 GitHub 和 Azure DevOps — 令牌保存在系统钥匙串中，无需 gh CLI。Azure DevOps 成为一等 forge，跨 fork PR 直接面向上游仓库。',
     // 最新特性横幅
-    newReleaseBadge: 'v2.13 新特性',
-    newReleaseTitle: '内联 AI 代码审查 — 直接在 PR diff 中',
-    newReleaseSub: '在 Review 面板中选择一个 hunk，请求针对性重写，一键接受。提示词预设为每项 AI 功能即时注入上下文。',
+    newReleaseBadge: 'v2.19 新特性',
+    newReleaseTitle: '登录 GitHub 与 Azure DevOps — 无需 CLI',
+    newReleaseSub: 'GitHub 和 Azure DevOps 的 OAuth 设备流登录，令牌保存在操作系统钥匙串中，跨 fork 的 Pull Request 可直接面向上游仓库提交。无需再配置 gh CLI。',
     newReleaseCta: '查看新特性',
     faqTitle: '常见问题',
     faqItems: [
       { q: 'GitWand 真的免费吗?', a: '是的,GitWand 在 MIT 许可下完全开源。你可以自由使用、修改和分发。' },
       { q: '智能冲突解决是如何工作的?', a: 'GitWand 使用 10 种解决模式(whitespace_only、same_change、one_side_change、reorder_only、insertion_at_boundary…)分析代码语义,由模式注册表(v1.4)进行编排,并对每个 hunk 打出置信度评分。简单冲突自动解决;复杂情况会附上完整的解释追踪呈现出来。' },
       { q: 'MCP 服务器是什么?为什么要用?', a: 'MCP 服务器将 GitWand 的引擎开放给 AI 代理 — Claude Code、Cursor、Windsurf 等。通过 stdio 在本地运行,无需 API 密钥,也不需要网络访问。GitWand 处理 95%+ 的简单冲突;AI 代理则在完整上下文下应对模糊情况。' },
-      { q: 'GitWand 适用于任何 Git 仓库吗?', a: '是的。GitWand 适用于任何本地 Git 仓库,无论托管在哪里(GitHub、GitLab、Bitbucket、Gitea…)。Pull Requests 视图目前仅限 GitHub。' },
+      { q: 'GitWand 适用于任何 Git 仓库吗?', a: '是的。GitWand 适用于任何本地 Git 仓库,无论托管在哪里(GitHub、GitLab、Bitbucket、Gitea…)。Pull Requests 视图支持 GitHub、GitLab、Bitbucket 和 Azure DevOps。' },
       { q: '与其他 Git 客户端有什么区别?', a: 'GitWand 的亮点在于内置的解决引擎、原生的 Tauri 架构(非 Electron)、3 种一致的界面(桌面端、CLI、VS Code),以及用于 AI 代理集成的 MCP 服务器。' },
       { q: '如何安装 MCP 服务器?', a: '使用 Claude Code 一条命令即可:claude mcp add gitwand -- npx -y @gitwand/mcp。对于 Claude Desktop、Cursor 或 Windsurf,将 mcpServers 块添加到你的客户端配置(见文档)。该服务器也已列入官方 MCP 注册表,浏览注册表的客户端会自动发现它。' },
     ],
@@ -1226,8 +1236,14 @@ function cellClass(v: CompareValue | undefined): string {
             </div>
           </div>
 
-          <!-- What's New tab — 6 highlights from v2.9 → v2.13 -->
+          <!-- What's New tab — 7 highlights from v2.5 → v2.19 -->
           <div v-else-if="activeTab === 'new'" key="new" class="features-grid" role="tabpanel">
+            <!-- GitHub OAuth, Azure DevOps & cross-fork PRs — v2.19 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.19</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 015 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0012 2z"/></svg></div>
+              <h3>{{ t.featOAuth }}</h3><p>{{ t.featOAuthDesc }}</p>
+            </div>
             <!-- AI inline code suggestions — v2.13 -->
             <div class="feat-card feat-card--new">
               <div class="feat-badge">v2.13</div>
@@ -1529,10 +1545,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/v2-14-forge-completeness" class="blog-teaser-card">
-          <div class="blog-teaser-meta">May 20, 2026 · 11 min read</div>
-          <h3 class="blog-teaser-title">Forge completeness: inline GitLab discussions, Bitbucket CI checks, and forge-agnostic intelligence</h3>
-          <p class="blog-teaser-excerpt">v2.14 closes the last ForgeNotImplementedError stubs from v2.10 — diff-line anchoring on GitLab, CI checks and draft conversion on Bitbucket, and conflict preview now works on all three forges. Plus a head-to-head with Linear Diffs.</p>
+        <a href="/blog/v2-19-github-oauth-azure" class="blog-teaser-card">
+          <div class="blog-teaser-meta">June 16, 2026 · 12 min read</div>
+          <h3 class="blog-teaser-title">Sign in with GitHub & Azure DevOps, and open cross-fork PRs</h3>
+          <p class="blog-teaser-excerpt">v2.19 takes the PR workflow off the gh CLI: OAuth device-flow sign-in for GitHub and Azure DevOps with tokens in the OS keychain, Azure DevOps as a first-class forge, cross-fork pull requests against the upstream parent, and a backend performance pass.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-19-github-oauth-azure" class="blog-card">
+    <div class="blog-meta">June 16, 2026 · 12 min read</div>
+    <h2 class="blog-title">Sign in with GitHub & Azure DevOps, and open cross-fork PRs: GitWand v2.19</h2>
+    <p class="blog-excerpt">v2.19 takes the PR workflow off the <code>gh</code> CLI. OAuth device-flow sign-in for GitHub and Azure DevOps with tokens kept in the OS keychain, Azure DevOps as a first-class forge backed by the REST API (PR lifecycle, threaded comments, branch-policy CI checks, reviewer votes), and cross-fork pull requests that target the upstream parent — fork PRs even show up in your list. Plus a backend performance pass: async commands, a stale-while-revalidate PR cache, and a libgit2 status fast-path.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-14-forge-completeness" class="blog-card">
     <div class="blog-meta">May 20, 2026 · 11 min read</div>
     <h2 class="blog-title">Inline GitLab discussions, Bitbucket CI checks, and forge-agnostic intelligence: GitWand v2.14</h2>

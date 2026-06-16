@@ -26,7 +26,7 @@
 
 ---
 
-GitWand is a lightweight, native Git client built with Tauri 2 and Vue 3. It covers the full daily workflow — changes, history, branches, push/pull — and goes further with **automatic resolution of trivial merge conflicts**, **integrated PR code review** with inline comments, and a **Git Tree** as the primary history view. Since v1.3, AI assists every step of the workflow — branch naming, PR writing, hunk-level review, semantic squash, and natural-language commit search. v2.7+ adds multi-repo Workspaces and Worktrees; v2.8 adds Agent Sessions (MCP); v2.9 adds a cross-repo Launchpad.
+GitWand is a lightweight, native Git client built with Tauri 2 and Vue 3. It covers the full daily workflow — changes, history, branches, push/pull — and goes further with **automatic resolution of trivial merge conflicts**, **integrated PR code review** with inline comments, and a **Git Tree** as the primary history view. Since v1.3, AI assists every step of the workflow — branch naming, PR writing, hunk-level review, semantic squash, and natural-language commit search. v2.7+ adds multi-repo Workspaces and Worktrees; v2.8 adds Agent Sessions (MCP); v2.9 adds a cross-repo Launchpad; v2.10 brings multi-forge pull requests across **GitHub, GitLab, Bitbucket and Azure DevOps**; v2.13 adds inline AI code review; v2.18 overlays CI check annotations directly on the diff; and v2.19 adds **OAuth device-flow sign-in for GitHub and Azure DevOps** (no `gh` CLI required) plus **cross-fork pull requests**.
 
 ## Desktop app
 
@@ -79,9 +79,12 @@ The current repo name in the header opens a dropdown showing recently opened rep
 
 ### Pull Requests & Code Review
 
-Browse, create, checkout, and merge GitHub PRs without leaving the app. The PR list sits in the sidebar and the full detail — diff, CI checks, comments, inline review — fills the main area.
+Browse, create, checkout, and merge pull/merge requests across **GitHub, GitLab, Bitbucket and Azure DevOps** without leaving the app. GitWand auto-detects the forge from the remote and routes to the right provider; accounts are managed once in Settings. The PR list sits in the sidebar and the full detail — diff, CI checks, comments, inline review — fills the main area.
 
+- **Sign in with OAuth** — "Sign in with GitHub" and "Sign in with Azure DevOps" use the OAuth device flow; tokens are stored in the OS keychain and the GitHub PR workflow runs tokenless over the REST API, with **no `gh` CLI required** (the CLI path still works when no token is configured)
+- **Cross-fork pull requests** — when `origin` is a fork, open a PR straight against the upstream parent (default), and see the PRs you opened upstream listed alongside your fork's own
 - **Inline comments** — read and write review comments anchored to diff lines, with full threading and code suggestions (` ```suggestion ``` ` blocks applicable in one click)
+- **Inline CI check annotations** — failed-check annotations overlay the diff with gutter icons (❌/⚠/ℹ) and hover tooltips, with a per-file count in the sidebar (GitHub, GitLab and Bitbucket)
 - **Review submission** — Approve / Request changes / Comment, with a draft queue to accumulate comments before sending
 - **🧠 Intelligence panel** — conflict prediction (`git merge-tree` before merging), hotspot analysis, review scope, static AI suggestions, file review history
 
@@ -91,7 +94,7 @@ The **Agents panel** (v2.8) shows active MCP sessions and lets you launch Claude
 
 ### Settings
 
-Language (FR/EN, OS auto-detected), theme (dark/light/system), commit signature, diff mode, AI provider (Claude / OpenAI-compatible / Ollama), external editor, Git binary path, switch behavior (stash/ask/refuse). All persisted in app settings.
+Language (English, French, Spanish, Brazilian Portuguese, Simplified Chinese — OS auto-detected), theme (dark/light/system), commit signature, diff mode, external editor, Git binary path, and switch behavior (stash/ask/refuse). **AI providers** cover API backends (Claude / OpenAI-compatible / Ollama) and local CLI agents (Claude Code, Codex, opencode, GitHub Copilot CLI), each with its own model picker. **Accounts** manages forge sign-in — OAuth device flow for GitHub and Azure DevOps, App Passwords / CLI for the others. All persisted in app settings.
 
 ### Installing
 
@@ -316,6 +319,8 @@ claude mcp add gitwand -- npx -y @gitwand/mcp
 | `gitwand_preview_merge` | Dry-run resolution — stats and risk assessment without writing files |
 | `gitwand_explain_hunk` | Explain why a specific hunk was classified its type (full trace + context) |
 | `gitwand_apply_resolution` | Apply a custom (LLM-provided) resolution to a specific complex hunk |
+| `gitwand_resolve_hunk` | Ask the connected agent to propose a resolution for one pending hunk (ours/theirs/base + trace returned) |
+| `gitwand_resolve_hunk_llm` | Validate an LLM-proposed resolution through the post-merge gate, then apply it to disk |
 
 ### Resources
 
@@ -355,7 +360,7 @@ gitwand/
 │   │               confidence scoring, tree-sitter structural dispatch
 │   ├── cli/        @gitwand/cli — Command-line interface
 │   ├── mcp/        @gitwand/mcp — MCP server (stdio transport)
-│   │               tools (5), resources (3), Claude Code commands
+│   │               tools (7), resources (3), Claude Code commands
 │   └── vscode/     VS Code extension — CodeLens, diagnostics, status bar
 ├── apps/
 │   └── desktop/    Tauri 2 + Vue 3 desktop app
@@ -411,7 +416,7 @@ Baseline results on Apple M-series:
 
 ### Internationalization
 
-GitWand uses a zero-dependency type-safe i18n system. `fr.ts` is the reference locale defined with `as const`. `en.ts` must match the same structure — TypeScript enforces it. The `useI18n()` composable provides `t(key, ...args)` with dotted key resolution and positional interpolation. OS language is auto-detected; users can override in Settings.
+GitWand uses a zero-dependency type-safe i18n system across five languages — English (`en`, default), French (`fr`), Spanish (`es`), Brazilian Portuguese (`pt-BR`), and Simplified Chinese (`zh-CN`). `en.ts` is the canonical reference, defined with `as const`; the `Locale` and `LocaleKey` types are derived from it, so every other locale must match its structure — TypeScript enforces it. The `useI18n()` composable provides `t(key, ...args)` with dotted key resolution and positional interpolation. OS language is auto-detected; users can override in Settings.
 
 ---
 
