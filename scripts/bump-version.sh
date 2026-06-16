@@ -63,9 +63,23 @@ do
   bump "$f" "s/\"version\": \"${OLD}\"/\"version\": \"${NEW}\"/"
 done
 
-# ── Cargo.toml (first occurrence = [package] version, not deps) ─────────────
-bump apps/desktop/src-tauri/Cargo.toml \
-  "0,/^version = \"${OLD}\"/s/version = \"${OLD}\"/version = \"${NEW}\"/"
+# ── Cargo.toml ([package] version only, not deps) ───────────────────────────
+# The `[package]` version is a standalone `version = "X.Y.Z"` line, so its first
+# field is literally `version`; dependency lines start with the crate name
+# (`tauri = { version = "2" }` → first field `tauri`) and are never matched.
+# awk is used instead of sed's GNU-only `0,/re/` range address, which is a
+# no-op on macOS/BSD sed and silently left Cargo.toml unbumped.
+bump_cargo_toml() {
+  local file="apps/desktop/src-tauri/Cargo.toml"
+  awk -v old="$OLD" -v new="$NEW" '
+    !done && $1 == "version" && $0 ~ ("\"" old "\"") {
+      sub("\"" old "\"", "\"" new "\""); done = 1
+    }
+    { print }
+  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+  echo "  ✓ $file"
+}
+bump_cargo_toml
 
 # ── tauri.conf.json ──────────────────────────────────────────────────────────
 bump apps/desktop/src-tauri/tauri.conf.json \
