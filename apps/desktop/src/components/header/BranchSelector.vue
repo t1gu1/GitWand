@@ -29,6 +29,7 @@ import { gitSubmoduleList, gitSubmoduleBranches, type GitBranch, type SubmoduleE
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview, type PreviewOperation } from "../../composables/useMergePreview";
+import { useScratchWorktree } from "../../composables/useScratchWorktree";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
@@ -247,6 +248,33 @@ const {
 
 const previewingBranch = ref<string | null>(null);
 const previewOperation = ref<PreviewOperation>("merge");
+
+// ─── Scratch worktree (v2.20.0) ──────────────────────────────────
+// Lets the user spin up an isolated worktree to resolve the previewed
+// conflicts away from the active checkout, then bring the result back
+// in one click (or discard it). State + errors are surfaced in the panel.
+const {
+  active: scratchActive,
+  loading: scratchLoading,
+  error: scratchError,
+  create: createScratch,
+  mergeBack: scratchMergeBack,
+  discard: scratchDiscard,
+} = useScratchWorktree(() => props.cwd);
+
+async function handleResolveInScratch() {
+  // Base the scratch on the branch we're previewing (the source we'd merge in),
+  // falling back to the current HEAD when unknown.
+  await createScratch(previewingBranch.value ?? undefined);
+}
+
+async function handleScratchMergeBack() {
+  await scratchMergeBack();
+}
+
+async function handleScratchDiscard() {
+  await scratchDiscard();
+}
 
 async function togglePreview(branchName: string) {
   if (previewingBranch.value === branchName) {
@@ -475,7 +503,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                   :risk-level="previewRisk"
                   :operation="previewOperation"
                   :target-branch="branchDisplay"
+                  :scratch-active="scratchActive"
+                  :scratch-loading="scratchLoading"
+                  :scratch-error="scratchError"
                   @update:operation="changePreviewOperation"
+                  @resolve-in-scratch="handleResolveInScratch"
+                  @scratch-merge-back="handleScratchMergeBack"
+                  @scratch-discard="handleScratchDiscard"
                   @close="closePreview"
                 />
               </li>

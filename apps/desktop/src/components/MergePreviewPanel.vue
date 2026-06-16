@@ -135,6 +135,48 @@
       </div>
     </div>
 
+    <!-- ─── Scratch worktree (v2.20.0) ───────────────────── -->
+    <div v-if="summary.conflictingFiles > 0" class="preview-scratch">
+      <!-- Error from the last scratch operation -->
+      <div v-if="scratchError" class="preview-scratch-error" role="alert">
+        {{ scratchError }}
+      </div>
+
+      <!-- No active scratch yet: offer to create one. -->
+      <button
+        v-if="!scratchActive"
+        type="button"
+        class="btn preview-scratch-btn"
+        :disabled="scratchLoading"
+        :title="t('scratch.openIsolated')"
+        @click="emit('resolve-in-scratch')"
+      >
+        <span v-if="scratchLoading">… {{ t('mergePreview.analyzing') }}</span>
+        <span v-else>{{ t('scratch.create') }}</span>
+      </button>
+
+      <!-- An active scratch exists: surface merge-back / discard. -->
+      <div v-else class="preview-scratch-active">
+        <span class="preview-scratch-path mono" :title="scratchActive.path">
+          {{ scratchActive.branch }}
+        </span>
+        <div class="preview-scratch-actions">
+          <button
+            type="button"
+            class="btn btn--primary preview-scratch-btn"
+            :disabled="scratchLoading"
+            @click="emit('scratch-merge-back')"
+          >{{ t('scratch.mergeBack') }}</button>
+          <button
+            type="button"
+            class="btn preview-scratch-btn"
+            :disabled="scratchLoading"
+            @click="emit('scratch-discard')"
+          >{{ t('scratch.discard') }}</button>
+        </div>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -142,6 +184,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "../composables/useI18n.js";
 import type { MergePreviewSummary, PreviewFileResult, PreviewFileStatus, PreviewOperation, RiskLevel } from "../composables/useMergePreview.js";
+import type { ScratchWorktree } from "../utils/backend.js";
 import { useAIProvider } from "../composables/useAIProvider.js";
 import { useMergeRisk } from "../composables/useMergeRisk.js";
 import AiSparkle from "./AiSparkle.vue";
@@ -157,11 +200,23 @@ const props = defineProps<{
   operation?: PreviewOperation;
   /** Current/target branch name (what we'd merge INTO). Used by the AI risk assessment. */
   targetBranch?: string;
+  /** Active scratch worktree, if one has been created (v2.20.0). */
+  scratchActive?: ScratchWorktree | null;
+  /** Whether a scratch worktree op (create/merge-back/discard) is in flight. */
+  scratchLoading?: boolean;
+  /** Error from the last scratch worktree op, surfaced inline. */
+  scratchError?: string | null;
 }>();
 
 const emit = defineEmits<{
   close: [];
   "update:operation": [op: PreviewOperation];
+  /** User asked to open an isolated scratch worktree for resolution. */
+  "resolve-in-scratch": [];
+  /** Bring the scratch resolution back into the main checkout. */
+  "scratch-merge-back": [];
+  /** Abandon the scratch worktree. */
+  "scratch-discard": [];
 }>();
 
 const OPERATIONS: PreviewOperation[] = ["merge", "rebase", "cherry-pick"];
@@ -509,4 +564,41 @@ function basename(path: string): string {
   white-space: nowrap;
 }
 .ph-status { color: var(--color-text-subtle); white-space: nowrap; }
+
+/* Scratch worktree (v2.20.0) */
+.preview-scratch {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border, #313244);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preview-scratch-error {
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.preview-scratch-btn {
+  min-height: 24px;
+  padding: 2px 10px;
+  font-size: 11px;
+}
+.preview-scratch-active {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.preview-scratch-path {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--text-xs);
+  color: var(--color-subtext, #6c7086);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.preview-scratch-actions {
+  display: flex;
+  gap: 6px;
+}
 </style>
