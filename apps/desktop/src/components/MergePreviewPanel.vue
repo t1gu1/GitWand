@@ -14,12 +14,32 @@
   <!-- ─── Summary ─────────────────────────────────────── -->
   <div v-else-if="summary" class="preview-panel">
 
+    <!-- Operation selector (merge / rebase / cherry-pick) -->
+    <div class="preview-ops" role="tablist" :aria-label="t('mergePreview.operationLabel')">
+      <button
+        v-for="op in OPERATIONS"
+        :key="op"
+        type="button"
+        role="tab"
+        class="preview-op"
+        :class="{ 'preview-op--active': (operation ?? 'merge') === op }"
+        :aria-selected="(operation ?? 'merge') === op"
+        @click="emit('update:operation', op)"
+      >{{ t(`mergePreview.op.${op}`) }}</button>
+    </div>
+
     <!-- Global badge -->
     <div class="preview-header">
       <span
         class="preview-badge"
         :class="badgeClass"
       >{{ badgeLabel }}</span>
+      <span
+        v-if="riskLevel"
+        class="preview-risk-badge"
+        :class="riskClass"
+        :title="t('mergePreview.riskLabel')"
+      >{{ riskLabel }}</span>
       <span class="preview-branch">← {{ summary.sourceBranch }}</span>
       <button
         v-if="ai.isAvailable.value && summary.files.length > 0"
@@ -68,25 +88,50 @@
       <div
         v-for="f in conflictingFiles"
         :key="f.filePath"
-        class="preview-file"
-        :class="`preview-file--${f.status}`"
+        class="preview-file-group"
       >
-        <span class="pf-icon">{{ statusIcon(f.status) }}</span>
-        <span class="pf-path" :title="f.filePath">{{ basename(f.filePath) }}</span>
-        <span class="pf-detail">
-          <template v-if="f.status === 'auto-resolved'">
-            {{ f.totalConflicts }} {{ t('mergePreview.conflictsAutoResolved') }}
-          </template>
-          <template v-else-if="f.status === 'partial'">
-            {{ f.autoResolved }}/{{ f.totalConflicts }} {{ t('mergePreview.partial') }}
-          </template>
-          <template v-else-if="f.status === 'add-delete'">
-            {{ t('mergePreview.addDelete') }}
-          </template>
-          <template v-else>
-            {{ f.totalConflicts }} {{ t('mergePreview.conflictsManual') }}
-          </template>
-        </span>
+        <button
+          type="button"
+          class="preview-file"
+          :class="[`preview-file--${f.status}`, { 'preview-file--expandable': f.hunks.length > 0 }]"
+          :aria-expanded="expanded.has(f.filePath)"
+          @click="f.hunks.length > 0 && toggleExpand(f.filePath)"
+        >
+          <span v-if="f.hunks.length > 0" class="pf-chevron">{{ expanded.has(f.filePath) ? '▾' : '▸' }}</span>
+          <span class="pf-icon">{{ statusIcon(f.status) }}</span>
+          <span class="pf-path" :title="f.filePath">{{ basename(f.filePath) }}</span>
+          <span class="pf-detail">
+            <template v-if="f.status === 'auto-resolved'">
+              {{ f.totalConflicts }} {{ t('mergePreview.conflictsAutoResolved') }}
+            </template>
+            <template v-else-if="f.status === 'partial'">
+              {{ f.autoResolved }}/{{ f.totalConflicts }} {{ t('mergePreview.partial') }}
+            </template>
+            <template v-else-if="f.status === 'add-delete'">
+              {{ t('mergePreview.addDelete') }}
+            </template>
+            <template v-else>
+              {{ f.totalConflicts }} {{ t('mergePreview.conflictsManual') }}
+            </template>
+          </span>
+        </button>
+
+        <!-- Hunk-by-hunk predicted conflicts -->
+        <ul v-if="expanded.has(f.filePath) && f.hunks.length > 0" class="preview-hunks">
+          <li
+            v-for="(h, i) in f.hunks"
+            :key="i"
+            class="preview-hunk"
+            :class="h.autoResolved ? 'preview-hunk--auto' : 'preview-hunk--manual'"
+          >
+            <span class="ph-icon">{{ h.autoResolved ? '✓' : '✕' }}</span>
+            <span class="ph-line">{{ t('mergePreview.hunkLine') }} {{ h.startLine }}</span>
+            <span class="ph-type">{{ h.type }}</span>
+            <span class="ph-status">
+              {{ h.autoResolved ? t('mergePreview.hunkAuto') : t('mergePreview.hunkManual') }}
+            </span>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -96,7 +141,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "../composables/useI18n.js";
-import type { MergePreviewSummary, PreviewFileResult, PreviewFileStatus } from "../composables/useMergePreview.js";
+import type { MergePreviewSummary, PreviewFileResult, PreviewFileStatus, PreviewOperation, RiskLevel } from "../composables/useMergePreview.js";
 import { useAIProvider } from "../composables/useAIProvider.js";
 import { useMergeRisk } from "../composables/useMergeRisk.js";
 import AiSparkle from "./AiSparkle.vue";
@@ -106,11 +151,38 @@ const props = defineProps<{
   error: string | null;
   summary: MergePreviewSummary | null;
   conflictingFiles: PreviewFileResult[];
+  /** Risk level derived by useMergePreview (low / medium / high). */
+  riskLevel?: RiskLevel;
+  /** Operation currently simulated (merge / rebase / cherry-pick). */
+  operation?: PreviewOperation;
   /** Current/target branch name (what we'd merge INTO). Used by the AI risk assessment. */
   targetBranch?: string;
 }>();
 
-defineEmits<{ close: [] }>();
+const emit = defineEmits<{
+  close: [];
+  "update:operation": [op: PreviewOperation];
+}>();
+
+const OPERATIONS: PreviewOperation[] = ["merge", "rebase", "cherry-pick"];
+
+// Per-file hunk-by-hunk expansion state (keyed by file path).
+const expanded = ref<Set<string>>(new Set());
+function toggleExpand(path: string) {
+  const next = new Set(expanded.value);
+  if (next.has(path)) next.delete(path);
+  else next.add(path);
+  expanded.value = next;
+}
+
+const riskClass = computed(() => `preview-risk-badge--${props.riskLevel ?? "low"}`);
+const riskLabel = computed(() => {
+  switch (props.riskLevel) {
+    case "high":   return t("mergePreview.riskHigh");
+    case "medium": return t("mergePreview.riskMedium");
+    default:        return t("mergePreview.riskLow");
+  }
+});
 
 const { t, locale } = useI18n();
 const ai = useAIProvider();
@@ -347,4 +419,94 @@ function basename(path: string): string {
   color: var(--color-text-subtle);
   white-space: nowrap;
 }
+
+/* Operation selector */
+.preview-ops {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 8px;
+  padding: 2px;
+  background: var(--color-surface-1, #181825);
+  border-radius: var(--radius-sm, 6px);
+}
+.preview-op {
+  flex: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  font-size: var(--text-xs);
+  color: var(--color-subtext, #6c7086);
+  border-radius: var(--radius-xs, 4px);
+  text-transform: capitalize;
+}
+.preview-op:hover { color: var(--color-text, #cdd6f4); }
+.preview-op--active {
+  background: var(--color-surface-2, #1e1e2e);
+  color: var(--color-text, #cdd6f4);
+  font-weight: var(--font-semibold);
+}
+
+/* Risk badge */
+.preview-risk-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-xs);
+}
+.preview-risk-badge--low    { background: var(--color-success-soft); color: var(--color-success); }
+.preview-risk-badge--medium { background: var(--color-warning-soft); color: var(--color-warning); }
+.preview-risk-badge--high   { background: var(--color-danger-soft); color: var(--color-danger); }
+
+/* File group + expandable trigger */
+.preview-file-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.preview-file {
+  width: 100%;
+  text-align: left;
+  border: none;
+  font: inherit;
+  color: inherit;
+}
+.preview-file--expandable { cursor: pointer; }
+.pf-chevron {
+  font-size: 9px;
+  width: 10px;
+  flex-shrink: 0;
+  color: var(--color-subtext, #6c7086);
+}
+
+/* Hunk-by-hunk list */
+.preview-hunks {
+  list-style: none;
+  margin: 0 0 2px 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.preview-hunk {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--color-surface-2, #1e1e2e);
+  font-size: var(--text-xs);
+}
+.preview-hunk--auto .ph-icon   { color: var(--color-success); }
+.preview-hunk--manual .ph-icon { color: var(--color-danger); }
+.ph-icon { width: 12px; text-align: center; flex-shrink: 0; }
+.ph-line { color: var(--color-subtext, #6c7086); white-space: nowrap; }
+.ph-type {
+  flex: 1;
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-status { color: var(--color-text-subtle); white-space: nowrap; }
 </style>

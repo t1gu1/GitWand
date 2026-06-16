@@ -510,6 +510,19 @@ const en = {
     partial: "auto-resolved",
     addDelete: "add/delete",
     conflictsManual: "manual conflict(s)",
+    operationLabel: "Operation to simulate",
+    op: {
+      merge: "Merge",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
+    },
+    riskLabel: "Predicted risk level",
+    riskLow: "Low risk",
+    riskMedium: "Medium risk",
+    riskHigh: "High risk",
+    hunkLine: "Line",
+    hunkAuto: "auto-resolvable",
+    hunkManual: "manual",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────

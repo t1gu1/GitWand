@@ -492,6 +492,19 @@ const zhCN: Locale = {
     partial: "已自动解决",
     addDelete: "新增/删除",
     conflictsManual: "个手动冲突",
+    operationLabel: "Operation to simulate", // TODO: translate
+    op: {
+      merge: "Merge", // TODO: translate
+      rebase: "Rebase", // TODO: translate
+      "cherry-pick": "Cherry-pick", // TODO: translate
+    },
+    riskLabel: "Predicted risk level", // TODO: translate
+    riskLow: "Low risk", // TODO: translate
+    riskMedium: "Medium risk", // TODO: translate
+    riskHigh: "High risk", // TODO: translate
+    hunkLine: "Line", // TODO: translate
+    hunkAuto: "auto-resolvable", // TODO: translate
+    hunkManual: "manual", // TODO: translate
   },
 
   rebase: {

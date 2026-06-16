@@ -12,12 +12,17 @@
 //!     per-file history with --follow + pickaxe + -L line ranges.
 //!   - `git_blame` — porcelain blame, capped at 10 000 entries.
 //!   - `preview_merge` — Phase 8.1 dry-run merge using `git merge-file`.
+//!   - `preview_rebase` / `preview_cherry_pick` — v2.20.0 Conflict Predictor
+//!     extension: side-effect-free 3-way previews for rebase / cherry-pick,
+//!     returning the same `FileMergePreview` shape as `preview_merge`.
 //!
 //! Private helpers kept alongside their only callers:
 //!   - `git_status_libgit2` / `libgit2_branch_status` / `libgit2_file_statuses`
 //!     / `compute_push_remote_via_cli` — feed `git_status`.
 //!   - `git_status_cli` — parity reference, also fallback for `git_status`.
-//!   - `merge_file_preview` — three-way merge driver for `preview_merge`.
+//!   - `merge_file_preview` — three-way merge driver for the preview commands.
+//!   - `build_3way_preview` / `rev_parse_verify` — shared by the rebase /
+//!     cherry-pick predictors.
 //!
 //! All helpers (git_cmd, git_binary, hidden_cmd, resolve_git_dir,
 //! read_git_*, has_unresolved_conflicts, parse_diff_hunks,
@@ -1162,18 +1167,152 @@ pub(crate) async fn preview_merge(cwd: String, source_branch: String) -> Result<
 // Scaffolding stubs — see design spec
 // docs/superpowers/specs/2026-06-16-v2.20.0-scratch-worktree-design.md
 
+/// Resolve a ref to a full commit SHA, returning a clear error if unknown.
+/// Used by the rebase / cherry-pick predictors to fail fast on bad refs.
+fn rev_parse_verify(git: &str, cwd: &str, rev: &str) -> Result<String, String> {
+    // `<rev>^{commit}` forces resolution to a commit object and fails on
+    // tags pointing at non-commits, on missing refs, etc.
+    let spec = format!("{}^{{commit}}", rev);
+    let out = hidden_cmd(git)
+        .args(["rev-parse", "--verify", "--quiet", &spec])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("rev-parse failed: {}", e))?;
+    if !out.status.success() {
+        return Err(format!("Unknown or invalid ref: {}", rev));
+    }
+    let sha = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if sha.is_empty() {
+        return Err(format!("Unknown or invalid ref: {}", rev));
+    }
+    Ok(sha)
+}
+
+/// Run the per-file 3-way preview over the intersection of changed files,
+/// then append the unilaterally-changed files (no conflict) — mirroring the
+/// structure of `preview_merge` so the frontend resolver contract is identical.
+///
+/// `ancestor` is the merge base / common ancestor, `ours_ref` is the side the
+/// work lands on, `theirs_ref` is the side being applied.
+fn build_3way_preview(
+    git: &str,
+    cwd: &str,
+    ancestor: &str,
+    ours_ref: &str,
+    theirs_ref: &str,
+) -> Result<Vec<FileMergePreview>, String> {
+    let ours_files = git_changed_files(git, cwd, ancestor, ours_ref)?;
+    let theirs_files = git_changed_files(git, cwd, ancestor, theirs_ref)?;
+
+    let ours_set: std::collections::HashSet<&String> = ours_files.iter().collect();
+    let theirs_set: std::collections::HashSet<&String> = theirs_files.iter().collect();
+
+    let both_modified: Vec<&String> = theirs_files.iter().filter(|f| ours_set.contains(f)).collect();
+    let only_ours: Vec<&String> = ours_files.iter().filter(|f| !theirs_set.contains(f)).collect();
+    let only_theirs: Vec<&String> = theirs_files.iter().filter(|f| !ours_set.contains(f)).collect();
+
+    let tmp = std::env::temp_dir();
+    let mut results: Vec<FileMergePreview> = Vec::new();
+
+    for file_path in both_modified {
+        results.push(merge_file_preview(git, cwd, ancestor, ours_ref, theirs_ref, file_path, &tmp));
+    }
+    for file_path in only_ours {
+        results.push(FileMergePreview {
+            file_path: file_path.clone(),
+            conflict_content: String::new(),
+            has_conflicts: false,
+            is_add_delete: false,
+        });
+    }
+    for file_path in only_theirs {
+        results.push(FileMergePreview {
+            file_path: file_path.clone(),
+            conflict_content: String::new(),
+            has_conflicts: false,
+            is_add_delete: false,
+        });
+    }
+
+    results.sort_by(|a, b| {
+        b.has_conflicts.cmp(&a.has_conflicts)
+            .then(a.file_path.cmp(&b.file_path))
+    });
+
+    Ok(results)
+}
+
 /// Simulate rebasing HEAD onto `onto` without modifying the working tree.
+///
+/// Orientation: `git rebase` replays HEAD's commits on top of `onto`. During a
+/// real rebase, the index being built starts from `onto`, and each replayed
+/// commit from HEAD is applied on top — so on a conflict git labels the `onto`
+/// side as "ours" (HEAD of the rebased-onto state) and the replayed commit as
+/// "theirs". We mirror that here:
+///   - ancestor = merge-base(HEAD, onto)
+///   - ours  = onto  (the target base the work lands on)
+///   - theirs = HEAD (the work being replayed on top)
+///
+/// This is the pragmatic *squashed* approximation: we 3-way the net diff of
+/// `base..HEAD` against `onto` rather than replaying each commit individually.
+/// Per-commit replay accuracy is a documented follow-up (design spec §4.1, §7).
 #[tauri::command]
 pub(crate) async fn preview_rebase(cwd: String, onto: String) -> Result<Vec<FileMergePreview>, String> {
-    let _ = (cwd, onto);
-    Err("preview_rebase not implemented (v2.20.0)".into())
+    let git = git_binary();
+
+    // Fail fast on an unknown / invalid `onto` ref.
+    rev_parse_verify(&git, &cwd, &onto)?;
+    rev_parse_verify(&git, &cwd, "HEAD")?;
+
+    // Common ancestor of the current branch and the rebase target.
+    let base_out = hidden_cmd(&git)
+        .args(["merge-base", "HEAD", &onto])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("merge-base failed: {}", e))?;
+    if !base_out.status.success() {
+        return Err(format!(
+            "Cannot find merge-base between HEAD and {}: {}",
+            onto,
+            String::from_utf8_lossy(&base_out.stderr).trim()
+        ));
+    }
+    let base = String::from_utf8_lossy(&base_out.stdout).trim().to_string();
+    if base.is_empty() {
+        return Err(format!("No common ancestor between HEAD and {}", onto));
+    }
+
+    // ours = onto, theirs = HEAD (see orientation note above).
+    build_3way_preview(&git, &cwd, &base, &onto, "HEAD")
 }
 
 /// Simulate cherry-picking `commit` onto HEAD without modifying the working tree.
+///
+/// Orientation matches `git cherry-pick`: it applies the diff `commit^..commit`
+/// onto HEAD. The 3-way is therefore:
+///   - ancestor = commit^ (the cherry-picked commit's parent)
+///   - ours  = HEAD   (where it is being applied)
+///   - theirs = commit (the change being picked)
 #[tauri::command]
 pub(crate) async fn preview_cherry_pick(cwd: String, commit: String) -> Result<Vec<FileMergePreview>, String> {
-    let _ = (cwd, commit);
-    Err("preview_cherry_pick not implemented (v2.20.0)".into())
+    let git = git_binary();
+
+    // Resolve the commit and ensure HEAD exists (clear error on a fresh repo).
+    let commit_sha = rev_parse_verify(&git, &cwd, &commit)?;
+    rev_parse_verify(&git, &cwd, "HEAD")?;
+
+    // Parent of the cherry-picked commit. A root commit has no parent — we
+    // cannot compute a 3-way ancestor, so report a clear error.
+    let parent_spec = format!("{}^", commit_sha);
+    let parent = rev_parse_verify(&git, &cwd, &parent_spec).map_err(|_| {
+        format!(
+            "Cannot preview cherry-pick of root commit {} (no parent to diff against)",
+            commit
+        )
+    })?;
+
+    // ancestor = commit^, ours = HEAD, theirs = commit.
+    build_3way_preview(&git, &cwd, &parent, "HEAD", &commit_sha)
 }
 
 /// Tente de merger les trois versions d'un fichier avec git merge-file.
@@ -1388,4 +1527,283 @@ pub(crate) async fn git_commit_template_path(cwd: String) -> Result<Option<Strin
     };
 
     Ok(Some(expanded))
+}
+
+// ─── Tests — Conflict Predictor (rebase / cherry-pick) ───────────────
+//
+// Per AGENTS.md these run against REAL temporary git repositories (no git
+// layer mocking). They exercise the sync helpers (`rev_parse_verify`,
+// `build_3way_preview`) that the async Tauri commands delegate to, on repos
+// with a *known* rebase conflict and a *known* cherry-pick conflict, and they
+// assert the working tree is left untouched.
+#[cfg(test)]
+mod predictor_tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    /// A throwaway git repo under the system temp dir, removed on drop.
+    struct TempRepo {
+        path: PathBuf,
+    }
+
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    impl TempRepo {
+        fn new() -> Self {
+            let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let pid = std::process::id();
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir = std::env::temp_dir().join(format!("gitwand-predictor-test-{}-{}-{}", pid, n, nanos));
+            std::fs::create_dir_all(&dir).unwrap();
+            let repo = TempRepo { path: dir };
+            repo.git(&["init", "-q", "-b", "main"]);
+            // Deterministic identity so commits succeed in CI.
+            repo.git(&["config", "user.name", "Test"]);
+            repo.git(&["config", "user.email", "test@example.com"]);
+            repo.git(&["config", "commit.gpgsign", "false"]);
+            repo
+        }
+
+        fn cwd(&self) -> &str {
+            self.path.to_str().unwrap()
+        }
+
+        fn git(&self, args: &[&str]) -> std::process::Output {
+            let out = Command::new(git_binary())
+                .args(args)
+                .current_dir(&self.path)
+                .output()
+                .unwrap_or_else(|e| panic!("git {:?} failed to spawn: {}", args, e));
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            out
+        }
+
+        fn write(&self, rel: &str, content: &str) {
+            let p = self.path.join(rel);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(p, content).unwrap();
+        }
+
+        fn read(&self, rel: &str) -> String {
+            std::fs::read_to_string(self.path.join(rel)).unwrap()
+        }
+
+        fn commit_all(&self, msg: &str) {
+            self.git(&["add", "-A"]);
+            self.git(&["commit", "-q", "-m", msg]);
+        }
+
+        fn head_sha(&self) -> String {
+            let out = self.git(&["rev-parse", "HEAD"]);
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+    }
+
+    /// Snapshot the working-tree state via `git status --porcelain` so tests can
+    /// assert the predictor never mutated anything.
+    fn porcelain(repo: &TempRepo) -> String {
+        let out = repo.git(&["status", "--porcelain"]);
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    fn conflicting(previews: &[FileMergePreview]) -> Vec<String> {
+        let mut v: Vec<String> = previews
+            .iter()
+            .filter(|p| p.has_conflicts)
+            .map(|p| p.file_path.clone())
+            .collect();
+        v.sort();
+        v
+    }
+
+    fn ref_sha(repo: &TempRepo, r: &str) -> String {
+        let out = repo.git(&["rev-parse", r]);
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn merge_base(repo: &TempRepo, a: &str, b: &str) -> String {
+        let out = repo.git(&["merge-base", a, b]);
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    // ── rebase ────────────────────────────────────────────────
+
+    #[test]
+    fn preview_rebase_predicts_known_conflict() {
+        let repo = TempRepo::new();
+        repo.write("shared.txt", "line1\nline2\nline3\n");
+        repo.commit_all("base");
+
+        // feature branch (HEAD) edits line2 one way.
+        repo.git(&["checkout", "-q", "-b", "feature"]);
+        repo.write("shared.txt", "line1\nFEATURE\nline3\n");
+        repo.commit_all("feature edit");
+
+        // main edits line2 a conflicting way.
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write("shared.txt", "line1\nMAIN\nline3\n");
+        repo.commit_all("main edit");
+
+        // Rebase feature (HEAD) onto main.
+        repo.git(&["checkout", "-q", "feature"]);
+        let head_before = repo.head_sha();
+        let status_before = porcelain(&repo);
+
+        let git = git_binary();
+        let cwd = repo.cwd();
+        rev_parse_verify(&git, cwd, "main").unwrap();
+        let base = merge_base(&repo, "HEAD", "main");
+        // Orientation: ours = onto (main), theirs = HEAD (feature).
+        let previews = build_3way_preview(&git, cwd, &base, "main", "HEAD").unwrap();
+
+        assert_eq!(
+            conflicting(&previews),
+            vec!["shared.txt".to_string()],
+            "expected shared.txt to be predicted as conflicting"
+        );
+
+        // Working tree + HEAD must be untouched.
+        assert_eq!(repo.head_sha(), head_before, "HEAD moved during preview");
+        assert_eq!(porcelain(&repo), status_before, "working tree mutated during preview");
+        assert_eq!(repo.read("shared.txt"), "line1\nFEATURE\nline3\n");
+    }
+
+    #[test]
+    fn preview_rebase_no_conflict_on_disjoint_changes() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.write("b.txt", "b\n");
+        repo.commit_all("base");
+
+        repo.git(&["checkout", "-q", "-b", "feature"]);
+        repo.write("a.txt", "a-feature\n");
+        repo.commit_all("feature edits a");
+
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write("b.txt", "b-main\n");
+        repo.commit_all("main edits b");
+
+        repo.git(&["checkout", "-q", "feature"]);
+        let git = git_binary();
+        let cwd = repo.cwd();
+        let base = merge_base(&repo, "HEAD", "main");
+        let previews = build_3way_preview(&git, cwd, &base, "main", "HEAD").unwrap();
+
+        assert!(
+            conflicting(&previews).is_empty(),
+            "disjoint changes must not be predicted as conflicting: {:?}",
+            conflicting(&previews)
+        );
+    }
+
+    #[test]
+    fn preview_rebase_unknown_ref_errors() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.commit_all("base");
+
+        let git = git_binary();
+        let err = rev_parse_verify(&git, repo.cwd(), "does-not-exist");
+        assert!(err.is_err(), "unknown ref should produce an Err");
+    }
+
+    // ── cherry-pick ───────────────────────────────────────────
+
+    #[test]
+    fn preview_cherry_pick_predicts_known_conflict() {
+        let repo = TempRepo::new();
+        repo.write("shared.txt", "x\ncommon\nz\n");
+        repo.commit_all("base");
+
+        // topic branch: a commit that rewrites `common`.
+        repo.git(&["checkout", "-q", "-b", "topic"]);
+        repo.write("shared.txt", "x\nTOPIC\nz\n");
+        repo.commit_all("topic edit");
+        let topic_commit = repo.head_sha();
+
+        // main diverges, editing the same line differently.
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write("shared.txt", "x\nMAIN\nz\n");
+        repo.commit_all("main edit");
+
+        let head_before = repo.head_sha();
+        let status_before = porcelain(&repo);
+
+        let git = git_binary();
+        let cwd = repo.cwd();
+        // ancestor = topic^, ours = HEAD (main), theirs = topic commit.
+        let parent = ref_sha(&repo, &format!("{}^", topic_commit));
+        let previews = build_3way_preview(&git, cwd, &parent, "HEAD", &topic_commit).unwrap();
+
+        assert_eq!(
+            conflicting(&previews),
+            vec!["shared.txt".to_string()],
+            "expected shared.txt to be predicted as conflicting on cherry-pick"
+        );
+
+        assert_eq!(repo.head_sha(), head_before, "HEAD moved during preview");
+        assert_eq!(porcelain(&repo), status_before, "working tree mutated during preview");
+        assert_eq!(repo.read("shared.txt"), "x\nMAIN\nz\n");
+    }
+
+    #[test]
+    fn preview_cherry_pick_clean_when_no_overlap() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.commit_all("base");
+
+        repo.git(&["checkout", "-q", "-b", "topic"]);
+        repo.write("newfile.txt", "brand new\n");
+        repo.commit_all("topic adds a new file");
+        let topic_commit = repo.head_sha();
+
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write("a.txt", "a-changed\n");
+        repo.commit_all("main edits a");
+
+        let git = git_binary();
+        let cwd = repo.cwd();
+        let parent = ref_sha(&repo, &format!("{}^", topic_commit));
+        let previews = build_3way_preview(&git, cwd, &parent, "HEAD", &topic_commit).unwrap();
+
+        assert!(
+            conflicting(&previews).is_empty(),
+            "non-overlapping cherry-pick must be clean: {:?}",
+            conflicting(&previews)
+        );
+    }
+
+    #[test]
+    fn rev_parse_verify_root_commit_has_no_parent() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.commit_all("root");
+        let root = repo.head_sha();
+
+        let git = git_binary();
+        let parent_spec = format!("{}^", root);
+        // The very first commit has no parent — predictor must surface an error.
+        assert!(
+            rev_parse_verify(&git, repo.cwd(), &parent_spec).is_err(),
+            "root commit parent must not resolve"
+        );
+    }
 }

@@ -503,6 +503,19 @@ const fr: Locale = {
     partial: "auto-résolu(s)",
     addDelete: "ajout/suppression",
     conflictsManual: "conflit(s) manuel(s)",
+    operationLabel: "Opération à simuler",
+    op: {
+      merge: "Fusion",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
+    },
+    riskLabel: "Niveau de risque prédit",
+    riskLow: "Risque faible",
+    riskMedium: "Risque moyen",
+    riskHigh: "Risque élevé",
+    hunkLine: "Ligne",
+    hunkAuto: "auto-résolvable",
+    hunkManual: "manuel",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────

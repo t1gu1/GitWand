@@ -34,6 +34,19 @@ export type PreviewFileStatus =
   | "clean"           // pas de conflit (modifié d'un seul côté)
   | "add-delete";     // conflit add/delete (toujours manuel)
 
+/**
+ * Aperçu d'un hunk individuel prédit (v2.20.0). Surface le résultat
+ * `resolve()` déjà calculé pour un affichage hunk-par-hunk dans le panel.
+ */
+export interface PreviewHunk {
+  /** Ligne de début du hunk dans le fichier conflictuel */
+  startLine: number;
+  /** Type de conflit classifié par le résolveur */
+  type: string;
+  /** GitWand peut-il résoudre ce hunk automatiquement ? */
+  autoResolved: boolean;
+}
+
 export interface PreviewFileResult {
   filePath: string;
   status: PreviewFileStatus;
@@ -43,6 +56,8 @@ export interface PreviewFileResult {
   autoResolved: number;
   /** Types de conflits détectés */
   conflictTypes: string[];
+  /** Aperçu hunk-par-hunk (vide pour les fichiers clean / add-delete) */
+  hunks: PreviewHunk[];
 }
 
 export interface MergePreviewSummary {
@@ -96,6 +111,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 0,
             autoResolved: 0,
             conflictTypes: [],
+            hunks: [],
           });
           continue;
         }
@@ -107,6 +123,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 1,
             autoResolved: 0,
             conflictTypes: ["add_delete"],
+            hunks: [],
           });
           continue;
         }
@@ -125,12 +142,29 @@ export function useMergePreview(cwd: () => string) {
             status = "manual";
           }
 
+          // Aperçu hunk-par-hunk : on réutilise la sortie resolve() déjà
+          // calculée (pas de second passage) pour alimenter le panel.
+          // `resolutions` porte le flag `autoResolved` par hunk ; on retombe
+          // sur `hunks` si la liste est vide.
+          const hunks: PreviewHunk[] = result.resolutions.length > 0
+            ? result.resolutions.map(r => ({
+                startLine: r.hunk.startLine,
+                type: r.hunk.type,
+                autoResolved: r.autoResolved,
+              }))
+            : result.hunks.map(h => ({
+                startLine: h.startLine,
+                type: h.type,
+                autoResolved: false,
+              }));
+
           files.push({
             filePath: raw.file_path,
             status,
             totalConflicts: result.stats.totalConflicts,
             autoResolved: result.stats.autoResolved,
             conflictTypes: types,
+            hunks,
           });
         } else {
           // Pas de contenu → conflit indéterminé
@@ -140,6 +174,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 1,
             autoResolved: 0,
             conflictTypes: ["complex"],
+            hunks: [{ startLine: 0, type: "complex", autoResolved: false }],
           });
         }
       }

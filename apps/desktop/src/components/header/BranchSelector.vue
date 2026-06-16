@@ -28,7 +28,7 @@ import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "
 import { gitSubmoduleList, gitSubmoduleBranches, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
-import { useMergePreview } from "../../composables/useMergePreview";
+import { useMergePreview, type PreviewOperation } from "../../composables/useMergePreview";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
@@ -240,11 +240,13 @@ const {
   error: previewError,
   summary: previewSummary,
   conflictingFiles: previewConflicts,
+  riskLevel: previewRisk,
   computePreview,
   reset: resetPreview,
 } = useMergePreview(() => props.cwd);
 
 const previewingBranch = ref<string | null>(null);
+const previewOperation = ref<PreviewOperation>("merge");
 
 async function togglePreview(branchName: string) {
   if (previewingBranch.value === branchName) {
@@ -253,7 +255,16 @@ async function togglePreview(branchName: string) {
     return;
   }
   previewingBranch.value = branchName;
-  await computePreview(branchName);
+  previewOperation.value = "merge";
+  await computePreview(branchName, previewOperation.value);
+}
+
+// Re-run the predictor for the same target when the user switches operation.
+async function changePreviewOperation(op: PreviewOperation) {
+  previewOperation.value = op;
+  if (previewingBranch.value) {
+    await computePreview(previewingBranch.value, op);
+  }
 }
 
 function closePreview() {
@@ -461,7 +472,10 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                   :error="previewError"
                   :summary="previewSummary"
                   :conflicting-files="previewConflicts"
+                  :risk-level="previewRisk"
+                  :operation="previewOperation"
                   :target-branch="branchDisplay"
+                  @update:operation="changePreviewOperation"
                   @close="closePreview"
                 />
               </li>
