@@ -269,4 +269,163 @@ describe('toolPreviewCherryPick — error handling', () => {
       cleanup()
     }
   })
+
+  it('returns isError=true when commit argument is missing', async () => {
+    const { cwd, cleanup } = makeRepo()
+    try {
+      writeFileSync(join(cwd, 'readme.md'), '# test\n')
+      git(cwd, ['add', 'readme.md'])
+      git(cwd, ['commit', '-m', 'init'])
+
+      const result: ToolResult = await handleToolCall(
+        'gitwand_preview_merge',
+        { operation: 'cherry-pick', cwd },
+        cwd,
+      )
+
+      expect(result.isError).toBe(true)
+      expect(result.content[0].text).toMatch(/commit/i)
+    } finally {
+      cleanup()
+    }
+  })
+})
+
+describe('toolPreviewCherryPick — conflict detection', () => {
+  it('detects a real conflict when the picked commit touches the same line', async () => {
+    const { cwd, cleanup } = makeRepo()
+    try {
+      // init: a.ts = "1"
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = 1;\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'init'])
+
+      // feature: same line → "feature"
+      git(cwd, ['checkout', '-b', 'feature'])
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = "feature";\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'feature change'])
+      const featureSha = git(cwd, ['rev-parse', 'HEAD'])
+
+      // main: same line → "main" (diverges from feature)
+      git(cwd, ['checkout', 'main'])
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = "main";\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'main change'])
+
+      // Cherry-pick the feature commit onto main → conflict on a.ts.
+      const result: ToolResult = await handleToolCall(
+        'gitwand_preview_merge',
+        { operation: 'cherry-pick', commit: featureSha, cwd },
+        cwd,
+      )
+
+      expect(result.isError).toBeFalsy()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.operation).toBe('cherry-pick')
+      expect(parsed.summary.totalConflicts).toBeGreaterThan(0)
+      expect(parsed.risk).not.toBe('low')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('flags an add/delete conflict when ours deleted a file theirs modifies', async () => {
+    const { cwd, cleanup } = makeRepo()
+    try {
+      // init: a.ts present
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = 1;\n')
+      writeFileSync(join(cwd, 'keep.ts'), 'export const k = 1;\n')
+      git(cwd, ['add', 'a.ts', 'keep.ts'])
+      git(cwd, ['commit', '-m', 'init'])
+
+      // feature: modify a.ts
+      git(cwd, ['checkout', '-b', 'feature'])
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = 2;\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'feature: modify a'])
+      const featureSha = git(cwd, ['rev-parse', 'HEAD'])
+
+      // main: delete a.ts
+      git(cwd, ['checkout', 'main'])
+      git(cwd, ['rm', 'a.ts'])
+      git(cwd, ['commit', '-m', 'main: delete a'])
+
+      // Cherry-pick feature (modifies a.ts) onto main (deleted a.ts) → add/delete.
+      const result: ToolResult = await handleToolCall(
+        'gitwand_preview_merge',
+        { operation: 'cherry-pick', commit: featureSha, cwd },
+        cwd,
+      )
+
+      expect(result.isError).toBeFalsy()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.operation).toBe('cherry-pick')
+      expect(parsed.summary.addDeleteFiles).toBeGreaterThan(0)
+      expect(parsed.risk).toBe('high')
+    } finally {
+      cleanup()
+    }
+  })
+})
+
+describe('toolPreview — merge operation (working tree)', () => {
+  it('reports no conflicts when the working tree is clean', async () => {
+    const { cwd, cleanup } = makeRepo()
+    try {
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = 1;\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'init'])
+
+      // Default operation is 'merge' — analyzes working-tree conflicts.
+      const result: ToolResult = await handleToolCall('gitwand_preview_merge', { cwd }, cwd)
+
+      expect(result.isError).toBeFalsy()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.operation).toBe('merge')
+      expect(parsed.risk).toBe('none')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('detects conflict markers already materialized in the working tree', async () => {
+    const { cwd, cleanup } = makeRepo()
+    try {
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = 1;\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'init'])
+
+      git(cwd, ['checkout', '-b', 'feature'])
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = "feature";\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'feature'])
+
+      git(cwd, ['checkout', 'main'])
+      writeFileSync(join(cwd, 'a.ts'), 'export const a = "main";\n')
+      git(cwd, ['add', 'a.ts'])
+      git(cwd, ['commit', '-m', 'main'])
+
+      // Real merge → leaves conflict markers + an unmerged entry in the index.
+      try {
+        git(cwd, ['merge', 'feature'])
+      } catch {
+        // git merge exits non-zero on conflict — expected.
+      }
+
+      const result: ToolResult = await handleToolCall(
+        'gitwand_preview_merge',
+        { operation: 'merge', cwd },
+        cwd,
+      )
+
+      expect(result.isError).toBeFalsy()
+      const parsed = JSON.parse(result.content[0].text)
+      expect(parsed.operation).toBe('merge')
+      expect(parsed.summary.files).toBeGreaterThan(0)
+      expect(parsed.summary.totalConflicts).toBeGreaterThan(0)
+    } finally {
+      cleanup()
+    }
+  })
 })

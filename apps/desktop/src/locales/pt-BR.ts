@@ -497,22 +497,22 @@ const ptBR: Locale = {
     partial: "auto-resolvido",
     addDelete: "adicionar/excluir",
     conflictsManual: "conflito(s) manual(is)",
-    operationLabel: "Operation to simulate", // TODO: translate
+    operationLabel: "Operação a simular",
     op: {
-      merge: "Merge", // TODO: translate
-      rebase: "Rebase", // TODO: translate
-      "cherry-pick": "Cherry-pick", // TODO: translate
+      merge: "Merge",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
     },
-    riskLabel: "Predicted risk level", // TODO: translate
-    riskLow: "Low risk", // TODO: translate
-    riskMedium: "Medium risk", // TODO: translate
-    riskHigh: "High risk", // TODO: translate
-    hunkLine: "Line", // TODO: translate
-    hunkAuto: "auto-resolvable", // TODO: translate
-    hunkManual: "manual", // TODO: translate
-    commitPicker: "Commit to cherry-pick", // TODO: translate
-    commitPickerLoading: "Loading commits…", // TODO: translate
-    commitPickerEmpty: "No commits found", // TODO: translate
+    riskLabel: "Nível de risco previsto",
+    riskLow: "Risco baixo",
+    riskMedium: "Risco médio",
+    riskHigh: "Risco alto",
+    hunkLine: "Linha",
+    hunkAuto: "auto-resolvível",
+    hunkManual: "manual",
+    commitPicker: "Commit para cherry-pick",
+    commitPickerLoading: "Carregando commits…",
+    commitPickerEmpty: "Nenhum commit encontrado",
   },
 
   // ─── Interactive Rebase ─────────────────────────────────
@@ -1492,14 +1492,14 @@ const ptBR: Locale = {
 
   // ─── Scratch worktree (v2.20.0) ─────────────────────────
   scratch: {
-    create: "Resolve in scratch worktree", // TODO: translate
-    openIsolated: "Open isolated worktree", // TODO: translate
-    mergeBack: "Bring changes back", // TODO: translate
-    discard: "Discard scratch", // TODO: translate
-    created: "Scratch worktree created", // TODO: translate
-    mergedBack: "Changes merged back into the main checkout", // TODO: translate
-    discarded: "Scratch worktree discarded", // TODO: translate
-    mergeBackBlocked: "Cannot bring changes back: the main checkout has conflicting uncommitted changes.", // TODO: translate
+    create: "Resolver em worktree temporário",
+    openIsolated: "Abrir worktree isolado",
+    mergeBack: "Trazer as alterações de volta",
+    discard: "Descartar o worktree temporário",
+    created: "Worktree temporário criado",
+    mergedBack: "Alterações trazidas de volta para o checkout principal",
+    discarded: "Worktree temporário descartado",
+    mergeBackBlocked: "Não é possível trazer as alterações de volta: o checkout principal tem alterações não commitadas em conflito.",
   },
 
   // ─── Worktrees ──────────────────────────────────────────

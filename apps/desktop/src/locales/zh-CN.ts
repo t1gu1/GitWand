@@ -492,22 +492,22 @@ const zhCN: Locale = {
     partial: "已自动解决",
     addDelete: "新增/删除",
     conflictsManual: "个手动冲突",
-    operationLabel: "Operation to simulate", // TODO: translate
+    operationLabel: "要模拟的操作",
     op: {
-      merge: "Merge", // TODO: translate
-      rebase: "Rebase", // TODO: translate
-      "cherry-pick": "Cherry-pick", // TODO: translate
+      merge: "合并",
+      rebase: "变基",
+      "cherry-pick": "拣选",
     },
-    riskLabel: "Predicted risk level", // TODO: translate
-    riskLow: "Low risk", // TODO: translate
-    riskMedium: "Medium risk", // TODO: translate
-    riskHigh: "High risk", // TODO: translate
-    hunkLine: "Line", // TODO: translate
-    hunkAuto: "auto-resolvable", // TODO: translate
-    hunkManual: "manual", // TODO: translate
-    commitPicker: "Commit to cherry-pick", // TODO: translate
-    commitPickerLoading: "Loading commits…", // TODO: translate
-    commitPickerEmpty: "No commits found", // TODO: translate
+    riskLabel: "预测的风险级别",
+    riskLow: "低风险",
+    riskMedium: "中等风险",
+    riskHigh: "高风险",
+    hunkLine: "行",
+    hunkAuto: "可自动解决",
+    hunkManual: "需手动处理",
+    commitPicker: "要拣选的提交",
+    commitPickerLoading: "正在加载提交…",
+    commitPickerEmpty: "未找到提交",
   },
 
   rebase: {
@@ -1477,14 +1477,14 @@ const zhCN: Locale = {
 
   // ─── Scratch worktree (v2.20.0) ─────────────────────────
   scratch: {
-    create: "Resolve in scratch worktree", // TODO: translate
-    openIsolated: "Open isolated worktree", // TODO: translate
-    mergeBack: "Bring changes back", // TODO: translate
-    discard: "Discard scratch", // TODO: translate
-    created: "Scratch worktree created", // TODO: translate
-    mergedBack: "Changes merged back into the main checkout", // TODO: translate
-    discarded: "Scratch worktree discarded", // TODO: translate
-    mergeBackBlocked: "Cannot bring changes back: the main checkout has conflicting uncommitted changes.", // TODO: translate
+    create: "在临时工作树中解决",
+    openIsolated: "打开隔离工作树",
+    mergeBack: "将更改合并回来",
+    discard: "丢弃临时工作树",
+    created: "已创建临时工作树",
+    mergedBack: "更改已合并回主检出",
+    discarded: "已丢弃临时工作树",
+    mergeBackBlocked: "无法合并更改：主检出存在冲突的未提交更改。",
   },
 
   // ─── Worktrees ──────────────────────────────────────────
