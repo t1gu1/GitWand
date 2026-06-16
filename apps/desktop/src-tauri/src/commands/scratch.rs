@@ -121,6 +121,15 @@ fn scratch_worktree_create_impl(
         },
     };
 
+    // SECURITY: `base_ref` may come straight from the frontend (`source_branch`).
+    // Before passing it to `git worktree add`, verify it actually resolves to a
+    // commit. This rejects a leading-dash value (e.g. "--no-checkout", "--detach")
+    // — which git would otherwise treat as a flag — as `fatal: invalid reference`.
+    // The trailing `--` separator below is a second, defence-in-depth guard.
+    if git_in(&repo_root, &["rev-parse", "--verify", "--quiet", &format!("{}^{{commit}}", base_ref)]).is_err() {
+        return Err(format!("source ref does not resolve to a commit: {}", base_ref));
+    }
+
     // Timestamp generated Rust-side so the frontend never has to.
     let created_at = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -146,6 +155,9 @@ fn scratch_worktree_create_impl(
         .arg("-b")
         .arg(&scratch_branch)
         .arg(&scratch_path)
+        // `--` separates the commit-ish from the option list so a leading-dash
+        // `base_ref` can never be parsed as a flag (argument-injection guard).
+        .arg("--")
         .arg(&base_ref)
         .current_dir(&repo_root)
         .output()
@@ -225,6 +237,22 @@ fn scratch_worktree_merge_back_impl(cwd: String, scratch_path: String) -> Result
     // Overlay the scratch branch's tree onto the main working tree + index,
     // without switching branches. Both worktrees share the object DB so this is
     // a single local operation.
+    //
+    // `git checkout <branch> -- .` only ADDS/UPDATES files present in the scratch
+    // tree; it never removes files the resolution DELETED. To make the transfer
+    // faithful, we first compute the set of files present in HEAD's tree but
+    // absent from the scratch tree (i.e. deleted in the scratch) and remove them
+    // from the main working tree + index, then overlay the remaining content.
+    let deleted = git_in(
+        &repo_root,
+        &["diff", "--name-only", "--diff-filter=D", "HEAD", &scratch_branch],
+    )?;
+    for path in deleted.lines().map(str::trim).filter(|p| !p.is_empty()) {
+        // `--` separates the pathspec from options; `--ignore-unmatch` keeps the
+        // operation idempotent if the file is already gone from the working tree.
+        let _ = git_in(&repo_root, &["rm", "-q", "--ignore-unmatch", "--", path]);
+    }
+
     git_in(&repo_root, &["checkout", &scratch_branch, "--", "."])?;
 
     // Cleanup: remove the scratch worktree and prune any dangling registration.
@@ -359,6 +387,7 @@ mod tests {
     fn create_then_merge_back_brings_resolution_and_cleans_up() {
         let repo = TempRepo::new();
         repo.write("file.txt", "original\n");
+        repo.write("stale.txt", "to be deleted\n");
         repo.commit_all("base");
 
         // Create the scratch worktree off the current HEAD.
@@ -374,10 +403,12 @@ mod tests {
         // The main checkout is untouched.
         assert_eq!(repo.read("file.txt"), "original\n");
 
-        // Write a "resolution" inside the scratch worktree.
+        // Write a "resolution" inside the scratch worktree: edit a file, add a
+        // new file, and DELETE a tracked file — the deletion must propagate.
         let scratch_dir = PathBuf::from(&scratch.path);
         std::fs::write(scratch_dir.join("file.txt"), "resolved\n").unwrap();
         std::fs::write(scratch_dir.join("new.txt"), "added\n").unwrap();
+        std::fs::remove_file(scratch_dir.join("stale.txt")).unwrap();
 
         // Merge back.
         scratch_worktree_merge_back_impl(repo.cwd(), scratch.path.clone())
@@ -386,6 +417,12 @@ mod tests {
         // The main checkout received the resolution.
         assert_eq!(repo.read("file.txt"), "resolved\n");
         assert_eq!(repo.read("new.txt"), "added\n");
+        // The deletion was transferred: the stale file is gone from the main
+        // checkout (working tree) — merge-back is a faithful tree transfer.
+        assert!(
+            !repo.path.join("stale.txt").exists(),
+            "file deleted in the scratch must be removed from the main checkout"
+        );
 
         // The scratch directory is gone.
         assert!(

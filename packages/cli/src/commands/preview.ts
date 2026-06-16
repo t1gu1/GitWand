@@ -125,10 +125,27 @@ function riskColor(risk: string): string {
   return c.red;
 }
 
-function computeRisk(autoResolved: number, remaining: number, addDeleteCount: number): "low" | "medium" | "high" {
-  if (remaining === 0 && addDeleteCount === 0) return "low";
-  if (remaining <= 2 && addDeleteCount === 0) return "medium";
-  return "high";
+/**
+ * Overall risk level, using the SAME status-based model as the desktop
+ * `useMergePreview` `riskLevel` computed and the MCP `previewResponse` (spec
+ * §4.2), so all three predictor surfaces agree for identical inputs:
+ *   - high   : at least one file is "manual" (conflicts, none auto-resolved) or
+ *              an add/delete conflict;
+ *   - medium : at least one file is "partial" (some but not all auto-resolved);
+ *   - low    : no conflicting files, or every conflict auto-resolved.
+ * Deliberately status-based, NOT count/threshold-based.
+ */
+function computeRisk(
+  previews: Array<{ totalConflicts: number; autoResolved: number }>,
+  addDeleteCount: number,
+): "low" | "medium" | "high" {
+  if (addDeleteCount > 0) return "high";
+  const hasManual = previews.some((p) => p.totalConflicts > 0 && p.autoResolved === 0);
+  if (hasManual) return "high";
+  const hasPartial = previews.some(
+    (p) => p.totalConflicts > 0 && p.autoResolved > 0 && p.autoResolved < p.totalConflicts,
+  );
+  return hasPartial ? "medium" : "low";
 }
 
 function printPreviewTable(
@@ -140,15 +157,18 @@ function printPreviewTable(
 ): void {
   const totalConflicts = previews.reduce((s, p) => s + p.totalConflicts, 0);
   const totalResolved = previews.reduce((s, p) => s + p.autoResolved, 0);
-  const remaining = totalConflicts - totalResolved;
-  const risk = computeRisk(totalResolved, remaining, addDeleteCount);
+  const risk = computeRisk(previews, addDeleteCount);
 
   const opLabel = operation === "rebase" ? "Rebase onto" : operation === "cherry-pick" ? "Cherry-pick" : "Merge";
   console.log(`\n${c.bold}${opLabel}:${c.reset} ${c.cyan}${ref}${c.reset}`);
   console.log(`${riskColor(risk)}${c.bold}Risk: ${risk.toUpperCase()}${c.reset}`);
   console.log();
 
-  if (sims.length === 0) {
+  // Only claim "clean" when there are genuinely no overlapping changes — i.e.
+  // no resolvable sims AND no add/delete conflicts. `sims` here is the
+  // add/delete-filtered list, so guarding on its length alone would print
+  // "predicted clean" immediately above an add/delete conflict line.
+  if (sims.length === 0 && addDeleteCount === 0) {
     console.log(`${c.green}No overlapping changes — operation predicted clean.${c.reset}\n`);
     return;
   }
@@ -248,8 +268,14 @@ export async function cmdPreview(flags: Record<string, boolean | string>): Promi
       process.exit(2);
     }
     ancestor = mb;
-    ours = headSha;
-    theirs = refSha;
+    // Orientation must match the Rust desktop predictor and the MCP tool:
+    // on a rebase, stage 2/ours = the rebased-onto target (`onto`), stage
+    // 3/theirs = the commit being replayed (HEAD). Getting this backwards would
+    // make orientation-sensitive resolutions (prefer-ours/theirs, import
+    // ordering, side-biased patterns) disagree with the GUI/MCP for the same
+    // rebase, even though the conflicting-file SET is symmetric.
+    ours = refSha;
+    theirs = headSha;
   } else if (operation === "cherry-pick") {
     const parentSha = revParse(cwd, `${refSha}^`);
     if (!parentSha) {
@@ -290,7 +316,7 @@ export async function cmdPreview(flags: Record<string, boolean | string>): Promi
   const totalConflicts = previews.reduce((sum, p) => sum + p.totalConflicts, 0);
   const totalResolved = previews.reduce((sum, p) => sum + p.autoResolved, 0);
   const remaining = totalConflicts - totalResolved;
-  const risk = computeRisk(totalResolved, remaining, addDeleteCount);
+  const risk = computeRisk(previews, addDeleteCount);
 
   if (isCIMode) {
     console.log(

@@ -554,9 +554,18 @@ async function toolPreview(cwd: string, args: Record<string, unknown>) {
 
 /**
  * Shared assembly of the preview response from per-file `resolve()` results,
- * including the overall risk level. `addDeleteCount` (files where one side
- * deleted the file) always pushes risk to "high" — mirrors the desktop
- * useMergePreview risk model.
+ * including the overall risk level.
+ *
+ * Risk uses the SAME status-based model as the desktop `useMergePreview`
+ * `riskLevel` computed (spec §4.2), so all three predictor surfaces
+ * (desktop / MCP / CLI) agree for identical inputs:
+ *   - high   : at least one file is "manual" (no conflict auto-resolved) or
+ *              "add-delete" (one side deleted the file);
+ *   - medium : at least one file is "partial" (some but not all conflicts
+ *              auto-resolved);
+ *   - low    : no conflicting files, or every conflict auto-resolved.
+ * It is deliberately status-based, NOT count/threshold-based: the number of
+ * cleanly auto-resolvable files does not by itself raise the risk.
  */
 function previewResponse(
   operation: string,
@@ -568,9 +577,24 @@ function previewResponse(
   const totalResolvable = previews.reduce((s: number, r) => s + ((r.autoResolved as number) ?? 0), 0);
   const remaining = totalConflicts - totalResolvable;
 
+  // Per-file status classification, mirroring the desktop model.
+  const hasHard = previews.some((r) => {
+    if (r.addDelete === true) return true;
+    const total = (r.totalConflicts as number) ?? 0;
+    const resolved = (r.autoResolved as number) ?? 0;
+    // "manual": the file has conflicts and none of them auto-resolved.
+    return total > 0 && resolved === 0;
+  });
+  const hasPartial = previews.some((r) => {
+    const total = (r.totalConflicts as number) ?? 0;
+    const resolved = (r.autoResolved as number) ?? 0;
+    // "partial": some — but not all — conflicts in the file auto-resolved.
+    return total > 0 && resolved > 0 && resolved < total;
+  });
+
   let risk: string;
-  if (addDeleteCount > 0 || remaining > 2 || fileCount > 3) risk = "high";
-  else if (remaining > 0) risk = "medium";
+  if (hasHard) risk = "high";
+  else if (hasPartial) risk = "medium";
   else risk = "low";
 
   return {
