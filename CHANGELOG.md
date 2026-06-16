@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (scaffolding — v2.20.0, in progress)
+### Added (v2.20.0, in progress)
 
 - **Scratch worktree for isolated resolution** — backend commands `scratch_worktree_create` / `merge_back` / `discard` (create a temporary `gitwand-scratch-<timestamp>` worktree, resolve away from the active checkout, bring changes back in one click, auto-cleanup), `useScratchWorktree` composable + `backend.ts` wrappers + `scratch.*` i18n keys in all 5 locales. Command bodies are stubbed pending implementation.
 - **Conflict Predictor extended to rebase & cherry-pick** — new side-effect-free `preview_rebase` / `preview_cherry_pick` commands (same `FileMergePreview` shape as `preview_merge`, which is left untouched), `useMergePreview` gains an `operation` parameter (`merge` | `rebase` | `cherry-pick`) and a `riskLevel` (low / medium / high) computed from the summary. Command bodies are stubbed pending implementation.
+- **MCP `gitwand_preview_merge` extended** — new `operation` parameter (`merge` | `rebase` | `cherry-pick`) with `onto` and `commit` args; uses `git merge-file` on blob snapshots in a temp dir — side-effect-free 3-way simulation mirroring the desktop Rust predictor.
+- **CLI `gitwand preview`** — new command; `--onto <ref>` (rebase), `--commit <sha>` (cherry-pick), `--branch <name>` (merge); exits 0 = clean, 1 = conflicts predicted, 2 = error; `--json` for CI pipelines.
 
 ## [2.19.0] - 2026-06-16
 
