@@ -509,6 +509,9 @@ const es: Locale = {
     hunkLine: "Line", // TODO: translate
     hunkAuto: "auto-resolvable", // TODO: translate
     hunkManual: "manual", // TODO: translate
+    commitPicker: "Commit to cherry-pick", // TODO: translate
+    commitPickerLoading: "Loading commits…", // TODO: translate
+    commitPickerEmpty: "No commits found", // TODO: translate
   },
 
   // ─── Interactive Rebase ─────────────────────────────────

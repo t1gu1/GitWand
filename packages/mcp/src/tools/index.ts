@@ -659,14 +659,39 @@ async function toolPreviewRebase(cwd: string, args: Record<string, unknown>) {
   if (revParse(cwd, "HEAD") === null) {
     return { content: [{ type: "text" as const, text: "Cannot resolve HEAD (empty repository?)." }], isError: true };
   }
-  const base = gitTry(cwd, ["merge-base", "HEAD", onto]);
-  if (!base) {
+  const headSha = revParse(cwd, "HEAD");
+  if (!headSha) {
+    return { content: [{ type: "text" as const, text: "Cannot resolve HEAD (empty repository?)." }], isError: true };
+  }
+  const mergeBase = gitTry(cwd, ["merge-base", headSha, onto]);
+  if (!mergeBase) {
     return { content: [{ type: "text" as const, text: `No common ancestor between HEAD and ${onto}.` }], isError: true };
   }
 
-  // Orientation matches the desktop predictor: ours = onto (target base),
-  // theirs = HEAD (work being replayed). Squashed approximation.
-  const sims = simulate3way(cwd, base, onto, "HEAD");
+  // Replay commits oldest-first: per-commit 3-way preview.
+  // Orientation per commit: ours = onto (target base), theirs = commit (replayed).
+  const commitsRaw = gitTry(cwd, ["rev-list", "--reverse", `${mergeBase}..${headSha}`]);
+  const commits = commitsRaw ? commitsRaw.split("\n").filter((c) => c.trim()) : [];
+  const allSims: SimulatedFile[] = [];
+  for (const c of commits) {
+    const parent = revParse(cwd, `${c}^`);
+    if (!parent) continue; // root commit — skip
+    const perCommitSims = simulate3way(cwd, parent, onto, c);
+    allSims.push(...perCommitSims);
+  }
+  // Deduplicate: for each file keep the entry with most conflict signal.
+  const seenFiles = new Map<string, SimulatedFile>();
+  for (const s of allSims) {
+    const existing = seenFiles.get(s.file);
+    if (!existing) {
+      seenFiles.set(s.file, s);
+    } else {
+      // addDelete > has-markers > clean
+      const score = (f: SimulatedFile) => f.addDelete ? 2 : f.content.includes("<<<<<<<") ? 1 : 0;
+      if (score(s) > score(existing)) seenFiles.set(s.file, s);
+    }
+  }
+  const sims = Array.from(seenFiles.values());
   if (sims.length === 0) {
     return { content: [{ type: "text" as const, text: JSON.stringify({ operation: "rebase", message: "No overlapping changes — rebase predicted clean.", risk: "low" }, null, 2) }] };
   }

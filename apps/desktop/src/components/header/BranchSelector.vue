@@ -25,7 +25,7 @@
  * either the trigger OR the popover count as "inside".
  */
 import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "vue";
-import { gitSubmoduleList, gitSubmoduleBranches, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
+import { gitSubmoduleList, gitSubmoduleBranches, getGitLog, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview, type PreviewOperation } from "../../composables/useMergePreview";
@@ -249,6 +249,42 @@ const {
 const previewingBranch = ref<string | null>(null);
 const previewOperation = ref<PreviewOperation>("merge");
 
+// ─── Commit picker (cherry-pick) ─────────────────────────────────
+// When the user selects cherry-pick as the preview operation, we need to
+// pick a specific commit SHA — not a branch tip — because git cherry-pick
+// operates on individual commits.
+
+interface CommitShortEntry {
+  sha: string;
+  shortSha: string;
+  message: string;
+}
+
+const cherryPickCommits = ref<CommitShortEntry[]>([]);
+const cherryPickCommitsLoading = ref(false);
+const selectedCherryPickSha = ref<string | null>(null);
+
+async function loadCherryPickCommits(branchName: string): Promise<void> {
+  cherryPickCommitsLoading.value = true;
+  cherryPickCommits.value = [];
+  selectedCherryPickSha.value = null;
+  try {
+    const entries = await getGitLog(props.cwd, 20, false, undefined, undefined, branchName);
+    cherryPickCommits.value = entries.map((e) => ({
+      sha: e.hashFull,
+      shortSha: e.hash,
+      message: e.message,
+    }));
+    if (cherryPickCommits.value.length > 0) {
+      selectedCherryPickSha.value = cherryPickCommits.value[0].sha;
+    }
+  } catch {
+    cherryPickCommits.value = [];
+  } finally {
+    cherryPickCommitsLoading.value = false;
+  }
+}
+
 // ─── Scratch worktree (v2.20.0) ──────────────────────────────────
 // Lets the user spin up an isolated worktree to resolve the previewed
 // conflicts away from the active checkout, then bring the result back
@@ -280,6 +316,8 @@ async function togglePreview(branchName: string) {
   if (previewingBranch.value === branchName) {
     previewingBranch.value = null;
     resetPreview();
+    cherryPickCommits.value = [];
+    selectedCherryPickSha.value = null;
     return;
   }
   previewingBranch.value = branchName;
@@ -290,14 +328,31 @@ async function togglePreview(branchName: string) {
 // Re-run the predictor for the same target when the user switches operation.
 async function changePreviewOperation(op: PreviewOperation) {
   previewOperation.value = op;
-  if (previewingBranch.value) {
+  if (!previewingBranch.value) return;
+
+  if (op === "cherry-pick") {
+    // Load the commit list for this branch; preview fires after user picks a commit.
+    await loadCherryPickCommits(previewingBranch.value);
+    // Auto-run preview with the first commit if available.
+    if (selectedCherryPickSha.value) {
+      await computePreview(selectedCherryPickSha.value, "cherry-pick");
+    }
+  } else {
     await computePreview(previewingBranch.value, op);
   }
+}
+
+/** Called when the user picks a different commit in the cherry-pick commit selector. */
+async function onCherryPickCommitChange(sha: string): Promise<void> {
+  selectedCherryPickSha.value = sha;
+  await computePreview(sha, "cherry-pick");
 }
 
 function closePreview() {
   previewingBranch.value = null;
   resetPreview();
+  cherryPickCommits.value = [];
+  selectedCherryPickSha.value = null;
 }
 
 // ─── Click-outside to close ──────────────────────────────────────
@@ -495,6 +550,28 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                 </button>
               </li>
               <li v-if="previewingBranch === branch.name" class="bp-preview-row">
+                <!-- Commit picker — only visible when cherry-pick is selected -->
+                <div v-if="previewOperation === 'cherry-pick'" class="bp-commit-picker">
+                  <label class="bp-commit-picker__label">{{ t('mergePreview.commitPicker') }}</label>
+                  <span v-if="cherryPickCommitsLoading" class="bp-commit-picker__loading muted">
+                    {{ t('mergePreview.commitPickerLoading') }}
+                  </span>
+                  <span v-else-if="!cherryPickCommitsLoading && cherryPickCommits.length === 0" class="bp-commit-picker__loading muted">
+                    {{ t('mergePreview.commitPickerEmpty') }}
+                  </span>
+                  <select
+                    v-else
+                    class="bp-commit-picker__select mono"
+                    :value="selectedCherryPickSha ?? ''"
+                    @change="onCherryPickCommitChange(($event.target as HTMLSelectElement).value)"
+                  >
+                    <option
+                      v-for="commit in cherryPickCommits"
+                      :key="commit.sha"
+                      :value="commit.sha"
+                    >[{{ commit.shortSha }}] {{ commit.message }}</option>
+                  </select>
+                </div>
                 <MergePreviewPanel
                   :loading="previewLoading"
                   :error="previewError"
@@ -981,6 +1058,45 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   justify-content: center;
   padding: var(--space-7);
   font-size: var(--font-size-base);
+}
+
+/* ─── Cherry-pick commit picker ─────────────────────────── */
+.bp-commit-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bp-commit-picker__label {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bp-commit-picker__loading {
+  font-size: var(--font-size-xs);
+}
+
+.bp-commit-picker__select {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  background: var(--color-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bp-commit-picker__select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
 /* Local copies of .btn and .btn--icon so the AI button inside .bp-create

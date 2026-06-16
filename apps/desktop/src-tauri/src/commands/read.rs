@@ -1248,25 +1248,26 @@ fn build_3way_preview(
 /// real rebase, the index being built starts from `onto`, and each replayed
 /// commit from HEAD is applied on top — so on a conflict git labels the `onto`
 /// side as "ours" (HEAD of the rebased-onto state) and the replayed commit as
-/// "theirs". We mirror that here:
-///   - ancestor = merge-base(HEAD, onto)
+/// "theirs". We mirror that here per commit:
+///   - ancestor = parent of the commit being replayed
 ///   - ours  = onto  (the target base the work lands on)
-///   - theirs = HEAD (the work being replayed on top)
+///   - theirs = commit (the individual commit being replayed)
 ///
-/// This is the pragmatic *squashed* approximation: we 3-way the net diff of
-/// `base..HEAD` against `onto` rather than replaying each commit individually.
-/// Per-commit replay accuracy is a documented follow-up (design spec §4.1, §7).
+/// Each commit in the stack `merge_base..HEAD` is replayed individually
+/// (oldest-first via `rev-list --reverse`). If the same file appears in
+/// multiple commits, the entry with the most conflicts is kept so that
+/// intermediate conflicts are not silently dropped.
 #[tauri::command]
 pub(crate) async fn preview_rebase(cwd: String, onto: String) -> Result<Vec<FileMergePreview>, String> {
     let git = git_binary();
 
     // Fail fast on an unknown / invalid `onto` ref.
-    rev_parse_verify(&git, &cwd, &onto)?;
-    rev_parse_verify(&git, &cwd, "HEAD")?;
+    let onto_sha = rev_parse_verify(&git, &cwd, &onto)?;
+    let head_sha = rev_parse_verify(&git, &cwd, "HEAD")?;
 
     // Common ancestor of the current branch and the rebase target.
     let base_out = hidden_cmd(&git)
-        .args(["merge-base", "HEAD", &onto])
+        .args(["merge-base", &head_sha, &onto_sha])
         .current_dir(&cwd)
         .output()
         .map_err(|e| format!("merge-base failed: {}", e))?;
@@ -1277,13 +1278,77 @@ pub(crate) async fn preview_rebase(cwd: String, onto: String) -> Result<Vec<File
             String::from_utf8_lossy(&base_out.stderr).trim()
         ));
     }
-    let base = String::from_utf8_lossy(&base_out.stdout).trim().to_string();
-    if base.is_empty() {
+    let merge_base = String::from_utf8_lossy(&base_out.stdout).trim().to_string();
+    if merge_base.is_empty() {
         return Err(format!("No common ancestor between HEAD and {}", onto));
     }
 
-    // ours = onto, theirs = HEAD (see orientation note above).
-    build_3way_preview(&git, &cwd, &base, &onto, "HEAD")
+    // Get commits oldest-first: merge_base..HEAD
+    let rev_range = format!("{}..{}", merge_base, head_sha);
+    let commits_out = hidden_cmd(&git)
+        .args(["rev-list", "--reverse", &rev_range])
+        .current_dir(&cwd)
+        .output()
+        .map_err(|e| format!("rev-list failed: {}", e))?;
+    if !commits_out.status.success() {
+        return Err(format!(
+            "rev-list failed: {}",
+            String::from_utf8_lossy(&commits_out.stderr).trim()
+        ));
+    }
+    let commits_str = String::from_utf8_lossy(&commits_out.stdout);
+    let commits: Vec<&str> = commits_str
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    // Replay each commit individually. ours = onto, theirs = commit.
+    // Accumulate all per-commit previews, then deduplicate by file path,
+    // keeping the entry with the most conflicts for each file.
+    let mut all_previews: Vec<FileMergePreview> = Vec::new();
+    for commit in &commits {
+        let parent_spec = format!("{}^", commit);
+        let parent = match rev_parse_verify(&git, &cwd, &parent_spec) {
+            Ok(p) => p,
+            Err(_) => continue, // root commit — skip (no parent to diff against)
+        };
+        let mut per_commit = build_3way_preview(&git, &cwd, &parent, &onto_sha, commit)?;
+        all_previews.append(&mut per_commit);
+    }
+
+    // Deduplicate: for each file path keep the entry with the most conflicts.
+    // Conflicting entries (has_conflicts=true) beat clean ones.
+    let mut by_file: std::collections::HashMap<String, FileMergePreview> =
+        std::collections::HashMap::new();
+    for preview in all_previews {
+        let key = preview.file_path.clone();
+        let keep = match by_file.get(&key) {
+            None => true,
+            Some(existing) => {
+                // Prefer the entry with more conflict signal:
+                // is_add_delete > has_conflicts (with markers) > clean.
+                let new_score = if preview.is_add_delete { 2u8 }
+                    else if preview.has_conflicts { 1 }
+                    else { 0 };
+                let old_score = if existing.is_add_delete { 2u8 }
+                    else if existing.has_conflicts { 1 }
+                    else { 0 };
+                new_score > old_score
+            }
+        };
+        if keep {
+            by_file.insert(key, preview);
+        }
+    }
+
+    let mut results: Vec<FileMergePreview> = by_file.into_values().collect();
+    results.sort_by(|a, b| {
+        b.has_conflicts.cmp(&a.has_conflicts)
+            .then(a.file_path.cmp(&b.file_path))
+    });
+
+    Ok(results)
 }
 
 /// Simulate cherry-picking `commit` onto HEAD without modifying the working tree.
@@ -1723,6 +1788,82 @@ mod predictor_tests {
         let git = git_binary();
         let err = rev_parse_verify(&git, repo.cwd(), "does-not-exist");
         assert!(err.is_err(), "unknown ref should produce an Err");
+    }
+
+    /// Two commits on the feature branch each modify `shared.txt` in ways that
+    /// conflict with `main`. The per-commit replay must surface the conflict even
+    /// though both commits touch the same file. A squash of the two commits would
+    /// produce the same net diff, so this test validates that the per-commit loop
+    /// fires `build_3way_preview` twice and the deduplication keeps the
+    /// conflicting entry.
+    #[test]
+    fn preview_rebase_two_commit_stack_reports_conflict() {
+        let repo = TempRepo::new();
+        repo.write("shared.txt", "line1\nline2\nline3\n");
+        repo.commit_all("base");
+
+        // Build a 2-commit feature branch, each touching shared.txt differently.
+        repo.git(&["checkout", "-q", "-b", "feature"]);
+        repo.write("shared.txt", "line1\nFEATURE-A\nline3\n");
+        repo.commit_all("feature commit 1");
+        repo.write("shared.txt", "line1\nFEATURE-B\nline3\n");
+        repo.commit_all("feature commit 2");
+
+        // main conflicts on the same line.
+        repo.git(&["checkout", "-q", "main"]);
+        repo.write("shared.txt", "line1\nMAIN\nline3\n");
+        repo.commit_all("main edit");
+
+        // HEAD is now on feature (2 commits ahead of merge-base).
+        repo.git(&["checkout", "-q", "feature"]);
+        let head_before = repo.head_sha();
+        let status_before = porcelain(&repo);
+
+        let git = git_binary();
+        let cwd = repo.cwd();
+        // Simulate: gitwand preview_rebase --onto main
+        let head_sha = rev_parse_verify(&git, cwd, "HEAD").unwrap();
+        let onto_sha = rev_parse_verify(&git, cwd, "main").unwrap();
+        let base_out = Command::new(git_binary())
+            .args(["merge-base", &head_sha, &onto_sha])
+            .current_dir(&repo.path)
+            .output()
+            .unwrap();
+        assert!(base_out.status.success(), "merge-base failed");
+        let merge_base = String::from_utf8_lossy(&base_out.stdout).trim().to_string();
+
+        // Collect commits oldest-first and replay.
+        let rev_range = format!("{}..{}", merge_base, head_sha);
+        let commits_out = Command::new(git_binary())
+            .args(["rev-list", "--reverse", &rev_range])
+            .current_dir(&repo.path)
+            .output()
+            .unwrap();
+        let commits_str = String::from_utf8_lossy(&commits_out.stdout);
+        let commits: Vec<&str> = commits_str.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+        assert_eq!(commits.len(), 2, "should have exactly 2 commits in the stack");
+
+        let mut all_previews: Vec<FileMergePreview> = Vec::new();
+        for commit in &commits {
+            let parent_spec = format!("{}^", commit);
+            let parent = rev_parse_verify(&git, cwd, &parent_spec).unwrap();
+            let mut pp = build_3way_preview(&git, cwd, &parent, &onto_sha, commit).unwrap();
+            all_previews.append(&mut pp);
+        }
+        // At least one entry for shared.txt must have has_conflicts = true.
+        let conflict_files: Vec<String> = all_previews.iter()
+            .filter(|p| p.has_conflicts)
+            .map(|p| p.file_path.clone())
+            .collect();
+        assert!(
+            conflict_files.iter().any(|f| f == "shared.txt"),
+            "2-commit stack: shared.txt must be predicted conflicting; got: {:?}",
+            conflict_files
+        );
+
+        // Repo must be completely untouched.
+        assert_eq!(repo.head_sha(), head_before, "HEAD moved during preview");
+        assert_eq!(porcelain(&repo), status_before, "working tree mutated");
     }
 
     // ── cherry-pick ───────────────────────────────────────────

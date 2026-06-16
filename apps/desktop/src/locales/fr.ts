@@ -516,6 +516,9 @@ const fr: Locale = {
     hunkLine: "Ligne",
     hunkAuto: "auto-résolvable",
     hunkManual: "manuel",
+    commitPicker: "Commit à cherry-picker",
+    commitPickerLoading: "Chargement des commits…",
+    commitPickerEmpty: "Aucun commit trouvé",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────

@@ -523,6 +523,9 @@ const en = {
     hunkLine: "Line",
     hunkAuto: "auto-resolvable",
     hunkManual: "manual",
+    commitPicker: "Commit to cherry-pick",
+    commitPickerLoading: "Loading commits…",
+    commitPickerEmpty: "No commits found",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────

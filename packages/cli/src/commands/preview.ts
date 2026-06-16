@@ -268,14 +268,9 @@ export async function cmdPreview(flags: Record<string, boolean | string>): Promi
       process.exit(2);
     }
     ancestor = mb;
-    // Orientation must match the Rust desktop predictor and the MCP tool:
-    // on a rebase, stage 2/ours = the rebased-onto target (`onto`), stage
-    // 3/theirs = the commit being replayed (HEAD). Getting this backwards would
-    // make orientation-sensitive resolutions (prefer-ours/theirs, import
-    // ordering, side-biased patterns) disagree with the GUI/MCP for the same
-    // rebase, even though the conflicting-file SET is symmetric.
+    // Orientation per commit: ours = onto (target base), theirs = commit (replayed).
     ours = refSha;
-    theirs = headSha;
+    theirs = headSha; // used below only for cherry-pick / merge; rebase uses per-commit loop
   } else if (operation === "cherry-pick") {
     const parentSha = revParse(cwd, `${refSha}^`);
     if (!parentSha) {
@@ -301,7 +296,33 @@ export async function cmdPreview(flags: Record<string, boolean | string>): Promi
   // Simulate
   let sims: SimulatedFile[];
   try {
-    sims = simulate3way(cwd, ancestor, ours, theirs);
+    if (operation === "rebase") {
+      // Per-commit replay (oldest-first) for accurate multi-commit stack detection.
+      // ancestor = merge-base, ours = onto, theirs = individual commit being replayed.
+      const commitsRaw = gitTry(cwd, ["rev-list", "--reverse", `${ancestor}..${headSha}`]);
+      const commits = commitsRaw ? commitsRaw.split("\n").filter((l) => l.trim()) : [];
+      const allSims: SimulatedFile[] = [];
+      for (const commitSha of commits) {
+        const parentSha = revParse(cwd, `${commitSha}^`);
+        if (!parentSha) continue; // root commit — skip
+        const perCommitSims = simulate3way(cwd, parentSha, ours, commitSha);
+        allSims.push(...perCommitSims);
+      }
+      // Deduplicate: keep the entry with the most conflict signal per file.
+      const seenFiles = new Map<string, SimulatedFile>();
+      for (const s of allSims) {
+        const existing = seenFiles.get(s.file);
+        if (!existing) {
+          seenFiles.set(s.file, s);
+        } else {
+          const score = (f: SimulatedFile) => f.addDelete ? 2 : f.content.includes("<<<<<<<") ? 1 : 0;
+          if (score(s) > score(existing)) seenFiles.set(s.file, s);
+        }
+      }
+      sims = Array.from(seenFiles.values());
+    } else {
+      sims = simulate3way(cwd, ancestor, ours, theirs);
+    }
   } catch (err: unknown) {
     console.error(
       `${c.red}Error during conflict simulation: ${err instanceof Error ? err.message : String(err)}${c.reset}\n`,
