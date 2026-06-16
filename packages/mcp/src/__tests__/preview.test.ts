@@ -47,13 +47,12 @@ function makeRepo(): Repo {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('simulate3way via toolPreviewRebase', () => {
-  it('detects overlapping files and returns a structured rebase preview', async () => {
-    // NOTE: git merge-file exits with code = number of conflicts (non-zero).
-    // gitTry() catches any non-zero exit and returns null, so conflict-marked
-    // content is silently lost. As a result, `totalConflicts` will be 0 even
-    // when real conflicts exist (see spawn task: fix gitTry to capture stdout
-    // from SpawnSyncReturns on conflict exit). This test verifies the
-    // simulation runs end-to-end and returns the expected response shape.
+  it('detects a real conflict on overlapping lines and reports it', async () => {
+    // Regression guard: git merge-file exits with code = number of conflicts
+    // (non-zero). The predictor must capture the conflict-marked stdout from
+    // that non-zero exit (gitMergeFile), NOT discard it (gitTry). If this
+    // regresses, totalConflicts collapses to 0 and the predictor reports a
+    // genuine conflict as "clean" — the worst possible failure mode.
     const { cwd, cleanup } = makeRepo()
     try {
       // Initial commit on main: a file with one line
@@ -67,7 +66,7 @@ describe('simulate3way via toolPreviewRebase', () => {
       git(cwd, ['add', 'app.ts'])
       git(cwd, ['commit', '-m', 'feature change'])
 
-      // Back to main: change the same line to "main"
+      // Back to main: change the SAME line to "main" → guaranteed conflict
       git(cwd, ['checkout', 'main'])
       writeFileSync(join(cwd, 'app.ts'), 'const value = "main";\n')
       git(cwd, ['add', 'app.ts'])
@@ -87,13 +86,17 @@ describe('simulate3way via toolPreviewRebase', () => {
       const text = result.content[0].text
       const parsed = JSON.parse(text)
 
-      // The operation should be 'rebase'
       expect(parsed.operation).toBe('rebase')
-      // The simulation finds app.ts in both sides → at least 1 file in summary
       expect(parsed.summary.files).toBeGreaterThan(0)
-      // Response must include summary and files array
       expect(Array.isArray(parsed.files)).toBe(true)
-      expect(typeof parsed.risk).toBe('string')
+
+      // The conflict MUST be detected — not silently swallowed.
+      expect(parsed.summary.totalConflicts).toBeGreaterThan(0)
+      expect(parsed.risk).not.toBe('low')
+      // app.ts must appear with at least one conflict in the per-file breakdown.
+      const appFile = parsed.files.find((f: { path?: string }) => f.path === 'app.ts')
+      expect(appFile).toBeDefined()
+      expect(appFile.totalConflicts).toBeGreaterThan(0)
     } finally {
       cleanup()
     }

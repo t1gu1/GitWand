@@ -44,6 +44,32 @@ function gitTry(cwd: string, args: string[]): string | null {
   }
 }
 
+/**
+ * Run `git merge-file` and return the merged content INCLUDING conflict markers.
+ *
+ * Unlike gitTry, this must NOT discard output on a non-zero exit: `git merge-file`
+ * exits with a code equal to the number of conflicts (>0 means there ARE
+ * conflicts — exactly the case the predictor cares about), and the conflict-marked
+ * content is still written to stdout. Returns the content as-is, or null only on a
+ * real spawn failure or a fatal git error (exit 255 / no captured stdout).
+ */
+function gitMergeFile(cwd: string, args: string[]): string | null {
+  try {
+    const out = execFileSync("git", ["merge-file", ...args], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out; // clean merge, exit 0
+  } catch (e: unknown) {
+    const err = e as { status?: number; stdout?: string };
+    if (typeof err.stdout === "string" && err.stdout.length > 0) {
+      return err.stdout;
+    }
+    return null;
+  }
+}
+
 /** Resolve a ref to a commit SHA, null if unknown. */
 function revParse(cwd: string, rev: string): string | null {
   return gitTry(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
@@ -108,7 +134,9 @@ function simulate3way(
       writeFileSync(pOurs, oursBlob, "utf-8");
       writeFileSync(pTheirs, theirsBlob, "utf-8");
 
-      const merged = gitTry(cwd, ["merge-file", "-p", "--diff3", pOurs, pBase, pTheirs]);
+      // Must use gitMergeFile, not gitTry: merge-file exits non-zero on conflict
+      // (the very case we want), and gitTry would discard the conflict content.
+      const merged = gitMergeFile(cwd, ["-p", "--diff3", pOurs, pBase, pTheirs]);
       out.push({ file, content: merged ?? "", addDelete: false });
     }
   } finally {
