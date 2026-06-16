@@ -133,7 +133,7 @@ fn known_configs(home: &PathBuf) -> Vec<(String, PathBuf)> {
 /// Return the list of known MCP config file locations with their current state,
 /// including the full list of already-configured server keys per file.
 #[tauri::command]
-pub(crate) fn mcp_detect_configs() -> Result<Vec<McpConfigFile>, String> {
+pub(crate) async fn mcp_detect_configs() -> Result<Vec<McpConfigFile>, String> {
     let home = home_dir().ok_or("Cannot determine home directory")?;
     let configs = known_configs(&home);
     let mut result = Vec::new();
@@ -172,7 +172,7 @@ pub(crate) fn mcp_detect_configs() -> Result<Vec<McpConfigFile>, String> {
 /// Read the `mcpServers` map from a config file as a JSON string.
 /// Returns `"{}"` when the file doesn't exist or has no mcpServers key.
 #[tauri::command]
-pub(crate) fn mcp_read_config(path: String) -> Result<String, String> {
+pub(crate) async fn mcp_read_config(path: String) -> Result<String, String> {
     let p = PathBuf::from(&path);
     let value = read_json(&p)?;
     let servers = value
@@ -193,7 +193,7 @@ pub(crate) fn mcp_read_config(path: String) -> Result<String, String> {
 /// Each file is created (with parent dirs) if it does not yet exist.
 /// Existing `mcpServers` entries for other servers are left untouched.
 #[tauri::command]
-pub(crate) fn mcp_install_server(
+pub(crate) async fn mcp_install_server(
     server_key: String,
     server_json: String,
     config_paths: Vec<String>,
@@ -234,7 +234,7 @@ pub(crate) fn mcp_install_server(
 /// Remove a server key from the `mcpServers` map in each specified config file.
 /// No-ops gracefully when the file or key doesn't exist.
 #[tauri::command]
-pub(crate) fn mcp_uninstall_server(
+pub(crate) async fn mcp_uninstall_server(
     server_key: String,
     config_paths: Vec<String>,
 ) -> Result<(), String> {

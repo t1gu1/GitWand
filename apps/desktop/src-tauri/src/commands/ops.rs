@@ -9,7 +9,7 @@ use rayon::prelude::*;
 // ─── Git stage / unstage ─────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_stage(cwd: String, paths: Vec<String>) -> Result<(), String> {
+pub(crate) async fn git_stage(cwd: String, paths: Vec<String>) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.arg("add").arg("--").current_dir(&cwd);
     for p in &paths {
@@ -24,7 +24,7 @@ pub(crate) fn git_stage(cwd: String, paths: Vec<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_unstage(cwd: String, paths: Vec<String>) -> Result<(), String> {
+pub(crate) async fn git_unstage(cwd: String, paths: Vec<String>) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.arg("reset").arg("HEAD").arg("--").current_dir(&cwd);
     for p in &paths {
@@ -39,7 +39,7 @@ pub(crate) fn git_unstage(cwd: String, paths: Vec<String>) -> Result<(), String>
 }
 
 #[tauri::command]
-pub(crate) fn git_stage_patch(cwd: String, patch: String) -> Result<(), String> {
+pub(crate) async fn git_stage_patch(cwd: String, patch: String) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.args(["apply", "--cached", "--unidiff-zero", "-"])
         .current_dir(&cwd)
@@ -58,7 +58,7 @@ pub(crate) fn git_stage_patch(cwd: String, patch: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub(crate) fn git_unstage_patch(cwd: String, patch: String) -> Result<(), String> {
+pub(crate) async fn git_unstage_patch(cwd: String, patch: String) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.args(["apply", "--cached", "--reverse", "--unidiff-zero", "-"])
         .current_dir(&cwd)
@@ -79,7 +79,7 @@ pub(crate) fn git_unstage_patch(cwd: String, patch: String) -> Result<(), String
 // ─── Git commit ──────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_commit(
+pub(crate) async fn git_commit(
     cwd: String,
     message: String,
     identity_name: Option<String>,
@@ -118,7 +118,7 @@ pub(crate) fn git_commit(
 }
 
 #[tauri::command]
-pub(crate) fn git_amend_commit(cwd: String, message: String) -> Result<String, String> {
+pub(crate) async fn git_amend_commit(cwd: String, message: String) -> Result<String, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["commit", "--amend", "-m", &message])
@@ -143,7 +143,7 @@ pub(crate) fn git_amend_commit(cwd: String, message: String) -> Result<String, S
 }
 
 #[tauri::command]
-pub(crate) fn git_split_commit(
+pub(crate) async fn git_split_commit(
     cwd: String,
     first_patch: String,
     first_message: String,
@@ -346,7 +346,7 @@ pub(crate) fn git_split_commit(
 // ─── Git push / pull / merge ─────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>, force: Option<bool>) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_push(cwd: String, set_upstream: Option<bool>, force: Option<bool>) -> Result<GitPushPullResult, String> {
     let mut args: Vec<&str> = vec!["push"];
     if set_upstream.unwrap_or(false) {
         args.extend(["--set-upstream", "origin", "HEAD"]);
@@ -382,7 +382,7 @@ pub(crate) fn git_push(cwd: String, set_upstream: Option<bool>, force: Option<bo
 }
 
 #[tauri::command]
-pub(crate) fn git_fetch(cwd: String) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_fetch(cwd: String) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["fetch", "--prune"])
@@ -406,7 +406,7 @@ pub(crate) fn git_fetch(cwd: String) -> Result<GitPushPullResult, String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_merge(cwd: String, branch: String) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_merge(cwd: String, branch: String) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["merge", &branch])
@@ -434,7 +434,7 @@ pub(crate) fn git_merge(cwd: String, branch: String) -> Result<GitPushPullResult
 }
 
 #[tauri::command]
-pub(crate) fn git_merge_abort(cwd: String) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_merge_abort(cwd: String) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["merge", "--abort"])
@@ -457,7 +457,7 @@ pub(crate) fn git_merge_abort(cwd: String) -> Result<GitPushPullResult, String> 
 }
 
 #[tauri::command]
-pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["-c", "core.editor=true", "merge", "--continue"])
@@ -483,7 +483,7 @@ pub(crate) fn git_merge_continue(cwd: String) -> Result<GitPushPullResult, Strin
 }
 
 #[tauri::command]
-pub(crate) fn git_pull(cwd: String, rebase: bool) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_pull(cwd: String, rebase: bool) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     // Pass the strategy flag EXPLICITLY so the user's pull-mode choice is
     // authoritative. A bare `git pull` defers to the ambient `pull.rebase`
@@ -514,7 +514,7 @@ pub(crate) fn git_pull(cwd: String, rebase: bool) -> Result<GitPushPullResult, S
 // ─── Git rebase ────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), String> {
+pub(crate) async fn git_rebase_action(cwd: String, action: String) -> Result<(), String> {
     let arg = match action.as_str() {
         "continue" | "abort" | "skip" => action.as_str(),
         _ => return Err(format!("Unknown rebase action '{}'", action)),
@@ -540,7 +540,7 @@ pub(crate) fn git_rebase_action(cwd: String, action: String) -> Result<(), Strin
 // ─── Git discard ───────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> Result<(), String> {
+pub(crate) async fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> Result<(), String> {
     if untracked {
         let mut cmd = git_cmd();
         cmd.arg("clean").arg("-f").arg("--").current_dir(&cwd);
@@ -570,7 +570,7 @@ pub(crate) fn git_discard(cwd: String, paths: Vec<String>, untracked: bool) -> R
 // ─── Git branches ──────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
+pub(crate) async fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> {
     let main_name = get_main_branch_name(&cwd);
     let output = git_cmd()
         .args([
@@ -683,7 +683,7 @@ fn get_main_branch_name(cwd: &str) -> String {
 }
 
 #[tauri::command]
-pub(crate) fn git_create_branch(cwd: String, name: String, checkout: bool, start_point: Option<String>) -> Result<(), String> {
+pub(crate) async fn git_create_branch(cwd: String, name: String, checkout: bool, start_point: Option<String>) -> Result<(), String> {
     if checkout {
         let mut args = vec!["checkout", "-b", &name];
         if let Some(ref sp) = start_point { args.push(sp); }
@@ -717,7 +717,7 @@ pub(crate) fn git_create_branch(cwd: String, name: String, checkout: bool, start
 }
 
 #[tauri::command]
-pub(crate) fn git_switch_branch(cwd: String, name: String) -> Result<(), String> {
+pub(crate) async fn git_switch_branch(cwd: String, name: String) -> Result<(), String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["checkout", &name])
@@ -733,7 +733,7 @@ pub(crate) fn git_switch_branch(cwd: String, name: String) -> Result<(), String>
 }
 
 #[tauri::command]
-pub(crate) fn git_delete_branch(cwd: String, name: String, force: bool) -> Result<(), String> {
+pub(crate) async fn git_delete_branch(cwd: String, name: String, force: bool) -> Result<(), String> {
     let flag = if force { "-D" } else { "-d" };
     let _t0 = Instant::now();
     let output = git_cmd()
@@ -750,7 +750,7 @@ pub(crate) fn git_delete_branch(cwd: String, name: String, force: bool) -> Resul
 }
 
 #[tauri::command]
-pub(crate) fn git_delete_remote_branch(cwd: String, remote: String, name: String) -> Result<(), String> {
+pub(crate) async fn git_delete_remote_branch(cwd: String, remote: String, name: String) -> Result<(), String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["push", &remote, "--delete", &name])
@@ -766,7 +766,7 @@ pub(crate) fn git_delete_remote_branch(cwd: String, remote: String, name: String
 }
 
 #[tauri::command]
-pub(crate) fn git_rename_branch(cwd: String, old_name: String, new_name: String) -> Result<(), String> {
+pub(crate) async fn git_rename_branch(cwd: String, old_name: String, new_name: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["branch", "-m", &old_name, &new_name])
         .current_dir(&cwd)
@@ -782,7 +782,7 @@ pub(crate) fn git_rename_branch(cwd: String, old_name: String, new_name: String)
 // ─── Git stash ────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_stash(cwd: String, message: Option<String>) -> Result<(), String> {
+pub(crate) async fn git_stash(cwd: String, message: Option<String>) -> Result<(), String> {
     let mut args: Vec<&str> = vec!["stash", "push", "--include-untracked"];
     let trimmed = message.as_deref().map(str::trim).filter(|s| !s.is_empty());
     if let Some(m) = trimmed {
@@ -804,7 +804,7 @@ pub(crate) fn git_stash(cwd: String, message: Option<String>) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_pop(cwd: String) -> Result<(), String> {
+pub(crate) async fn git_stash_pop(cwd: String) -> Result<(), String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["stash", "pop"])
@@ -820,7 +820,7 @@ pub(crate) fn git_stash_pop(cwd: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
+pub(crate) async fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
     let output = git_cmd()
         .args(["stash", "list", "--format=%H%x00%gd%x00%gs%x00%ai"])
         .current_dir(&cwd)
@@ -874,7 +874,7 @@ pub(crate) fn git_stash_list(cwd: String) -> Result<Vec<StashEntry>, String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_apply(cwd: String, index: usize) -> Result<(), String> {
+pub(crate) async fn git_stash_apply(cwd: String, index: usize) -> Result<(), String> {
     let stash_ref = format!("stash@{{{}}}", index);
     let _t0 = Instant::now();
     let output = git_cmd()
@@ -893,7 +893,7 @@ pub(crate) fn git_stash_apply(cwd: String, index: usize) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_drop(cwd: String, index: usize) -> Result<(), String> {
+pub(crate) async fn git_stash_drop(cwd: String, index: usize) -> Result<(), String> {
     let stash_ref = format!("stash@{{{}}}", index);
     let output = git_cmd()
         .args(["stash", "drop", &stash_ref])
@@ -910,7 +910,7 @@ pub(crate) fn git_stash_drop(cwd: String, index: usize) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_clear(cwd: String) -> Result<(), String> {
+pub(crate) async fn git_stash_clear(cwd: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["stash", "clear"])
         .current_dir(&cwd)
@@ -926,7 +926,7 @@ pub(crate) fn git_stash_clear(cwd: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_stash_show(cwd: String, index: usize) -> Result<String, String> {
+pub(crate) async fn git_stash_show(cwd: String, index: usize) -> Result<String, String> {
     let stash_ref = format!("stash@{{{}}}", index);
     let output = git_cmd()
         .args(["stash", "show", "-p", &stash_ref])
@@ -945,7 +945,7 @@ pub(crate) fn git_stash_show(cwd: String, index: usize) -> Result<String, String
 // ─── Cherry-pick ─────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_cherry_pick(cwd: String, hashes: Vec<String>) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_cherry_pick(cwd: String, hashes: Vec<String>) -> Result<GitPushPullResult, String> {
     let git = git_binary();
     let mut args = vec!["cherry-pick".to_string()];
     args.extend(hashes);
@@ -970,7 +970,7 @@ pub(crate) fn git_cherry_pick(cwd: String, hashes: Vec<String>) -> Result<GitPus
 }
 
 #[tauri::command]
-pub(crate) fn git_cherry_pick_abort(cwd: String) -> Result<(), String> {
+pub(crate) async fn git_cherry_pick_abort(cwd: String) -> Result<(), String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["cherry-pick", "--abort"])
@@ -988,7 +988,7 @@ pub(crate) fn git_cherry_pick_abort(cwd: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult, String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["cherry-pick", "--continue"])
@@ -1011,7 +1011,7 @@ pub(crate) fn git_cherry_pick_continue(cwd: String) -> Result<GitPushPullResult,
 // ─── Commit context menu operations ─────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_checkout_commit(cwd: String, sha: String) -> Result<(), String> {
+pub(crate) async fn git_checkout_commit(cwd: String, sha: String) -> Result<(), String> {
     let _t0 = Instant::now();
     let output = git_cmd()
         .args(["checkout", &sha])
@@ -1029,7 +1029,7 @@ pub(crate) fn git_checkout_commit(cwd: String, sha: String) -> Result<(), String
 }
 
 #[tauri::command]
-pub(crate) fn git_reset_to_commit(cwd: String, sha: String, mode: String) -> Result<(), String> {
+pub(crate) async fn git_reset_to_commit(cwd: String, sha: String, mode: String) -> Result<(), String> {
     let flag = match mode.as_str() {
         "soft" => "--soft",
         "hard" => "--hard",
@@ -1053,7 +1053,7 @@ pub(crate) fn git_reset_to_commit(cwd: String, sha: String, mode: String) -> Res
 }
 
 #[tauri::command]
-pub(crate) fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>) -> Result<GitPushPullResult, String> {
+pub(crate) async fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>) -> Result<GitPushPullResult, String> {
     let mut args = vec!["revert".to_string(), "--no-edit".to_string()];
     if let Some(m) = mainline {
         args.push("-m".to_string());
@@ -1080,7 +1080,7 @@ pub(crate) fn git_revert_commit(cwd: String, sha: String, mainline: Option<u32>)
 // ─── Git tags ──────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String>) -> Result<(), String> {
+pub(crate) async fn git_create_tag(cwd: String, name: String, sha: String, message: Option<String>) -> Result<(), String> {
     let tag_name = name.clone();
     let trimmed = message.as_deref().map(str::trim).filter(|s| !s.is_empty());
     let args: Vec<String> = if let Some(m) = trimmed {
@@ -1127,7 +1127,7 @@ pub(crate) fn git_create_tag(cwd: String, name: String, sha: String, message: Op
 }
 
 #[tauri::command]
-pub(crate) fn git_list_tags(cwd: String) -> Result<Vec<TagEntry>, String> {
+pub(crate) async fn git_list_tags(cwd: String) -> Result<Vec<TagEntry>, String> {
     let sep = "\x1f";
     let fmt = format!(
         "%(refname:short){s}%(objecttype){s}%(objectname:short){s}%(*objectname:short){s}%(taggerdate:iso){s}%(creatordate:iso){s}%(contents:subject)",
@@ -1167,7 +1167,7 @@ pub(crate) fn git_list_tags(cwd: String) -> Result<Vec<TagEntry>, String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_delete_tag(cwd: String, name: String) -> Result<(), String> {
+pub(crate) async fn git_delete_tag(cwd: String, name: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["tag", "-d", &name])
         .current_dir(&cwd)
@@ -1180,7 +1180,7 @@ pub(crate) fn git_delete_tag(cwd: String, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_push_tags(cwd: String, remote: String, mode: String, tag_name: Option<String>) -> Result<(), String> {
+pub(crate) async fn git_push_tags(cwd: String, remote: String, mode: String, tag_name: Option<String>) -> Result<(), String> {
     let mut args = vec!["push".to_string(), remote.clone()];
     match mode.as_str() {
         "single" => {
@@ -1205,7 +1205,7 @@ pub(crate) fn git_push_tags(cwd: String, remote: String, mode: String, tag_name:
 }
 
 #[tauri::command]
-pub(crate) fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<String>, String> {
+pub(crate) async fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<String>, String> {
     // Local tags
     let local_out = git_cmd()
         .args(["tag", "-l"])
@@ -1243,7 +1243,7 @@ pub(crate) fn git_unpushed_tags(cwd: String, remote: String) -> Result<Vec<Strin
 }
 
 #[tauri::command]
-pub(crate) fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
+pub(crate) async fn git_delete_remote_tag(cwd: String, remote: String, name: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["push", &remote, "--delete", &format!("refs/tags/{}", name)])
         .current_dir(&cwd)
@@ -1258,7 +1258,7 @@ pub(crate) fn git_delete_remote_tag(cwd: String, remote: String, name: String) -
 // ─── Git conflict check ─────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_conflict_check(cwd: String, target_branch: String) -> Result<ConflictRisk, String> {
+pub(crate) async fn git_conflict_check(cwd: String, target_branch: String) -> Result<ConflictRisk, String> {
     let git = git_binary();
 
     let base_out = hidden_cmd(&git)
@@ -1296,7 +1296,7 @@ pub(crate) fn git_conflict_check(cwd: String, target_branch: String) -> Result<C
 // ─── Git submodules ─────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_submodule_list(cwd: String) -> Result<Vec<SubmoduleEntry>, String> {
+pub(crate) async fn git_submodule_list(cwd: String) -> Result<Vec<SubmoduleEntry>, String> {
     let gitmodules = std::path::Path::new(&cwd).join(".gitmodules");
     if !gitmodules.exists() {
         return Ok(Vec::new());
@@ -1391,7 +1391,7 @@ pub(crate) fn git_submodule_list(cwd: String) -> Result<Vec<SubmoduleEntry>, Str
 }
 
 #[tauri::command]
-pub(crate) fn git_submodule_init(cwd: String) -> Result<(), String> {
+pub(crate) async fn git_submodule_init(cwd: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["submodule", "init"])
         .current_dir(&cwd)
@@ -1407,7 +1407,7 @@ pub(crate) fn git_submodule_init(cwd: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_submodule_update(cwd: String, init: bool, recursive: bool) -> Result<(), String> {
+pub(crate) async fn git_submodule_update(cwd: String, init: bool, recursive: bool) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.arg("submodule").arg("update");
     if init {
@@ -1431,7 +1431,7 @@ pub(crate) fn git_submodule_update(cwd: String, init: bool, recursive: bool) -> 
 }
 
 #[tauri::command]
-pub(crate) fn git_submodule_add(cwd: String, url: String, path: String) -> Result<(), String> {
+pub(crate) async fn git_submodule_add(cwd: String, url: String, path: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["submodule", "add", &url, &path])
         .current_dir(&cwd)
@@ -1449,7 +1449,7 @@ pub(crate) fn git_submodule_add(cwd: String, url: String, path: String) -> Resul
 /// List the local branches of a submodule. `submodule_path` is relative to `cwd`.
 /// Used by the branch picker's "Submodules" section (v2.15.1).
 #[tauri::command]
-pub(crate) fn git_submodule_branches(
+pub(crate) async fn git_submodule_branches(
     cwd: String,
     submodule_path: String,
 ) -> Result<Vec<SubmoduleBranch>, String> {
@@ -1494,7 +1494,7 @@ pub(crate) fn git_submodule_branches(
 /// scan stays cheap even on large histories (v2.15.1). Used to badge commits
 /// in the Git Tree with the submodule SHA they point to.
 #[tauri::command]
-pub(crate) fn git_commit_submodule_changes(
+pub(crate) async fn git_commit_submodule_changes(
     cwd: String,
 ) -> Result<HashMap<String, Vec<CommitSubmoduleChange>>, String> {
     let gitmodules = std::path::Path::new(&cwd).join(".gitmodules");
@@ -1598,7 +1598,7 @@ pub(crate) fn git_commit_submodule_changes(
 // ─── Worktrees ────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, String> {
+pub(crate) async fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, String> {
     let output = git_cmd()
         .args(["worktree", "list", "--porcelain"])
         .current_dir(&cwd)
@@ -1676,7 +1676,7 @@ pub(crate) fn git_worktree_list(cwd: String) -> Result<Vec<WorktreeEntry>, Strin
 }
 
 #[tauri::command]
-pub(crate) fn git_worktree_add(
+pub(crate) async fn git_worktree_add(
     cwd: String,
     path: String,
     branch: String,
@@ -1739,7 +1739,7 @@ pub(crate) fn git_worktree_add(
 }
 
 #[tauri::command]
-pub(crate) fn git_worktree_remove(cwd: String, path: String, force: Option<bool>) -> Result<(), String> {
+pub(crate) async fn git_worktree_remove(cwd: String, path: String, force: Option<bool>) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.arg("worktree").arg("remove");
     if force.unwrap_or(false) {
@@ -1762,7 +1762,7 @@ pub(crate) fn git_worktree_remove(cwd: String, path: String, force: Option<bool>
 }
 
 #[tauri::command]
-pub(crate) fn git_worktree_prune(cwd: String) -> Result<(), String> {
+pub(crate) async fn git_worktree_prune(cwd: String) -> Result<(), String> {
     let output = git_cmd()
         .args(["worktree", "prune"])
         .current_dir(&cwd)
@@ -1779,8 +1779,8 @@ pub(crate) fn git_worktree_prune(cwd: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, String> {
-    let worktrees = git_worktree_list(cwd)?;
+pub(crate) async fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoStatus>, String> {
+    let worktrees = git_worktree_list(cwd).await?;
 
     let statuses = worktrees.into_par_iter().map(|wt| {
         let path = wt.path.clone();
@@ -1842,7 +1842,7 @@ pub(crate) fn git_worktree_status_all(cwd: String) -> Result<Vec<WorkspaceRepoSt
 }
 
 #[tauri::command]
-pub(crate) fn git_worktree_repair(cwd: String, paths: Vec<String>) -> Result<(), String> {
+pub(crate) async fn git_worktree_repair(cwd: String, paths: Vec<String>) -> Result<(), String> {
     let mut cmd = git_cmd();
     cmd.args(["worktree", "repair"]);
     for p in &paths {
@@ -1919,7 +1919,7 @@ fn parse_clone_progress(line: &str) -> Option<CloneProgress> {
 }
 
 #[tauri::command]
-pub(crate) fn git_clone(url: String, dest: String, app_handle: tauri::AppHandle) -> Result<String, String> {
+pub(crate) async fn git_clone(url: String, dest: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     use std::io::Read;
     use tauri::Emitter;
 
@@ -1985,7 +1985,7 @@ pub(crate) fn git_clone(url: String, dest: String, app_handle: tauri::AppHandle)
 }
 
 #[tauri::command]
-pub(crate) fn gh_fork(url: String, parent_dir: String) -> Result<String, String> {
+pub(crate) async fn gh_fork(url: String, parent_dir: String) -> Result<String, String> {
     let url_trim = url.trim();
     let parent_trim = parent_dir.trim();
     if url_trim.is_empty() {
@@ -2029,7 +2029,7 @@ pub(crate) fn gh_fork(url: String, parent_dir: String) -> Result<String, String>
 // ─── Git hooks ─────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_hook_list(cwd: String) -> Result<Vec<HookEntry>, String> {
+pub(crate) async fn git_hook_list(cwd: String) -> Result<Vec<HookEntry>, String> {
     if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
     let repo = PathBuf::from(&cwd);
     let hooks_dir = repo.join(".git").join("hooks");
@@ -2101,7 +2101,7 @@ pub(crate) fn git_hook_list(cwd: String) -> Result<Vec<HookEntry>, String> {
 }
 
 #[tauri::command]
-pub(crate) fn git_hook_toggle(cwd: String, name: String, enabled: bool) -> Result<(), String> {
+pub(crate) async fn git_hook_toggle(cwd: String, name: String, enabled: bool) -> Result<(), String> {
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
@@ -2127,7 +2127,7 @@ pub(crate) fn git_hook_toggle(cwd: String, name: String, enabled: bool) -> Resul
 }
 
 #[tauri::command]
-pub(crate) fn git_hook_create(cwd: String, name: String, content: String) -> Result<(), String> {
+pub(crate) async fn git_hook_create(cwd: String, name: String, content: String) -> Result<(), String> {
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
@@ -2164,7 +2164,7 @@ pub(crate) fn git_hook_create(cwd: String, name: String, content: String) -> Res
 }
 
 #[tauri::command]
-pub(crate) fn git_hook_delete(cwd: String, name: String) -> Result<(), String> {
+pub(crate) async fn git_hook_delete(cwd: String, name: String) -> Result<(), String> {
     if name.contains('/') || name.contains('\\') || name.contains('.') {
         return Err(format!("Invalid hook name: {}", name));
     }
@@ -2255,10 +2255,10 @@ fn detect_agent_tool(worktree_path: &str) -> Option<String> {
 }
 
 #[tauri::command]
-pub(crate) fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, String> {
+pub(crate) async fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, String> {
     if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
     let path = PathBuf::from(&cwd);
-    let worktrees = git_worktree_list(path.to_string_lossy().to_string())?;
+    let worktrees = git_worktree_list(path.to_string_lossy().to_string()).await?;
 
     let mut cwds_cache: HashMap<String, HashSet<String>> = HashMap::new();
 
@@ -2317,7 +2317,7 @@ pub(crate) fn agent_session_list(cwd: String) -> Result<Vec<AgentSession>, Strin
 }
 
 #[tauri::command]
-pub(crate) fn agent_session_launch(cwd: String, tool: String) -> Result<(), String> {
+pub(crate) async fn agent_session_launch(cwd: String, tool: String) -> Result<(), String> {
     if cwd.trim().is_empty() { return Err("cwd must not be empty".to_string()); }
     let path = PathBuf::from(&cwd);
     let binary = match tool.as_str() {
@@ -2340,7 +2340,7 @@ pub(crate) fn agent_session_launch(cwd: String, tool: String) -> Result<(), Stri
 // ─── Shortlog ────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
+pub(crate) async fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
     let output = git_cmd()
         .args(["shortlog", "-sne", "HEAD"])
         .current_dir(&cwd)
@@ -2363,27 +2363,34 @@ pub(crate) fn git_shortlog(cwd: String) -> Result<Vec<ShortlogEntry>, String> {
 
 // ─── Git exec / autocomplete ─────────────────────────────────
 
+// Async + spawn_blocking: a synchronous Tauri command runs on the webview main
+// thread, so a slow `git` invocation (e.g. `status` on a large repo, ~1.3s)
+// freezes the UI. Offloading the blocking process spawn keeps the UI responsive.
 #[tauri::command]
-pub(crate) fn git_exec(cwd: String, args: Vec<String>) -> Result<TerminalResult, String> {
-    if args.is_empty() {
-        return Err("No arguments provided".to_string());
-    }
+pub(crate) async fn git_exec(cwd: String, args: Vec<String>) -> Result<TerminalResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if args.is_empty() {
+            return Err("No arguments provided".to_string());
+        }
 
-    let output = git_cmd()
-        .args(&args)
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| format!("Failed to execute git command: {}", e))?;
+        let output = git_cmd()
+            .args(&args)
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to execute git command: {}", e))?;
 
-    Ok(TerminalResult {
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        exit_code: output.status.code().unwrap_or(-1),
+        Ok(TerminalResult {
+            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+            exit_code: output.status.code().unwrap_or(-1),
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub(crate) fn git_autocomplete(cwd: String, partial: String) -> Result<Vec<String>, String> {
+pub(crate) async fn git_autocomplete(cwd: String, partial: String) -> Result<Vec<String>, String> {
     let mut suggestions = Vec::new();
 
     if !partial.contains(' ') {
@@ -2428,7 +2435,7 @@ pub(crate) fn git_autocomplete(cwd: String, partial: String) -> Result<Vec<Strin
 // ─── Git config ────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn set_git_config(git_path: String) -> Result<(), String> {
+pub(crate) async fn set_git_config(git_path: String) -> Result<(), String> {
     let mut binary = GIT_BINARY
         .get_or_init(|| Mutex::new("git".to_string()))
         .lock()
@@ -2444,7 +2451,7 @@ pub(crate) fn set_git_config(git_path: String) -> Result<(), String> {
 // ─── Conflicted files ──────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn get_conflicted_files(cwd: String) -> Result<Vec<String>, String> {
+pub(crate) async fn get_conflicted_files(cwd: String) -> Result<Vec<String>, String> {
     let output = git_cmd()
         .args(["diff", "--name-only", "--diff-filter=U"])
         .current_dir(&cwd)
@@ -2469,53 +2476,59 @@ pub(crate) fn get_conflicted_files(cwd: String) -> Result<Vec<String>, String> {
 // ─── Git remote info ─────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
-    let output = git_cmd()
-        .args(["remote", "-v"])
-        .current_dir(&cwd)
-        .output()
-        .map_err(|e| format!("Failed to get remote info: {}", e))?;
+pub(crate) async fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = git_cmd()
+            .args(["remote", "-v"])
+            .current_dir(&cwd)
+            .output()
+            .map_err(|e| format!("Failed to get remote info: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if !line.contains("(fetch)") {
-            continue;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        for line in stdout.lines() {
+            if !line.contains("(fetch)") {
+                continue;
+            }
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            let name = parts[0].to_string();
+            let url = parts[1].to_string();
+
+            let provider = if url.contains("github.com") {
+                "github"
+            } else if url.contains("gitlab.com") || url.contains("gitlab") {
+                "gitlab"
+            } else if url.contains("bitbucket.org") || url.contains("bitbucket") {
+                "bitbucket"
+            } else if url.contains("dev.azure.com") || url.contains("visualstudio.com") {
+                "azure"
+            } else {
+                "unknown"
+            };
+
+            let (owner, repo) = parse_remote_owner_repo(&url);
+
+            return Ok(RemoteInfo {
+                name,
+                url,
+                provider: provider.to_string(),
+                owner,
+                repo,
+            });
         }
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() < 2 {
-            continue;
-        }
-        let name = parts[0].to_string();
-        let url = parts[1].to_string();
 
-        let provider = if url.contains("github.com") {
-            "github"
-        } else if url.contains("gitlab.com") || url.contains("gitlab") {
-            "gitlab"
-        } else if url.contains("bitbucket.org") || url.contains("bitbucket") {
-            "bitbucket"
-        } else {
-            "unknown"
-        };
-
-        let (owner, repo) = parse_remote_owner_repo(&url);
-
-        return Ok(RemoteInfo {
-            name,
-            url,
-            provider: provider.to_string(),
-            owner,
-            repo,
-        });
-    }
-
-    Err("No remote found".to_string())
+        Err("No remote found".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // ─── Git user ────────────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn git_get_user(cwd: String) -> Result<serde_json::Value, String> {
+pub(crate) async fn git_get_user(cwd: String) -> Result<serde_json::Value, String> {
     let name_out = git_cmd()
         .args(["config", "user.name"])
         .current_dir(&cwd)
@@ -2535,7 +2548,7 @@ pub(crate) fn git_get_user(cwd: String) -> Result<serde_json::Value, String> {
 
 /// Detect monorepo workspaces (pnpm, npm, yarn).
 #[tauri::command]
-pub(crate) fn detect_monorepo(cwd: String) -> Result<MonorepoInfo, String> {
+pub(crate) async fn detect_monorepo(cwd: String) -> Result<MonorepoInfo, String> {
     let cwd_path = std::path::Path::new(&cwd);
 
     // Check pnpm-workspace.yaml
@@ -2582,7 +2595,7 @@ pub(crate) fn detect_monorepo(cwd: String) -> Result<MonorepoInfo, String> {
 // ─── Read .gitwandrc ─────────────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn read_gitwandrc(cwd: String) -> String {
+pub(crate) async fn read_gitwandrc(cwd: String) -> String {
     let cwd_path = std::path::Path::new(&cwd);
 
     // 1. .gitwandrc
@@ -2625,7 +2638,7 @@ pub(crate) fn read_gitwandrc(cwd: String) -> String {
 /// localStorage. It runs through `/bin/sh -c`, so the user has full shell
 /// access, which is intentional (same model as git hooks).
 #[tauri::command]
-pub(crate) fn shell_exec(cwd: String, command: String) -> Result<String, String> {
+pub(crate) async fn shell_exec(cwd: String, command: String) -> Result<String, String> {
     if cwd.trim().is_empty() {
         return Err("cwd must not be empty".to_string());
     }
@@ -2662,7 +2675,11 @@ pub(crate) fn shell_exec(cwd: String, command: String) -> Result<String, String>
 /// Returns the GitHub login of the currently authenticated `gh` user.
 /// Calls `gh api user --jq .login` — fast, no repo context needed.
 #[tauri::command]
-pub(crate) fn gh_current_user() -> Result<String, String> {
+pub(crate) async fn gh_current_user() -> Result<String, String> {
+    // Settings-managed token present → resolve via REST (no `gh` needed).
+    if let Some(tok) = crate::commands::github_api::settings_github_token() {
+        return crate::commands::github_api::rest_current_user(&tok);
+    }
     // GH_TOKEN propagation: centralized in `hidden_cmd` (cf. git/cmd.rs).
     let output = hidden_cmd("gh")
         .args(["api", "user", "--jq", ".login"])
@@ -2689,7 +2706,10 @@ pub(crate) fn gh_current_user() -> Result<String, String> {
 // caller (e.g. parity probes); not worth it. Documented here so future
 // readers don't think it's missing the prefix by accident.
 #[tauri::command]
-pub(crate) fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
+pub(crate) async fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> {
+    if let Some(tok) = crate::commands::github_api::settings_github_token() {
+        return crate::commands::github_api::rest_pr_files(&cwd, number, &tok);
+    }
     let output = hidden_cmd("gh")
         .args([
             "pr", "view", &number.to_string(),
@@ -2718,7 +2738,7 @@ pub(crate) fn pr_files(cwd: String, number: i64) -> Result<Vec<String>, String> 
 // common ancestor (unrelated histories, empty repo).
 
 #[tauri::command]
-pub(crate) fn git_merge_base(cwd: String, ref1: String, ref2: String) -> Result<String, String> {
+pub(crate) async fn git_merge_base(cwd: String, ref1: String, ref2: String) -> Result<String, String> {
     let output = git_cmd()
         .args(["merge-base", &ref1, &ref2])
         .current_dir(&cwd)
@@ -2731,10 +2751,45 @@ pub(crate) fn git_merge_base(cwd: String, ref1: String, ref2: String) -> Result<
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+// ─── Open a URL in the system browser ────────────────────────
+//
+// The webview's `window.open` is a no-op in Tauri, so external links must be
+// handed to the OS default handler. Restricted to http(s) to avoid opening
+// arbitrary schemes (file://, etc.).
+
+#[tauri::command]
+pub(crate) async fn open_url(url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Refusing to open non-http(s) URL".to_string());
+    }
+    // Reject whitespace and control characters. A real URL percent-encodes
+    // these; their presence signals a malformed or hostile value. Notably this
+    // blocks any newline that could be reinterpreted by a handler.
+    if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return Err("Refusing to open URL with whitespace or control characters".to_string());
+    }
+    #[cfg(target_os = "macos")]
+    let mut cmd = hidden_cmd("open");
+    #[cfg(target_os = "linux")]
+    let mut cmd = hidden_cmd("xdg-open");
+    // Windows: invoke `explorer.exe <url>` directly rather than `cmd /C start`.
+    // `cmd.exe` re-parses its command line and treats `& | ^ < >` as shell
+    // metacharacters, so a link like `https://x/&calc` (legitimate query
+    // strings use `&`) would split into a second command and execute it.
+    // `explorer.exe` is not a shell — it receives the URL as a single argv
+    // entry via the standard CommandLineToArgvW rules, with no `&` splitting.
+    #[cfg(target_os = "windows")]
+    let mut cmd = hidden_cmd("explorer");
+    cmd.arg(&url)
+        .spawn()
+        .map_err(|e| format!("Failed to open URL: {}", e))?;
+    Ok(())
+}
+
 // ─── Open in external editor ─────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn open_in_editor(cwd: String, path: String, editor: String) -> Result<(), String> {
+pub(crate) async fn open_in_editor(cwd: String, path: String, editor: String) -> Result<(), String> {
     let editor_cmd = if editor.trim().is_empty() {
         "code".to_string()
     } else {
@@ -2751,6 +2806,6 @@ pub(crate) fn open_in_editor(cwd: String, path: String, editor: String) -> Resul
 // ─── Transparent command log ──────────────────────────────────
 
 #[tauri::command]
-pub(crate) fn get_command_log() -> Vec<crate::git::cmd::CmdLogEntry> {
+pub(crate) async fn get_command_log() -> Vec<crate::git::cmd::CmdLogEntry> {
     crate::git::cmd::cmd_log_snapshot()
 }

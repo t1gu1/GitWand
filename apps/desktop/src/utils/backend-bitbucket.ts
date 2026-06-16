@@ -11,6 +11,7 @@ import {
   CIAnnotationRaw,
   mapAnnotation,
   PrReviewComment,
+  PrReview,
   ReviewerCandidate,
 } from "./backend-pr";
 
@@ -140,6 +141,12 @@ export async function bbDeleteComment(
 ): Promise<void> {
   if (!isTauri()) throw new Error("bbDeleteComment requires Tauri");
   return tauriInvoke<void>("bb_delete_comment", { cwd, prId, commentId });
+}
+
+/** List reviews (approvals / changes-requested) derived from PR participants. */
+export async function bbListReviews(cwd: string, prId: number): Promise<PrReview[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<PrReview[]>("bb_list_reviews", { cwd, prId });
 }
 
 /** Approve a Bitbucket PR (current user). */

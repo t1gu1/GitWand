@@ -27,6 +27,25 @@ export function ghCurrentUser(): Promise<string> {
   return _currentUserPromise;
 }
 
+/** GitHub fork relationship for the repo at `cwd`. */
+export interface ForkInfo {
+  /** True when origin is a fork of another GitHub repo. */
+  isFork: boolean;
+  /** Origin as "owner/repo" (head side of a cross-fork PR). */
+  origin: string;
+  /** Parent/upstream as "owner/repo", or "" when not a fork. */
+  parent: string;
+}
+
+/**
+ * Resolve the current repo's fork relationship so the PR create view can offer
+ * "open against upstream". Falls back to a non-fork result in dev:web.
+ */
+export async function ghForkInfo(cwd: string): Promise<ForkInfo> {
+  if (isTauri()) return tauriInvoke<ForkInfo>("gh_fork_info", { cwd });
+  return { isFork: false, origin: "", parent: "" };
+}
+
 /** Returns the list of file paths changed by a PR (lazy — call only when needed). */
 export async function ghPrFiles(repoPath: string, prNumber: number): Promise<string[]> {
   if (isTauri()) {
@@ -80,11 +99,12 @@ export interface PullRequest {
  * for the typical 10/20/30 windows the UI uses. TODO Phase 2: cursor-based
  * GraphQL pagination so already-loaded pages are not re-fetched.
  *
- * The heavy fields (`reviewDecision`, `mergeStateStatus`, `checksRollup`,
- * `additions`, `deletions`, `reviewRequested`) are NOT populated by this
- * call anymore — they're returned as empty strings / zeros. Callers that
- * need them must fetch the PR detail lazily (per-PR enrichment on hover
- * or select).
+ * The heavy fields (`reviewDecision`, `additions`, `deletions`,
+ * `reviewRequested`) are NOT populated by this call (gh CLI path) — empty
+ * strings / zeros. `mergeStateStatus` and `checksRollup` ARE populated so
+ * the sidebar dot turns red on conflicts and CI failures. Callers that need
+ * the other fields must fetch the PR detail lazily (per-PR enrichment on
+ * hover or select).
  */
 export async function ghListPrs(
   cwd: string,
@@ -216,6 +236,8 @@ export async function ghCreatePr(
   base: string = "",
   draft: boolean = false,
   reviewers: string[] = [],
+  /** Cross-fork target as "owner/repo". Empty → open against the origin repo. */
+  baseRepo: string = "",
 ): Promise<PullRequest> {
   if (isTauri()) {
     const raw = await tauriInvoke<{
@@ -235,7 +257,7 @@ export async function ghCreatePr(
       review_decision: string;
       merge_state_status: string;
       checks_rollup: string;
-    }>("gh_create_pr", { cwd, title, body, base, draft, reviewers });
+    }>("gh_create_pr", { cwd, title, body, base, baseRepo: baseRepo || null, draft, reviewers });
     return {
       number: raw.number,
       title: raw.title,
@@ -262,7 +284,7 @@ export async function ghCreatePr(
   const res = await devFetch(`${DEV_SERVER}/api/gh-create-pr`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cwd, title, body, base, draft, reviewers }),
+    body: JSON.stringify({ cwd, title, body, base, baseRepo, draft, reviewers }),
   });
   const raw = await res.json();
   if (!res.ok || raw.error) {
@@ -386,6 +408,12 @@ export interface PullRequestDetail {
   reviewers: string[];
   mergeable: string;
   checksStatus: string;
+  /**
+   * Whether the current viewer can merge this PR. `null` when the forge does
+   * not expose it (Azure, Bitbucket) — callers must treat null as "allowed"
+   * and gate the merge button on errors only, never on an unknown permission.
+   */
+  canMerge: boolean | null;
 }
 
 export interface CICheck {
@@ -476,6 +504,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
       reviewers: string[];
       mergeable: string;
       checks_status: string;
+      can_merge: boolean | null;
     }>("gh_pr_detail", { cwd, number });
     return {
       number: raw.number,
@@ -499,6 +528,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
       reviewers: raw.reviewers,
       mergeable: raw.mergeable,
       checksStatus: raw.checks_status,
+      canMerge: raw.can_merge ?? null,
     };
   }
   // Browser dev mode
@@ -513,6 +543,7 @@ export async function ghPrDetail(cwd: string, number: number): Promise<PullReque
     url: raw.url, additions: raw.additions, deletions: raw.deletions,
     changedFiles: raw.changed_files, comments: raw.comments, reviewComments: raw.review_comments,
     labels: raw.labels, reviewers: raw.reviewers, mergeable: raw.mergeable, checksStatus: raw.checks_status,
+    canMerge: raw.can_merge ?? null,
   };
 }
 
@@ -602,12 +633,78 @@ export interface CreatePrCommentParams {
 
 /** Fetch all review comments for a PR. */
 export async function ghPrComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
-  // No Tauri implementation — browser only for now
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("gh_pr_comments", { cwd, number: prNumber });
   const res = await devFetch(`${DEV_SERVER}/api/gh-pr-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
   if (!res.ok) throw new Error(`gh pr comments failed: ${res.status}`);
   const raw = await res.json();
   if (raw.error) throw new Error(raw.error);
   return raw as PrReviewComment[];
+}
+
+/**
+ * Issue-level (conversation) comments on a PR — the ones not anchored to a
+ * diff line. Returned in the same {@link PrReviewComment} shape with an empty
+ * `path` so they can be merged with review comments for display.
+ */
+export async function ghPrIssueComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("gh_pr_issue_comments", { cwd, number: prNumber });
+  const res = await devFetch(`${DEV_SERVER}/api/gh-pr-issue-comments?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`);
+  if (!res.ok) throw new Error(`gh pr issue comments failed: ${res.status}`);
+  const raw = await res.json();
+  if (raw.error) throw new Error(raw.error);
+  return raw as PrReviewComment[];
+}
+
+// ─── Reactions ──────────────────────────────────────────────────────────────
+
+export interface PrReaction {
+  id: number;
+  content: string;
+  user: string;
+}
+
+/** List reactions on a PR or one of its comments.
+ * `targetType`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+ * `targetId`: PR number for `"pr"`, comment id otherwise.
+ */
+export async function ghListReactions(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+): Promise<PrReaction[]> {
+  if (isTauri()) {
+    return tauriInvoke<PrReaction[]>("gh_list_reactions", { cwd, number: prNumber, targetType, targetId });
+  }
+  return [];
+}
+
+/** Add a reaction to a PR or comment. Returns the created reaction. */
+export async function ghAddReaction(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+  content: string,
+): Promise<PrReaction> {
+  if (isTauri()) {
+    return tauriInvoke<PrReaction>("gh_add_reaction", { cwd, number: prNumber, targetType, targetId, content });
+  }
+  throw new Error("Reactions not supported in dev mode");
+}
+
+/** Delete a reaction from a PR or comment. */
+export async function ghDeleteReaction(
+  cwd: string,
+  prNumber: number,
+  targetType: string,
+  targetId: number,
+  reactionId: number,
+): Promise<void> {
+  if (isTauri()) {
+    return tauriInvoke<void>("gh_delete_reaction", { cwd, number: prNumber, targetType, targetId, reactionId });
+  }
+  throw new Error("Reactions not supported in dev mode");
 }
 
 /** Create a new review comment (or reply to an existing one). */
@@ -675,6 +772,7 @@ export interface PendingReviewComment {
 
 /** Fetch all reviews for a PR. */
 export async function ghPrListReviews(cwd: string, prNumber: number): Promise<PrReview[]> {
+  if (isTauri()) return tauriInvoke<PrReview[]>("gh_pr_reviews", { cwd, number: prNumber });
   const res = await fetch(
     `${DEV_SERVER}/api/gh-pr-reviews?cwd=${encodeURIComponent(cwd)}&number=${prNumber}`,
   );
@@ -814,4 +912,288 @@ export async function getCredential(service: string, account: string): Promise<s
 export async function deleteCredential(service: string, account: string): Promise<void> {
   if (!isTauri()) return;
   return tauriInvoke<void>("delete_credential", { service, account });
+}
+
+// ─── GitHub OAuth device flow ───────────────────────────────────────────────
+//
+// "Sign in with GitHub" from Settings > Accounts. The token is stored in the
+// OS keychain (service "gitwand:github", account "oauth"); once present, the
+// Rust `gh_*` commands route through the REST API instead of the `gh` CLI, so
+// the `gh` binary is no longer required.
+
+export interface GithubDeviceCode {
+  device_code: string;
+  user_code: string;
+  verification_uri: string;
+  /** verification_uri with the code pre-filled (skips manual entry); may be "". */
+  verification_uri_complete: string;
+  expires_in: number;
+  /** Minimum seconds between polls (GitHub-mandated, floored at 5). */
+  interval: number;
+}
+
+export interface GithubDevicePoll {
+  /** "pending" | "slow_down" | "success" | "error" */
+  status: string;
+  /** Populated only on success. */
+  login: string;
+  /** Populated only on a hard error. */
+  error: string;
+}
+
+/** Begin the OAuth device flow — returns the user code + verification URL. */
+export async function githubDeviceStart(): Promise<GithubDeviceCode> {
+  if (isTauri()) return tauriInvoke<GithubDeviceCode>("github_device_start");
+  // dev:web — mock device flow (does not actually authenticate).
+  const res = await devFetch(`${DEV_SERVER}/api/github-device-start`, { method: "POST" });
+  if (!res.ok) throw new Error(`github-device-start failed: ${res.status}`);
+  return res.json() as Promise<GithubDeviceCode>;
+}
+
+/** Poll once for the access token. On success the token is stored server-side. */
+export async function githubDevicePoll(deviceCode: string): Promise<GithubDevicePoll> {
+  if (isTauri()) return tauriInvoke<GithubDevicePoll>("github_device_poll", { deviceCode });
+  const res = await devFetch(`${DEV_SERVER}/api/github-device-poll`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_code: deviceCode }),
+  });
+  if (!res.ok) throw new Error(`github-device-poll failed: ${res.status}`);
+  return res.json() as Promise<GithubDevicePoll>;
+}
+
+/**
+ * Open an http(s) URL in the system browser. In Tauri the webview's
+ * `window.open` is a no-op, so we hand the URL to the OS via the Rust
+ * `open_url` command; in dev:web we fall back to `window.open`.
+ */
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke<void>("open_url", { url });
+    return;
+  }
+  window.open(url, "_blank");
+}
+
+/** Whether a Settings-managed GitHub token is currently stored. */
+export async function githubTokenPresent(): Promise<boolean> {
+  if (isTauri()) return tauriInvoke<boolean>("github_token_present");
+  const res = await devFetch(`${DEV_SERVER}/api/github-token-present`, { method: "POST" });
+  if (!res.ok) return false;
+  return res.json() as Promise<boolean>;
+}
+
+// ─── Azure DevOps (Entra ID OAuth + REST) ───────────────────────────────────
+//
+// "Sign in with Azure" from Settings > Accounts uses Microsoft's Entra ID
+// device-authorization grant — the same UX as the GitHub device flow, so the
+// `GithubDeviceCode` / `GithubDevicePoll` shapes are reused verbatim. The
+// access token is stored in the OS keychain (service "gitwand:azure", account
+// "oauth"); the `az_*` PR commands route through the Azure DevOps REST API.
+//
+// Azure DevOps support is Tauri-only — there is no dev:web mock backend, so the
+// browser path throws a clear "desktop only" error.
+
+const AZURE_WEB_ONLY = "Azure DevOps sign-in is only available in the desktop app.";
+
+/** Begin the Entra ID device flow — returns the user code + verification URL. */
+export async function azureDeviceStart(): Promise<GithubDeviceCode> {
+  if (isTauri()) return tauriInvoke<GithubDeviceCode>("azure_device_start");
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+/** Poll once for the Entra access token. On success the token is stored. */
+export async function azureDevicePoll(deviceCode: string): Promise<GithubDevicePoll> {
+  if (isTauri()) return tauriInvoke<GithubDevicePoll>("azure_device_poll", { deviceCode });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+/** Whether a Settings-managed Azure token is currently stored. */
+export async function azureTokenPresent(): Promise<boolean> {
+  if (isTauri()) return tauriInvoke<boolean>("azure_token_present");
+  return false;
+}
+
+/**
+ * Sign out of Azure DevOps: removes both the access token and the Entra refresh
+ * token from the OS keychain. Must be called on account removal — clearing only
+ * the access token would leave the refresh token able to mint new tokens.
+ */
+export async function azureSignOut(): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("azure_sign_out");
+}
+
+/** Map the Rust `PullRequest` serde shape (snake_case) to the camelCase type. */
+function mapRawPr(pr: any): PullRequest {
+  return {
+    number: pr.number,
+    title: pr.title,
+    state: pr.state,
+    author: pr.author,
+    branch: pr.branch,
+    base: pr.base,
+    draft: pr.draft,
+    createdAt: pr.created_at,
+    updatedAt: pr.updated_at,
+    url: pr.url,
+    additions: pr.additions,
+    deletions: pr.deletions,
+    labels: pr.labels ?? [],
+    assignees: pr.assignees ?? [],
+    reviewRequested: pr.review_requested ?? [],
+    reviewDecision: pr.review_decision ?? "",
+    mergeStateStatus: pr.merge_state_status ?? "",
+    checksRollup: pr.checks_rollup ?? "",
+    commentCount: pr.comment_count ?? 0,
+  };
+}
+
+export async function azCurrentUser(): Promise<string> {
+  if (isTauri()) return tauriInvoke<string>("az_current_user");
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azListPrs(
+  cwd: string,
+  state: string = "open",
+  limit: number = 10,
+  offset: number = 0,
+): Promise<PullRequest[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any[]>("az_list_prs", { cwd, state, limit, offset });
+    return raw.map(mapRawPr);
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrCount(cwd: string, state: string = "open"): Promise<number> {
+  if (isTauri()) return tauriInvoke<number>("az_pr_count", { cwd, state });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrDetail(cwd: string, number: number): Promise<PullRequestDetail> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any>("az_pr_detail", { cwd, number });
+    return {
+      number: raw.number,
+      title: raw.title,
+      body: raw.body,
+      state: raw.state,
+      author: raw.author,
+      branch: raw.branch,
+      base: raw.base,
+      draft: raw.draft,
+      createdAt: raw.created_at,
+      updatedAt: raw.updated_at,
+      mergedAt: raw.merged_at,
+      url: raw.url,
+      additions: raw.additions,
+      deletions: raw.deletions,
+      changedFiles: raw.changed_files,
+      comments: raw.comments,
+      reviewComments: raw.review_comments,
+      labels: raw.labels,
+      reviewers: raw.reviewers,
+      mergeable: raw.mergeable,
+      checksStatus: raw.checks_status,
+      canMerge: raw.can_merge ?? null,
+    };
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrDiff(cwd: string, number: number): Promise<string> {
+  if (isTauri()) return tauriInvoke<string>("az_pr_diff", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrFiles(cwd: string, number: number): Promise<string[]> {
+  if (isTauri()) return tauriInvoke<string[]>("az_pr_files", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azCreatePr(
+  cwd: string,
+  title: string,
+  body: string,
+  base?: string,
+  draft?: boolean,
+): Promise<PullRequest> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<any>("az_create_pr", { cwd, title, body, base, draft });
+    return mapRawPr(raw);
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azMergePr(cwd: string, number: number, method: string = "merge"): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_merge_pr", { cwd, number, method });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrReady(cwd: string, number: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_pr_ready", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azCheckoutPr(cwd: string, number: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_checkout_pr", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrComments(cwd: string, number: number): Promise<PrReviewComment[]> {
+  if (isTauri()) return tauriInvoke<PrReviewComment[]>("az_pr_comments", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrCreateComment(cwd: string, number: number, body: string): Promise<PrReviewComment> {
+  if (isTauri()) return tauriInvoke<PrReviewComment>("az_pr_create_comment", { cwd, number, body });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrChecks(cwd: string, number: number): Promise<CICheck[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<Array<{ name: string; state: string; conclusion: string; details_url: string }>>(
+      "az_pr_checks",
+      { cwd, number },
+    );
+    return raw.map((c) => ({
+      name: c.name,
+      state: c.state,
+      conclusion: c.conclusion,
+      detailsUrl: c.details_url,
+    }));
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azPrReviews(cwd: string, number: number): Promise<PrReview[]> {
+  if (isTauri()) return tauriInvoke<PrReview[]>("az_pr_reviews", { cwd, number });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azSubmitReview(
+  cwd: string,
+  number: number,
+  opts: { event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT"; body?: string },
+): Promise<PrReview> {
+  if (isTauri()) {
+    return tauriInvoke<PrReview>("az_submit_review", { cwd, number, event: opts.event, body: opts.body });
+  }
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azListLikes(cwd: string, prNumber: number, compositeId: number): Promise<PrReaction[]> {
+  if (isTauri()) return tauriInvoke<PrReaction[]>("az_list_likes", { cwd, prNumber, compositeId });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azAddLike(cwd: string, prNumber: number, compositeId: number): Promise<PrReaction> {
+  if (isTauri()) return tauriInvoke<PrReaction>("az_add_like", { cwd, prNumber, compositeId });
+  throw new Error(AZURE_WEB_ONLY);
+}
+
+export async function azDeleteLike(cwd: string, prNumber: number, compositeId: number): Promise<void> {
+  if (isTauri()) return tauriInvoke<void>("az_delete_like", { cwd, prNumber, compositeId });
+  throw new Error(AZURE_WEB_ONLY);
 }

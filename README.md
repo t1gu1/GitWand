@@ -114,7 +114,12 @@ cd apps/desktop && pnpm dev:web
 # Tauri desktop mode — requires Rust toolchain
 # Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+
+# Desktop Dev Build (In the apps/desktop/ folder)
 pnpm --filter desktop tauri dev
+
+# On linux you may have to run
+WEBKIT_DISABLE_COMPOSITING_MODE=1 pnpm --filter desktop tauri dev
 ```
 
 ---

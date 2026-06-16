@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
 import { saveSettings as persistAppSettings } from "../composables/useSettings";
+import { avatarStyle, avatarInitials } from "../composables/useAvatar";
 import { useLaunchpadWip } from "../composables/useLaunchpadWip";
 import { useLaunchpadPrs } from "../composables/useLaunchpadPrs";
 import { useLaunchpadIssues } from "../composables/useLaunchpadIssues";
@@ -78,18 +79,6 @@ function toggleTeamMember(login: string): void {
   if (next.has(login)) next.delete(login);
   else next.add(login);
   expandedTeamMembers.value = next;
-}
-
-const TEAM_AVATAR_COLORS = [
-  "#cba6f7", "#89b4fa", "#a6e3a1", "#fab387", "#f38ba8", "#94e2d5",
-] as const;
-
-function teamAvatarColor(login: string): string {
-  let hash = 0;
-  for (let i = 0; i < login.length; i++) {
-    hash = (hash * 31 + login.charCodeAt(i)) & 0xffff;
-  }
-  return TEAM_AVATAR_COLORS[hash % TEAM_AVATAR_COLORS.length];
 }
 
 const membersWithOverlap = computed(() =>
@@ -850,12 +839,12 @@ onMounted(() => {
             >
               <span
                 class="launchpad-view__team-avatar"
-                :style="{ background: teamAvatarColor(member.login) }"
+                :style="avatarStyle(member.login)"
                 aria-hidden="true"
-              >{{ (member.login[0] ?? "?").toUpperCase() }}</span>
+              >{{ avatarInitials(member.login) }}</span>
               <span
                 class="launchpad-view__team-login"
-                :style="{ color: teamAvatarColor(member.login) }"
+                :style="{ color: avatarStyle(member.login).color }"
               >{{ member.login }}</span>
               <span class="launchpad-view__team-pr-count">
                 {{ t("launchpad.teamPrCount", member.prs.length) }}
@@ -921,12 +910,12 @@ onMounted(() => {
             >
               <span
                 class="launchpad-view__team-avatar"
-                :style="{ background: teamAvatarColor(member.login) }"
+                :style="avatarStyle(member.login)"
                 aria-hidden="true"
-              >{{ (member.login[0] ?? "?").toUpperCase() }}</span>
+              >{{ avatarInitials(member.login) }}</span>
               <span
                 class="launchpad-view__team-login"
-                :style="{ color: teamAvatarColor(member.login) }"
+                :style="{ color: avatarStyle(member.login).color }"
               >{{ member.login }}</span>
               <span class="launchpad-view__team-pr-count">
                 {{ t("launchpad.teamPrCount", member.prs.length) }}
@@ -1736,10 +1725,9 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-xs);
-  color: #1e1e2e;
   font-weight: var(--font-weight-bold);
   flex-shrink: 0;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1.5px solid currentColor;
 }
 
 .launchpad-view__team-login {

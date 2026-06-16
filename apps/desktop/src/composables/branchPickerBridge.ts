@@ -29,3 +29,10 @@ export const LAUNCHPAD_OPEN_REQUEST_KEY: InjectionKey<Ref<number>> = Symbol("lau
 
 /** Toggle the commit-graph git-tree panel (double-click on any file in Changes or Diff). */
 export const TOGGLE_GIT_TREE_KEY: InjectionKey<() => void> = Symbol("toggleGitTree");
+
+/** Settings tab identifiers accepted by {@link OPEN_SETTINGS_KEY}. */
+export type SettingsTabTarget =
+  | "general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+
+/** Open the Settings panel, optionally on a specific tab (e.g. from the PR sidebar). */
+export const OPEN_SETTINGS_KEY: InjectionKey<(tab?: SettingsTabTarget) => void> = Symbol("openSettings");

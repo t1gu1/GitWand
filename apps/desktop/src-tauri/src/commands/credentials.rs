@@ -30,7 +30,7 @@
 /// `account` — sub-key within the service, e.g. `"workspace:username"`.
 /// `value`   — the secret (PAT, app-password, etc.).
 #[tauri::command]
-pub(crate) fn set_credential(service: String, account: String, value: String) -> Result<(), String> {
+pub(crate) async fn set_credential(service: String, account: String, value: String) -> Result<(), String> {
     let entry = keyring::Entry::new(&service, &account)
         .map_err(|e| format!("keyring init failed for {}/{}: {}", service, account, e))?;
     entry
@@ -44,7 +44,7 @@ pub(crate) fn set_credential(service: String, account: String, value: String) ->
 /// the keychain is locked. The caller should surface this to the user as
 /// "Please configure your credentials in Settings > Accounts."
 #[tauri::command]
-pub(crate) fn get_credential(service: String, account: String) -> Result<String, String> {
+pub(crate) async fn get_credential(service: String, account: String) -> Result<String, String> {
     let entry = keyring::Entry::new(&service, &account)
         .map_err(|e| format!("keyring init failed for {}/{}: {}", service, account, e))?;
     entry
@@ -59,7 +59,7 @@ pub(crate) fn get_credential(service: String, account: String) -> Result<String,
 ///
 /// Silently succeeds if the entry does not exist (idempotent).
 #[tauri::command]
-pub(crate) fn delete_credential(service: String, account: String) -> Result<(), String> {
+pub(crate) async fn delete_credential(service: String, account: String) -> Result<(), String> {
     let entry = match keyring::Entry::new(&service, &account) {
         Ok(e) => e,
         Err(_) => return Ok(()), // Entry cannot exist if we can't init

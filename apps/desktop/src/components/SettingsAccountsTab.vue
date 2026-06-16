@@ -5,11 +5,18 @@
  * Settings > Accounts tab — v2.10 §4.2.
  */
 
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useI18n } from "../composables/useI18n";
 import { useAccounts } from "../composables/useAccounts";
 import { useCredentials } from "../composables/useCredentials";
+import { useGithubAuth, GITHUB_TOKEN_KEY } from "../composables/useGithubAuth";
+import { useAzureAuth, AZURE_TOKEN_KEY } from "../composables/useAzureAuth";
+import { isTauri, azureSignOut } from "../utils/backend";
 import type { ForgeName } from "../composables/forge/types";
+
+// In dev:web there is no Rust backend — the GitHub flow is a fake mock that
+// cannot actually authenticate. Flag it so the UI says so plainly.
+const isDevMock = !isTauri();
 
 const { t } = useI18n();
 const {
@@ -28,10 +35,32 @@ const {
   removeCredential,
 } = useCredentials();
 
+// GitHub OAuth device flow — auto-unwrapped refs for template ergonomics.
+const {
+  phase: ghPhase,
+  userCode: ghUserCode,
+  error: ghError,
+  login: ghLogin,
+  start: ghStart,
+  openVerification: ghOpen,
+  reset: ghReset,
+} = useGithubAuth();
+
+// Azure DevOps Entra ID device flow — same shape as the GitHub flow.
+const {
+  phase: azPhase,
+  userCode: azUserCode,
+  error: azError,
+  login: azLogin,
+  start: azStart,
+  openVerification: azOpen,
+  reset: azReset,
+} = useAzureAuth();
+
 // ─── Add-account form ────────────────────────────────────────────────────────
 
 const showForm = ref(false);
-const formForge = ref<ForgeName>("bitbucket");
+const formForge = ref<ForgeName>("github");
 const formLabel = ref("");
 const formUsername = ref("");
 const formWorkspace = ref("");
@@ -40,19 +69,73 @@ const formError = ref<string | null>(null);
 const formSuccess = ref(false);
 
 function openForm() {
-  formForge.value = "bitbucket";
+  formForge.value = "github";
   formLabel.value = "";
   formUsername.value = "";
   formWorkspace.value = "";
   formToken.value = "";
   formError.value = null;
   formSuccess.value = false;
+  ghReset();
+  azReset();
   showForm.value = true;
 }
 
 function cancelForm() {
+  ghReset();
+  azReset();
   showForm.value = false;
 }
+
+// ─── GitHub OAuth device flow ─────────────────────────────────────────────────
+
+function startGithubLogin() {
+  formError.value = null;
+  ghStart();
+}
+
+// ─── Azure DevOps Entra ID device flow ────────────────────────────────────────
+
+function startAzureLogin() {
+  formError.value = null;
+  azStart();
+}
+
+// On successful sign-in, register the Azure account. The token is already in the
+// OS keychain (stored by the Rust poll command) under AZURE_TOKEN_KEY.
+watch(azPhase, (p) => {
+  if (p !== "success") return;
+  addAccount({
+    forge: "azure",
+    label: formLabel.value.trim() || azLogin.value,
+    username: azLogin.value,
+    tokenKey: AZURE_TOKEN_KEY,
+  });
+  formSuccess.value = true;
+  setTimeout(() => {
+    showForm.value = false;
+    formSuccess.value = false;
+    azReset();
+  }, 1200);
+});
+
+// On successful sign-in, register the account. The token is already in the OS
+// keychain (stored by the Rust poll command) under GITHUB_TOKEN_KEY.
+watch(ghPhase, (p) => {
+  if (p !== "success") return;
+  addAccount({
+    forge: "github",
+    label: formLabel.value.trim() || ghLogin.value,
+    username: ghLogin.value,
+    tokenKey: GITHUB_TOKEN_KEY,
+  });
+  formSuccess.value = true;
+  setTimeout(() => {
+    showForm.value = false;
+    formSuccess.value = false;
+    ghReset();
+  }, 1200);
+});
 
 async function submitForm() {
   formError.value = null;
@@ -85,7 +168,12 @@ async function submitForm() {
 async function onRemove(id: string) {
   const acc = accounts.value.find((a) => a.id === id);
   if (!acc) return;
-  if (acc.tokenKey) {
+  if (acc.forge === "azure") {
+    // Azure stores two keychain entries (access token + Entra refresh token);
+    // the generic single-entry delete below would leave the refresh token
+    // behind, able to silently mint new access tokens after sign-out.
+    await azureSignOut();
+  } else if (acc.tokenKey) {
     const slash = acc.tokenKey.indexOf("/");
     if (slash !== -1) await removeCredential(acc.tokenKey.slice(0, slash), acc.tokenKey.slice(slash + 1));
   }
@@ -94,8 +182,8 @@ async function onRemove(id: string) {
 
 // ─── Display ─────────────────────────────────────────────────────────────────
 
-const forgeOrder: ForgeName[] = ["github", "gitlab", "bitbucket"];
-const forgeLabel: Record<ForgeName, string> = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket", unknown: "Unknown" };
+const forgeOrder: ForgeName[] = ["github", "gitlab", "bitbucket", "azure"];
+const forgeLabel: Record<ForgeName, string> = { github: "GitHub", gitlab: "GitLab", bitbucket: "Bitbucket", azure: "Azure DevOps", unknown: "Unknown" };
 const knownForges = computed(() => forgeOrder.filter((f) => (accountsByForge.value[f]?.length ?? 0) > 0));
 const totalAccounts = computed(() => accounts.value.length);
 </script>
@@ -151,6 +239,7 @@ const totalAccounts = computed(() => accounts.value.length);
             <option value="github">GitHub</option>
             <option value="gitlab">GitLab</option>
             <option value="bitbucket">Bitbucket</option>
+            <option value="azure">Azure DevOps</option>
           </select>
         </div>
 
@@ -159,7 +248,8 @@ const totalAccounts = computed(() => accounts.value.length);
           <input v-model="formLabel" type="text" class="sa-input" placeholder="work, perso, client-x…" />
         </div>
 
-        <div class="sa-field">
+        <!-- GitHub / Azure return the username via OAuth — no manual input needed. -->
+        <div v-if="formForge !== 'github' && formForge !== 'azure'" class="sa-field">
           <label class="sa-label">{{ t('settings.accountsUsernameLabel') }}</label>
           <input v-model="formUsername" type="text" class="sa-input" />
         </div>
@@ -175,13 +265,61 @@ const totalAccounts = computed(() => accounts.value.length);
           </div>
         </template>
 
+        <!-- GitHub — OAuth device flow, no token paste, no gh CLI required. -->
+        <div v-else-if="formForge === 'github'" class="sa-gh">
+          <template v-if="ghPhase === 'idle' || ghPhase === 'error'">
+            <button class="sa-gh-btn" @click="startGithubLogin">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+              </svg>
+              {{ t('settings.accountsGithubSignIn') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsGithubHint') }}</p>
+            <p v-if="ghError" class="sa-msg sa-msg--error">{{ ghError }}</p>
+          </template>
+          <template v-else-if="ghPhase === 'awaiting'">
+            <p v-if="isDevMock" class="sa-msg sa-msg--error">{{ t('settings.accountsGithubDevMock') }}</p>
+            <p class="sa-note">{{ t('settings.accountsGithubEnterCode') }}</p>
+            <code class="sa-gh-code">{{ ghUserCode }}</code>
+            <button v-if="!isDevMock" class="sa-gh-btn" @click="ghOpen">
+              {{ t('settings.accountsGithubOpen') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsGithubWaiting') }}</p>
+          </template>
+          <template v-else-if="ghPhase === 'success'">
+            <p class="sa-msg sa-msg--ok">{{ t('settings.accountsGithubConnected') }} @{{ ghLogin }}</p>
+          </template>
+        </div>
+
+        <!-- Azure DevOps — Entra ID OAuth device flow, no PAT paste. -->
+        <div v-else-if="formForge === 'azure'" class="sa-gh">
+          <template v-if="azPhase === 'idle' || azPhase === 'error'">
+            <button class="sa-gh-btn sa-gh-btn--azure" @click="startAzureLogin">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M3.6 11.9L8 1.4l3.2 7.6-5 1.2 4.3 4.4H1.6l2-2.7zm6 1.7l2.8-4.6 1.6 5.2H8.1l1.5-.6z"/>
+              </svg>
+              {{ t('settings.accountsAzureSignIn') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsAzureHint') }}</p>
+            <p v-if="azError" class="sa-msg sa-msg--error">{{ azError }}</p>
+          </template>
+          <template v-else-if="azPhase === 'awaiting'">
+            <p v-if="isDevMock" class="sa-msg sa-msg--error">{{ t('settings.accountsAzureDevMock') }}</p>
+            <p class="sa-note">{{ t('settings.accountsAzureEnterCode') }}</p>
+            <code class="sa-gh-code">{{ azUserCode }}</code>
+            <button v-if="!isDevMock" class="sa-gh-btn" @click="azOpen">
+              {{ t('settings.accountsAzureOpen') }}
+            </button>
+            <p class="sa-note">{{ t('settings.accountsAzureWaiting') }}</p>
+          </template>
+          <template v-else-if="azPhase === 'success'">
+            <p class="sa-msg sa-msg--ok">{{ t('settings.accountsAzureConnected') }} {{ azLogin }}</p>
+          </template>
+        </div>
+
+        <!-- GitLab — still CLI-based. -->
         <div v-else class="sa-note">
-          <template v-if="formForge === 'gitlab'">
-            GitLab auth is handled by <code>glab auth login</code> — no token needed here.
-          </template>
-          <template v-else>
-            GitHub auth is handled by <code>gh auth login</code> — no token needed here.
-          </template>
+          GitLab auth is handled by <code>glab auth login</code> — no token needed here.
         </div>
 
         <p v-if="formError" class="sa-msg sa-msg--error">{{ formError }}</p>
@@ -191,7 +329,12 @@ const totalAccounts = computed(() => accounts.value.length);
           <button class="sa-ghost-btn" :disabled="saving" @click="cancelForm">
             {{ t('settings.accountsCancelBtn') }}
           </button>
-          <button class="sa-primary-btn" :disabled="saving" @click="submitForm">
+          <button
+            v-if="formForge !== 'github' && formForge !== 'azure'"
+            class="sa-primary-btn"
+            :disabled="saving"
+            @click="submitForm"
+          >
             {{ saving ? '…' : t('settings.accountsSaveBtn') }}
           </button>
         </div>
@@ -408,6 +551,53 @@ const totalAccounts = computed(() => accounts.value.length);
   background: rgba(255, 255, 255, 0.07);
   padding: 1px 5px;
   border-radius: 3px;
+}
+
+/* ── GitHub OAuth device flow ── */
+.sa-gh {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sa-gh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm, 5px);
+  background: var(--color-text, #eee);
+  color: var(--color-bg, #1e1e1e);
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.sa-gh-btn:hover {
+  opacity: 0.88;
+}
+
+.sa-gh-btn--azure {
+  background: #0078d4;
+  color: #fff;
+}
+
+.sa-gh-code {
+  align-self: flex-start;
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-subtle, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  color: var(--color-text, #eee);
+  user-select: all;
 }
 
 /* ── Messages ── */

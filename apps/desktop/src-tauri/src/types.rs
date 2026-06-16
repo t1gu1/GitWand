@@ -363,7 +363,17 @@ pub struct GhPrReviewRequest {
 
 #[derive(Deserialize)]
 pub struct GhPrStatusCheck {
+    /// CheckRun outcome (SUCCESS / FAILURE / …). `None` while still running.
+    #[serde(default)]
     pub conclusion: Option<String>,
+    /// StatusContext outcome (SUCCESS / PENDING / FAILURE / ERROR). Present on
+    /// legacy commit-status entries that carry no `conclusion`.
+    #[serde(default)]
+    pub state: Option<String>,
+    /// CheckRun lifecycle (QUEUED / IN_PROGRESS / COMPLETED). Used to detect a
+    /// check that is still running (no conclusion yet).
+    #[serde(default)]
+    pub status: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -474,6 +484,54 @@ pub struct PullRequestDetail {
     pub reviewers: Vec<String>,
     pub mergeable: String,
     pub checks_status: String,
+    /// Whether the current viewer has permission to merge this PR.
+    /// `None` when the forge does not cheaply expose it (Azure, Bitbucket) —
+    /// the UI must treat unknown as "allowed" and gate on errors only, never
+    /// disable the merge button on an unknown permission.
+    #[serde(default)]
+    pub can_merge: Option<bool>,
+}
+
+// ─── Fork / PR target info ─────────────────────────────────────────
+
+/// Describes the current repo's GitHub fork relationship, used by the PR
+/// create view to offer "open against upstream" for forks.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkInfo {
+    /// True when `origin` is a fork of another GitHub repo.
+    pub is_fork: bool,
+    /// `origin` as `owner/repo` (the head side of a cross-fork PR).
+    pub origin: String,
+    /// Parent/upstream as `owner/repo`, or "" when not a fork.
+    pub parent: String,
+}
+
+// ─── GitHub OAuth device flow ──────────────────────────────────────
+
+/// Returned by `github_device_start` — the user-facing code + the
+/// `device_code` the frontend polls with.
+#[derive(Serialize)]
+pub struct GithubDeviceCode {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    /// `verification_uri` with the user code pre-filled — opening this skips the
+    /// manual code-entry step. Empty if GitHub omits it.
+    pub verification_uri_complete: String,
+    pub expires_in: i64,
+    /// Minimum seconds between polls (GitHub-mandated, floored at 5).
+    pub interval: i64,
+}
+
+/// Returned by `github_device_poll`. `status` ∈
+/// `"pending" | "slow_down" | "success" | "error"`. The token itself is never
+/// returned — it is stored directly in the OS keychain on success.
+#[derive(Serialize)]
+pub struct GithubDevicePoll {
+    pub status: String,
+    pub login: String,
+    pub error: String,
 }
 
 // ─── CI Check ──────────────────────────────────────────────────────

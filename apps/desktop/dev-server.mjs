@@ -152,6 +152,12 @@ function gitSpawn(args, cwd) {
   });
 }
 
+// ── Mock state: GitHub OAuth device flow (dev:web only) ──────────────────────
+// The real flow lives in Rust (`github_api.rs`). In the browser mock we fake it
+// so the Settings > Accounts UI can be exercised without Tauri. It does NOT log
+// you in — it just returns a static code then "succeeds" after a couple polls.
+let _mockGithubPolls = 0;
+
 /**
  * Get a GitHub OAuth token — tries in order:
  *  1. GH_TOKEN / GITHUB_TOKEN env vars
@@ -197,6 +203,51 @@ function getRepoNwo(cwd) {
   const url = r.stdout.trim();
   const m = url.match(/github\.com[:/](.+?)\/(.+?)(?:\.git)?$/);
   return m ? `${m[1]}/${m[2]}` : null;
+}
+
+/** Cache of resolved PR repo nwo, keyed by `<origin>#<number>`. The repo a PR
+ *  lives in is stable for the PR's lifetime, so one resolution per dev-server
+ *  process is enough — without this the 3 per-PR endpoints each re-resolve
+ *  (up to ~9 redundant API roundtrips when a PR detail opens). */
+const prNwoCache = new Map();
+
+/**
+ * Resolve the repo where PR `number` actually lives. Mirrors the Rust
+ * `get_pr_json` resolution: try origin first; if the PR isn't there, fall back
+ * to the fork's upstream parent. Without this, cross-fork PRs (branch pushed to
+ * a fork, PR opened against the upstream repo) resolve to the fork — where the
+ * PR number doesn't exist — and per-PR endpoints 404.
+ *
+ * Only a *definitive* answer (origin or parent confirmed) is cached; a transient
+ * failure (5xx / rate limit / network) falls back to origin for this request but
+ * stays uncached so a later call can re-resolve instead of pinning the wrong repo.
+ */
+async function resolvePrNwo(cwd, number, token) {
+  const origin = getRepoNwo(cwd);
+  if (!origin) return null;
+  const cacheKey = `${origin}#${number}`;
+  if (prNwoCache.has(cacheKey)) return prNwoCache.get(cacheKey);
+  try {
+    const resp = await githubFetch(`/repos/${origin}/pulls/${number}`, token);
+    if (resp.ok) {
+      prNwoCache.set(cacheKey, origin);
+      return origin;
+    }
+    // PR not visible on origin (404 missing / 403 private / 410 gone) → try the
+    // fork's upstream parent. Other statuses are treated as transient.
+    if ([403, 404, 410].includes(resp.status)) {
+      const info = await githubFetch(`/repos/${origin}`, token);
+      const parent = info.ok ? (await info.json()).parent?.full_name : null;
+      if (parent) {
+        const r2 = await githubFetch(`/repos/${parent}/pulls/${number}`, token);
+        if (r2.ok) {
+          prNwoCache.set(cacheKey, parent);
+          return parent;
+        }
+      }
+    }
+  } catch { /* transient — fall through without caching */ }
+  return origin;
 }
 
 /** Fetch from GitHub REST API with auth. `accept` overrides the default JSON accept header. */
@@ -2179,6 +2230,39 @@ async function handleRequest(req, res) {
 
     // ─── GitHub REST API endpoints (no gh binary needed) ──────
 
+    // POST /api/github-device-start — MOCK device flow (dev:web only).
+    // Returns a static user code + verification URL. The frontend opens the URL
+    // and starts polling; see /api/github-device-poll below.
+    if (url.pathname === "/api/github-device-start" && req.method === "POST") {
+      _mockGithubPolls = 0;
+      // NOTE: verification_uri intentionally does NOT point at the real
+      // github.com/login/device — this is a fake flow and a real code is never
+      // issued. Sending the user to GitHub with a bogus code only confuses.
+      return jsonResponse(req, res, {
+        device_code: "mock-device-code",
+        user_code: "DEV-MOCK",
+        verification_uri: "about:blank#gitwand-dev-mock",
+        verification_uri_complete: "",
+        expires_in: 900,
+        interval: 1,
+      });
+    }
+
+    // POST /api/github-device-poll — MOCK: "pending" twice, then "success".
+    // No real token is stored; this only unblocks UI iteration in dev:web.
+    if (url.pathname === "/api/github-device-poll" && req.method === "POST") {
+      _mockGithubPolls += 1;
+      if (_mockGithubPolls < 3) {
+        return jsonResponse(req, res, { status: "pending", login: "", error: "" });
+      }
+      return jsonResponse(req, res, { status: "success", login: "dev-user", error: "" });
+    }
+
+    // POST /api/github-token-present — MOCK: never "logged in" in dev:web.
+    if (url.pathname === "/api/github-token-present" && req.method === "POST") {
+      return jsonResponse(req, res, false);
+    }
+
     // GET /api/gh-current-user — returns the authenticated GitHub login
     if (url.pathname === "/api/gh-current-user" && req.method === "GET") {
       try {
@@ -2237,10 +2321,55 @@ async function handleRequest(req, res) {
           review_requested: (pr.requested_reviewers ?? []).map((r) => r.login).filter(Boolean),
           // GitHub REST API /pulls does not expose reviewDecision (GraphQL-only via gh CLI).
           review_decision: "",
-          // mergeable_state is the closest REST equivalent to mergeStateStatus.
-          merge_state_status: pr.mergeable_state ?? "",
-          // statusCheckRollup requires an extra API call per PR — not fetched here.
+          // mergeable_state from list is null/unknown — filled in below via per-PR fetch.
+          merge_state_status: "",
+          // filled in below via check-runs API (parallel, one call per PR).
           checks_rollup: "",
+          _head_sha: pr.head?.sha ?? "",
+          _pr_number: pr.number,
+        }));
+        // Parallel enrichment: CI check-runs + per-PR mergeable_state.
+        // The list endpoint returns mergeable_state null/unknown — need per-PR fetch.
+        // Mirrors Rust rest_rollup_for_sha + rest_mergeable_state in github_api.rs.
+        await Promise.all(prs.map(async (pr) => {
+          const sha = pr._head_sha;
+          const num = pr._pr_number;
+          delete pr._head_sha;
+          delete pr._pr_number;
+          await Promise.all([
+            // CI rollup
+            (async () => {
+              if (!sha) return;
+              try {
+                const r = await githubFetch(`/repos/${nwo}/commits/${sha}/check-runs?per_page=100`, token);
+                if (!r.ok) return;
+                const d = await r.json();
+                const runs = d.check_runs ?? [];
+                if (runs.length === 0) return;
+                let pending = false;
+                for (const run of runs) {
+                  const outcome = (run.conclusion ?? "").toUpperCase();
+                  if (["FAILURE","ERROR","CANCELLED","TIMED_OUT","ACTION_REQUIRED","STALE"].includes(outcome)) {
+                    pr.checks_rollup = "FAILURE"; return;
+                  }
+                  if (!["SUCCESS","NEUTRAL","SKIPPED"].includes(outcome)) pending = true;
+                  if (run.status && run.status !== "completed" && !run.conclusion) pending = true;
+                }
+                pr.checks_rollup = pending ? "PENDING" : "SUCCESS";
+              } catch { /* best-effort */ }
+            })(),
+            // Mergeable state (list returns null/unknown — fetch single PR)
+            (async () => {
+              if (!num) return;
+              try {
+                const r = await githubFetch(`/repos/${nwo}/pulls/${num}`, token);
+                if (!r.ok) return;
+                const d = await r.json();
+                const state = (d.mergeable_state ?? "").toUpperCase();
+                if (state && state !== "UNKNOWN") pr.merge_state_status = state;
+              } catch { /* best-effort */ }
+            })(),
+          ]);
         }));
         return jsonResponse(req, res, prs);
       } catch (err) {
@@ -2592,7 +2721,7 @@ async function handleRequest(req, res) {
       try {
         const token = getGithubToken();
         if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
-        const nwo = getRepoNwo(resolve(cwd));
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
         // Fetch all review comments (paginated — up to 200)
         const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/comments?per_page=100`, token);
@@ -2612,6 +2741,41 @@ async function handleRequest(req, res) {
           start_side: c.start_side ?? null,
           in_reply_to_id: c.in_reply_to_id ?? null,
           diff_hunk: c.diff_hunk ?? "",
+          url: c.html_url ?? "",
+        })));
+      } catch (err) {
+        return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
+      }
+    }
+
+    // GET /api/gh-pr-issue-comments?cwd=<path>&number=<n>
+    // Issue-level (conversation) comments — not anchored to a diff line.
+    if (url.pathname === "/api/gh-pr-issue-comments" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      const number = url.searchParams.get("number");
+      if (!cwd || !number) return jsonResponse(req, res, { error: "Missing cwd or number" }, 400);
+      try {
+        const token = getGithubToken();
+        if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
+        if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
+        const resp = await githubFetch(`/repos/${nwo}/issues/${number}/comments?per_page=100`, token);
+        if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
+        const raw = await resp.json();
+        return jsonResponse(req, res, raw.map((c) => ({
+          id: c.id,
+          body: c.body,
+          author: c.user?.login ?? "",
+          created_at: c.created_at,
+          updated_at: c.updated_at,
+          path: "",
+          line: null,
+          original_line: null,
+          side: "RIGHT",
+          start_line: null,
+          start_side: null,
+          in_reply_to_id: null,
+          diff_hunk: "",
           url: c.html_url ?? "",
         })));
       } catch (err) {
@@ -2731,12 +2895,21 @@ async function handleRequest(req, res) {
       try {
         const token = getGithubToken();
         if (!token) return jsonResponse(req, res, { error: "No GitHub token" }, 401);
-        const nwo = getRepoNwo(resolve(cwd));
+        const nwo = await resolvePrNwo(resolve(cwd), number, token);
         if (!nwo) return jsonResponse(req, res, { error: "Could not determine GitHub repo" }, 400);
-        const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews`, token);
+        const resp = await githubFetch(`/repos/${nwo}/pulls/${number}/reviews?per_page=100`, token);
         if (!resp.ok) return jsonResponse(req, res, { error: `GitHub API ${resp.status}` }, 500);
-        const reviews = await resp.json();
-        return jsonResponse(req, res, reviews);
+        const raw = await resp.json();
+        // Map to the frontend `PrReview` shape (parity with the Tauri
+        // `map_reviews`), instead of leaking the raw GitHub object.
+        return jsonResponse(req, res, raw.map((r) => ({
+          id: r.id,
+          state: r.state,
+          body: r.body ?? "",
+          user: { login: r.user?.login ?? "", avatar_url: r.user?.avatar_url ?? "" },
+          submitted_at: r.submitted_at,
+          html_url: r.html_url,
+        })));
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
@@ -4394,6 +4567,7 @@ async function handleRequest(req, res) {
         if (remoteUrl.includes("github.com")) provider = "github";
         else if (remoteUrl.includes("gitlab")) provider = "gitlab";
         else if (remoteUrl.includes("bitbucket")) provider = "bitbucket";
+        else if (remoteUrl.includes("dev.azure.com") || remoteUrl.includes("visualstudio.com")) provider = "azure";
 
         // Extract owner/repo — SSH (git@host:owner/repo.git) or HTTPS.
         let owner = "";

@@ -38,6 +38,7 @@ import {
   bbPrCiChecks,
   bbPrAnnotations,
   bbConvertDraftToReady,
+  bbListReviews,
   bbApprovePr,
   bbPrFiles,
   bbCurrentUser,
@@ -193,14 +194,7 @@ export class BitbucketProvider implements ForgeProvider {
   //   COMMENT         → post a general comment
 
   listReviews(cwd: string, prNumber: number): Promise<PrReview[]> {
-    // Bitbucket exposes approvals via the PR participants array.
-    // We fetch the PR detail and extract approved participants.
-    return bbGetPr(cwd, prNumber).then((detail) => {
-      // detail comes from Rust bb_pr_to_detail which doesn't expose participants
-      // directly. Return an empty array until v2.11 exposes the raw JSON.
-      void detail;
-      return [] as PrReview[];
-    });
+    return bbListReviews(cwd, prNumber);
   }
 
   async submitReview(

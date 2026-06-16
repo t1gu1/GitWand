@@ -6,6 +6,7 @@ import {
   ghCreatePr,
   ghCheckoutPr,
   ghMergePr,
+  openExternalUrl,
   ghPrDetail,
   ghPrDiff,
   ghPrChecks,
@@ -138,6 +139,15 @@ const forge = computed(() =>
 
 const isGitHub = computed(() => remote.value?.provider === "github");
 const hasDetail = computed(() => !!selectedPr.value);
+
+/** Human-facing name of the active forge — used for "Open on …" labels. */
+const FORGE_LABELS: Record<string, string> = {
+  github: "GitHub",
+  gitlab: "GitLab",
+  bitbucket: "Bitbucket",
+  azure: "Azure DevOps",
+};
+const forgeLabel = computed(() => FORGE_LABELS[forge.value.name] ?? "Web");
 
 // ─── Parse unified diff ─────────────────────────────────
 function parseUnifiedDiff(rawDiff: string): GitDiff[] {
@@ -306,7 +316,8 @@ async function mergePr() {
   } catch (err: any) { error.value = err.message; }
 }
 
-function openInBrowser(url: string) { window.open(url, "_blank"); }
+// window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
+function openInBrowser(url: string) { void openExternalUrl(url); }
 
 // ─── Comment actions ─────────────────────────────────────
 async function handleCreateComment(params: CreatePrCommentParams & { path: string }) {
@@ -473,13 +484,32 @@ function checkIcon(c: CICheck): string {
   return "❓";
 }
 
-function checksIcon(status: string): string {
+const checksIcon = (status: string) => {
   const s = status.toUpperCase();
   if (s === "SUCCESS" || s === "PASS") return "✅";
   if (["FAILURE","FAIL","ERROR"].includes(s)) return "❌";
   if (s === "PENDING") return "⏳";
   return "";
-}
+};
+
+const commitsUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return `${base}?_a=commits`;
+  return `${base}/commits`;
+});
+
+const filesUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return `${base}?_a=files`;
+  return `${base}/files`;
+});
+
+const checksUrl = computed(() => {
+  const base = prDetail.value?.url || "";
+  if (forge.value.name === "azure") return base;
+  return `${base}/checks`;
+});
+
 
 function renderBody(body: string): string {
   return body
@@ -616,7 +646,7 @@ watch(() => props.cwd, () => {
                 <div class="pr-item-actions" @click.stop>
                   <button class="eco-btn eco-btn--xs" @click="checkoutPr(pr)">Checkout</button>
                   <button v-if="pr.state === 'OPEN' || pr.state === 'open'" class="eco-btn eco-btn--xs eco-btn--primary" @click="mergingPr = pr">Merger</button>
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(pr.url)" title="Ouvrir sur GitHub">↗</button>
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(pr.url)" :title="`Ouvrir sur ${forgeLabel}`">↗</button>
                 </div>
               </button>
             </div>
@@ -679,7 +709,15 @@ watch(() => props.cwd, () => {
                 >
                   ✍️ Review
                 </button>
-                <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ GitHub</button>
+
+                <div class="pr-forge-group">
+                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url)">↗ {{ forgeLabel }}</button>
+                  <div class="pr-links-mini">
+                    <button class="eco-btn eco-btn--xs" @click="openInBrowser(commitsUrl)" title="Commits">📦↗</button>
+                    <button class="eco-btn eco-btn--xs" @click="openInBrowser(filesUrl)" title="Fichiers">📄↗</button>
+                    <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(checksUrl)" title="CI">🔗↗</button>
+                  </div>
+                </div>
               </div>
 
               <!-- Info tab -->
@@ -709,7 +747,7 @@ watch(() => props.cwd, () => {
                   </div>
                   <div class="pr-stat">
                     <span class="pr-stat-label">Commentaires</span>
-                    <span>{{ prDetail.comments + prDetail.reviewComments }}</span>
+                    <span>{{ Math.max(prDetail.comments + prDetail.reviewComments, prComments.length) }}</span>
                   </div>
                 </div>
 
@@ -730,12 +768,6 @@ watch(() => props.cwd, () => {
                 <div class="pr-section-label">Description</div>
                 <div v-if="prDetail.body" class="pr-body-text" v-html="safeHtml(renderBody(prDetail.body))" />
                 <div v-else class="pr-placeholder pr-placeholder--sm">Aucune description.</div>
-
-                <div class="pr-links">
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/commits')">📦 Commits</button>
-                  <button class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/files')">📄 Fichiers</button>
-                  <button v-if="prDetail.checksStatus" class="eco-btn eco-btn--xs" @click="openInBrowser(prDetail.url + '/checks')">🔗 CI</button>
-                </div>
               </div>
 
               <!-- Diff tab -->
@@ -1256,10 +1288,28 @@ watch(() => props.cwd, () => {
   font-size: 11px;
 }
 
-.pr-links {
+.pr-forge-group {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  align-items: stretch;
+  margin-left: 8px;
+}
+
+.pr-links-mini {
+  display: flex;
+  gap: 2px;
+}
+
+.pr-links-mini .eco-btn {
+  flex: 1;
+  padding: 0;
+  height: 18px;
+  min-width: 24px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Diff tab */

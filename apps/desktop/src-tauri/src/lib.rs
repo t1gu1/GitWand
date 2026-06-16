@@ -203,28 +203,31 @@ pub fn git_log_parity(
     all: Option<bool>,
     author: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
-    commands::read::git_log(cwd, count, all, author, None, None)
+    // Command fns are now `async` (run off the UI thread). These `*_parity`
+    // wrappers are sync entry points for the parity-probe example, so block on
+    // the future here to keep their signatures unchanged.
+    tauri::async_runtime::block_on(commands::read::git_log(cwd, count, all, author, None, None))
 }
 
 pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String> {
-    commands::ops::git_branches(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_branches(cwd))
 }
 
 pub fn git_stash_list_parity(cwd: String) -> Result<Vec<types::StashEntry>, String> {
-    commands::ops::git_stash_list(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_stash_list(cwd))
 }
 
 pub fn git_submodule_branches_parity(
     cwd: String,
     submodule_path: String,
 ) -> Result<Vec<types::SubmoduleBranch>, String> {
-    commands::ops::git_submodule_branches(cwd, submodule_path)
+    tauri::async_runtime::block_on(commands::ops::git_submodule_branches(cwd, submodule_path))
 }
 
 pub fn git_commit_submodule_changes_parity(
     cwd: String,
 ) -> Result<std::collections::HashMap<String, Vec<types::CommitSubmoduleChange>>, String> {
-    commands::ops::git_commit_submodule_changes(cwd)
+    tauri::async_runtime::block_on(commands::ops::git_commit_submodule_changes(cwd))
 }
 
 // ─── Tauri entry point ─────────────────────────────────────
@@ -304,6 +307,7 @@ pub fn run() {
             commands::ops::git_stash,
             commands::ops::git_stash_pop,
             commands::ops::open_in_editor,
+            commands::ops::open_url,
             commands::ops::set_git_config,
             commands::ops::read_gitwandrc,
             commands::read::preview_merge,
@@ -327,8 +331,40 @@ pub fn run() {
             commands::gh::gh_pr_detail,
             commands::gh::gh_pr_diff,
             commands::gh::gh_pr_checks,
+            commands::gh::gh_pr_comments,
+            commands::gh::gh_pr_issue_comments,
+            commands::gh::gh_pr_reviews,
             commands::gh::gh_check_annotations,
+            commands::gh::gh_list_reactions,
+            commands::gh::gh_add_reaction,
+            commands::gh::gh_delete_reaction,
             commands::gh::gh_pr_ready,
+            commands::gh::gh_fork_info,
+            commands::github_api::github_device_start,
+            commands::github_api::github_device_poll,
+            commands::github_api::github_token_present,
+            commands::azure::azure_device_start,
+            commands::azure::azure_device_poll,
+            commands::azure::azure_token_present,
+            commands::azure::azure_sign_out,
+            commands::azure::az_current_user,
+            commands::azure::az_list_prs,
+            commands::azure::az_pr_count,
+            commands::azure::az_pr_detail,
+            commands::azure::az_pr_diff,
+            commands::azure::az_pr_files,
+            commands::azure::az_create_pr,
+            commands::azure::az_merge_pr,
+            commands::azure::az_pr_ready,
+            commands::azure::az_checkout_pr,
+            commands::azure::az_pr_comments,
+            commands::azure::az_pr_create_comment,
+            commands::azure::az_pr_checks,
+            commands::azure::az_pr_reviews,
+            commands::azure::az_submit_review,
+            commands::azure::az_list_likes,
+            commands::azure::az_add_like,
+            commands::azure::az_delete_like,
             commands::ops::git_exec,
             commands::ops::git_autocomplete,
             commands::ops::git_get_user,
@@ -410,6 +446,9 @@ pub fn run() {
             commands::gitlab::gl_reviewer_candidates,
             commands::gitlab::gl_mr_files,
             commands::gitlab::gl_mr_create_discussion,
+            commands::gitlab::gl_list_reactions,
+            commands::gitlab::gl_add_reaction,
+            commands::gitlab::gl_delete_reaction,
             // ── Credentials (OS keychain) ──
             commands::credentials::set_credential,
             commands::credentials::get_credential,
@@ -426,6 +465,7 @@ pub fn run() {
             commands::bitbucket::bb_create_comment,
             commands::bitbucket::bb_update_comment,
             commands::bitbucket::bb_delete_comment,
+            commands::bitbucket::bb_list_reviews,
             commands::bitbucket::bb_approve_pr,
             commands::bitbucket::bb_pr_files,
             commands::bitbucket::bb_current_user,
@@ -506,6 +546,64 @@ mod tests {
         assert_eq!(pr.review_decision, "REVIEW_REQUIRED");
         assert_eq!(pr.merge_state_status, "BLOCKED");
         assert_eq!(pr.checks_rollup, "SUCCESS");
+    }
+
+    #[test]
+    fn checks_rollup_is_red_when_any_check_fails() {
+        // Regression: the old parser read only the *first* check's conclusion,
+        // so a green first check masked a later failure → green dot on a red PR.
+        let json = r#"[{
+          "number": 7, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"conclusion": "FAILURE"},
+            {"conclusion": "SUCCESS"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "FAILURE");
+    }
+
+    #[test]
+    fn checks_rollup_is_pending_while_a_check_runs() {
+        // A still-running CheckRun (status IN_PROGRESS, conclusion null) and a
+        // legacy StatusContext (state PENDING) both yield a yellow rollup.
+        let json = r#"[{
+          "number": 8, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"status": "IN_PROGRESS", "conclusion": null},
+            {"state": "PENDING"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "PENDING");
+    }
+
+    #[test]
+    fn checks_rollup_green_only_when_all_pass() {
+        let json = r#"[{
+          "number": 9, "title": "x", "state": "OPEN", "author": {"login": "a"},
+          "headRefName": "h", "baseRefName": "main", "isDraft": false,
+          "createdAt": "2026-01-01T00:00:00Z", "updatedAt": "2026-01-01T00:00:00Z",
+          "url": "u", "additions": 0, "deletions": 0, "labels": [], "assignees": [],
+          "reviewRequests": [], "reviewDecision": null, "mergeStateStatus": null,
+          "statusCheckRollup": [
+            {"conclusion": "SUCCESS"},
+            {"conclusion": "SKIPPED"},
+            {"state": "SUCCESS"}
+          ]
+        }]"#;
+        let prs = parse_gh_pr_json(json).unwrap();
+        assert_eq!(prs[0].checks_rollup, "SUCCESS");
     }
 
     #[test]

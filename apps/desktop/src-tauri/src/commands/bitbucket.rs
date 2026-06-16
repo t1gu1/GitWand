@@ -16,14 +16,15 @@
 //! **Pagination**: Bitbucket uses page-based pagination with `?page=N&pagelen=M`
 //! and a `size` field in the response envelope.
 //!
-//! **Security note**: credentials are injected via the `Authorization: Basic`
-//! header, which is visible in process arguments. This is acceptable for v2.10
-//! (same profile as `gh`/`glab` token propagation). Use stdin piping via
-//! `curl --config -` in v2.11 to harden this.
+//! **Security note**: credentials are injected via `curl --config -` (stdin),
+//! keeping the `Authorization: Basic` header off the process argv.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use crate::git::hidden_cmd;
 use crate::types::*;
+use super::curl_util::{auth_header_config, curl_with_status};
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 // ─── Credential helpers ────────────────────────────────────────────────────────
 
@@ -58,10 +59,10 @@ fn get_bb_creds(cwd: &str) -> Result<(String, String), String> {
     Ok((username, app_password))
 }
 
-/// Build the `Authorization: Basic <base64(user:pass)>` header value.
-fn basic_auth_header(username: &str, app_password: &str) -> String {
+/// Build curl `--config -` file contents for Bitbucket Basic auth.
+fn basic_auth_config(username: &str, app_password: &str) -> String {
     let encoded = B64.encode(format!("{}:{}", username, app_password));
-    format!("Basic {}", encoded)
+    auth_header_config("Basic", &encoded)
 }
 
 // ─── Project resolution ────────────────────────────────────────────────────────
@@ -122,56 +123,48 @@ fn repo_api(workspace: &str, slug: &str) -> String {
 
 // ─── HTTP helper ───────────────────────────────────────────────────────────────
 
-/// Perform a Bitbucket API call via `curl`.
+/// Transport layer: delegate to `curl_with_status` with no forge-specific
+/// extra headers (Bitbucket needs none beyond `Accept` and auth).
+fn bb_curl_raw(
+    method: &str,
+    url: &str,
+    body_json: Option<&str>,
+    auth_config: &str,
+    accept: &str,
+) -> Result<(i32, String), String> {
+    curl_with_status(method, url, Some(auth_config), body_json, &[], accept)
+}
+
+/// JSON API call: interprets the `(status, body)` from `bb_curl_raw`.
 ///
-/// - `method`   : "GET", "POST", "PUT", "DELETE"
-/// - `url`      : full API URL
-/// - `body_json`: optional JSON body as a pre-serialized string
-/// - `auth`     : `"Basic <b64>"` header value
-///
-/// Returns the parsed JSON response on success, or an error string on failure.
+/// HTTP ≥ 400 maps to an error (preferring the JSON `message` field).
+/// Empty bodies (DELETE / some PUT) return `Null`. Application-level errors
+/// surfaced in a 2xx `{"error":{...}}` envelope are also mapped to errors.
 fn bb_curl(
     method: &str,
     url: &str,
     body_json: Option<&str>,
-    auth: &str,
+    auth_config: &str,
 ) -> Result<serde_json::Value, String> {
-    let mut args: Vec<String> = vec![
-        "-s".to_string(),
-        "-X".to_string(), method.to_string(),
-        "-H".to_string(), format!("Authorization: {}", auth),
-        "-H".to_string(), "Accept: application/json".to_string(),
-        "-H".to_string(), "Content-Type: application/json".to_string(),
-    ];
-
-    if let Some(body) = body_json {
-        args.push("-d".to_string());
-        args.push(body.to_string());
+    let (status, body) = bb_curl_raw(method, url, body_json, auth_config, "application/json")?;
+    if status >= 400 {
+        let msg = serde_json::from_str::<serde_json::Value>(body.trim())
+            .ok()
+            .and_then(|v| {
+                v.get("error")
+                    .and_then(|e| e.get("message"))
+                    .and_then(|m| m.as_str())
+                    .map(String::from)
+            })
+            .unwrap_or_else(|| format!("HTTP {}", status));
+        return Err(format!("Bitbucket API error: {}", msg));
     }
-
-    args.push(url.to_string());
-
-    let output = hidden_cmd("curl")
-        .args(&args)
-        .output()
-        .map_err(|e| format!("curl not found or failed to spawn: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if stdout.trim().is_empty() {
-        // DELETE and some PUT calls return no body — success if curl exited 0.
-        if output.status.success() {
-            return Ok(serde_json::Value::Null);
-        }
-        return Err(format!(
-            "Bitbucket API call failed (no output): {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+    if body.trim().is_empty() {
+        return Ok(serde_json::Value::Null);
     }
-
-    let json: serde_json::Value = serde_json::from_str(stdout.trim())
-        .map_err(|e| format!("Failed to parse Bitbucket response: {} — raw: {}", e, &stdout[..stdout.len().min(300)]))?;
-
-    // Check for Bitbucket error envelope.
+    let json: serde_json::Value = serde_json::from_str(body.trim())
+        .map_err(|e| format!("Failed to parse Bitbucket response: {} — raw: {}", e, &body[..body.len().min(300)]))?;
+    // Secondary check: Bitbucket sometimes returns 2xx with an error envelope.
     if let Some(error) = json.get("error") {
         let msg = error
             .get("message")
@@ -179,7 +172,6 @@ fn bb_curl(
             .unwrap_or("unknown Bitbucket API error");
         return Err(format!("Bitbucket API error: {}", msg));
     }
-
     Ok(json)
 }
 
@@ -386,6 +378,9 @@ fn bb_pr_to_detail(pr: &serde_json::Value) -> PullRequestDetail {
         reviewers,
         mergeable: String::new(), // Not directly available in v2.10
         checks_status: String::new(), // Bitbucket Pipelines needs a separate call
+        // Bitbucket merge permission needs a separate privileges call —
+        // unknown ⇒ UI gates on errors only.
+        can_merge: None,
     }
 }
 
@@ -405,7 +400,7 @@ impl OrElseEmpty for String {
 ///
 /// `state` accepts "OPEN" (default), "MERGED", "DECLINED", "ALL".
 #[tauri::command]
-pub(crate) fn bb_list_prs(
+pub(crate) async fn bb_list_prs(
     cwd: String,
     state: String,
     limit: Option<i64>,
@@ -413,7 +408,7 @@ pub(crate) fn bb_list_prs(
 ) -> Result<Vec<PullRequest>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let st = match state.to_uppercase().as_str() {
         "MERGED" => "MERGED",
@@ -445,7 +440,7 @@ pub(crate) fn bb_list_prs(
         )
     };
 
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -457,15 +452,39 @@ pub(crate) fn bb_list_prs(
         prs.drain(..skip);
     }
 
+    // Colour the sidebar dot from each PR's head-commit build statuses. The list
+    // payload carries `source.commit.hash`, so resolve it per PR (no extra PR
+    // fetch) and aggregate statuses in parallel (red = failed, yellow = running).
+    let sha_by_num: HashMap<i64, String> = values
+        .iter()
+        .filter_map(|pr| {
+            let hash = jdeep(pr, "source", "commit", "hash");
+            if hash.is_empty() { None } else { Some((ji(pr, "id"), hash)) }
+        })
+        .collect();
+    let rollups: HashMap<i64, String> = prs
+        .par_iter()
+        .filter_map(|pr| {
+            let sha = sha_by_num.get(&pr.number)?;
+            let rollup = bb_rollup_for_sha(&workspace, &slug, sha, &auth_config);
+            if rollup.is_empty() { None } else { Some((pr.number, rollup)) }
+        })
+        .collect();
+    for pr in &mut prs {
+        if let Some(state) = rollups.get(&pr.number) {
+            pr.checks_rollup = state.clone();
+        }
+    }
+
     Ok(prs)
 }
 
 /// Count PRs for a given state.
 #[tauri::command]
-pub(crate) fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
+pub(crate) async fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let st = match state.to_uppercase().as_str() {
         "MERGED" => "MERGED",
@@ -479,47 +498,40 @@ pub(crate) fn bb_pr_count(cwd: String, state: String) -> Result<i64, String> {
         st
     );
 
-    let resp = bb_curl("GET", &url, None, &auth).unwrap_or(serde_json::Value::Null);
+    let resp = bb_curl("GET", &url, None, &auth_config).unwrap_or(serde_json::Value::Null);
     Ok(resp.get("size").and_then(|v| v.as_i64()).unwrap_or(0))
 }
 
 /// Get detailed PR info.
 #[tauri::command]
-pub(crate) fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, String> {
+pub(crate) async fn bb_get_pr(cwd: String, pr_id: i64) -> Result<PullRequestDetail, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let resp = bb_curl("GET", &url, None, &auth)?;
-    Ok(bb_pr_to_detail(&resp))
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
+    let mut detail = bb_pr_to_detail(&resp);
+    // Aggregate the head commit's build statuses so the CI tab can colour itself.
+    let sha = jdeep(&resp, "source", "commit", "hash");
+    detail.checks_status = bb_rollup_for_sha(&workspace, &slug, &sha, &auth_config);
+    Ok(detail)
 }
 
 /// Get the diff of a PR as a unified diff string.
 #[tauri::command]
-pub(crate) fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
+pub(crate) async fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Bitbucket /diff endpoint returns plain-text unified diff — not JSON.
     let url = format!("{}/pullrequests/{}/diff", repo_api(&workspace, &slug), pr_id);
-    let output = hidden_cmd("curl")
-        .args([
-            "-s",
-            "-H", &format!("Authorization: {}", auth),
-            &url,
-        ])
-        .output()
-        .map_err(|e| format!("curl diff: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "bb pr diff failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        ));
+    let (status, body) = bb_curl_raw("GET", &url, None, &auth_config, "*/*")?;
+    if status >= 400 {
+        return Err(format!("Bitbucket diff failed (HTTP {}): {}", status, body.trim()));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    Ok(body)
 }
 
 /// Create a PR via Bitbucket REST API.
@@ -527,7 +539,7 @@ pub(crate) fn bb_pr_diff(cwd: String, pr_id: i64) -> Result<String, String> {
 /// If `source_branch` is empty, the current HEAD branch is resolved via
 /// `git rev-parse --abbrev-ref HEAD` (mirrors the `glab mr create` convention).
 #[tauri::command]
-pub(crate) fn bb_create_pr(
+pub(crate) async fn bb_create_pr(
     cwd: String,
     title: String,
     body: String,
@@ -537,7 +549,7 @@ pub(crate) fn bb_create_pr(
 ) -> Result<PullRequest, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Resolve source branch from HEAD if not provided.
     let source_branch = if source_branch.is_empty() {
@@ -567,7 +579,7 @@ pub(crate) fn bb_create_pr(
     });
 
     let url = format!("{}/pullrequests", repo_api(&workspace, &slug));
-    let resp = bb_curl("POST", &url, Some(&payload.to_string()), &auth)?;
+    let resp = bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(bb_pr_to_pr(&resp))
 }
 
@@ -575,10 +587,10 @@ pub(crate) fn bb_create_pr(
 ///
 /// `method` accepts "merge" (default), "squash", "fast_forward".
 #[tauri::command]
-pub(crate) fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(), String> {
+pub(crate) async fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let merge_strategy = match method.as_str() {
         "squash" => "squash",
@@ -592,7 +604,7 @@ pub(crate) fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(),
     });
 
     let url = format!("{}/pullrequests/{}/merge", repo_api(&workspace, &slug), pr_id);
-    bb_curl("POST", &url, Some(&payload.to_string()), &auth)?;
+    bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(())
 }
 
@@ -602,14 +614,14 @@ pub(crate) fn bb_merge_pr(cwd: String, pr_id: i64, method: String) -> Result<(),
 /// 1. Fetch the source branch from origin
 /// 2. Switch to it (create tracking branch if needed)
 #[tauri::command]
-pub(crate) fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Fetch PR detail to get the source branch name.
     let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &url, None, &auth)?;
+    let pr = bb_curl("GET", &url, None, &auth_config)?;
     let branch = jdeep(&pr, "source", "branch", "name");
     if branch.is_empty() {
         return Err(format!("Could not determine source branch for PR #{}", pr_id));
@@ -655,30 +667,30 @@ pub(crate) fn bb_checkout_pr(cwd: String, pr_id: i64) -> Result<(), String> {
 
 /// List comments on a PR. Returns raw JSON array for TypeScript parsing.
 #[tauri::command]
-pub(crate) fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Value, String> {
+pub(crate) async fn bb_pr_comments(cwd: String, pr_id: i64) -> Result<serde_json::Value, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/comments?pagelen=100",
         repo_api(&workspace, &slug),
         pr_id
     );
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     Ok(resp.get("values").cloned().unwrap_or(serde_json::Value::Array(vec![])))
 }
 
 /// Create a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_create_comment(
+pub(crate) async fn bb_create_comment(
     cwd: String,
     pr_id: i64,
     body: String,
 ) -> Result<serde_json::Value, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let payload = serde_json::json!({ "content": { "raw": body } });
     let url = format!(
@@ -686,12 +698,12 @@ pub(crate) fn bb_create_comment(
         repo_api(&workspace, &slug),
         pr_id
     );
-    bb_curl("POST", &url, Some(&payload.to_string()), &auth)
+    bb_curl("POST", &url, Some(&payload.to_string()), &auth_config)
 }
 
 /// Update a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_update_comment(
+pub(crate) async fn bb_update_comment(
     cwd: String,
     pr_id: i64,
     comment_id: i64,
@@ -699,7 +711,7 @@ pub(crate) fn bb_update_comment(
 ) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let payload = serde_json::json!({ "content": { "raw": body } });
     let url = format!(
@@ -708,20 +720,20 @@ pub(crate) fn bb_update_comment(
         pr_id,
         comment_id
     );
-    bb_curl("PUT", &url, Some(&payload.to_string()), &auth)?;
+    bb_curl("PUT", &url, Some(&payload.to_string()), &auth_config)?;
     Ok(())
 }
 
 /// Delete a comment on a PR.
 #[tauri::command]
-pub(crate) fn bb_delete_comment(
+pub(crate) async fn bb_delete_comment(
     cwd: String,
     pr_id: i64,
     comment_id: i64,
 ) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/comments/{}",
@@ -729,39 +741,113 @@ pub(crate) fn bb_delete_comment(
         pr_id,
         comment_id
     );
-    bb_curl("DELETE", &url, None, &auth)?;
+    bb_curl("DELETE", &url, None, &auth_config)?;
     Ok(())
+}
+
+/// List PR reviews derived from the participants array.
+///
+/// Returns each participant who has approved or requested changes, shaped to match
+/// the frontend `PrReview` interface. Participants with no recorded action are omitted.
+#[tauri::command]
+pub(crate) async fn bb_list_reviews(
+    cwd: String,
+    pr_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let (workspace, slug) = parse_workspace_slug(&cwd)?;
+    let (username, app_password) = get_bb_creds(&cwd)?;
+    let auth_config = basic_auth_config(&username, &app_password);
+
+    let url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
+
+    let participants = resp
+        .get("participants")
+        .and_then(|a| a.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let reviews: Vec<serde_json::Value> = participants
+        .into_iter()
+        .enumerate()
+        .filter_map(|(idx, p)| {
+            let approved = p.get("approved").and_then(|b| b.as_bool()).unwrap_or(false);
+            let state_raw = p
+                .get("state")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            let review_state = if approved || state_raw == "approved" {
+                "APPROVED"
+            } else if state_raw == "changes_requested" {
+                "CHANGES_REQUESTED"
+            } else {
+                return None; // participant hasn't acted yet
+            };
+
+            let user = p.get("user").cloned().unwrap_or(serde_json::Value::Null);
+            let login = user
+                .get("nickname")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let avatar_url = user
+                .get("links")
+                .and_then(|l| l.get("avatar"))
+                .and_then(|a| a.get("href"))
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+            let submitted_at = p
+                .get("participated_on")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string();
+
+            Some(serde_json::json!({
+                "id": idx as i64,
+                "state": review_state,
+                "body": "",
+                "user": { "login": login, "avatar_url": avatar_url },
+                "submitted_at": submitted_at,
+                "html_url": ""
+            }))
+        })
+        .collect();
+
+    Ok(reviews)
 }
 
 /// Approve a PR (current user).
 #[tauri::command]
-pub(crate) fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_approve_pr(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/approve",
         repo_api(&workspace, &slug),
         pr_id
     );
-    bb_curl("POST", &url, None, &auth)?;
+    bb_curl("POST", &url, None, &auth_config)?;
     Ok(())
 }
 
 /// List files changed in a PR.
 #[tauri::command]
-pub(crate) fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String> {
+pub(crate) async fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "{}/pullrequests/{}/diffstat",
         repo_api(&workspace, &slug),
         pr_id
     );
-    let resp = bb_curl("GET", &url, None, &auth)?;
+    let resp = bb_curl("GET", &url, None, &auth_config)?;
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -786,11 +872,11 @@ pub(crate) fn bb_pr_files(cwd: String, pr_id: i64) -> Result<Vec<String>, String
 
 /// Get the current Bitbucket user (the one whose credentials are stored).
 #[tauri::command]
-pub(crate) fn bb_current_user(cwd: String) -> Result<String, String> {
+pub(crate) async fn bb_current_user(cwd: String) -> Result<String, String> {
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
-    let resp = bb_curl("GET", "https://api.bitbucket.org/2.0/user", None, &auth)?;
+    let resp = bb_curl("GET", "https://api.bitbucket.org/2.0/user", None, &auth_config)?;
     Ok(resp
         .get("nickname")
         .or_else(|| resp.get("display_name"))
@@ -801,16 +887,16 @@ pub(crate) fn bb_current_user(cwd: String) -> Result<String, String> {
 
 /// List reviewer candidates (repo members with write access).
 #[tauri::command]
-pub(crate) fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+pub(crate) async fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     let url = format!(
         "https://api.bitbucket.org/2.0/repositories/{}/{}/permissions-config/users",
         workspace, slug
     );
-    let resp = bb_curl("GET", &url, None, &auth)
+    let resp = bb_curl("GET", &url, None, &auth_config)
         .unwrap_or(serde_json::Value::Null);
 
     let values = resp
@@ -847,19 +933,53 @@ pub(crate) fn bb_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidat
     Ok(candidates)
 }
 
+/// Reduce a commit's Bitbucket build statuses to one rollup state:
+/// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` (no CI).
+/// Precedence: any failed/stopped build ⇒ red, else any in-progress ⇒ yellow.
+fn bb_rollup_from_statuses(values: &[serde_json::Value]) -> String {
+    if values.is_empty() {
+        return String::new();
+    }
+    let mut pending = false;
+    for s in values {
+        // Bitbucket status states: SUCCESSFUL / FAILED / INPROGRESS / STOPPED.
+        match js(s, "state").as_str() {
+            "FAILED" | "STOPPED" => return "FAILURE".to_string(),
+            "SUCCESSFUL" => {}
+            _ => pending = true, // INPROGRESS / anything unknown → still running
+        }
+    }
+    if pending { "PENDING".to_string() } else { "SUCCESS".to_string() }
+}
+
+/// Fetch + aggregate the build statuses of commit `sha`. Sync, best-effort
+/// (empty on any error) so it's safe to fan out under rayon.
+fn bb_rollup_for_sha(workspace: &str, slug: &str, sha: &str, auth_config: &str) -> String {
+    if sha.is_empty() {
+        return String::new();
+    }
+    let url = format!(
+        "https://api.bitbucket.org/2.0/repositories/{}/{}/commit/{}/statuses?pagelen=100",
+        workspace, slug, sha
+    );
+    let resp = bb_curl("GET", &url, None, auth_config).unwrap_or(serde_json::Value::Null);
+    let values = resp.get("values").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    bb_rollup_from_statuses(&values)
+}
+
 /// Get CI status checks for a PR via Bitbucket Pipelines commit statuses endpoint.
 ///
 /// Endpoint: GET /2.0/repositories/{ws}/{slug}/commit/{sha}/statuses
 /// The head commit SHA is read from the PR's `source.commit.hash` field.
 #[tauri::command]
-pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, String> {
+pub(crate) async fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Step 1: get the PR to find the head commit SHA.
     let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &pr_url, None, &auth)?;
+    let pr = bb_curl("GET", &pr_url, None, &auth_config)?;
     let head_sha = jdeep(&pr, "source", "commit", "hash");
     if head_sha.is_empty() {
         return Ok(Vec::new());
@@ -870,7 +990,7 @@ pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, S
         "https://api.bitbucket.org/2.0/repositories/{}/{}/commit/{}/statuses?pagelen=30",
         workspace, slug, head_sha
     );
-    let resp = bb_curl("GET", &url, None, &auth).unwrap_or(serde_json::Value::Null);
+    let resp = bb_curl("GET", &url, None, &auth_config).unwrap_or(serde_json::Value::Null);
     let values = resp
         .get("values")
         .and_then(|v| v.as_array())
@@ -921,7 +1041,7 @@ pub(crate) fn bb_pr_ci_checks(cwd: String, pr_id: i64) -> Result<Vec<CICheck>, S
 pub(crate) fn bb_pr_annotations(cwd: String, pr_id: i64) -> Result<Vec<CIAnnotation>, String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth = basic_auth_config(&username, &app_password);
 
     // 1. Head commit SHA.
     let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
@@ -1002,14 +1122,14 @@ pub(crate) fn bb_pr_annotations(cwd: String, pr_id: i64) -> Result<Vec<CIAnnotat
 /// Bitbucket has no native draft concept — the convention is a "Draft: " title
 /// prefix. This command strips it via a PUT update on the PR.
 #[tauri::command]
-pub(crate) fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), String> {
+pub(crate) async fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), String> {
     let (workspace, slug) = parse_workspace_slug(&cwd)?;
     let (username, app_password) = get_bb_creds(&cwd)?;
-    let auth = basic_auth_header(&username, &app_password);
+    let auth_config = basic_auth_config(&username, &app_password);
 
     // Step 1: get current title.
     let pr_url = format!("{}/pullrequests/{}", repo_api(&workspace, &slug), pr_id);
-    let pr = bb_curl("GET", &pr_url, None, &auth)?;
+    let pr = bb_curl("GET", &pr_url, None, &auth_config)?;
     let title = js(&pr, "title");
 
     // Step 2: strip "Draft: " prefix (case-insensitive).
@@ -1028,6 +1148,6 @@ pub(crate) fn bb_convert_draft_to_ready(cwd: String, pr_id: i64) -> Result<(), S
 
     // Step 3: PATCH the title via PUT (Bitbucket uses PUT for PR updates).
     let body = serde_json::json!({ "title": ready_title }).to_string();
-    bb_curl("PUT", &pr_url, Some(&body), &auth)?;
+    bb_curl("PUT", &pr_url, Some(&body), &auth_config)?;
     Ok(())
 }

@@ -15,6 +15,7 @@ import {
 } from "../utils/backend";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
+import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
 import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
@@ -330,29 +331,6 @@ function runNextAction() {
   else if (nextAction.value.view) emit("changeView", nextAction.value.view);
 }
 
-/** Deterministic hue for an avatar from a string (same author → same color). */
-function hueFor(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return Math.abs(h) % 360;
-}
-
-function avatarStyle(key: string) {
-  const h = hueFor(key);
-  const color = `hsl(${h} 70% 55%)`;
-  return {
-    borderColor: color,
-    color: color,
-    background: "transparent",
-  };
-}
-
-function initials(name: string): string {
-  if (!name) return "?";
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 /** Detect conventional-commit type for tag colouring. */
 function commitType(msg: string): string {
@@ -487,7 +465,9 @@ function renderReadme(md: string): string {
   // dividers, and we don't want them rendered as text. markdown-it's
   // `html: false` mode escapes them, which looks noisy in the UI.
   const cleaned = rest.replace(/<!--[\s\S]*?-->/g, "");
-  return headerHtml + renderMarkdown(cleaned);
+  // READMEs soft-wrap single newlines (GitHub behaviour) — disable `breaks` so
+  // wrapped prose isn't broken up with spurious <br> tags.
+  return headerHtml + renderMarkdown(cleaned, { breaks: false });
 }
 
 function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {

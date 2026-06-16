@@ -17,6 +17,8 @@
 
 use crate::git::hidden_cmd;
 use crate::types::*;
+use rayon::prelude::*;
+use std::collections::HashMap;
 
 // ─── JSON field helpers ────────────────────────────────────────────────────────
 
@@ -181,6 +183,11 @@ fn gl_mr_to_detail(mr: &serde_json::Value) -> PullRequestDetail {
         reviewers: jusernames(mr, "reviewers"),
         mergeable,
         checks_status: String::new(),
+        // GitLab's single-MR endpoint carries `user.can_merge` for the caller.
+        can_merge: mr
+            .get("user")
+            .and_then(|u| u.get("can_merge"))
+            .and_then(|b| b.as_bool()),
     }
 }
 
@@ -188,7 +195,7 @@ fn gl_mr_to_detail(mr: &serde_json::Value) -> PullRequestDetail {
 
 /// Detect if `glab` CLI is installed and accessible.
 #[tauri::command]
-pub(crate) fn detect_glab(cwd: String) -> bool {
+pub(crate) async fn detect_glab(cwd: String) -> bool {
     hidden_cmd("glab")
         .arg("--version")
         .current_dir(&cwd)
@@ -202,7 +209,7 @@ pub(crate) fn detect_glab(cwd: String) -> bool {
 /// `state` accepts "opened" (default), "closed", "merged", "all".
 /// Pagination: naïve slice — glab doesn't support cursor pagination via CLI.
 #[tauri::command]
-pub(crate) fn gl_list_mrs(
+pub(crate) async fn gl_list_mrs(
     cwd: String,
     state: String,
     limit: Option<i64>,
@@ -250,6 +257,33 @@ pub(crate) fn gl_list_mrs(
         mrs.drain(..skip);
     }
 
+    // Colour the sidebar dot from each MR's pipeline. The list payload rarely
+    // embeds `head_pipeline`, so use it when present (free) and otherwise fetch
+    // the pipeline per MR in parallel (red = failed, yellow = pending).
+    let embedded: HashMap<i64, String> = arr
+        .iter()
+        .filter_map(|mr| {
+            let iid = ji(mr, "iid");
+            let status = mr.get("head_pipeline").or_else(|| mr.get("pipeline")).map(|p| js(p, "status"))?;
+            Some((iid, status))
+        })
+        .collect();
+    let rollups: HashMap<i64, String> = mrs
+        .par_iter()
+        .filter_map(|mr| {
+            let rollup = match embedded.get(&mr.number) {
+                Some(s) => gl_status_to_rollup(s),
+                None => gl_pipeline_rollup(&cwd, mr.number),
+            };
+            if rollup.is_empty() { None } else { Some((mr.number, rollup)) }
+        })
+        .collect();
+    for mr in &mut mrs {
+        if let Some(state) = rollups.get(&mr.number) {
+            mr.checks_rollup = state.clone();
+        }
+    }
+
     Ok(mrs)
 }
 
@@ -257,7 +291,7 @@ pub(crate) fn gl_list_mrs(
 ///
 /// Returns 0 on non-fatal errors so the Launchpad badge can still render.
 #[tauri::command]
-pub(crate) fn gl_mr_count(cwd: String, state: String) -> Result<i64, String> {
+pub(crate) async fn gl_mr_count(cwd: String, state: String) -> Result<i64, String> {
     let st = match state.as_str() {
         "closed" => "closed",
         "merged" => "merged",
@@ -282,7 +316,7 @@ pub(crate) fn gl_mr_count(cwd: String, state: String) -> Result<i64, String> {
 
 /// Get detailed MR info using `glab mr view`.
 #[tauri::command]
-pub(crate) fn gl_get_mr(cwd: String, iid: i64) -> Result<PullRequestDetail, String> {
+pub(crate) async fn gl_get_mr(cwd: String, iid: i64) -> Result<PullRequestDetail, String> {
     let output = hidden_cmd("glab")
         .args(["mr", "view", &iid.to_string(), "--output", "json"])
         .current_dir(&cwd)
@@ -300,12 +334,25 @@ pub(crate) fn gl_get_mr(cwd: String, iid: i64) -> Result<PullRequestDetail, Stri
     let mr: serde_json::Value = serde_json::from_str(stdout.trim())
         .map_err(|e| format!("Failed to parse glab mr view output: {}", e))?;
 
-    Ok(gl_mr_to_detail(&mr))
+    let mut detail = gl_mr_to_detail(&mr);
+    // Prefer the pipeline status embedded in the MR object (free); fall back to
+    // a dedicated pipelines call so the CI tab can colour red / yellow / green.
+    let embedded = mr
+        .get("head_pipeline")
+        .or_else(|| mr.get("pipeline"))
+        .map(|p| js(p, "status"))
+        .unwrap_or_default();
+    detail.checks_status = if embedded.is_empty() {
+        gl_pipeline_rollup(&cwd, iid)
+    } else {
+        gl_status_to_rollup(&embedded)
+    };
+    Ok(detail)
 }
 
 /// Get the unified diff of a MR using `glab mr diff`.
 #[tauri::command]
-pub(crate) fn gl_mr_diff(cwd: String, iid: i64) -> Result<String, String> {
+pub(crate) async fn gl_mr_diff(cwd: String, iid: i64) -> Result<String, String> {
     let output = hidden_cmd("glab")
         .args(["mr", "diff", &iid.to_string()])
         .current_dir(&cwd)
@@ -327,7 +374,7 @@ pub(crate) fn gl_mr_diff(cwd: String, iid: i64) -> Result<String, String> {
 /// Returns the most-recent pipeline as a single-entry list (GitLab only has
 /// one "active" pipeline per MR at a time). Each job maps to a CICheck entry.
 #[tauri::command]
-pub(crate) fn gl_mr_pipelines(cwd: String, iid: i64) -> Result<Vec<CICheck>, String> {
+pub(crate) async fn gl_mr_pipelines(cwd: String, iid: i64) -> Result<Vec<CICheck>, String> {
     let endpoint = format!(
         "projects/:fullpath/merge_requests/{}/pipelines",
         iid
@@ -374,6 +421,41 @@ pub(crate) fn gl_mr_pipelines(cwd: String, iid: i64) -> Result<Vec<CICheck>, Str
             }
         })
         .collect())
+}
+
+/// Reduce a GitLab pipeline `status` to a rollup state the frontend colours:
+/// `FAILURE` (red) / `PENDING` (yellow) / `SUCCESS` (green), or `""` (no CI).
+fn gl_status_to_rollup(status: &str) -> String {
+    match status {
+        "success" => "SUCCESS",
+        "failed" | "canceled" => "FAILURE",
+        // No pipeline / skipped → no dot.
+        "" | "skipped" => "",
+        // created / waiting_for_resource / preparing / pending / running /
+        // manual / scheduled → still in flight.
+        _ => "PENDING",
+    }
+    .to_string()
+}
+
+/// Fetch a MR's most-recent pipeline and reduce it to a rollup state. Sync and
+/// best-effort (empty on any error) so it's safe to fan out under rayon.
+fn gl_pipeline_rollup(cwd: &str, iid: i64) -> String {
+    let endpoint = format!("projects/:fullpath/merge_requests/{}/pipelines", iid);
+    let out = match hidden_cmd("glab").args(["api", &endpoint]).current_dir(cwd).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return String::new(),
+    };
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let v: serde_json::Value =
+        serde_json::from_str(stdout.trim()).unwrap_or(serde_json::Value::Array(vec![]));
+    // The API returns pipelines newest-first; the first entry is the active one.
+    let status = v
+        .as_array()
+        .and_then(|a| a.first())
+        .map(|p| js(p, "status"))
+        .unwrap_or_default();
+    gl_status_to_rollup(&status)
 }
 
 /// Helper — run `glab api <endpoint>` and parse the JSON response.
@@ -501,7 +583,7 @@ pub(crate) fn gl_mr_annotations(cwd: String, iid: i64) -> Result<Vec<CIAnnotatio
 
 /// Create a MR using `glab mr create`.
 #[tauri::command]
-pub(crate) fn gl_create_mr(
+pub(crate) async fn gl_create_mr(
     cwd: String,
     title: String,
     body: String,
@@ -564,7 +646,7 @@ pub(crate) fn gl_create_mr(
 ///
 /// `method` accepts "merge" (default), "squash", "rebase".
 #[tauri::command]
-pub(crate) fn gl_merge_mr(cwd: String, iid: i64, method: String) -> Result<(), String> {
+pub(crate) async fn gl_merge_mr(cwd: String, iid: i64, method: String) -> Result<(), String> {
     let mut args: Vec<String> = vec!["mr".to_string(), "merge".to_string(), iid.to_string()];
 
     match method.as_str() {
@@ -593,7 +675,7 @@ pub(crate) fn gl_merge_mr(cwd: String, iid: i64, method: String) -> Result<(), S
 
 /// Checkout a MR branch locally using `glab mr checkout`.
 #[tauri::command]
-pub(crate) fn gl_checkout_mr(cwd: String, iid: i64) -> Result<(), String> {
+pub(crate) async fn gl_checkout_mr(cwd: String, iid: i64) -> Result<(), String> {
     let output = hidden_cmd("glab")
         .args(["mr", "checkout", &iid.to_string()])
         .current_dir(&cwd)
@@ -611,7 +693,7 @@ pub(crate) fn gl_checkout_mr(cwd: String, iid: i64) -> Result<(), String> {
 
 /// Convert a draft MR to ready-for-review using `glab mr update --draft=false`.
 #[tauri::command]
-pub(crate) fn gl_convert_draft_to_ready(cwd: String, iid: i64) -> Result<(), String> {
+pub(crate) async fn gl_convert_draft_to_ready(cwd: String, iid: i64) -> Result<(), String> {
     let output = hidden_cmd("glab")
         .args(["mr", "update", &iid.to_string(), "--draft=false"])
         .current_dir(&cwd)
@@ -633,7 +715,7 @@ pub(crate) fn gl_convert_draft_to_ready(cwd: String, iid: i64) -> Result<(), Str
 /// GitLab notes are simpler than GitHub review comments: no diff-line
 /// anchoring in v2.10 (that requires the Discussions API).
 #[tauri::command]
-pub(crate) fn gl_mr_notes(cwd: String, iid: i64) -> Result<serde_json::Value, String> {
+pub(crate) async fn gl_mr_notes(cwd: String, iid: i64) -> Result<serde_json::Value, String> {
     let endpoint = format!(
         "projects/:fullpath/merge_requests/{}/notes?sort=asc&per_page=100",
         iid
@@ -659,7 +741,7 @@ pub(crate) fn gl_mr_notes(cwd: String, iid: i64) -> Result<serde_json::Value, St
 ///
 /// Returns the created note as raw JSON — parsed TypeScript-side.
 #[tauri::command]
-pub(crate) fn gl_mr_create_note(
+pub(crate) async fn gl_mr_create_note(
     cwd: String,
     iid: i64,
     body: String,
@@ -684,7 +766,7 @@ pub(crate) fn gl_mr_create_note(
 
 /// Update a note on a MR via `glab api`.
 #[tauri::command]
-pub(crate) fn gl_mr_update_note(
+pub(crate) async fn gl_mr_update_note(
     cwd: String,
     iid: i64,
     note_id: i64,
@@ -711,7 +793,7 @@ pub(crate) fn gl_mr_update_note(
 
 /// Delete a note on a MR via `glab api`.
 #[tauri::command]
-pub(crate) fn gl_mr_delete_note(
+pub(crate) async fn gl_mr_delete_note(
     cwd: String,
     iid: i64,
     note_id: i64,
@@ -737,7 +819,7 @@ pub(crate) fn gl_mr_delete_note(
 
 /// Approve a MR using `glab mr approve`.
 #[tauri::command]
-pub(crate) fn gl_approve_mr(cwd: String, iid: i64) -> Result<(), String> {
+pub(crate) async fn gl_approve_mr(cwd: String, iid: i64) -> Result<(), String> {
     let output = hidden_cmd("glab")
         .args(["mr", "approve", &iid.to_string()])
         .current_dir(&cwd)
@@ -757,7 +839,7 @@ pub(crate) fn gl_approve_mr(cwd: String, iid: i64) -> Result<(), String> {
 ///
 /// Returns raw JSON — parsed TypeScript-side into PrReview[].
 #[tauri::command]
-pub(crate) fn gl_list_reviews(cwd: String, iid: i64) -> Result<serde_json::Value, String> {
+pub(crate) async fn gl_list_reviews(cwd: String, iid: i64) -> Result<serde_json::Value, String> {
     let endpoint = format!(
         "projects/:fullpath/merge_requests/{}/approvals",
         iid
@@ -779,7 +861,7 @@ pub(crate) fn gl_list_reviews(cwd: String, iid: i64) -> Result<serde_json::Value
 
 /// Get the current GitLab user via `glab api /user`.
 #[tauri::command]
-pub(crate) fn gl_current_user(cwd: String) -> Result<String, String> {
+pub(crate) async fn gl_current_user(cwd: String) -> Result<String, String> {
     let output = hidden_cmd("glab")
         .args(["api", "/user"])
         .current_dir(&cwd)
@@ -806,7 +888,7 @@ pub(crate) fn gl_current_user(cwd: String) -> Result<String, String> {
 
 /// List reviewer candidates (project members with push access) via `glab api`.
 #[tauri::command]
-pub(crate) fn gl_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
+pub(crate) async fn gl_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidate>, String> {
     let output = hidden_cmd("glab")
         .args(["api", "projects/:fullpath/members/all?per_page=100"])
         .current_dir(&cwd)
@@ -853,7 +935,7 @@ pub(crate) fn gl_reviewer_candidates(cwd: String) -> Result<Vec<ReviewerCandidat
 
 /// List file paths changed in a MR via `glab api` (diffs endpoint).
 #[tauri::command]
-pub(crate) fn gl_mr_files(cwd: String, iid: i64) -> Result<Vec<String>, String> {
+pub(crate) async fn gl_mr_files(cwd: String, iid: i64) -> Result<Vec<String>, String> {
     let endpoint = format!(
         "projects/:fullpath/merge_requests/{}/diffs?per_page=100",
         iid
@@ -895,7 +977,7 @@ pub(crate) fn gl_mr_files(cwd: String, iid: i64) -> Result<Vec<String>, String> 
 ///   Body: { body, position: { base_sha, start_sha, head_sha, position_type,
 ///            new_path, new_line, old_path, old_line } }
 #[tauri::command]
-pub(crate) fn gl_mr_create_discussion(
+pub(crate) async fn gl_mr_create_discussion(
     cwd: String,
     iid: i64,
     body: String,
@@ -950,4 +1032,114 @@ pub(crate) fn gl_mr_create_discussion(
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     serde_json::from_str(stdout.trim()).map_err(|e| format!("Parse discussion: {}", e))
+}
+
+// ─── Award emoji (reactions) ─────────────────────────────────────────────────
+
+/// Map a GitLab emoji name to the equivalent GitHub reaction content string.
+fn gl_emoji_to_gh(name: &str) -> &str {
+    match name {
+        "thumbsup"   => "+1",
+        "thumbsdown" => "-1",
+        "laughing"   => "laugh",
+        "tada"       => "hooray",
+        // confused, heart, rocket, eyes share the same name on both platforms
+        other        => other,
+    }
+}
+
+/// Map a GitHub reaction content string to the GitLab emoji name.
+fn gh_content_to_gl(content: &str) -> &str {
+    match content {
+        "+1"    => "thumbsup",
+        "-1"    => "thumbsdown",
+        "laugh" => "laughing",
+        "hooray"=> "tada",
+        other   => other,
+    }
+}
+
+fn map_gl_reaction(r: &serde_json::Value) -> serde_json::Value {
+    serde_json::json!({
+        "id": ji(r, "id"),
+        "content": gl_emoji_to_gh(&js(r, "name")),
+        "user": juser(r, "user"),
+    })
+}
+
+/// Run any `glab api` call with optional `-f key=value` fields.
+fn glab_api(cwd: &str, method: &str, endpoint: &str, fields: &[(&str, &str)]) -> Result<serde_json::Value, String> {
+    let mut cmd = hidden_cmd("glab");
+    cmd.args(["api", "-X", method, endpoint]);
+    for (k, v) in fields {
+        cmd.args(["-f", &format!("{}={}", k, v)]);
+    }
+    let output = cmd.current_dir(cwd).output().map_err(|e| format!("glab api: {}", e))?;
+    if !output.status.success() {
+        return Err(format!("glab api {} {}: {}", method, endpoint, String::from_utf8_lossy(&output.stderr)));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() { return Ok(serde_json::Value::Null); }
+    serde_json::from_str(trimmed).map_err(|e| format!("parse glab response: {}", e))
+}
+
+fn award_emoji_path(iid: i64, target_type: &str, target_id: i64) -> String {
+    match target_type {
+        "pr" => format!("projects/:fullpath/merge_requests/{}/award_emoji", iid),
+        _    => format!("projects/:fullpath/merge_requests/{}/notes/{}/award_emoji", iid, target_id),
+    }
+}
+
+/// List award emojis (reactions) on a MR or one of its notes.
+/// `target_type`: `"pr"` | `"review_comment"` | `"issue_comment"`.
+/// `target_id`: ignored for `"pr"`, note id otherwise.
+/// Emoji names are normalised to GitHub reaction content strings.
+#[tauri::command]
+pub(crate) async fn gl_list_reactions(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = award_emoji_path(iid, &target_type, target_id);
+        let v = glab_api(&cwd, "GET", &path, &[])?;
+        Ok(v.as_array().map(|a| a.iter().map(map_gl_reaction).collect()).unwrap_or_default())
+    }).await.map_err(|e| e.to_string())?
+}
+
+/// Add an award emoji (reaction) to a MR or note.
+/// `content` uses GitHub reaction content strings (normalised to GitLab names internally).
+#[tauri::command]
+pub(crate) async fn gl_add_reaction(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+    content: String,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let gl_name = gh_content_to_gl(&content).to_string();
+        let path = award_emoji_path(iid, &target_type, target_id);
+        let v = glab_api(&cwd, "POST", &path, &[("name", &gl_name)])?;
+        Ok(map_gl_reaction(&v))
+    }).await.map_err(|e| e.to_string())?
+}
+
+/// Delete an award emoji (reaction) from a MR or note.
+#[tauri::command]
+pub(crate) async fn gl_delete_reaction(
+    cwd: String,
+    iid: i64,
+    target_type: String,
+    target_id: i64,
+    reaction_id: i64,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base = award_emoji_path(iid, &target_type, target_id);
+        let path = format!("{}/{}", base, reaction_id);
+        glab_api(&cwd, "DELETE", &path, &[])?;
+        Ok(())
+    }).await.map_err(|e| e.to_string())?
 }

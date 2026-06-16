@@ -91,6 +91,11 @@ export interface AppSettings {
   updateChannel: "stable" | "beta";
   /** Language used for AI-generated commit messages. "" = follow UI locale. */
   commitMessageLang: string;
+  /**
+   * Language for AI-generated PR title/body. "english" (default — PRs are most
+   * often written in English) or "ui" to match the app's current locale.
+   */
+  prAiLanguage: "english" | "ui";
   /** Whether AI features are enabled. */
   aiEnabled: boolean;
   /** Active AI provider. */
@@ -205,6 +210,7 @@ export const defaultAppSettings: AppSettings = {
   blameAlgorithm: "histogram",
   updateChannel: "stable",
   commitMessageLang: "",
+  prAiLanguage: "english",
   aiEnabled: false,
   aiProvider: "none",
   aiApiKey: "",

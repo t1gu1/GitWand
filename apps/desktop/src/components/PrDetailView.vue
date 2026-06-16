@@ -11,13 +11,16 @@
  * - Stat cards refined with icons + gradient hover
  * - Polished tabs with animation + count badges
  */
-import { computed, inject, ref } from "vue";
-import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
-import { renderMarkdown } from "../composables/useSafeHtml";
+import { computed, inject, nextTick, ref } from "vue";
+import { PR_PANEL_KEY, isMergeConflict, type PrPanelState } from "../composables/usePrPanel";
+import { renderMarkdown, onMarkdownLinkClick } from "../composables/useSafeHtml";
+import { useAvatar } from "../composables/useAvatar";
+import { openExternalUrl } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import PrInlineDiff from "./PrInlineDiff.vue";
 import PrReviewModal from "./PrReviewModal.vue";
 import PrIntelligencePanel from "./PrIntelligencePanel.vue";
+import PrReactions from "./PrReactions.vue";
 
 const { t } = useI18n();
 
@@ -28,34 +31,11 @@ const emit = defineEmits<{
 
 const p = inject<PrPanelState>(PR_PANEL_KEY)!;
 
-function openInBrowser(url: string) { window.open(url, "_blank"); }
+// window.open is a no-op in the Tauri webview — hand the URL to the OS opener.
+function openInBrowser(url: string) { void openExternalUrl(url); }
 
-/** Author initials for the avatar disk. */
-function authorInitials(author: string): string {
-  if (!author) return "?";
-  const parts = author.replace(/[^a-zA-Z0-9\s-]/g, " ").split(/[\s-]+/).filter(Boolean);
-  if (parts.length === 0) return author[0]?.toUpperCase() ?? "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[1][0]).toUpperCase();
-}
-
-/** Deterministic hue from the author name so the avatar keeps a stable color. */
-function authorHue(author: string): number {
-  if (!author) return 260;
-  let h = 0;
-  for (let i = 0; i < author.length; i++) {
-    h = (h * 31 + author.charCodeAt(i)) >>> 0;
-  }
-  return h % 360;
-}
-
-const avatarStyle = computed(() => {
-  const author = p.prDetail.value?.author ?? "";
-  const hue = authorHue(author);
-  return {
-    background: `linear-gradient(135deg, hsl(${hue} 65% 55%), hsl(${(hue + 40) % 360} 70% 45%))`,
-  };
-});
+// Avatar disks share the app-wide outline style — see composables/useAvatar.
+const { avatarStyle, avatarInitials: authorInitials } = useAvatar();
 
 const isOpenPr = computed(() => {
   const s = p.selectedPr.value?.state;
@@ -64,6 +44,168 @@ const isOpenPr = computed(() => {
 
 /** Local UI state for the PR description's formatted / raw switch. */
 const descriptionTab = ref<"formatted" | "raw">("formatted");
+
+const commitsUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return `${base}?_a=commits`;
+  return `${base}/commits`;
+});
+
+const filesUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return `${base}?_a=files`;
+  return `${base}/files`;
+});
+
+const checksUrl = computed(() => {
+  const base = p.prDetail.value?.url || "";
+  if (p.forge.value.name === "azure") return base;
+  return `${base}/checks`;
+});
+
+/** CI tab tint: red on failure, green when all pass, yellow while pending. */
+const ciTabState = computed<"ok" | "fail" | "pending" | null>(() => {
+  // A merge conflict blocks the PR just like a failing check — flag it red even
+  // when CI itself is green/empty.
+  if (isMergeConflict(p.prDetail.value?.mergeable)) return "fail";
+  const s = (p.prDetail.value?.checksStatus || "").toUpperCase();
+  if (!s) return null;
+  if (["FAILURE", "FAIL", "ERROR"].includes(s)) return "fail";
+  if (s === "SUCCESS" || s === "PASS") return "ok";
+  if (s === "PENDING") return "pending";
+  return null;
+});
+
+/** Merge status shown in the stats grid — never claims "Mergeable" while CI is
+ * red or the branch conflicts. */
+const mergeStatus = computed<{ icon: string; label: string }>(() => {
+  const m = (p.prDetail.value?.mergeable || "").toUpperCase();
+  if (isMergeConflict(m)) {
+    return { icon: "⚠️", label: t("pr.detail.mergeConflicting") };
+  }
+  // CI failed (red) but no git conflict — surface a generic problem instead of
+  // a misleading "Mergeable".
+  if (ciTabState.value === "fail") {
+    return { icon: "⚠️", label: t("pr.detail.mergeProblem") };
+  }
+  if (m === "MERGEABLE") return { icon: "✅", label: t("pr.detail.mergeMergeable") };
+  if (!m || m === "UNKNOWN") return { icon: "—", label: t("pr.detail.mergeUnknown") };
+  return { icon: p.mergeableIcon(m), label: m };
+});
+
+/**
+ * Review + issue-level comments, sorted oldest-first for display under the
+ * description. `bodyHtml` is rendered once here (markdown parse + sanitize is
+ * expensive) instead of in the `v-html` binding, which would re-run on every
+ * re-render for every comment.
+ */
+const sortedComments = computed(() =>
+  [...p.prComments.value, ...p.prIssueComments.value]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+    .map((c) => ({ ...c, bodyHtml: renderMarkdown(c.body) })),
+);
+
+/** Translated verdict label + CSS modifier for a review state. */
+function reviewStateMeta(state: string): { label: string; cls: string } {
+  switch ((state || "").toUpperCase()) {
+    case "APPROVED":
+      return { label: t("pr.detail.reviewApproved"), cls: "pdv-review--approved" };
+    case "CHANGES_REQUESTED":
+      return { label: t("pr.detail.reviewChangesRequested"), cls: "pdv-review--changes" };
+    case "DISMISSED":
+      return { label: t("pr.detail.reviewDismissed"), cls: "pdv-review--dismissed" };
+    default:
+      return { label: t("pr.detail.reviewCommented"), cls: "pdv-review--commented" };
+  }
+}
+
+type TimelineComment = (typeof sortedComments.value)[number] & { kind: "comment" };
+type TimelineReview = {
+  kind: "review";
+  id: number;
+  author: string;
+  verdictLabel: string;
+  verdictCls: string;
+  bodyHtml: string;
+  ts: string;
+  href: string;
+};
+type TimelineItem = TimelineComment | TimelineReview;
+
+/**
+ * Unified conversation timeline: inline/issue comments interleaved with the
+ * review-level verdicts (Approve / Request changes / Comment), oldest-first.
+ * Lets the "requested changes" review show up in the comments list — with its
+ * summary body and a link back to the review on the forge — instead of being
+ * hidden in a separate block.
+ */
+const timeline = computed<TimelineItem[]>(() => {
+  const comments: TimelineItem[] = sortedComments.value.map((c) => ({ ...c, kind: "comment" as const }));
+  // PENDING reviews (unsubmitted drafts) are excluded; COMMENTED reviews with an
+  // empty body carry no standalone signal (their inline notes live in the
+  // comments thread). `bodyHtml` is rendered once, like `sortedComments`.
+  const reviews: TimelineItem[] = p.prReviews.value
+    .filter((r) => {
+      const s = (r.state || "").toUpperCase();
+      if (s === "PENDING") return false;
+      if (s === "COMMENTED") return !!r.body?.trim();
+      return true;
+    })
+    .map((r) => {
+      const meta = reviewStateMeta(r.state);
+      return {
+        kind: "review" as const,
+        id: r.id,
+        author: r.user?.login ?? "",
+        verdictLabel: meta.label,
+        verdictCls: meta.cls,
+        bodyHtml: r.body?.trim() ? renderMarkdown(r.body) : "",
+        ts: r.submitted_at,
+        href: r.html_url,
+      };
+    });
+  return [...comments, ...reviews].sort((a, b) => {
+    const ta = a.kind === "review" ? a.ts : a.created_at;
+    const tb = b.kind === "review" ? b.ts : b.created_at;
+    return new Date(ta).getTime() - new Date(tb).getTime();
+  });
+});
+
+/** PR description rendered once (see `sortedComments` for the rationale). */
+const descriptionHtml = computed(() => renderMarkdown(p.prDetail.value?.body));
+
+/** Anchor at the bottom of the comments list — target for the Comments tile. */
+const commentsEnd = ref<HTMLElement | null>(null);
+
+/** Clicking the Comments tile jumps to the Info tab and scrolls to the last comment. */
+async function scrollToLastComment() {
+  p.detailTab.value = "info";
+  await nextTick();
+  commentsEnd.value?.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+/**
+ * Web URL for a comment's "Go to" button. GitHub/Bitbucket expose a direct
+ * per-comment permalink; GitLab/Azure don't, so fall back to the PR/MR page
+ * (with the GitLab `#note_<id>` anchor when the base is a GitLab MR).
+ */
+function commentHref(c: { url: string; id: number }): string {
+  if (c.url) return c.url;
+  const base = p.prDetail.value?.url ?? "";
+  if (!base) return "";
+  return /gitlab/i.test(base) && c.id ? `${base}#note_${c.id}` : base;
+}
+
+/** Short relative time for a comment timestamp. */
+function commentTimeAgo(dateStr: string): string {
+  try {
+    const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}j`;
+  } catch { return dateStr; }
+}
 </script>
 
 <template>
@@ -131,8 +273,25 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
           <div class="pdv-hero-title">
             <span class="pdv-pr-num">#{{ p.prDetail.value.number }}</span>
             <h1 class="pdv-pr-title">{{ p.prDetail.value.title }}</h1>
+            <!-- SWR: cached detail is on screen; show a small badge while the
+                 background revalidation runs. -->
+            <span
+              v-if="p.detailRefreshing.value"
+              class="pdv-refresh-badge"
+              role="status"
+              :title="t('pr.detail.refreshing')"
+            >
+              <span class="pdv-spinner pdv-spinner--sm" aria-hidden="true"></span>
+              {{ t('pr.detail.refreshing') }}
+            </span>
           </div>
           <div class="pdv-hero-actions">
+            <button class="pdv-btn" @click="openInBrowser(p.prDetail.value.url)" :title="p.forgeLabel.value">
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+              <span>{{ p.forgeLabel.value }}</span>
+            </button>
             <button class="pdv-btn" @click="p.checkoutPr(p.selectedPr.value!)">
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M3 8h10M8 3l5 5-5 5" />
@@ -152,6 +311,8 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
             <button
               v-if="isOpenPr"
               class="pdv-btn pdv-btn--primary"
+              :disabled="p.mergeBlocked.value"
+              :title="p.mergeBlocked.value ? p.mergeBlockedReason.value : undefined"
               @click="p.mergingPr.value = p.selectedPr.value"
             >
               <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -163,18 +324,12 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </svg>
               <span>{{ t('pr.detail.merge') }}</span>
             </button>
-            <button class="pdv-btn pdv-btn--ghost" @click="openInBrowser(p.prDetail.value.url)" title="GitHub">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.42 7.42 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z" />
-              </svg>
-              <span>GitHub</span>
-            </button>
           </div>
         </div>
 
         <div class="pdv-hero-meta">
           <span class="pdv-author">
-            <span class="pdv-avatar" :style="avatarStyle" aria-hidden="true">{{ authorInitials(p.prDetail.value.author) }}</span>
+            <span class="pdv-avatar" :style="avatarStyle(p.prDetail.value.author)" aria-hidden="true">{{ authorInitials(p.prDetail.value.author) }}</span>
             <span class="pdv-author-name">{{ p.prDetail.value.author }}</span>
           </span>
           <span class="pdv-meta-sep" aria-hidden="true">·</span>
@@ -190,6 +345,33 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
           <span v-if="p.prDetail.value.mergedAt" class="pdv-merged-ago">
             {{ t('pr.detail.mergedAgo', p.timeAgo(p.prDetail.value.mergedAt)) }}
           </span>
+
+          <div style="flex: 1"></div>
+
+          <div class="pdv-hero-links">
+            <button class="pdv-hero-link" @click="openInBrowser(commitsUrl)">
+              {{ t('pr.detail.linkCommits') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+            <button class="pdv-hero-link" @click="openInBrowser(filesUrl)">
+              {{ t('pr.detail.linkFiles') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+            <button
+              v-if="p.prDetail.value.checksStatus"
+              class="pdv-hero-link"
+              @click="openInBrowser(checksUrl)"
+            >
+              {{ t('pr.detail.linkCi') }}
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3H3v10h10V9.5M9.5 2.5H13V6M13 3l-6 6" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -223,7 +405,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
           </span>
         </button>
         <button
-          :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'checks' }]"
+          :class="['pdv-tab', ciTabState ? `pdv-tab--ci-${ciTabState}` : '', { 'pdv-tab--active': p.detailTab.value === 'checks' }]"
           @click="p.detailTab.value = 'checks'"
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -235,7 +417,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
             class="pdv-tab-emoji pdv-tab-emoji--sm"
             :title="p.prDetail.value.checksStatus"
           >{{ p.checksIcon(p.prDetail.value.checksStatus) }}</span>
-          <span v-if="p.prChecks.value.length" class="pdv-tab-count">{{ p.prChecks.value.length }}</span>
+          <span v-if="p.checksWithConflict.value.length" class="pdv-tab-count">{{ p.checksWithConflict.value.length }}</span>
         </button>
         <button
           :class="['pdv-tab', { 'pdv-tab--active': p.detailTab.value === 'intelligence' }]"
@@ -319,12 +501,12 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statMerge') }}</span>
               <span class="pdv-stat-value">
-                <span class="pdv-stat-emoji">{{ p.mergeableIcon(p.prDetail.value.mergeable) }}</span>
-                {{ p.prDetail.value.mergeable }}
+                <span class="pdv-stat-emoji">{{ mergeStatus.icon }}</span>
+                {{ mergeStatus.label }}
               </span>
             </div>
 
-            <div class="pdv-stat">
+            <button type="button" class="pdv-stat pdv-stat--clickable" @click="p.detailTab.value = 'diff'">
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5z" />
@@ -333,9 +515,9 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statFiles') }}</span>
               <span class="pdv-stat-value">{{ p.prDetail.value.changedFiles }}</span>
-            </div>
+            </button>
 
-            <div class="pdv-stat">
+            <button type="button" class="pdv-stat pdv-stat--clickable" @click="p.detailTab.value = 'diff'">
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
                   <path d="M8 3v10M3 8h10" />
@@ -346,17 +528,23 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
                 <span class="pdv-add">+{{ p.prDetail.value.additions }}</span>
                 <span class="pdv-del">−{{ p.prDetail.value.deletions }}</span>
               </span>
-            </div>
+            </button>
 
-            <div class="pdv-stat">
+            <component
+              :is="sortedComments.length ? 'button' : 'div'"
+              :type="sortedComments.length ? 'button' : undefined"
+              class="pdv-stat"
+              :class="{ 'pdv-stat--clickable': sortedComments.length }"
+              @click="sortedComments.length && scrollToLastComment()"
+            >
               <span class="pdv-stat-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 8c0 3-3 5.5-6 5.5-.7 0-1.4-.1-2-.3L3 14l.7-2.8A5.5 5.5 0 0 1 2 8c0-3 3-5.5 6-5.5S14 5 14 8z" />
                 </svg>
               </span>
               <span class="pdv-stat-label">{{ t('pr.detail.statComments') }}</span>
-              <span class="pdv-stat-value">{{ p.prDetail.value.comments + p.prDetail.value.reviewComments }}</span>
-            </div>
+              <span class="pdv-stat-value">{{ Math.max(p.prDetail.value.comments + p.prDetail.value.reviewComments, sortedComments.length) }}</span>
+            </component>
           </div>
 
           <!-- Reviewers -->
@@ -364,7 +552,7 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
             <h2 class="pdv-section-label">{{ t('pr.detail.reviewers') }}</h2>
             <div class="pdv-chips">
               <span v-for="r in p.prDetail.value.reviewers" :key="r" class="pdv-chip pdv-chip--reviewer">
-                <span class="pdv-chip-avatar" :style="{ background: `hsl(${authorHue(r)} 65% 55%)` }" aria-hidden="true">
+                <span class="pdv-chip-avatar" :style="avatarStyle(r)" aria-hidden="true">
                   {{ authorInitials(r) }}
                 </span>
                 {{ r }}
@@ -411,29 +599,110 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
               <div
                 v-if="descriptionTab === 'formatted'"
                 class="pdv-body-formatted"
-                v-html="renderMarkdown(p.prDetail.value.body)"
+                @click="onMarkdownLinkClick"
+                v-html="descriptionHtml"
               />
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
+              <div v-if="p.selectedPr.value" class="pdv-desc-reactions">
+                <PrReactions
+                  :cwd="p.cwd.value"
+                  :pr-number="p.selectedPr.value.number"
+                  target-type="pr"
+                  :target-id="p.selectedPr.value.number"
+                  :current-user="p.currentUser.value"
+                  :forge-name="p.forge.value.name"
+                />
+              </div>
             </div>
             <div v-else class="pdv-muted">{{ t('pr.detail.noDescription') }}</div>
           </section>
 
-          <!-- Secondary links -->
-          <div class="pdv-links">
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/commits')">
-              {{ t('pr.detail.linkCommits') }}
-            </button>
-            <button class="pdv-btn pdv-btn--ghost pdv-btn--sm" @click="openInBrowser(p.prDetail.value.url + '/files')">
-              {{ t('pr.detail.linkFiles') }}
-            </button>
-            <button
-              v-if="p.prDetail.value.checksStatus"
-              class="pdv-btn pdv-btn--ghost pdv-btn--sm"
-              @click="openInBrowser(p.prDetail.value.url + '/checks')"
-            >
-              {{ t('pr.detail.linkCi') }}
-            </button>
-          </div>
+          <!-- Conversation: comments + review verdicts, oldest-first -->
+          <section v-if="timeline.length" class="pdv-section pdv-section--comments">
+            <h2 class="pdv-section-label">
+              {{ t('pr.detail.statComments') }}
+              <span class="pdv-section-count">{{ timeline.length }}</span>
+            </h2>
+            <ul class="pdv-comments">
+              <template v-for="item in timeline">
+                <!-- Review verdict (Approve / Request changes / Comment) -->
+                <li
+                  v-if="item.kind === 'review'"
+                  :key="`review-${item.id}`"
+                  class="pdv-comment pdv-review"
+                  :class="item.verdictCls"
+                >
+                  <div class="pdv-comment-head">
+                    <span class="pdv-comment-avatar" :style="avatarStyle(item.author)" aria-hidden="true">
+                      {{ authorInitials(item.author) }}
+                    </span>
+                    <span class="pdv-comment-author">{{ item.author }}</span>
+                    <span class="pdv-review-verdict">{{ item.verdictLabel }}</span>
+                    <button
+                      v-if="item.href"
+                      type="button"
+                      class="pdv-comment-goto"
+                      :title="t('pr.detail.commentGoto')"
+                      @click="openInBrowser(item.href)"
+                    >
+                      {{ t('pr.detail.commentGoto') }}
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
+                      </svg>
+                    </button>
+                    <span class="pdv-comment-time" :title="item.ts">{{ commentTimeAgo(item.ts) }}</span>
+                  </div>
+                  <div v-if="item.bodyHtml" class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="item.bodyHtml" />
+                  <!-- Reactions only on reviews that carry a body — there is no
+                       reaction target for a bodyless verdict (e.g. a bare Approve).
+                       PrReactions itself gates which forges support a review target. -->
+                  <PrReactions
+                    v-if="item.bodyHtml && p.selectedPr.value"
+                    :cwd="p.cwd.value"
+                    :pr-number="p.selectedPr.value.number"
+                    target-type="review"
+                    :target-id="item.id"
+                    :current-user="p.currentUser.value"
+                    :forge-name="p.forge.value.name"
+                  />
+                </li>
+                <!-- Inline / issue comment -->
+                <li v-else :key="`comment-${item.path}#${item.id}`" class="pdv-comment">
+                  <div class="pdv-comment-head">
+                    <span class="pdv-comment-avatar" :style="avatarStyle(item.author)" aria-hidden="true">
+                      {{ authorInitials(item.author) }}
+                    </span>
+                    <span class="pdv-comment-author">{{ item.author }}</span>
+                    <button
+                      v-if="commentHref(item)"
+                      type="button"
+                      class="pdv-comment-goto"
+                      :title="t('pr.detail.commentGoto')"
+                      @click="openInBrowser(commentHref(item))"
+                    >
+                      {{ t('pr.detail.commentGoto') }}
+                      <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
+                      </svg>
+                    </button>
+                    <span v-if="item.path" class="pdv-comment-anchor">{{ item.path.split('/').pop() }}<template v-if="item.line">:{{ item.line }}</template></span>
+                    <span class="pdv-comment-time" :title="item.created_at">{{ commentTimeAgo(item.created_at) }}</span>
+                  </div>
+                  <div class="pdv-comment-body" @click="onMarkdownLinkClick" v-html="item.bodyHtml" />
+                  <PrReactions
+                    v-if="p.selectedPr.value"
+                    :cwd="p.cwd.value"
+                    :pr-number="p.selectedPr.value.number"
+                    :target-type="item.path ? 'review_comment' : 'issue_comment'"
+                    :target-id="item.id"
+                    :current-user="p.currentUser.value"
+                    :forge-name="p.forge.value.name"
+                  />
+                </li>
+              </template>
+            </ul>
+            <div ref="commentsEnd"></div>
+          </section>
         </div>
 
         <!-- Diff tab -->
@@ -475,8 +744,11 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
                 :diff="p.selectedDiff.value"
                 :file-path="p.selectedDiffFile.value"
                 :comments="p.commentsForFile.value"
-                :current-user="undefined"
+                :current-user="p.currentUser.value ?? undefined"
                 :review-draft-count="p.draftReviewComments.value.length"
+                :cwd="p.cwd.value"
+                :pr-number="p.selectedPr.value?.number"
+                :forge-name="p.forge.value.name"
                 :annotations="p.selectedDiffFile.value ? (p.annotationsByFile.value[p.selectedDiffFile.value] ?? []) : []"
                 @create-comment="p.handleCreateComment"
                 @add-to-review="p.handleAddToReview"
@@ -492,9 +764,9 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
 
         <!-- CI tab -->
         <div v-else-if="p.detailTab.value === 'checks'" class="pdv-body pdv-checks-body">
-          <div v-if="p.prChecks.value.length === 0" class="pdv-loading">{{ t('pr.detail.noChecks') }}</div>
+          <div v-if="p.checksWithConflict.value.length === 0" class="pdv-loading">{{ t('pr.detail.noChecks') }}</div>
           <div v-else class="pdv-checks">
-            <div v-for="c in p.prChecks.value" :key="c.name" class="pdv-check">
+            <div v-for="c in p.checksWithConflict.value" :key="c.name" class="pdv-check">
               <span class="pdv-check-icon">{{ p.checkIcon(c) }}</span>
               <span class="pdv-check-name">{{ c.name }}</span>
               <!-- v2.18 — clickable "N annotations" badge → jump to the diff -->
@@ -668,8 +940,26 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   animation: pdv-spin 0.8s linear infinite;
 }
 
+.pdv-spinner--sm {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+
 @keyframes pdv-spin {
   to { transform: rotate(360deg); }
+}
+
+/* SWR background-refresh badge in the hero. */
+.pdv-refresh-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  align-self: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
 }
 
 /* ─── Hero header ────────────────────────────────────────── */
@@ -749,11 +1039,11 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  color: #fff;
+  border: 1.5px solid currentColor;
   font-size: 9px;
   font-weight: var(--font-weight-bold);
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  flex-shrink: 0;
 }
 
 .pdv-author-name {
@@ -827,6 +1117,17 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   color: var(--color-accent);
   border-bottom-color: var(--color-accent);
   font-weight: var(--font-weight-semibold);
+}
+
+/* CI tab tint — visible at a glance even when the tab isn't selected. */
+.pdv-tab--ci-fail:not(.pdv-tab--active) {
+  color: var(--color-danger, #ef4444);
+}
+.pdv-tab--ci-ok:not(.pdv-tab--active) {
+  color: var(--color-success, #3fb950);
+}
+.pdv-tab--ci-pending:not(.pdv-tab--active) {
+  color: var(--color-warning, #f59e0b);
 }
 
 .pdv-tab-emoji {
@@ -996,6 +1297,14 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   overflow: hidden;
 }
 
+.pdv-stat--clickable {
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  width: 100%;
+}
+
 .pdv-stat::before {
   content: "";
   position: absolute;
@@ -1070,6 +1379,217 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   letter-spacing: 0.06em;
 }
 
+.pdv-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.pdv-comments {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Review verdict rows in the conversation timeline (extend .pdv-comment) */
+.pdv-review {
+  border-left-width: 3px;
+}
+
+/* Electric blue for "changes requested" — intentional brand accent, defined
+   once here and reused for the border + verdict text below. */
+.pdv-review--changes { --pdv-review-changes: #2f81f7; }
+.pdv-review--approved { border-left-color: var(--color-success); }
+.pdv-review--changes { border-left-color: var(--pdv-review-changes); }
+.pdv-review--dismissed { border-left-color: var(--color-danger); }
+.pdv-review--commented { border-left-color: var(--color-accent); }
+
+.pdv-review-verdict {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-muted);
+}
+
+/* Verdict text colors + glow, keyed on the review state */
+.pdv-review--changes .pdv-review-verdict {
+  color: var(--pdv-review-changes);
+  text-shadow: 0 0 6px rgba(47, 129, 247, 0.7), 0 0 12px rgba(47, 129, 247, 0.4);
+}
+.pdv-review--approved .pdv-review-verdict {
+  color: var(--color-success);
+  text-shadow: 0 0 6px rgba(46, 160, 67, 0.6);
+}
+.pdv-review--dismissed .pdv-review-verdict {
+  color: var(--color-danger);
+  text-shadow: 0 0 6px rgba(248, 81, 73, 0.6);
+}
+
+.pdv-comment {
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.pdv-comment-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+/* Bodyless rows (e.g. an Approve verdict with no summary) — drop the head's
+   bottom margin so the row isn't padded unevenly at the bottom. */
+.pdv-comment-head:last-child {
+  margin-bottom: 0;
+}
+
+.pdv-comment-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: var(--font-weight-bold);
+  flex-shrink: 0;
+}
+
+.pdv-comment-author {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+}
+
+.pdv-comment-anchor {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.pdv-comment-time {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.pdv-comment-goto {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+}
+.pdv-comment-goto:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.pdv-comment-body {
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.pdv-comment-body :deep(p) { margin-bottom: var(--space-5); }
+.pdv-comment-body :deep(p:last-child) { margin-bottom: 0; }
+.pdv-comment-body :deep(h1),
+.pdv-comment-body :deep(h2),
+.pdv-comment-body :deep(h3),
+.pdv-comment-body :deep(h4) {
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-3);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pdv-comment-body :deep(h1:first-child),
+.pdv-comment-body :deep(h2:first-child) {
+  margin-top: 0;
+}
+.pdv-comment-body :deep(h1) { font-size: var(--font-size-lg); }
+.pdv-comment-body :deep(h2) { font-size: var(--font-size-md); }
+.pdv-comment-body :deep(ul),
+.pdv-comment-body :deep(ol) {
+  margin: var(--space-1) 0 var(--space-2) 0;
+  padding-left: var(--space-6);
+}
+.pdv-comment-body :deep(li) { margin-bottom: 2px; }
+.pdv-comment-body :deep(.md-code-block) {
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+  overflow-x: auto;
+}
+.pdv-comment-body :deep(.md-inline-code) {
+  background: var(--color-bg-tertiary);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+}
+.pdv-comment-body :deep(.md-hr) {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-4) 0;
+}
+
+/* Lighter blue than --color-accent (purple), which read too dark on the bg. */
+.pdv-comment-body :deep(.md-link) {
+  color: #79c0ff;
+  text-decoration: none;
+}
+.pdv-comment-body :deep(.md-link:hover) {
+  color: #a5d6ff;
+  text-decoration: underline;
+}
+
+.pdv-comment-body :deep(.md-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: var(--space-5);
+  font-size: var(--font-size-sm);
+}
+.pdv-comment-body :deep(.md-table th),
+.pdv-comment-body :deep(.md-table td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.pdv-comment-body :deep(.md-table thead th) {
+  background: var(--color-bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.pdv-comment-body :deep(.md-table tbody tr:nth-child(even)) {
+  background: var(--color-bg-secondary);
+}
+
 .pdv-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1100,10 +1620,10 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  color: #fff;
+  border: 1.5px solid currentColor;
   font-size: 8px;
   font-weight: var(--font-weight-bold);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+  flex-shrink: 0;
 }
 
 .pdv-chip--label {
@@ -1167,6 +1687,16 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   word-break: break-word;
 }
 
+/* Reaction strip reserved at the bottom of the description box, mirroring
+   how reactions sit inside each PR comment. Extra bottom padding gives the
+   strip a bit of breathing room. */
+.pdv-desc-reactions {
+  padding: 0 var(--space-6) var(--space-5);
+}
+.pdv-desc-reactions :deep(.prt-reactions) {
+  margin-top: 0;
+}
+
 /* Markdown primitives inside the PR description. Mirrors the README
    renderer so `renderMarkdown()` output is styled consistently. */
 .pdv-body-formatted :deep(h1),
@@ -1227,6 +1757,27 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   text-decoration: none;
 }
 .pdv-body-formatted :deep(.md-link:hover) { text-decoration: underline; }
+
+.pdv-body-formatted :deep(.md-table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: var(--space-3);
+  font-size: var(--font-size-sm);
+}
+.pdv-body-formatted :deep(.md-table th),
+.pdv-body-formatted :deep(.md-table td) {
+  border: 1px solid var(--color-border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.pdv-body-formatted :deep(.md-table thead th) {
+  background: var(--color-bg-secondary);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+.pdv-body-formatted :deep(.md-table tbody tr:nth-child(even)) {
+  background: var(--color-bg-secondary);
+}
 .pdv-body-formatted :deep(.md-blockquote) {
   border-left: 3px solid var(--color-accent-soft);
   padding-left: var(--space-5);
@@ -1285,10 +1836,29 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   text-align: center;
 }
 
-.pdv-links {
+.pdv-hero-links {
   display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pdv-hero-link {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  padding: 1px var(--space-2);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.pdv-hero-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
 }
 
 .pdv-loading {
@@ -1479,12 +2049,20 @@ const descriptionTab = ref<"formatted" | "raw">("formatted");
   background: var(--color-bg);
   border-color: var(--color-border-strong);
   color: var(--color-text);
-  transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 .pdv-btn:active {
-  transform: translateY(0);
   box-shadow: none;
+}
+.pdv-btn:disabled,
+.pdv-btn:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+  transform: none;
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
 }
 
 .pdv-btn--sm {

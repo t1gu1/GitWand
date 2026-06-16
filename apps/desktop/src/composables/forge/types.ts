@@ -57,6 +57,12 @@ export interface CreatePRInput {
   title: string;
   body: string;
   base?: string;
+  /**
+   * Cross-fork target as "owner/repo". When set (and different from origin),
+   * the PR opens against this repo with the current branch as the head fork.
+   * GitHub only — ignored by GitLab/Bitbucket.
+   */
+  baseRepo?: string;
   draft?: boolean;
   reviewers?: string[];
 }
@@ -69,7 +75,7 @@ export interface SubmitReviewOptions {
 
 // ─── Forge name discriminant ────────────────────────────────────────────────
 
-export type ForgeName = "github" | "gitlab" | "bitbucket" | "unknown";
+export type ForgeName = "github" | "gitlab" | "bitbucket" | "azure" | "unknown";
 
 // ─── ForgeProvider interface ─────────────────────────────────────────────────
 
@@ -145,6 +151,12 @@ export interface ForgeProvider {
   // ── Comments ──────────────────────────────────────────────────────────────
 
   listComments(cwd: string, prNumber: number): Promise<PrReviewComment[]>;
+
+  /**
+   * Issue-level (conversation) comments — not anchored to a diff line.
+   * Optional: providers that don't expose them simply omit it.
+   */
+  listIssueComments?(cwd: string, prNumber: number): Promise<PrReviewComment[]>;
 
   createComment(cwd: string, prNumber: number, params: CreatePrCommentParams): Promise<PrReviewComment>;
 

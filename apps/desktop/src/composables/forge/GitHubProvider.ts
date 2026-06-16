@@ -25,6 +25,7 @@ import {
   ghMergePr,
   ghCheckoutPr,
   ghPrComments,
+  ghPrIssueComments,
   ghPrCreateComment,
   ghPrUpdateComment,
   ghPrDeleteComment,
@@ -115,7 +116,7 @@ export class GitHubProvider implements ForgeProvider {
   // ── PR actions ────────────────────────────────────────────────────────────
 
   createPR(cwd: string, input: CreatePRInput): Promise<PullRequest> {
-    return ghCreatePr(cwd, input.title, input.body, input.base, input.draft, input.reviewers);
+    return ghCreatePr(cwd, input.title, input.body, input.base, input.draft, input.reviewers, input.baseRepo);
   }
 
   mergePR(cwd: string, number: number, method: "merge" | "squash" | "rebase" = "merge"): Promise<void> {
@@ -134,6 +135,10 @@ export class GitHubProvider implements ForgeProvider {
 
   listComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
     return ghPrComments(cwd, prNumber);
+  }
+
+  listIssueComments(cwd: string, prNumber: number): Promise<PrReviewComment[]> {
+    return ghPrIssueComments(cwd, prNumber);
   }
 
   createComment(cwd: string, prNumber: number, params: CreatePrCommentParams): Promise<PrReviewComment> {

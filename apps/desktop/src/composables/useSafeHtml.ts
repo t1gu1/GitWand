@@ -30,6 +30,7 @@
 
 import DOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
+import { openExternalUrl } from "../utils/backend";
 
 /**
  * Lowercase, strip non-word characters, collapse whitespace / dashes.
@@ -152,7 +153,7 @@ export function safeHtml(raw: string | null | undefined): string {
 const md = new MarkdownIt({
   html: false, // do not let source markdown embed arbitrary HTML
   linkify: true,
-  breaks: false,
+  breaks: true,
   typographer: false,
 });
 
@@ -177,8 +178,14 @@ rules.code_block = (tokens, idx, options, env, self) => {
   return rendered.replace("<pre>", '<pre class="md-code-block">');
 };
 rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const lang = (token.info || "").trim();
   const rendered = originalFence(tokens, idx, options, env, self);
-  return rendered.replace("<pre>", '<pre class="md-code-block">');
+  let html = rendered.replace("<pre>", '<pre class="md-code-block">');
+  if (lang === "suggestion") {
+    html = html.replace('class="md-code-block"', 'class="md-code-block md-suggestion-block"');
+  }
+  return html;
 };
 rules.code_inline = (tokens, idx, options, env, self) => {
   const rendered = originalCodeInline(tokens, idx, options, env, self);
@@ -212,9 +219,37 @@ rules.link_open = (tokens, idx, options, env, self) => {
 
 /**
  * Parse markdown and sanitize the result. Safe to feed to `v-html`.
+ *
+ * `breaks` controls whether a single newline becomes a `<br>`. Default `true`
+ * matches GitHub's comment/PR-body rendering (soft line breaks are honoured).
+ * Pass `false` for README-style documents, where GitHub soft-wraps single
+ * newlines as spaces and rendering them as `<br>` would mangle the layout.
+ *
+ * The single shared `md` instance is toggled per call. Rendering is synchronous
+ * and JS is single-threaded, so there is no interleaving between the toggle and
+ * the render.
  */
-export function renderMarkdown(src: string | null | undefined): string {
+export function renderMarkdown(
+  src: string | null | undefined,
+  options: { breaks?: boolean } = {},
+): string {
   if (!src) return "";
+  md.set({ breaks: options.breaks ?? true });
   const rawHtml = md.render(src);
   return safeHtml(rawHtml);
+}
+
+/**
+ * Click handler for containers that render markdown via `v-html`. Anchors
+ * inside rendered markdown would otherwise navigate the Tauri webview away from
+ * the app — intercept clicks on http(s) links and hand them to the OS browser.
+ *
+ * Usage: `<div v-html="..." @click="onMarkdownLinkClick" />`.
+ */
+export function onMarkdownLinkClick(e: MouseEvent): void {
+  const href = (e.target as HTMLElement | null)?.closest("a")?.getAttribute("href");
+  if (href && /^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+  }
 }

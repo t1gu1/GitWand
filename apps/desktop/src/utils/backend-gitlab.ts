@@ -13,6 +13,7 @@ import {
   PrReviewComment,
   PrReview,
   ReviewerCandidate,
+  PrReaction,
 } from "./backend-pr";
 
 // ─── GitLab / glab CLI wrappers (§2.x Forge integrations) ──────────────────
@@ -57,6 +58,7 @@ export async function glGetMr(cwd: string, iid: number): Promise<PullRequestDeta
     merged_at: string; url: string; additions: number; deletions: number;
     changed_files: number; comments: number; review_comments: number;
     labels: string[]; reviewers: string[]; mergeable: string; checks_status: string;
+    can_merge: boolean | null;
   }>("gl_get_mr", { cwd, iid });
   return {
     number: raw.number, title: raw.title, body: raw.body, state: raw.state,
@@ -66,6 +68,7 @@ export async function glGetMr(cwd: string, iid: number): Promise<PullRequestDeta
     changedFiles: raw.changed_files, comments: raw.comments,
     reviewComments: raw.review_comments, labels: raw.labels, reviewers: raw.reviewers,
     mergeable: raw.mergeable, checksStatus: raw.checks_status,
+    canMerge: raw.can_merge ?? null,
   } as unknown as PullRequestDetail;
 }
 
@@ -157,7 +160,11 @@ function glNoteToComment(note: Record<string, unknown>): PrReviewComment {
 export async function glMrNotes(cwd: string, iid: number): Promise<PrReviewComment[]> {
   if (!isTauri()) return [];
   const raw = await tauriInvoke<unknown[]>("gl_mr_notes", { cwd, iid });
-  return (raw as Record<string, unknown>[]).map(glNoteToComment);
+  // Drop system notes ("changed the description", label/assignee events, …) —
+  // they are activity log entries, not real conversation comments.
+  return (raw as Record<string, unknown>[])
+    .filter((n) => n.system !== true)
+    .map(glNoteToComment);
 }
 
 /** Create a note (comment) on a MR. */
@@ -271,4 +278,41 @@ export async function glMrCreateDiscussion(
 export async function glMrFiles(cwd: string, iid: number): Promise<string[]> {
   if (!isTauri()) return [];
   return tauriInvoke<string[]>("gl_mr_files", { cwd, iid });
+}
+
+// ─── Award emoji (reactions) ──────────────────────────────────────────────────
+
+/** List award emojis (reactions) on a MR or one of its notes. */
+export async function glListReactions(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+): Promise<PrReaction[]> {
+  if (!isTauri()) return [];
+  return tauriInvoke<PrReaction[]>("gl_list_reactions", { cwd, iid, targetType, targetId });
+}
+
+/** Add an award emoji (reaction). Returns the created reaction. */
+export async function glAddReaction(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+  content: string,
+): Promise<PrReaction> {
+  if (!isTauri()) throw new Error("glAddReaction requires Tauri");
+  return tauriInvoke<PrReaction>("gl_add_reaction", { cwd, iid, targetType, targetId, content });
+}
+
+/** Delete an award emoji (reaction). */
+export async function glDeleteReaction(
+  cwd: string,
+  iid: number,
+  targetType: string,
+  targetId: number,
+  reactionId: number,
+): Promise<void> {
+  if (!isTauri()) throw new Error("glDeleteReaction requires Tauri");
+  return tauriInvoke<void>("gl_delete_reaction", { cwd, iid, targetType, targetId, reactionId });
 }

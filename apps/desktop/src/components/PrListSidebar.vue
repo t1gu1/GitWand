@@ -11,12 +11,14 @@
  * - Hover-lift + active accent border, matching the rest of the app
  */
 import { computed, inject, onMounted, onBeforeUnmount, ref, watch } from "vue";
-import { PR_PANEL_KEY, type PrPanelState } from "../composables/usePrPanel";
+import { PR_PANEL_KEY, isMergeConflict, type PrPanelState } from "../composables/usePrPanel";
+import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
 import { useI18n } from "../composables/useI18n";
 
 const { t } = useI18n();
 
 const panel = inject<PrPanelState>(PR_PANEL_KEY)!;
+const openSettings = inject(OPEN_SETTINGS_KEY, undefined);
 
 // ─── Lazy pagination sentinel (v2.8.5 §E) ─────────────────
 // IntersectionObserver watches a 1px element at the bottom of the list;
@@ -70,6 +72,32 @@ function stateInfo(state: string): { label: string; cls: StateCls } {
   return { label: t("pr.list.stateClosed"), cls: "pls-state--closed" };
 }
 
+/**
+ * Merge-readiness of an open PR, surfaced as the status-dot colour:
+ *  - "fail"    → red: CI failed/errored, or the merge is blocked by conflicts.
+ *  - "waiting" → yellow: still pending (CI running, or an approval is missing).
+ *  - "ok"      → green: everything green, ready to merge.
+ * Uses only fields present on the list item — no extra per-PR requests.
+ */
+type PrStatus = "ok" | "waiting" | "fail";
+function prStatus(pr: { state: string; draft: boolean; reviewDecision: string; mergeStateStatus: string; checksRollup: string }): PrStatus {
+  // Draft PRs still follow the colour code — a draft with failing CI is red.
+  if (pr.state.toUpperCase() !== "OPEN") return "ok";
+  const ci = (pr.checksRollup || "").toUpperCase();
+  const ms = (pr.mergeStateStatus || "").toUpperCase();
+  // Red: a hard failure — CI is red, or the merge is blocked by conflicts.
+  if (["FAILURE", "ERROR"].includes(ci)) return "fail";
+  if (isMergeConflict(ms)) return "fail";
+  // Yellow: CI still running / queued.
+  if (["PENDING", "EXPECTED"].includes(ci)) return "waiting";
+  // Yellow: waiting on review approval or changes requested.
+  const rd = (pr.reviewDecision || "").toUpperCase();
+  if (rd === "REVIEW_REQUIRED" || rd === "CHANGES_REQUESTED") return "waiting";
+  // Yellow: blocked / unstable per GitHub's merge-state machine.
+  if (["BLOCKED", "UNSTABLE"].includes(ms)) return "waiting";
+  return "ok";
+}
+
 /** Total count shown as a subtle pill next to the title. */
 const totalCount = computed(() => panel.displayedPrs.value.length);
 
@@ -101,9 +129,30 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
           <line x1="6" y1="9" x2="6" y2="21" />
         </svg>
         <span class="pls-title">{{ t('pr.list.title') }}</span>
-        <span v-if="!panel.loading.value && totalCount > 0" class="pls-count-pill">{{ totalCount }}</span>
-        <button class="pls-icon-btn" @click="panel.loadPrs" :title="t('pr.list.refresh')" aria-label="Refresh">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <span v-if="totalCount > 0" class="pls-count-pill">{{ totalCount }}</span>
+        <!-- SWR: subtle spinner while a background revalidation runs over the
+             cached list already on screen (distinct from the cold full spinner).
+             Replaces the refresh button while active. -->
+        <div
+          v-if="panel.loading.value || panel.refreshing.value"
+          class="pls-icon-btn pls-icon-btn--loading"
+          :title="t('pr.list.refreshing')"
+          :aria-label="t('pr.list.refreshing')"
+          role="status"
+        >
+          <div class="pls-spinner pls-spinner--sm"></div>
+        </div>
+        <button
+          v-else
+          class="pls-icon-btn"
+          @click="panel.loadPrs"
+          :title="t('pr.list.refresh')"
+          aria-label="Refresh"
+        >
+          <svg
+            class="pls-refresh-icon"
+            width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+          >
             <path d="M13.5 8A5.5 5.5 0 1 1 8 2.5" />
             <path d="M13.5 2.5v3h-3" />
           </svg>
@@ -173,6 +222,10 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
     <!-- Messages -->
     <div v-if="panel.error.value" class="pls-msg pls-msg--error">
       <span>{{ panel.error.value }}</span>
+      <template v-if="panel.errorAction.value === 'open-settings' && openSettings">
+        <span class="pls-msg-hint">{{ t('pr.error.ghNotInstalledHint') }}</span>
+        <button class="pls-msg-action" @click="openSettings('accounts')">{{ t('pr.error.openSettings') }}</button>
+      </template>
       <button class="pls-msg-action" @click="panel.loadPrs">{{ t('pr.error.retry') }}</button>
     </div>
     <div
@@ -230,7 +283,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
         <div class="pls-row-top">
           <span class="pls-num">#{{ pr.number }}</span>
           <span class="pls-state-chip" :class="stateInfo(pr.state).cls">
-            <span class="pls-state-dot" aria-hidden="true"></span>
+            <span class="pls-state-dot" :class="`pls-state-dot--${prStatus(pr)}`" aria-hidden="true"></span>
             {{ stateInfo(pr.state).label }}
           </span>
           <span v-if="pr.draft" class="pls-draft-chip">{{ t('pr.list.draft') }}</span>
@@ -307,7 +360,6 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
 }
 
 .pls-title {
-  flex: 1;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-bold);
   text-transform: uppercase;
@@ -334,6 +386,7 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
   width: 24px;
   height: 24px;
   padding: 0;
@@ -349,6 +402,14 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   border-color: var(--color-border);
   color: var(--color-text);
 }
+.pls-icon-btn:disabled,
+.pls-icon-btn--loading {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* SWR: subtle spinner while a background revalidation runs over the
+             cached list already on screen. */
 
 /* ─── Segmented filter ───────────────────────────────────── */
 .pls-segmented {
@@ -504,6 +565,11 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   gap: var(--space-2);
 }
 
+.pls-msg-hint {
+  font-size: var(--font-size-xs);
+  opacity: 0.85;
+}
+
 .pls-msg-action {
   align-self: flex-start;
   background: none;
@@ -638,6 +704,19 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   background: currentColor;
 }
 
+/* Open PR still waiting on review/merge → yellow dot instead of the green one. */
+.pls-state-dot--ok {
+  background: currentColor;
+}
+
+.pls-state-dot--waiting {
+  background: var(--color-warning, #e3b341);
+}
+
+.pls-state-dot--fail {
+  background: var(--color-danger, #f85149);
+}
+
 .pls-state-chip.pls-state--open {
   color: var(--color-success);
   background: var(--color-success-soft);
@@ -759,7 +838,8 @@ function setUserFilter(mode: 'all' | 'assigned' | 'reviews') {
   .pls-new-btn:hover {
     transform: none;
   }
-  .pls-spinner {
+  .pls-spinner,
+  .pls-refresh-icon--spinning {
     animation: none;
   }
 }
