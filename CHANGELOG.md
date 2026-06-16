@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-06-16
+
+v2.19 takes the PR workflow off the `gh` CLI and opens it to more forges: sign in to GitHub with the OAuth device flow (tokens in the OS keychain, REST path with no CLI required), add Azure DevOps as a first-class forge, and open cross-fork pull requests against an upstream parent. Ships with a round of performance work on the backend (async Tauri commands, disk-persisted stale-while-revalidate PR cache, libgit2 `git_status` fast-path).
+
 ### Added
 
 - **Cross-fork pull requests** — when the repo's `origin` is a fork, the PR create view shows a target-repository selector (upstream parent vs your fork), defaulting to upstream. Works on both the REST (token) path — head is qualified as `fork-owner:branch` — and the `gh` path (`--repo`). New `gh_fork_info` command detects the relationship.
@@ -16,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical
 
+- **Backend performance** — PR-workflow Tauri commands converted to `async` with blocking git/network work offloaded to background threads (no more UI freeze on context switch); disk-persisted stale-while-revalidate cache for PR lists and details (the UI paints from cache, then revalidates in the background); `git_status` gains an in-process libgit2 fast-path that avoids spawning a CLI process.
 - **CI: npm publishing switched to OIDC trusted publishing** — the three `@gitwand/*` packages now have a Trusted Publisher configured on npmjs.com (GitHub Actions, repo `devlint/GitWand`, workflow `publish.yml`); pnpm exchanges the workflow's OIDC id-token for a short-lived publish token. The long-lived `NPM_TOKEN` secret is gone — its silent expiry had caused npm publishes to fail unnoticed from v2.15 to v2.17 (npm users jumped straight from 2.14.0 to 2.18.0). Provenance attestations are still emitted (automatic with OIDC).
 
 ### Notes

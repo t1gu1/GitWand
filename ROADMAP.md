@@ -6,7 +6,7 @@
 
 ## What's Next
 
-### v2.19.0 — Scratch worktree + extended Conflict Predictor
+### v2.20.0 — Scratch worktree + extended Conflict Predictor
 
 _Inspired by GitSquid. A natural extension of the GitWand engine and Worktree first-class (v2.7)._
 
@@ -23,7 +23,7 @@ _Inspired by GitSquid. A natural extension of the GitWand engine and Worktree fi
 
 ---
 
-### v2.20.0 — Monorepo Scope
+### v2.21.0 — Monorepo Scope
 
 _Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, Nx…)._
 
@@ -34,7 +34,7 @@ _Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, 
 
 ---
 
-### v2.21.0 — Safety Bundle: pre-commit secrets scanner
+### v2.22.0 — Safety Bundle: pre-commit secrets scanner
 
 _Inspired by GitSquid. A "safety" feature with zero network dependency — everything local._
 
@@ -46,7 +46,7 @@ _Inspired by GitSquid. A "safety" feature with zero network dependency — every
 
 ---
 
-### v2.22.0 — Stacked Branches (native)
+### v2.23.0 — Stacked Branches (native)
 
 _A differentiating feature: stacked PRs workflow without an external CLI (Graphite, ghstack…)._
 
@@ -64,7 +64,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.23.0 — Voice Input (experimental)
+### v2.24.0 — Voice Input (experimental)
 
 - **Local dictation**: microphone button in the commit panel — transcription via embedded Whisper (`whisper-rs` Rust) — zero cloud
 - **Optional AI enrichment**: pass dictated text through `useAIProvider` for conventional commit formatting
@@ -74,7 +74,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.24.0 — Terminal tabs & AI workspace
+### v2.25.0 — Terminal tabs & AI workspace
 
 _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand as a native AI workspace._
 
@@ -123,6 +123,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.19.0** | GitHub OAuth & Azure DevOps + cross-fork PRs — "Sign in with GitHub" via OAuth device flow (tokens in the OS keychain, tokenless REST path, no `gh` CLI required), Azure DevOps as a first-class forge (`AzureProvider`, Entra ID device flow + auto token refresh, PR list/detail/diff/create/merge/checkout, comments, branch-policy CI checks, reviewer votes), cross-fork pull requests (target-repo selector defaulting to upstream, fork PRs surfaced in the list), and a backend performance pass (async Tauri commands, disk-persisted SWR PR cache, libgit2 `git_status` fast-path) |
 | **v2.18.0** | Inline CI Check Annotations — check-run annotations overlaid in the PR diff across the three forges (GitHub check-runs API, GitLab `artifacts:reports:codequality`, Bitbucket Reports API), gutter icons ❌/⚠/ℹ with hover tooltip, clickable "N annotations" badge in the CI tab, per-file ⚠ count in the diff sidebar, forge-agnostic `CIAnnotation` type + `ForgeProvider.getCheckAnnotations()`, lazy one-shot fetch per PR; Copilot CLI as a fourth AI provider (text-only sandbox) |
 | **v2.17.0** | opencode provider + per-CLI model picker — `opencode-cli` as a first-class AI provider (`opencode run`, binary discovery, Settings status), second model select under the provider picker for the three CLI agents (opencode enumerates via `opencode models`, Claude Code aliases, Codex free-text), `aiModelByProvider` persisted per provider, `--model` threaded through all three CLIs |
 | **v2.16.0** | PR Activity Notifications — background Launchpad poller, zero-network snapshot diff (`useLaunchpadNotifications`) for CI flips / review requests / new comments / merge-close, native OS notifications via `tauri-plugin-notification` (background-only), Settings granularity (All · Reviews & comments · CI failures only · None) + "by people" bot filter, enriched `workspace_prs_all` (CI/review/comment fields) |

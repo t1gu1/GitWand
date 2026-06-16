@@ -5,6 +5,26 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.19.0 — June 2026
+
+### Sign in with GitHub — no `gh` CLI required
+
+Connecting GitWand to GitHub no longer means installing and configuring the `gh` CLI. Settings → Accounts now has a "Sign in with GitHub" button that runs the OAuth device flow: approve the code in your browser once, and the token is stored in your OS keychain — never exposed to the app's frontend. From then on the whole PR workflow (list, detail, diff, checks, create, merge, checkout, mark-ready) goes straight through the GitHub REST API. The `gh` CLI still works exactly as before when you'd rather use it.
+
+### Azure DevOps, as a first-class forge
+
+Azure DevOps joins GitHub, GitLab and Bitbucket. Sign in with the same Entra ID device flow (with automatic token refresh, so your session doesn't expire mid-task), and GitWand auto-detects `dev.azure.com` and `*.visualstudio.com` remotes. You get the full pull-request lifecycle — list, detail, diff, create, merge, checkout, draft→ready — plus threaded comments, branch-policy CI checks and reviewer votes, so the merge-readiness chip reflects real build and approval state.
+
+### Cross-fork pull requests
+
+If your `origin` is a fork, the PR create view now lets you target the upstream parent instead of your own fork — it defaults to upstream, the way most contributions flow. The PR list for a fork also surfaces the PRs you opened on the upstream repo, merged in with your origin's own, and detail/diff/checks/merge resolve transparently to the right repository.
+
+### Faster context switches
+
+A round of backend work makes the app feel quicker when you jump between repos and PRs: Tauri commands are now async with blocking git and network calls offloaded to background threads, a stale-while-revalidate cache paints PR lists and details instantly from disk while refreshing behind the scenes, and `git_status` gained an in-process libgit2 fast-path that skips spawning a CLI process.
+
+---
+
 ## v2.18.0 — June 2026
 
 ### Your CI, inside the diff
