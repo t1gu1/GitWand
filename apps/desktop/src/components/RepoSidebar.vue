@@ -4,6 +4,7 @@ import { TOGGLE_GIT_TREE_KEY } from "../composables/branchPickerBridge";
 import { type RepoFileEntry, type ViewMode } from "../composables/useGitRepo";
 import { gitRemoteInfo, getGitUser, type GitLogEntry, type GitBranch, type RemoteInfo, type GitUser, type GitDiff } from "../utils/backend";
 import PrListSidebar from "./PrListSidebar.vue";
+import ScopePicker from "./ScopePicker.vue";
 import { useI18n } from "../composables/useI18n";
 import { avatarStyle, avatarInitials } from "../composables/useAvatar";
 import { useCommitMessage } from "../composables/useCommitMessage";
@@ -828,6 +829,9 @@ function formatActivityDate(dateStr: string): string {
         PRs
       </button>
     </div>
+
+    <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo -->
+    <ScopePicker v-if="cwd" :cwd="cwd" />
 
     <!-- History file list -->
     <div class="sections" v-if="viewMode === 'history'">
