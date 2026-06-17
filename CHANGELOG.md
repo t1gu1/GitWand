@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-06-17
+
+### Added
+
+- **Scratch worktree for isolated resolution** — backend commands `scratch_worktree_create` / `merge_back` / `discard` create a temporary `gitwand-scratch-<timestamp>` worktree as a sibling of the repo, let you resolve conflicts away from the active checkout, bring the changes back into the main checkout in one click (merge-back refuses if the main checkout has conflicting uncommitted changes), and auto-clean up (`worktree remove --force` + `prune`, no dangling registration). Wired into the merge-preview / Conflict Predictor panel: "Resolve in scratch worktree" opens the new worktree as a repo tab so you resolve in it, then merge-back / discard switch back to the origin checkout and close the scratch tab. The lifecycle is anchored to the origin repo (merge-back/discard always target the captured origin cwd, never the active tab). Backed by `useScratchWorktree` composable, `backend.ts` wrappers, `scratch.*` i18n keys in all 5 locales, and real-temp-repo Rust tests + composable unit tests.
+- **Conflict Predictor extended to rebase & cherry-pick** — new side-effect-free `preview_rebase` / `preview_cherry_pick` Tauri commands (same `FileMergePreview` shape as `preview_merge`, which is left untouched): rebase replays each commit in `merge-base(HEAD, onto)..HEAD` as a per-commit 3-way against `onto` (deduplicated by highest conflict signal per file — faithful to a real rebase, not a squashed approximation), cherry-pick 3-ways `commit` onto HEAD (ancestor = `commit^`); both fail fast on unknown refs / missing merge-base / root commits and never touch the working tree. `MergePreviewPanel` gains an operation selector (merge | rebase | cherry-pick), a colour-coded `riskLevel` badge (low / medium / high), and an expandable hunk-by-hunk preview of the predicted conflicts surfaced from the existing per-file `resolve()` output. Rust tests cover known rebase/cherry-pick conflicts on real temp repos and assert the working tree is untouched.
+- **MCP `gitwand_preview_merge` extended** — new `operation` parameter (`merge` | `rebase` | `cherry-pick`) with `onto` and `commit` args; uses `git merge-file` on blob snapshots in a temp dir — side-effect-free 3-way simulation mirroring the desktop Rust predictor.
+- **CLI `gitwand preview`** — new command; `--onto <ref>` (rebase), `--commit <sha>` (cherry-pick), `--branch <name>` (merge); exits 0 = clean, 1 = conflicts predicted, 2 = error; `--json` for CI pipelines.
+
 ## [2.19.0] - 2026-06-16
 
 v2.19 takes the PR workflow off the `gh` CLI and opens it to more forges: sign in to GitHub with the OAuth device flow (tokens in the OS keychain, REST path with no CLI required), add Azure DevOps as a first-class forge, and open cross-fork pull requests against an upstream parent. Ships with a round of performance work on the backend (async Tauri commands, disk-persisted stale-while-revalidate PR cache, libgit2 `git_status` fast-path).

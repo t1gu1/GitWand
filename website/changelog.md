@@ -5,6 +5,22 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.20.0 — June 2026
+
+### Resolve conflicts in a scratch worktree
+
+Some conflicts are easier to untangle away from your live checkout. From the merge preview, "Resolve in scratch worktree" now spins up a temporary, isolated worktree (`gitwand-scratch-<timestamp>`) right next to your repo and opens it as its own tab — your working tree stays untouched. Resolve there, then bring the result back into your main checkout in one click, or discard it. Either way the scratch is cleaned up automatically, with no dangling worktree left behind. Bring-back is anchored to your original repo (and refuses if your main checkout still has its own conflicting changes), so the result always lands where you expect.
+
+### The Conflict Predictor now sees rebases and cherry-picks
+
+GitWand could already predict the conflicts of a merge before you ran it. That now extends to **rebase** and **cherry-pick** — without touching your working tree, index or HEAD. A rebase preview replays each commit on top of the target branch the way Git actually would (not a single squashed guess), and a cherry-pick preview simulates applying the commit onto HEAD. The merge-preview panel gains an operation selector (merge / rebase / cherry-pick), a colour-coded risk badge (low / medium / high), and an expandable hunk-by-hunk view of exactly what would conflict.
+
+### Predict from the command line and from AI agents
+
+The same side-effect-free prediction is available everywhere the engine runs. The `@gitwand/mcp` server's `gitwand_preview_merge` tool takes an `operation` parameter so connected AI agents can ask "would this rebase conflict?" before acting. And the `@gitwand/cli` gains a new `gitwand preview` command — `--onto <ref>`, `--commit <sha>` or `--branch <name>` — that exits 0 for a clean operation, 1 when conflicts are predicted, and 2 on error, with `--json` for CI pipelines.
+
+---
+
 ## v2.19.0 — June 2026
 
 ### Sign in with GitHub — no `gh` CLI required

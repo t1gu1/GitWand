@@ -12,8 +12,18 @@
  */
 
 import { ref, computed } from "vue";
-import { previewMerge } from "../utils/backend.js";
+import { previewMerge, previewRebase, previewCherryPick } from "../utils/backend.js";
 import { resolve } from "@gitwand/core";
+
+// ─── Opérations prédictibles (v2.20.0) ───────────────────
+//
+// Le Conflict Predictor simule un merge, un rebase ou un cherry-pick sans
+// toucher au working tree. `merge` est la valeur par défaut (rétrocompatible).
+
+export type PreviewOperation = "merge" | "rebase" | "cherry-pick";
+
+/** Niveau de risque global d'une opération prédite. */
+export type RiskLevel = "low" | "medium" | "high";
 
 // ─── Types ─────────────────────────────────────────────────
 
@@ -24,6 +34,19 @@ export type PreviewFileStatus =
   | "clean"           // pas de conflit (modifié d'un seul côté)
   | "add-delete";     // conflit add/delete (toujours manuel)
 
+/**
+ * Aperçu d'un hunk individuel prédit (v2.20.0). Surface le résultat
+ * `resolve()` déjà calculé pour un affichage hunk-par-hunk dans le panel.
+ */
+export interface PreviewHunk {
+  /** Ligne de début du hunk dans le fichier conflictuel */
+  startLine: number;
+  /** Type de conflit classifié par le résolveur */
+  type: string;
+  /** GitWand peut-il résoudre ce hunk automatiquement ? */
+  autoResolved: boolean;
+}
+
 export interface PreviewFileResult {
   filePath: string;
   status: PreviewFileStatus;
@@ -33,6 +56,8 @@ export interface PreviewFileResult {
   autoResolved: number;
   /** Types de conflits détectés */
   conflictTypes: string[];
+  /** Aperçu hunk-par-hunk (vide pour les fichiers clean / add-delete) */
+  hunks: PreviewHunk[];
 }
 
 export interface MergePreviewSummary {
@@ -59,13 +84,21 @@ export function useMergePreview(cwd: () => string) {
   const error = ref<string | null>(null);
   const summary = ref<MergePreviewSummary | null>(null);
 
-  async function computePreview(sourceBranch: string): Promise<void> {
+  async function computePreview(
+    ref_: string,
+    operation: PreviewOperation = "merge",
+  ): Promise<void> {
     loading.value = true;
     error.value = null;
     summary.value = null;
 
     try {
-      const rawFiles = await previewMerge(cwd(), sourceBranch);
+      const rawFiles =
+        operation === "rebase"
+          ? await previewRebase(cwd(), ref_)
+          : operation === "cherry-pick"
+            ? await previewCherryPick(cwd(), ref_)
+            : await previewMerge(cwd(), ref_);
 
       const files: PreviewFileResult[] = [];
 
@@ -78,6 +111,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 0,
             autoResolved: 0,
             conflictTypes: [],
+            hunks: [],
           });
           continue;
         }
@@ -89,6 +123,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 1,
             autoResolved: 0,
             conflictTypes: ["add_delete"],
+            hunks: [],
           });
           continue;
         }
@@ -107,12 +142,29 @@ export function useMergePreview(cwd: () => string) {
             status = "manual";
           }
 
+          // Aperçu hunk-par-hunk : on réutilise la sortie resolve() déjà
+          // calculée (pas de second passage) pour alimenter le panel.
+          // `resolutions` porte le flag `autoResolved` par hunk ; on retombe
+          // sur `hunks` si la liste est vide.
+          const hunks: PreviewHunk[] = result.resolutions.length > 0
+            ? result.resolutions.map(r => ({
+                startLine: r.hunk.startLine,
+                type: r.hunk.type,
+                autoResolved: r.autoResolved,
+              }))
+            : result.hunks.map(h => ({
+                startLine: h.startLine,
+                type: h.type,
+                autoResolved: false,
+              }));
+
           files.push({
             filePath: raw.file_path,
             status,
             totalConflicts: result.stats.totalConflicts,
             autoResolved: result.stats.autoResolved,
             conflictTypes: types,
+            hunks,
           });
         } else {
           // Pas de contenu → conflit indéterminé
@@ -122,6 +174,7 @@ export function useMergePreview(cwd: () => string) {
             totalConflicts: 1,
             autoResolved: 0,
             conflictTypes: ["complex"],
+            hunks: [{ startLine: 0, type: "complex", autoResolved: false }],
           });
         }
       }
@@ -135,7 +188,7 @@ export function useMergePreview(cwd: () => string) {
       const fullyAutoMergeable = conflictingFiles > 0 && manualFiles === 0;
 
       summary.value = {
-        sourceBranch,
+        sourceBranch: ref_,
         files,
         conflictingFiles,
         autoResolvableFiles,
@@ -161,11 +214,29 @@ export function useMergePreview(cwd: () => string) {
     summary.value?.files.filter(f => f.status !== "clean") ?? [],
   );
 
+  /**
+   * Niveau de risque global (v2.20.0), dérivé du résumé :
+   *  - low    : aucun fichier conflictuel, ou tous auto-résolus
+   *  - medium : des fichiers "partial" mais aucun "manual"/"add-delete"
+   *  - high   : au moins un fichier "manual" ou "add-delete"
+   */
+  const riskLevel = computed<RiskLevel>(() => {
+    const s = summary.value;
+    if (!s || s.conflictingFiles === 0) return "low";
+    const hasHard = s.files.some(
+      f => f.status === "manual" || f.status === "add-delete",
+    );
+    if (hasHard) return "high";
+    const hasPartial = s.files.some(f => f.status === "partial");
+    return hasPartial ? "medium" : "low";
+  });
+
   return {
     loading,
     error,
     summary,
     conflictingFiles,
+    riskLevel,
     computePreview,
     reset,
   };

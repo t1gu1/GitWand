@@ -21,12 +21,14 @@ import { c, printBanner } from "./ui.js";
 import { DEFAULT_CONCURRENCY } from "./concurrency.js";
 import { cmdResolve } from "./commands/resolve.js";
 import { cmdStatus } from "./commands/status.js";
+import { cmdPreview } from "./commands/preview.js";
 
 function printHelp(): void {
   printBanner();
   console.log(`${c.bold}Usage:${c.reset}`);
   console.log(`  gitwand resolve [files...]      Auto-resolve trivial conflicts`);
   console.log(`  gitwand status                  Show conflict status`);
+  console.log(`  gitwand preview                 Predict conflicts before merge/rebase/cherry-pick`);
   console.log(`  gitwand --help                  Show this help`);
   console.log();
   console.log(`${c.bold}Options:${c.reset}`);
@@ -36,6 +38,11 @@ function printHelp(): void {
   console.log(`  --concurrency=N       Parallel file workers (default ${DEFAULT_CONCURRENCY}, min 1)`);
   console.log(`  --ci                  CI mode: JSON output + exit code 1 if unresolved`);
   console.log(`  --json                Output results as JSON (implies --ci behavior)`);
+  console.log();
+  console.log(`${c.bold}Preview options:${c.reset}`);
+  console.log(`  --onto=<ref>          Rebase preview: HEAD rebased onto <ref>`);
+  console.log(`  --commit=<sha>        Cherry-pick preview: <sha> applied onto HEAD`);
+  console.log(`  --branch=<name>       Merge preview: <name> merged into HEAD`);
   console.log(`  --llm-fallback        Enable LLM fallback for unresolved conflicts (opt-in, experimental)`);
   console.log(`  --llm-provider=X      LLM provider: claude (default) | openai | ollama`);
   console.log(`  --llm-model=X         Model name (e.g. claude-sonnet-4-6, gpt-4o-mini, llama3)`);
@@ -92,6 +99,8 @@ export async function main(): Promise<void> {
     await cmdResolve(positional, flags);
   } else if (command === "status") {
     await cmdStatus(flags);
+  } else if (command === "preview") {
+    await cmdPreview(flags);
   } else {
     console.error(`${c.red}Unknown command: ${command}${c.reset}`);
     printHelp();

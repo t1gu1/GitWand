@@ -84,7 +84,7 @@ function setLocale(code: Locale) {
 }
 
 // ── Smart download URL (OS detection) ─────────────────────────────────────
-const LATEST = '2.19.0'
+const LATEST = '2.20.0'
 const RELEASES = 'https://github.com/devlint/GitWand/releases'
 
 // SSR-safe: start with the generic releases page, then switch to the
@@ -105,13 +105,13 @@ onMounted(() => {
 
 const i18n: Record<Locale, any> = {
   fr: {
-    badge: 'v2.19.0 · Open Source · MIT',
+    badge: 'v2.20.0 · Open Source · MIT',
     heroH1a: 'Le client Git qui',
     heroH1b: 'résout les conflits pour vous.',
     heroSub: 'GitWand classifie chaque conflit de merge avec 10 patterns déterministes et un score de confiance par hunk. Les 95 % triviaux — résolus automatiquement. Les cas complexes — pour vous, avec traces complètes. Natif, gratuit, open source.',
     download: 'Télécharger',
     github: 'GitHub',
-    whatsNew: 'Nouveautés v2.19',
+    whatsNew: 'Nouveautés v2.20',
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patterns de résolution',
@@ -225,12 +225,14 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configurez des templates de commit par repo, chargés automatiquement à l\'ouverture. Choisissez un préfixe Conventional Commits (feat, fix, docs…) depuis un picker intégré.',
     featAISuggest: 'Suggestions de code IA inline',
     featAISuggestDesc: 'Sélectionnez un hunk dans le panneau Review, demandez une réécriture ciblée et acceptez la suggestion IA en un clic. Les presets de prompts ajoutent un contexte instantané.',
+    featScratch: 'Worktree scratch + Conflict Predictor étendu',
+    featScratchDesc: 'Résolvez les conflits dans un worktree isolé jetable, ramenés en un clic (cleanup auto). Le Conflict Predictor prédit désormais rebase et cherry-pick — sans effet de bord, avec badge de risque et vue hunk par hunk.',
     featOAuth: 'GitHub OAuth, Azure DevOps & PRs cross-fork',
     featOAuthDesc: 'Connectez-vous à GitHub et Azure DevOps via OAuth device flow — tokens dans le trousseau de l\'OS, sans CLI gh. Azure DevOps devient une forge à part entière, et les PRs cross-fork ciblent le dépôt upstream.',
     // Encart Nouveautés
-    newReleaseBadge: 'Nouveau dans la v2.19',
-    newReleaseTitle: 'Connexion GitHub & Azure DevOps — sans CLI',
-    newReleaseSub: 'Connexion OAuth device-flow pour GitHub et Azure DevOps, tokens stockés dans le trousseau de l\'OS, et pull requests cross-fork ouvertes directement vers le dépôt upstream. Fini la configuration de la CLI gh.',
+    newReleaseBadge: 'Nouveau dans la v2.20',
+    newReleaseTitle: 'Résolvez dans un worktree scratch, prédisez rebase & cherry-pick',
+    newReleaseSub: 'Un worktree isolé jetable pour résoudre les conflits hors de votre checkout actif — ramenez le résultat en un clic. Et le Conflict Predictor s\'étend au rebase et au cherry-pick, sans effet de bord, dans l\'app, le serveur MCP et la nouvelle commande CLI gitwand preview.',
     newReleaseCta: 'Voir les nouveautés',
     faqTitle: 'Questions fréquentes',
     faqItems: [
@@ -245,13 +247,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparaison fonctionnalité par fonctionnalité avec les clients Git les plus populaires.',
   },
   en: {
-    badge: 'v2.19.0 · Open Source · MIT',
+    badge: 'v2.20.0 · Open Source · MIT',
     heroH1a: 'The Git client that',
     heroH1b: 'resolves conflicts for you.',
     heroSub: 'GitWand classifies every merge conflict using 10 deterministic patterns and per-hunk confidence scoring. The trivial 95% — auto-resolved. The complex — left for you with full traces. Native, free, open-source.',
     download: 'Download',
     github: 'GitHub',
-    whatsNew: "What's new in v2.19",
+    whatsNew: "What's new in v2.20",
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'resolution patterns',
@@ -365,12 +367,14 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configure per-repo commit templates loaded automatically on open. Pick a Conventional Commits prefix (feat, fix, docs…) from an inline chip picker.',
     featAISuggest: 'AI inline code suggestions',
     featAISuggestDesc: 'Select any hunk in the PR Review panel, request a targeted rewrite, and accept the AI suggestion in one click. Prompt presets add instant context across every AI feature.',
+    featScratch: 'Scratch worktree + extended Conflict Predictor',
+    featScratchDesc: 'Resolve conflicts in a throwaway isolated worktree, brought back in one click (auto-cleanup). The Conflict Predictor now covers rebase and cherry-pick — side-effect-free, with a risk badge and a hunk-by-hunk view.',
     featOAuth: 'GitHub OAuth, Azure DevOps & cross-fork PRs',
     featOAuthDesc: 'Sign in to GitHub and Azure DevOps with the OAuth device flow — tokens in your OS keychain, no gh CLI. Azure DevOps is a first-class forge, and cross-fork PRs target the upstream parent.',
     // Highlight banner
-    newReleaseBadge: 'New in v2.19',
-    newReleaseTitle: 'Sign in with GitHub & Azure DevOps — no CLI required',
-    newReleaseSub: 'OAuth device-flow sign-in for GitHub and Azure DevOps, tokens kept in your OS keychain, and cross-fork pull requests opened straight against the upstream parent. No more gh CLI setup.',
+    newReleaseBadge: 'New in v2.20',
+    newReleaseTitle: 'Resolve in a scratch worktree, predict rebase & cherry-pick',
+    newReleaseSub: 'A throwaway isolated worktree to resolve conflicts away from your live checkout — bring the result back in one click. And the Conflict Predictor now sees rebase and cherry-pick, side-effect-free, across the app, the MCP server, and a new gitwand preview CLI command.',
     newReleaseCta: 'See what\'s new',
     faqTitle: 'Frequently asked questions',
     faqItems: [
@@ -385,13 +389,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Feature-by-feature breakdown against the most popular Git clients on the market.',
   },
   es: {
-    badge: 'v2.19.0 · Open Source · MIT',
+    badge: 'v2.20.0 · Open Source · MIT',
     heroH1a: 'El cliente Git que',
     heroH1b: 'resuelve conflictos por ti.',
     heroSub: 'GitWand clasifica cada conflicto de merge con 10 patrones deterministas y puntuación de confianza por hunk. El 95 % trivial — resuelto automáticamente. Lo complejo — para ti, con trazas completas. Nativo, gratuito, open source.',
     download: 'Descargar',
     github: 'GitHub',
-    whatsNew: 'Novedades v2.19',
+    whatsNew: 'Novedades v2.20',
     docs: 'Documentación →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'patrones de resolución',
@@ -505,12 +509,14 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configura templates de commit por repo, cargados automáticamente al abrir. Elige un prefijo de Conventional Commits (feat, fix, docs…) desde un selector integrado.',
     featAISuggest: 'Sugerencias de código IA inline',
     featAISuggestDesc: 'Selecciona cualquier hunk en el panel Review, pide una reescritura enfocada y acepta la sugerencia IA con un clic. Los presets de prompts añaden contexto instantáneo.',
+    featScratch: 'Worktree temporal + Conflict Predictor ampliado',
+    featScratchDesc: 'Resuelve conflictos en un worktree aislado y desechable, traído de vuelta en un clic (limpieza automática). El Conflict Predictor ahora cubre rebase y cherry-pick — sin efectos secundarios, con badge de riesgo y vista hunk por hunk.',
     featOAuth: 'GitHub OAuth, Azure DevOps y PRs cross-fork',
     featOAuthDesc: 'Inicia sesión en GitHub y Azure DevOps con OAuth device flow — tokens en el llavero del SO, sin CLI gh. Azure DevOps es una forge de primera clase y las PRs cross-fork apuntan al repo upstream.',
     // Encabezado Novedades
-    newReleaseBadge: 'Nuevo en v2.19',
-    newReleaseTitle: 'Inicia sesión con GitHub y Azure DevOps — sin CLI',
-    newReleaseSub: 'Inicio de sesión OAuth (device flow) para GitHub y Azure DevOps, tokens en el llavero del SO, y pull requests cross-fork abiertas directamente contra el repo upstream. Sin configurar la CLI gh.',
+    newReleaseBadge: 'Nuevo en v2.20',
+    newReleaseTitle: 'Resuelve en un worktree temporal, predice rebase y cherry-pick',
+    newReleaseSub: 'Un worktree aislado y desechable para resolver conflictos fuera de tu checkout activo — trae el resultado de vuelta en un clic. Y el Conflict Predictor ahora cubre rebase y cherry-pick, sin efectos secundarios, en la app, el servidor MCP y el nuevo comando CLI gitwand preview.',
     newReleaseCta: 'Ver las novedades',
     faqTitle: 'Preguntas frecuentes',
     faqItems: [
@@ -525,13 +531,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparativa función a función con los clientes Git más populares del mercado.',
   },
   'pt-BR': {
-    badge: 'v2.19.0 · Open Source · MIT',
+    badge: 'v2.20.0 · Open Source · MIT',
     heroH1a: 'O cliente Git que',
     heroH1b: 'resolve conflitos por você.',
     heroSub: 'GitWand classifica cada conflito de merge com 10 padrões deterministas e pontuação de confiança por hunk. Os 95 % triviais — resolvidos automaticamente. Os complexos — para você, com traces completos. Nativo, gratuito, open source.',
     download: 'Baixar',
     github: 'GitHub',
-    whatsNew: 'Novidades v2.19',
+    whatsNew: 'Novidades v2.20',
     docs: 'Documentação →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: 'padrões de resolução',
@@ -645,12 +651,14 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: 'Configure templates de commit por repo, carregados automaticamente ao abrir. Escolha um prefixo de Conventional Commits (feat, fix, docs…) a partir de um seletor integrado.',
     featAISuggest: 'Sugestões de código IA inline',
     featAISuggestDesc: 'Selecione qualquer hunk no painel Review, peça uma reescrita focada e aceite a sugestão de IA com um clique. Presets de prompts adicionam contexto instantâneo.',
+    featScratch: 'Worktree temporário + Conflict Predictor ampliado',
+    featScratchDesc: 'Resolva conflitos em um worktree isolado e descartável, trazido de volta em um clique (limpeza automática). O Conflict Predictor agora cobre rebase e cherry-pick — sem efeitos colaterais, com badge de risco e visão hunk a hunk.',
     featOAuth: 'GitHub OAuth, Azure DevOps e PRs cross-fork',
     featOAuthDesc: 'Entre no GitHub e no Azure DevOps com OAuth device flow — tokens no keychain do SO, sem CLI gh. Azure DevOps é uma forge de primeira classe, e as PRs cross-fork miram o repositório upstream.',
     // Banner de Novidades
-    newReleaseBadge: 'Novo na v2.19',
-    newReleaseTitle: 'Entre com GitHub e Azure DevOps — sem CLI',
-    newReleaseSub: 'Login OAuth (device flow) para GitHub e Azure DevOps, tokens no keychain do SO, e pull requests cross-fork abertas direto contra o repositório upstream. Sem configurar a CLI gh.',
+    newReleaseBadge: 'Novo na v2.20',
+    newReleaseTitle: 'Resolva em um worktree temporário, preveja rebase e cherry-pick',
+    newReleaseSub: 'Um worktree isolado e descartável para resolver conflitos fora do seu checkout ativo — traga o resultado de volta em um clique. E o Conflict Predictor agora cobre rebase e cherry-pick, sem efeitos colaterais, no app, no servidor MCP e no novo comando CLI gitwand preview.',
     newReleaseCta: 'Ver as novidades',
     faqTitle: 'Perguntas frequentes',
     faqItems: [
@@ -665,13 +673,13 @@ const i18n: Record<Locale, any> = {
     compareSub: 'Comparação recurso a recurso com os clientes Git mais populares do mercado.',
   },
   'zh-CN': {
-    badge: 'v2.19.0 · 开源 · MIT',
+    badge: 'v2.20.0 · 开源 · MIT',
     heroH1a: '自动解决冲突的',
     heroH1b: 'Git 客户端',
     heroSub: 'GitWand 通过 10 种确定性模式与逐 hunk 置信度评分，对每个合并冲突进行分类。95% 的简单冲突自动解决。复杂的留给你，附带完整追踪。原生、免费、开源。',
     download: '下载',
     github: 'GitHub',
-    whatsNew: 'v2.19 新特性',
+    whatsNew: 'v2.20 新特性',
     docs: '文档 →',
     platforms: 'macOS · Linux · Windows',
     statPatterns: '种解决模式',
@@ -785,12 +793,14 @@ const i18n: Record<Locale, any> = {
     featIdentitiesDesc: '为每个仓库配置提交模板，打开时自动加载。通过内置选择器选择约定式提交前缀（feat、fix、docs…）。',
     featAISuggest: '内联 AI 代码建议',
     featAISuggestDesc: '在 Review 面板中选择任意 hunk，请求针对性重写，一键接受 AI 建议。提示词预设为所有 AI 功能即时注入上下文。',
+    featScratch: '临时工作树 + 增强的 Conflict Predictor',
+    featScratchDesc: '在可丢弃的隔离工作树中解决冲突，一键合并回来（自动清理）。Conflict Predictor 现已覆盖变基与拣选 — 无副作用，带风险标记和逐块视图。',
     featOAuth: 'GitHub OAuth、Azure DevOps 与跨 fork PR',
     featOAuthDesc: '通过 OAuth 设备流登录 GitHub 和 Azure DevOps — 令牌保存在系统钥匙串中，无需 gh CLI。Azure DevOps 成为一等 forge，跨 fork PR 直接面向上游仓库。',
     // 最新特性横幅
-    newReleaseBadge: 'v2.19 新特性',
-    newReleaseTitle: '登录 GitHub 与 Azure DevOps — 无需 CLI',
-    newReleaseSub: 'GitHub 和 Azure DevOps 的 OAuth 设备流登录，令牌保存在操作系统钥匙串中，跨 fork 的 Pull Request 可直接面向上游仓库提交。无需再配置 gh CLI。',
+    newReleaseBadge: 'v2.20 新特性',
+    newReleaseTitle: '在临时工作树中解决冲突，预测变基与拣选',
+    newReleaseSub: '一个可丢弃的隔离工作树，让你在不影响当前检出的情况下解决冲突 — 一键将结果合并回来。Conflict Predictor 现已覆盖变基和拣选，无副作用，贯穿桌面应用、MCP 服务器以及全新的 gitwand preview 命令行命令。',
     newReleaseCta: '查看新特性',
     faqTitle: '常见问题',
     faqItems: [
@@ -1238,6 +1248,12 @@ function cellClass(v: CompareValue | undefined): string {
 
           <!-- What's New tab — 7 highlights from v2.5 → v2.19 -->
           <div v-else-if="activeTab === 'new'" key="new" class="features-grid" role="tabpanel">
+            <!-- Scratch worktree + extended Conflict Predictor — v2.20 -->
+            <div class="feat-card feat-card--new">
+              <div class="feat-badge">v2.20</div>
+              <div class="feat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="9" r="2.5"/><path d="M6 8.5v7M8.4 7.2C12 6 14 8 15.6 8.8M9 18h4a4 4 0 004-4v-2.5"/></svg></div>
+              <h3>{{ t.featScratch }}</h3><p>{{ t.featScratchDesc }}</p>
+            </div>
             <!-- GitHub OAuth, Azure DevOps & cross-fork PRs — v2.19 -->
             <div class="feat-card feat-card--new">
               <div class="feat-badge">v2.19</div>
@@ -1545,10 +1561,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/v2-19-github-oauth-azure" class="blog-teaser-card">
-          <div class="blog-teaser-meta">June 16, 2026 · 12 min read</div>
-          <h3 class="blog-teaser-title">Sign in with GitHub & Azure DevOps, and open cross-fork PRs</h3>
-          <p class="blog-teaser-excerpt">v2.19 takes the PR workflow off the gh CLI: OAuth device-flow sign-in for GitHub and Azure DevOps with tokens in the OS keychain, Azure DevOps as a first-class forge, cross-fork pull requests against the upstream parent, and a backend performance pass.</p>
+        <a href="/blog/v2-20-scratch-worktree-conflict-predictor" class="blog-teaser-card">
+          <div class="blog-teaser-meta">June 17, 2026 · 9 min read</div>
+          <h3 class="blog-teaser-title">Resolve in a scratch worktree, and predict rebase & cherry-pick conflicts</h3>
+          <p class="blog-teaser-excerpt">v2.20 adds a throwaway scratch worktree for isolated conflict resolution — resolve away from your live checkout, bring it back in one click — and extends the Conflict Predictor to rebase and cherry-pick across the desktop app, the MCP server, and a new gitwand preview CLI command.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

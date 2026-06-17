@@ -11,4 +11,5 @@ pub(crate) mod mcp_catalog;
 pub(crate) mod network;
 pub(crate) mod ops;
 pub(crate) mod read;
+pub(crate) mod scratch;
 pub(crate) mod workspace;

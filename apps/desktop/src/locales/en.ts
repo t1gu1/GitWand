@@ -510,6 +510,22 @@ const en = {
     partial: "auto-resolved",
     addDelete: "add/delete",
     conflictsManual: "manual conflict(s)",
+    operationLabel: "Operation to simulate",
+    op: {
+      merge: "Merge",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
+    },
+    riskLabel: "Predicted risk level",
+    riskLow: "Low risk",
+    riskMedium: "Medium risk",
+    riskHigh: "High risk",
+    hunkLine: "Line",
+    hunkAuto: "auto-resolvable",
+    hunkManual: "manual",
+    commitPicker: "Commit to cherry-pick",
+    commitPickerLoading: "Loading commits…",
+    commitPickerEmpty: "No commits found",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────
@@ -1514,6 +1530,18 @@ const en = {
     pickaxeNoResults: "No commits found for this search.",
     showLineHistory: "Show history for these lines",
     rangeHistory: "History for lines {0}\u2013{1}",
+  },
+
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Resolve in scratch worktree",
+    openIsolated: "Open isolated worktree",
+    mergeBack: "Bring changes back",
+    discard: "Discard scratch",
+    created: "Scratch worktree created",
+    mergedBack: "Changes merged back into the main checkout",
+    discarded: "Scratch worktree discarded",
+    mergeBackBlocked: "Cannot bring changes back: the main checkout has conflicting uncommitted changes.",
   },
 
   // ─── Worktrees ──────────────────────────────────────────

@@ -503,6 +503,22 @@ const fr: Locale = {
     partial: "auto-résolu(s)",
     addDelete: "ajout/suppression",
     conflictsManual: "conflit(s) manuel(s)",
+    operationLabel: "Opération à simuler",
+    op: {
+      merge: "Fusion",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
+    },
+    riskLabel: "Niveau de risque prédit",
+    riskLow: "Risque faible",
+    riskMedium: "Risque moyen",
+    riskHigh: "Risque élevé",
+    hunkLine: "Ligne",
+    hunkAuto: "auto-résolvable",
+    hunkManual: "manuel",
+    commitPicker: "Commit à cherry-picker",
+    commitPickerLoading: "Chargement des commits…",
+    commitPickerEmpty: "Aucun commit trouvé",
   },
 
   // ─── Interactive Rebase (Phase 1.2.1) ──────────────────
@@ -1484,6 +1500,18 @@ const fr: Locale = {
     explainChange: "Expliquer ce changement avec l'IA",
     whyThisChange: "Pourquoi ce changement \u003f",
     analyzingCommit: "Analyse du commit en cours\u2026",
+  },
+
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Résoudre dans un worktree scratch",
+    openIsolated: "Ouvrir un worktree isolé",
+    mergeBack: "Ramener les changements",
+    discard: "Abandonner le scratch",
+    created: "Worktree scratch créé",
+    mergedBack: "Changements ramenés dans le checkout principal",
+    discarded: "Worktree scratch abandonné",
+    mergeBackBlocked: "Impossible de ramener les changements : le checkout principal a des modifications non commitées en conflit.",
   },
 
   // ─── Worktrees ──────────────────────────────────────────

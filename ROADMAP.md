@@ -6,23 +6,6 @@
 
 ## What's Next
 
-### v2.20.0 — Scratch worktree + extended Conflict Predictor
-
-_Inspired by GitSquid. A natural extension of the GitWand engine and Worktree first-class (v2.7)._
-
-**Scratch worktree for isolated resolution**
-
-- From the merge preview or the Conflict Predictor, open a temporary isolated worktree (`gitwand-scratch-<timestamp>`) without touching the active checkout
-- Resolve conflicts in this sandbox, validate, then bring changes back to the main checkout in one click
-- Automatic cleanup of the scratch worktree after merge-back or abandonment
-
-**Conflict Predictor extended to rebase and cherry-pick**
-
-- `gitwand_preview_merge` extended to simulate a rebase (`git rebase --no-apply`) and a cherry-pick (`git cherry-pick --no-commit`) without modifying the working tree
-- Hunk-by-hunk preview before launching the operation, with a risk level (low/medium/high)
-
----
-
 ### v2.21.0 — Monorepo Scope
 
 _Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, Nx…)._
@@ -123,6 +106,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.20.0** | Scratch worktree + extended Conflict Predictor — "Resolve in scratch worktree" from the merge preview opens a temporary isolated `gitwand-scratch-<timestamp>` worktree as a repo tab (resolve away from the active checkout, bring changes back in one click or discard, auto-cleanup, origin-anchored lifecycle); Conflict Predictor extended to rebase (per-commit replay against `onto`) and cherry-pick — side-effect-free `preview_rebase` / `preview_cherry_pick` Tauri commands, MCP `gitwand_preview_merge` `operation` param, new `gitwand preview` CLI command, operation selector + risk badge (low/medium/high) + hunk-by-hunk preview in the panel |
 | **v2.19.0** | GitHub OAuth & Azure DevOps + cross-fork PRs — "Sign in with GitHub" via OAuth device flow (tokens in the OS keychain, tokenless REST path, no `gh` CLI required), Azure DevOps as a first-class forge (`AzureProvider`, Entra ID device flow + auto token refresh, PR list/detail/diff/create/merge/checkout, comments, branch-policy CI checks, reviewer votes), cross-fork pull requests (target-repo selector defaulting to upstream, fork PRs surfaced in the list), and a backend performance pass (async Tauri commands, disk-persisted SWR PR cache, libgit2 `git_status` fast-path) |
 | **v2.18.0** | Inline CI Check Annotations — check-run annotations overlaid in the PR diff across the three forges (GitHub check-runs API, GitLab `artifacts:reports:codequality`, Bitbucket Reports API), gutter icons ❌/⚠/ℹ with hover tooltip, clickable "N annotations" badge in the CI tab, per-file ⚠ count in the diff sidebar, forge-agnostic `CIAnnotation` type + `ForgeProvider.getCheckAnnotations()`, lazy one-shot fetch per PR; Copilot CLI as a fourth AI provider (text-only sandbox) |
 | **v2.17.0** | opencode provider + per-CLI model picker — `opencode-cli` as a first-class AI provider (`opencode run`, binary discovery, Settings status), second model select under the provider picker for the three CLI agents (opencode enumerates via `opencode models`, Claude Code aliases, Codex free-text), `aiModelByProvider` persisted per provider, `--model` threaded through all three CLIs |

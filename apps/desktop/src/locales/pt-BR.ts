@@ -497,6 +497,22 @@ const ptBR: Locale = {
     partial: "auto-resolvido",
     addDelete: "adicionar/excluir",
     conflictsManual: "conflito(s) manual(is)",
+    operationLabel: "Operação a simular",
+    op: {
+      merge: "Merge",
+      rebase: "Rebase",
+      "cherry-pick": "Cherry-pick",
+    },
+    riskLabel: "Nível de risco previsto",
+    riskLow: "Risco baixo",
+    riskMedium: "Risco médio",
+    riskHigh: "Risco alto",
+    hunkLine: "Linha",
+    hunkAuto: "auto-resolvível",
+    hunkManual: "manual",
+    commitPicker: "Commit para cherry-pick",
+    commitPickerLoading: "Carregando commits…",
+    commitPickerEmpty: "Nenhum commit encontrado",
   },
 
   // ─── Interactive Rebase ─────────────────────────────────
@@ -1472,6 +1488,18 @@ const ptBR: Locale = {
     explainChange: "Explicar esta alteração com IA",
     whyThisChange: "Por que esta alteração?",
     analyzingCommit: "Analisando commit\u2026",
+  },
+
+  // ─── Scratch worktree (v2.20.0) ─────────────────────────
+  scratch: {
+    create: "Resolver em worktree temporário",
+    openIsolated: "Abrir worktree isolado",
+    mergeBack: "Trazer as alterações de volta",
+    discard: "Descartar o worktree temporário",
+    created: "Worktree temporário criado",
+    mergedBack: "Alterações trazidas de volta para o checkout principal",
+    discarded: "Worktree temporário descartado",
+    mergeBackBlocked: "Não é possível trazer as alterações de volta: o checkout principal tem alterações não commitadas em conflito.",
   },
 
   // ─── Worktrees ──────────────────────────────────────────

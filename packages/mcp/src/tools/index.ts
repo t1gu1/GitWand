@@ -12,7 +12,7 @@
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { resolve as resolvePath } from "node:path";
 import { resolve, type MergeResult } from "@gitwand/core";
 import { resolveHunkToolDefinition, handleResolveHunk } from "./resolve_hunk.js";
@@ -66,13 +66,26 @@ export function registerTools() {
     {
       name: "gitwand_preview_merge",
       description:
-        "Dry-run conflict resolution on all conflicted files. Shows how many conflicts GitWand can auto-resolve vs. how many need manual/LLM attention. Does NOT modify any files.",
+        "Side-effect-free Conflict Predictor. Simulates a merge, rebase, or cherry-pick and reports how many conflicts GitWand can auto-resolve vs. how many need manual/LLM attention, plus an overall risk level (low/medium/high). Does NOT modify the working tree, index, or HEAD.\n\n- operation 'merge' (default): analyzes conflicts already materialized in the working tree (files with conflict markers).\n- operation 'rebase': simulates rebasing HEAD onto `onto` (3-way against merge-base(HEAD, onto); HEAD's work is replayed on top of `onto`).\n- operation 'cherry-pick': simulates cherry-picking `commit` onto HEAD (3-way with `commit^` as ancestor, HEAD as ours, `commit` as theirs).",
       inputSchema: {
         type: "object" as const,
         properties: {
           cwd: {
             type: "string",
             description: "Working directory (repo root). Defaults to server cwd.",
+          },
+          operation: {
+            type: "string",
+            enum: ["merge", "rebase", "cherry-pick"],
+            description: "Operation to simulate. Default: 'merge'.",
+          },
+          onto: {
+            type: "string",
+            description: "Required when operation is 'rebase': the branch/ref to rebase HEAD onto.",
+          },
+          commit: {
+            type: "string",
+            description: "Required when operation is 'cherry-pick': the commit to simulate cherry-picking onto HEAD.",
           },
         },
       },
@@ -193,6 +206,134 @@ function getConflictedFiles(cwd: string): string[] {
   }
 }
 
+// ─── Conflict Predictor helpers (rebase / cherry-pick) ─────
+//
+// These live in the MCP package (which already depends on node:child_process /
+// node:fs), NOT in @gitwand/core, which must stay Node-free. They synthesize
+// conflict-marked content for a simulated rebase / cherry-pick WITHOUT touching
+// the working tree, index, or HEAD — by reading the three blob versions with
+// `git show` and running `git merge-file` in a system temp directory. The
+// resulting markered content is then fed through the same `resolve()` engine as
+// the working-tree merge path, so the predictor output is identical in shape.
+
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join as joinPath } from "node:path";
+
+/** Run git, returning trimmed stdout, or null on non-zero exit / spawn error. */
+function gitTry(cwd: string, args: string[]): string | null {
+  try {
+    // execFileSync passes args as a discrete array — no shell interpolation.
+    const out = execFileSync("git", args, { cwd, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] });
+    return out.trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Run `git merge-file` and return the merged content INCLUDING conflict markers.
+ *
+ * Unlike gitTry, this must NOT discard output on a non-zero exit: `git merge-file`
+ * exits with a code equal to the number of conflicts (>0 means there ARE
+ * conflicts — exactly the case the predictor cares about), and the conflict-marked
+ * content is still written to stdout. Returns the content as-is (no trim, to
+ * preserve a trailing newline the resolver may rely on), or null only on a real
+ * spawn failure or a fatal git error (exit 255 / no captured stdout).
+ */
+function gitMergeFile(cwd: string, args: string[]): string | null {
+  try {
+    const out = execFileSync("git", ["merge-file", ...args], {
+      cwd,
+      encoding: "utf-8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out; // clean merge, exit 0
+  } catch (e: unknown) {
+    // execFileSync throws on non-zero exit; the error still carries captured
+    // stdout. Conflicts → status in 1..127 with markered content on stdout.
+    const err = e as { status?: number; stdout?: string };
+    if (typeof err.stdout === "string" && err.stdout.length > 0) {
+      return err.stdout;
+    }
+    return null;
+  }
+}
+
+/** Resolve a ref to a commit SHA, or null if unknown/invalid. */
+function revParse(cwd: string, rev: string): string | null {
+  return gitTry(cwd, ["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]);
+}
+
+/** Files changed between two revs (name-only). */
+function changedFiles(cwd: string, base: string, rev: string): string[] {
+  const out = gitTry(cwd, ["diff", "--name-only", base, rev]);
+  if (!out) return [];
+  return out.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+}
+
+/** Read a file's blob at a given rev, or null if absent at that rev. */
+function showBlob(cwd: string, rev: string, file: string): string | null {
+  return gitTry(cwd, ["show", `${rev}:${file}`]);
+}
+
+interface SimulatedFile {
+  file: string;
+  /** Content with conflict markers (diff3), suitable for resolve(). */
+  content: string;
+  /** True when one side is missing the file (add/delete conflict). */
+  addDelete: boolean;
+}
+
+/**
+ * Build the conflict-marked content for the intersection of files changed on
+ * both sides of a 3-way operation, mirroring the desktop Rust predictor.
+ * `ours`/`theirs` are git refs; ancestor is the common base.
+ * Returns only the files that actually changed on BOTH sides (the only ones
+ * that can conflict); clean unilateral changes are omitted since they never
+ * produce markers.
+ */
+function simulate3way(cwd: string, ancestor: string, ours: string, theirs: string): SimulatedFile[] {
+  const oursFiles = new Set(changedFiles(cwd, ancestor, ours));
+  const theirsFiles = changedFiles(cwd, ancestor, theirs);
+  const both = theirsFiles.filter((f) => oursFiles.has(f));
+
+  if (both.length === 0) return [];
+
+  const tmp = mkdtempSync(joinPath(tmpdir(), "gitwand-predict-"));
+  const out: SimulatedFile[] = [];
+  try {
+    for (const file of both) {
+      const baseBlob = showBlob(cwd, ancestor, file);
+      const oursBlob = showBlob(cwd, ours, file);
+      const theirsBlob = showBlob(cwd, theirs, file);
+
+      // One side missing the file → add/delete conflict (no markers to resolve).
+      if (oursBlob === null || theirsBlob === null) {
+        out.push({ file, content: "", addDelete: true });
+        continue;
+      }
+
+      const safe = file.replace(/[\\/.]/g, "_");
+      const pBase = joinPath(tmp, `${safe}.base`);
+      const pOurs = joinPath(tmp, `${safe}.ours`);
+      const pTheirs = joinPath(tmp, `${safe}.theirs`);
+      writeFileSync(pBase, baseBlob ?? "", "utf-8");
+      writeFileSync(pOurs, oursBlob, "utf-8");
+      writeFileSync(pTheirs, theirsBlob, "utf-8");
+
+      // git merge-file -p --diff3 <ours> <base> <theirs> → markered content on stdout.
+      // Must use gitMergeFile, not gitTry: merge-file exits non-zero on conflict
+      // (the very case we want), and gitTry would discard the conflict content.
+      const merged = gitMergeFile(cwd, ["-p", "--diff3", pOurs, pBase, pTheirs]);
+      out.push({ file, content: merged ?? "", addDelete: false });
+    }
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+  return out;
+}
+
 function serializeResult(file: string, result: MergeResult) {
   return {
     path: file,
@@ -291,7 +432,7 @@ export async function handleToolCall(
     case "gitwand_resolve_conflicts":
       return toolResolve(cwd, args);
     case "gitwand_preview_merge":
-      return toolPreview(cwd);
+      return toolPreview(cwd, args);
     case "gitwand_explain_hunk":
       return toolExplain(cwd, args);
     case "gitwand_apply_resolution":
@@ -409,12 +550,22 @@ async function toolResolve(cwd: string, args: Record<string, unknown>) {
   };
 }
 
-async function toolPreview(cwd: string) {
+async function toolPreview(cwd: string, args: Record<string, unknown>) {
+  const operation = ((args.operation as string) ?? "merge") as "merge" | "rebase" | "cherry-pick";
+
+  if (operation === "rebase") {
+    return toolPreviewRebase(cwd, args);
+  }
+  if (operation === "cherry-pick") {
+    return toolPreviewCherryPick(cwd, args);
+  }
+
+  // Default: merge — analyze conflicts already present in the working tree.
   const files = getConflictedFiles(cwd);
 
   if (files.length === 0) {
     return {
-      content: [{ type: "text" as const, text: JSON.stringify({ message: "No conflicted files.", risk: "none" }, null, 2) }],
+      content: [{ type: "text" as const, text: JSON.stringify({ operation: "merge", message: "No conflicted files.", risk: "none" }, null, 2) }],
     };
   }
 
@@ -429,23 +580,63 @@ async function toolPreview(cwd: string) {
     }
   });
 
-  const totalConflicts = previews.reduce((s: number, r: Record<string, unknown>) => s + ((r.totalConflicts as number) ?? 0), 0);
-  const totalResolvable = previews.reduce((s: number, r: Record<string, unknown>) => s + ((r.autoResolved as number) ?? 0), 0);
+  return previewResponse("merge", files.length, previews);
+}
+
+/**
+ * Shared assembly of the preview response from per-file `resolve()` results,
+ * including the overall risk level.
+ *
+ * Risk uses the SAME status-based model as the desktop `useMergePreview`
+ * `riskLevel` computed (spec §4.2), so all three predictor surfaces
+ * (desktop / MCP / CLI) agree for identical inputs:
+ *   - high   : at least one file is "manual" (no conflict auto-resolved) or
+ *              "add-delete" (one side deleted the file);
+ *   - medium : at least one file is "partial" (some but not all conflicts
+ *              auto-resolved);
+ *   - low    : no conflicting files, or every conflict auto-resolved.
+ * It is deliberately status-based, NOT count/threshold-based: the number of
+ * cleanly auto-resolvable files does not by itself raise the risk.
+ */
+function previewResponse(
+  operation: string,
+  fileCount: number,
+  previews: Array<Record<string, unknown>>,
+  addDeleteCount = 0,
+) {
+  const totalConflicts = previews.reduce((s: number, r) => s + ((r.totalConflicts as number) ?? 0), 0);
+  const totalResolvable = previews.reduce((s: number, r) => s + ((r.autoResolved as number) ?? 0), 0);
   const remaining = totalConflicts - totalResolvable;
 
-  // Risk assessment
+  // Per-file status classification, mirroring the desktop model.
+  const hasHard = previews.some((r) => {
+    if (r.addDelete === true) return true;
+    const total = (r.totalConflicts as number) ?? 0;
+    const resolved = (r.autoResolved as number) ?? 0;
+    // "manual": the file has conflicts and none of them auto-resolved.
+    return total > 0 && resolved === 0;
+  });
+  const hasPartial = previews.some((r) => {
+    const total = (r.totalConflicts as number) ?? 0;
+    const resolved = (r.autoResolved as number) ?? 0;
+    // "partial": some — but not all — conflicts in the file auto-resolved.
+    return total > 0 && resolved > 0 && resolved < total;
+  });
+
   let risk: string;
-  if (remaining === 0) risk = "low";
-  else if (remaining <= 2 && files.length <= 3) risk = "medium";
-  else risk = "high";
+  if (hasHard) risk = "high";
+  else if (hasPartial) risk = "medium";
+  else risk = "low";
 
   return {
     content: [{
       type: "text" as const,
       text: JSON.stringify({
+        operation,
         risk,
         summary: {
-          files: files.length,
+          files: fileCount,
+          addDeleteFiles: addDeleteCount,
           totalConflicts,
           autoResolvable: totalResolvable,
           remaining,
@@ -457,6 +648,112 @@ async function toolPreview(cwd: string) {
       }, null, 2),
     }],
   };
+}
+
+/** Build per-file `resolve()` previews from the simulated 3-way conflict set. */
+function previewsFromSimulation(sims: SimulatedFile[]) {
+  let addDeleteCount = 0;
+  const previews = sims.map((sim) => {
+    if (sim.addDelete) {
+      addDeleteCount++;
+      return {
+        path: sim.file,
+        addDelete: true,
+        totalConflicts: 1,
+        autoResolved: 0,
+        remaining: 1,
+        note: "One side adds/deletes this file — requires manual decision.",
+      } as Record<string, unknown>;
+    }
+    // No markers means git merged it cleanly → no conflict for this file.
+    if (!sim.content.includes("<<<<<<<")) {
+      return { path: sim.file, totalConflicts: 0, autoResolved: 0, remaining: 0 } as Record<string, unknown>;
+    }
+    try {
+      const result = resolve(sim.content, sim.file, { explainOnly: true });
+      return serializeResult(sim.file, result) as Record<string, unknown>;
+    } catch (err: any) {
+      return { path: sim.file, error: err.message } as Record<string, unknown>;
+    }
+  });
+  return { previews, addDeleteCount };
+}
+
+async function toolPreviewRebase(cwd: string, args: Record<string, unknown>) {
+  const onto = args.onto as string | undefined;
+  if (!onto) {
+    return { content: [{ type: "text" as const, text: "Missing required argument for rebase preview: onto." }], isError: true };
+  }
+  if (revParse(cwd, onto) === null) {
+    return { content: [{ type: "text" as const, text: `Unknown or invalid ref: ${onto}` }], isError: true };
+  }
+  if (revParse(cwd, "HEAD") === null) {
+    return { content: [{ type: "text" as const, text: "Cannot resolve HEAD (empty repository?)." }], isError: true };
+  }
+  const headSha = revParse(cwd, "HEAD");
+  if (!headSha) {
+    return { content: [{ type: "text" as const, text: "Cannot resolve HEAD (empty repository?)." }], isError: true };
+  }
+  const mergeBase = gitTry(cwd, ["merge-base", headSha, onto]);
+  if (!mergeBase) {
+    return { content: [{ type: "text" as const, text: `No common ancestor between HEAD and ${onto}.` }], isError: true };
+  }
+
+  // Replay commits oldest-first: per-commit 3-way preview.
+  // Orientation per commit: ours = onto (target base), theirs = commit (replayed).
+  const commitsRaw = gitTry(cwd, ["rev-list", "--reverse", `${mergeBase}..${headSha}`]);
+  const commits = commitsRaw ? commitsRaw.split("\n").filter((c) => c.trim()) : [];
+  const allSims: SimulatedFile[] = [];
+  for (const c of commits) {
+    const parent = revParse(cwd, `${c}^`);
+    if (!parent) continue; // root commit — skip
+    const perCommitSims = simulate3way(cwd, parent, onto, c);
+    allSims.push(...perCommitSims);
+  }
+  // Deduplicate: for each file keep the entry with most conflict signal.
+  const seenFiles = new Map<string, SimulatedFile>();
+  for (const s of allSims) {
+    const existing = seenFiles.get(s.file);
+    if (!existing) {
+      seenFiles.set(s.file, s);
+    } else {
+      // addDelete > has-markers > clean
+      const score = (f: SimulatedFile) => f.addDelete ? 2 : f.content.includes("<<<<<<<") ? 1 : 0;
+      if (score(s) > score(existing)) seenFiles.set(s.file, s);
+    }
+  }
+  const sims = Array.from(seenFiles.values());
+  if (sims.length === 0) {
+    return { content: [{ type: "text" as const, text: JSON.stringify({ operation: "rebase", message: "No overlapping changes — rebase predicted clean.", risk: "low" }, null, 2) }] };
+  }
+  const { previews, addDeleteCount } = previewsFromSimulation(sims);
+  return previewResponse("rebase", sims.length, previews, addDeleteCount);
+}
+
+async function toolPreviewCherryPick(cwd: string, args: Record<string, unknown>) {
+  const commit = args.commit as string | undefined;
+  if (!commit) {
+    return { content: [{ type: "text" as const, text: "Missing required argument for cherry-pick preview: commit." }], isError: true };
+  }
+  const commitSha = revParse(cwd, commit);
+  if (commitSha === null) {
+    return { content: [{ type: "text" as const, text: `Unknown or invalid ref: ${commit}` }], isError: true };
+  }
+  if (revParse(cwd, "HEAD") === null) {
+    return { content: [{ type: "text" as const, text: "Cannot resolve HEAD (empty repository?)." }], isError: true };
+  }
+  const parent = revParse(cwd, `${commitSha}^`);
+  if (parent === null) {
+    return { content: [{ type: "text" as const, text: `Cannot preview cherry-pick of root commit ${commit} (no parent to diff against).` }], isError: true };
+  }
+
+  // ancestor = commit^, ours = HEAD, theirs = commit.
+  const sims = simulate3way(cwd, parent, "HEAD", commitSha);
+  if (sims.length === 0) {
+    return { content: [{ type: "text" as const, text: JSON.stringify({ operation: "cherry-pick", message: "No overlapping changes — cherry-pick predicted clean.", risk: "low" }, null, 2) }] };
+  }
+  const { previews, addDeleteCount } = previewsFromSimulation(sims);
+  return previewResponse("cherry-pick", sims.length, previews, addDeleteCount);
 }
 
 async function toolExplain(cwd: string, args: Record<string, unknown>) {
