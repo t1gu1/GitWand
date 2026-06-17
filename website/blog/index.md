@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-20-scratch-worktree-conflict-predictor" class="blog-card">
+    <div class="blog-meta">June 17, 2026 · 9 min read</div>
+    <h2 class="blog-title">Resolve in a scratch worktree, and predict rebase & cherry-pick conflicts: GitWand v2.20</h2>
+    <p class="blog-excerpt">v2.20 adds a scratch worktree for isolated conflict resolution — spin up a throwaway <code>gitwand-scratch-&lt;timestamp&gt;</code> worktree, resolve away from your live checkout, bring it back in one click or discard it, with automatic cleanup. And it extends the Conflict Predictor to <strong>rebase</strong> (per-commit replay, not a squashed guess) and <strong>cherry-pick</strong> — side-effect-free, across the desktop app, the <code>gitwand_preview_merge</code> MCP tool, and a new <code>gitwand preview</code> CLI command.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-19-github-oauth-azure" class="blog-card">
     <div class="blog-meta">June 16, 2026 · 12 min read</div>
     <h2 class="blog-title">Sign in with GitHub & Azure DevOps, and open cross-fork PRs: GitWand v2.19</h2>
