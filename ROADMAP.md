@@ -6,19 +6,6 @@
 
 ## What's Next
 
-### v2.21.0 — Monorepo Scope
-
-_Inspired by GitSquid. Makes GitWand ergonomic on large monorepos (pnpm, Cargo, Nx…)._
-
-- **Workspace scope picker**: select a sub-workspace — the graph, commit search, and stats all scope to its file tree
-- **Auto-detection**: reads `pnpm-workspace.yaml`, `Cargo.toml [workspace]`, `nx.json`, `turbo.json`, `go.work`
-- **Scope persisted per repo** in `.gitwand-workspace.json`
-- **Ad-hoc scope without config**: a "Custom folder…" entry in the picker opens the native folder picker → scope to any directory
-
-**Follow-up (separate PR):** an in-app repo **folder-browser** panel (recursive working-tree tree) with a right-click **"Scope here"** — the gesture the roadmap originally envisioned. Deferred because the only existing tree (`FolderDiffTree`) is a *diff* tree (changed folders between two refs), the wrong substrate for general scoping, and is currently unmounted. Ad-hoc scoping already ships via the native picker above, so this is a UX nicety, not a capability gap.
-
----
-
 ### v2.22.0 — Safety Bundle: pre-commit secrets scanner
 
 _Inspired by GitSquid. A "safety" feature with zero network dependency — everything local._
@@ -77,6 +64,12 @@ _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand 
 
 ---
 
+### Later (unscheduled)
+
+- **In-app folder-browser + right-click "Scope here"** — follow-up to v2.21.0 Monorepo Scope: a recursive working-tree folder panel where right-clicking a folder scopes to it. Ad-hoc scoping already ships via the picker's "Custom folder…"; this in-tree gesture is deferred (the existing `FolderDiffTree` is a *diff* tree — the wrong substrate — and is unmounted).
+
+---
+
 ## Vision
 
 GitWand is a native Git client that **understands** code, resolves trivial conflicts on its own, and makes visible what the terminal hides.
@@ -108,6 +101,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.21.0** | Monorepo Scope — pick a sub-workspace and scope the commit graph, search & stats to its file tree. Auto-detects 6 workspace formats (pnpm, npm/yarn, Cargo `[workspace]`, `nx.json`, `turbo.json`, `go.work`), parsed natively in Rust with a documented precedence; scope persisted per repo (additive `scope` field in `.gitwand-workspace.json`, validated on load); `git_log` pathspec filtering + a new `git_rev_count` driving a stable "N commits hidden" badge; sidebar `ScopePicker` (auto-detected packages + "Custom folder…" ad-hoc), active-scope chip & badge in the graph header. Picker shows only on detected monorepos; full dev:web parity via a mock `detect-monorepo` route |
 | **v2.20.0** | Scratch worktree + extended Conflict Predictor — "Resolve in scratch worktree" from the merge preview opens a temporary isolated `gitwand-scratch-<timestamp>` worktree as a repo tab (resolve away from the active checkout, bring changes back in one click or discard, auto-cleanup, origin-anchored lifecycle); Conflict Predictor extended to rebase (per-commit replay against `onto`) and cherry-pick — side-effect-free `preview_rebase` / `preview_cherry_pick` Tauri commands, MCP `gitwand_preview_merge` `operation` param, new `gitwand preview` CLI command, operation selector + risk badge (low/medium/high) + hunk-by-hunk preview in the panel |
 | **v2.19.0** | GitHub OAuth & Azure DevOps + cross-fork PRs — "Sign in with GitHub" via OAuth device flow (tokens in the OS keychain, tokenless REST path, no `gh` CLI required), Azure DevOps as a first-class forge (`AzureProvider`, Entra ID device flow + auto token refresh, PR list/detail/diff/create/merge/checkout, comments, branch-policy CI checks, reviewer votes), cross-fork pull requests (target-repo selector defaulting to upstream, fork PRs surfaced in the list), and a backend performance pass (async Tauri commands, disk-persisted SWR PR cache, libgit2 `git_status` fast-path) |
 | **v2.18.0** | Inline CI Check Annotations — check-run annotations overlaid in the PR diff across the three forges (GitHub check-runs API, GitLab `artifacts:reports:codequality`, Bitbucket Reports API), gutter icons ❌/⚠/ℹ with hover tooltip, clickable "N annotations" badge in the CI tab, per-file ⚠ count in the diff sidebar, forge-agnostic `CIAnnotation` type + `ForgeProvider.getCheckAnnotations()`, lazy one-shot fetch per PR; Copilot CLI as a fourth AI provider (text-only sandbox) |

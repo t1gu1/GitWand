@@ -38,7 +38,7 @@ for (let i = 0; i < args.length; i++) {
 const server = new Server(
   {
     name: "gitwand",
-    version: "2.20.1",
+    version: "2.21.0",
   },
   {
     capabilities: {

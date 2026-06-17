@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.21.0 — June 2026
+
+### Scope a monorepo to one sub-workspace
+
+Large monorepos make the commit graph noisy — hundreds of commits across dozens of packages you don't care about right now. v2.21.0 adds a **scope picker** to the repo sidebar: pick a sub-workspace and the commit graph, commit search and repository stats all narrow to that part of the tree. GitWand auto-detects your packages from six workspace formats — pnpm (`pnpm-workspace.yaml`), npm/yarn (`package.json` workspaces), Cargo (`[workspace]`), Nx (`nx.json`), Turborepo (`turbo.json`) and Go (`go.work`) — all read natively in Rust, with a clear precedence when several coexist. Not inside a package? A "Custom folder…" option scopes to any directory you pick.
+
+### History that stays focused
+
+With a scope active, the graph filters to the commits that actually touched that sub-tree, and the header shows a chip for the current scope plus an "N commits hidden" badge — a stable count of everything outside it that stays put as you scroll. Clicking either clears the scope and brings the whole repo back. Your choice is remembered per repository (stored in `.gitwand-workspace.json`) and quietly falls back to the whole repo if the folder it pointed at has since been deleted. The picker only appears when GitWand actually detects a monorepo, so single-package repos stay uncluttered.
+
+---
+
 ## v2.20.1 — June 2026
 
 ### Sign-in fixed in the Linux AppImage

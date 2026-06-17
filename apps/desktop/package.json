@@ -1,6 +1,6 @@
 {
   "name": "@gitwand/desktop",
-  "version": "2.20.1",
+  "version": "2.21.0",
   "private": true,
   "description": "GitWand Desktop — lightweight Git client with smart conflict resolution (Tauri + Vue 3)",
   "type": "module",
