@@ -5,6 +5,14 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.20.1 — June 2026
+
+### Sign-in fixed in the Linux AppImage
+
+Signing in to GitHub or Azure DevOps from the released Linux AppImage failed with a cryptic `Failed to parse device-code response` error — even though it worked perfectly when running GitWand from source. The culprit was the AppImage runtime rewriting the library path for everything GitWand launches, which left the bundled `curl` loading the wrong system libraries and dying mid-request. GitWand now cleans up that environment before launching any helper process, so sign-in (and every other GitHub/Azure operation) works the same from the AppImage as it does everywhere else. The transport also reports the real underlying error now instead of a misleading parsing message. Thanks to @t1gu1 for the detailed report.
+
+---
+
 ## v2.20.0 — June 2026
 
 ### Resolve conflicts in a scratch worktree
