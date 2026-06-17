@@ -30,6 +30,7 @@ import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview, type PreviewOperation } from "../../composables/useMergePreview";
 import { useScratchWorktree } from "../../composables/useScratchWorktree";
+import { useRepoTabs } from "../../composables/useRepoTabs";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
@@ -293,23 +294,49 @@ const {
   active: scratchActive,
   loading: scratchLoading,
   error: scratchError,
+  originCwd: scratchOriginCwd,
   create: createScratch,
   mergeBack: scratchMergeBack,
   discard: scratchDiscard,
 } = useScratchWorktree(() => props.cwd);
 
+// Opening the scratch as a repo tab is what makes the sandbox usable: the user
+// resolves the conflicts IN that tab, then comes back here to bring them across.
+const { openTab, closeTab, tabs } = useRepoTabs();
+// Id of the tab we opened for the active scratch, so we can close it on cleanup.
+let scratchTabId: number | null = null;
+
 async function handleResolveInScratch() {
   // Base the scratch on the branch we're previewing (the source we'd merge in),
   // falling back to the current HEAD when unknown.
-  await createScratch(previewingBranch.value ?? undefined);
+  const wt = await createScratch(previewingBranch.value ?? undefined);
+  if (wt) {
+    // Open + switch to the isolated worktree so the user can resolve there.
+    const tab = openTab(wt.path);
+    scratchTabId = tab.id;
+  }
+}
+
+/** Remove the dead scratch tab once its worktree has been merged back / discarded. */
+function closeScratchTab() {
+  if (scratchTabId !== null && tabs.value.some((t) => t.id === scratchTabId)) {
+    closeTab(scratchTabId);
+  }
+  scratchTabId = null;
 }
 
 async function handleScratchMergeBack() {
-  await scratchMergeBack();
+  // Switch back to the origin checkout BEFORE merge-back removes the scratch dir,
+  // so the UI stops watching a directory that is about to disappear.
+  if (scratchOriginCwd.value) openTab(scratchOriginCwd.value);
+  const ok = await scratchMergeBack();
+  if (ok) closeScratchTab();
 }
 
 async function handleScratchDiscard() {
-  await scratchDiscard();
+  if (scratchOriginCwd.value) openTab(scratchOriginCwd.value);
+  const ok = await scratchDiscard();
+  if (ok) closeScratchTab();
 }
 
 async function togglePreview(branchName: string) {
