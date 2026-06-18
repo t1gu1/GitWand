@@ -662,6 +662,9 @@ pub(crate) async fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> 
     let output = git_cmd()
         .args([
             "branch", "-a",
+            // KEEP IN SYNC with the same format/parse in dev-server.mjs
+            // (handleRequest branch listing). Field order is positional — any
+            // field add/reorder must be mirrored there and in the parser below.
             &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(committerdate:iso-strict)\x1f%(ahead-behind:{})", main_name),
         ])
         .current_dir(&cwd)

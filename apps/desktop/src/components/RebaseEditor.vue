@@ -10,6 +10,7 @@ import {
 } from "../composables/useInteractiveRebase";
 import { useSplitCommit } from "../composables/useSplitCommit";
 import { getGitBranches, type GitBranch } from "../utils/backend";
+import { branchSort } from "../utils/branchSort";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useSquashSuggestion, type SquashSuggestion } from "../composables/useSquashSuggestion";
 import BaseModal from "./BaseModal.vue";
@@ -29,7 +30,9 @@ const branchesLoading = ref(false);
 async function fetchBranches() {
   branchesLoading.value = true;
   try {
-    localBranches.value = await getGitBranches(props.cwd);
+    // Sort once here (order is invariant across filter keystrokes) using the
+    // app-wide canonical branch ordering.
+    localBranches.value = (await getGitBranches(props.cwd)).sort(branchSort);
 
     // If initialBase is provided, select it immediately after branches are loaded
     if (props.initialBase) {
@@ -100,13 +103,8 @@ const baseCandidates = computed(() => {
         !b.isRemote &&
         b.name.toLowerCase().includes(filter),
     )
-    // Most recently committed branch first (committerdate:iso-strict → sortable).
-    .slice()
-    .sort((a, b) => {
-      const ta = Date.parse(a.lastCommitDate) || 0;
-      const tb = Date.parse(b.lastCommitDate) || 0;
-      return tb - ta;
-    })
+    // localBranches is already sorted (branchSort) at fetch time; filtering
+    // preserves order, so just project to names here.
     .map((b) => b.name);
 });
 

@@ -2292,6 +2292,8 @@ async function handleRequest(req, res) {
           return "main";
         })();
 
+        // KEEP IN SYNC with git_branches in src-tauri/src/commands/ops.rs —
+        // same positional field order and date format must be used in both.
         const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(committerdate:iso-strict)\x1f%(ahead-behind:${mainName})`;
         const stdout = execSync(`git branch -a --format="${format}"`, {
           cwd: resolvedCwd,
@@ -4139,7 +4141,11 @@ async function handleRequest(req, res) {
 
         if (result.code !== 0) {
           const stderr = result.stderr ?? "";
-          if (stderr.includes("CONFLICT") || stderr.includes("could not apply")) {
+          const stdout = result.stdout ?? "";
+          // Match the Rust git_interactive_rebase: git writes conflict markers
+          // to either stream depending on version/locale.
+          const blob = stderr + stdout;
+          if (blob.includes("CONFLICT") || blob.includes("could not apply")) {
             return jsonResponse(req, res, { ok: true, conflict: true });
           }
           return jsonResponse(req, res, { error: stderr || "Rebase failed" }, 500);
