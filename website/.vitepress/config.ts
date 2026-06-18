@@ -146,6 +146,7 @@ export default defineConfig({
           text: 'Blog',
           items: [
             { text: 'All articles', link: '/blog/' },
+            { text: 'Changes tree view + interactive rebase fix (v2.23)', link: '/blog/v2-23-changes-tree-view' },
             { text: 'Scratch worktree + rebase/cherry-pick predictor (v2.20)', link: '/blog/v2-20-scratch-worktree-conflict-predictor' },
             { text: 'GitHub & Azure DevOps sign-in, cross-fork PRs (v2.19)', link: '/blog/v2-19-github-oauth-azure' },
             { text: 'Forge completeness: inline discussions, CI checks (v2.14)', link: '/blog/v2-14-forge-completeness' },

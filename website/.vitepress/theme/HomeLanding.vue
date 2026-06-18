@@ -1564,10 +1564,10 @@ function cellClass(v: CompareValue | undefined): string {
         <div class="blog-teaser-header">
           <span class="blog-teaser-label">From the blog</span>
         </div>
-        <a href="/blog/v2-20-scratch-worktree-conflict-predictor" class="blog-teaser-card">
-          <div class="blog-teaser-meta">June 17, 2026 · 9 min read</div>
-          <h3 class="blog-teaser-title">Resolve in a scratch worktree, and predict rebase & cherry-pick conflicts</h3>
-          <p class="blog-teaser-excerpt">v2.20 adds a throwaway scratch worktree for isolated conflict resolution — resolve away from your live checkout, bring it back in one click — and extends the Conflict Predictor to rebase and cherry-pick across the desktop app, the MCP server, and a new gitwand preview CLI command.</p>
+        <a href="/blog/v2-23-changes-tree-view" class="blog-teaser-card">
+          <div class="blog-teaser-meta">June 18, 2026 · 6 min read</div>
+          <h3 class="blog-teaser-title">A folder tree for your changes, and rebases that work in the real app</h3>
+          <p class="blog-teaser-excerpt">v2.23 gives the Changes sidebar a list/tree layout toggle with collapsible folders, puts stage, unstage and discard on every file and folder row, and fixes interactive rebase in the packaged desktop app with a dedicated git_interactive_rebase command.</p>
           <span class="blog-teaser-cta">Read article →</span>
         </a>
       </div>

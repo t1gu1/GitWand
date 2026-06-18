@@ -6,6 +6,12 @@ description: Technical articles on Git workflows, AI-powered conflict resolution
 # Blog
 
 <div class="blog-list">
+  <a href="/blog/v2-23-changes-tree-view" class="blog-card">
+    <div class="blog-meta">June 18, 2026 · 6 min read</div>
+    <h2 class="blog-title">A folder tree for your changes, and rebases that work in the real app: GitWand v2.23</h2>
+    <p class="blog-excerpt">v2.23 gives the Changes sidebar a list/tree layout toggle with collapsible folders (persisted, auto-expanding to the selected file, built on a pure <code>useFileTree</code> composable), and puts stage/unstage/discard on every file <em>and</em> folder row behind one always-visible segmented control. Plus the fix that matters: interactive rebase now works in the <strong>packaged</strong> desktop app — a real <code>git_interactive_rebase</code> command replaces a dev-only HTTP endpoint that went nowhere in production — and branch pickers list branches by most-recent commit.</p>
+    <span class="blog-read">Read article →</span>
+  </a>
   <a href="/blog/v2-20-scratch-worktree-conflict-predictor" class="blog-card">
     <div class="blog-meta">June 17, 2026 · 9 min read</div>
     <h2 class="blog-title">Resolve in a scratch worktree, and predict rebase & cherry-pick conflicts: GitWand v2.20</h2>
