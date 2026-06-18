@@ -512,7 +512,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                   <circle cx="11.5" cy="8.5" r="2.5" />
                   <rect x="7.5" y="8" width="1" height="6" />
                 </svg>
-                <span class="bp-item-name mono">{{ branch.name }}</span>
+                <span class="bp-item-name mono" :title="branch.name"><span class="bp-item-name__text">{{ branch.name }}</span></span>
                 <span v-if="branch.ahead > 0 || branch.behind > 0" class="bp-item-meta muted">
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
                   <span v-if="branch.behind > 0">&darr;{{ branch.behind }}</span>
@@ -605,7 +605,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
               class="bp-item bp-item--remote"
               @click="handleBranchSwitch(branch.name.replace(/^origin\//, ''))"
             >
-              <span class="bp-item-name mono">{{ branch.name }}</span>
+              <span class="bp-item-name mono" :title="branch.name"><span class="bp-item-name__text">{{ branch.name }}</span></span>
             </li>
           </ul>
         </div>
@@ -960,10 +960,21 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
 .bp-item-name {
   flex: 1;
+  /* Stretch over the row's vertical padding so the hover/tooltip target
+     is the full row height — no dead gap above/below the text. */
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin-block: calc(var(--space-3) * -1);
+  padding-block: var(--space-3);
+  min-width: 0;
+  font-weight: var(--font-weight-medium);
+}
+.bp-item-name__text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: var(--font-weight-medium);
+  min-width: 0;
 }
 .bp-item--remote .bp-item-name { opacity: 0.7; }
 
