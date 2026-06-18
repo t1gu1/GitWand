@@ -1562,7 +1562,7 @@ const visibleCommits = computed<VisibleCommit[]>(() => {
         </svg>
         <span class="commit-ctx-menu-item__ai">
           {{ t('sidebar.quickStashAi') }}
-          <span class="ai-badge">{{ t('sidebar.aiLabel') }}</span>
+          <span class="ai-badge">{{ t('common.ai') }}</span>
         </span>
       </li>
       <li class="commit-ctx-menu-sep" role="separator"></li>

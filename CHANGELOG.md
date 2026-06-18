@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Branch selector polish** — the branch popover is wider and its lists grow to fit their contents; each branch row's actions are fused into a single segmented control, and the branch name is now a full-height hover/tooltip target so the whole row reacts to the pointer. The create-branch form reset is factored into a shared helper.
+- **Collapsible branch sections** — the `LOCAL` and `REMOTE` headers in the branch popover are now toggle buttons with a disclosure chevron and a branch count, collapsing/expanding their lists (same affordance as the Submodules section).
+- **Shared `BranchNameField`** — create-branch modals across `App.vue`, `CommitGraph.vue`, `RepoSidebar.vue`, and the branch selector now use one extracted `BranchNameField` component for consistent validation and UX, with new `branch.*` i18n keys in all 5 locales.
+- **AI button color** — the loading state of the commit AI button in `RepoSidebar.vue` now uses the AI accent color.
+
 ### Fixed
 
 - **External links in the Linux AppImage** — clicking external links (the GitHub/Azure sign-in buttons, PR/issue links in the Launchpad, "open repo on the web", the changelog link) did nothing in the released AppImage even though they worked under `pnpm tauri dev`. Two causes: (1) the `open_url` helper fired a lone fire-and-forget `xdg-open` whose spawned helper inherited the AppImage's polluted `LD_LIBRARY_PATH` and died silently — `open_url` now spawns via `hidden_cmd` (de-polluted env), tries `xdg-open` / `gio` / `kde-open5` / `$BROWSER` in turn, and checks exit status so a real failure surfaces (exit-status handling documented as Linux-only); (2) several links were bare `http(s)` anchors that the Tauri webview ignores (`target="_blank"`/`window.open` are no-ops) — a single catch-all now routes every external anchor click through `openExternalUrl`, so no link can silently do nothing again.

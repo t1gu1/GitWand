@@ -1061,7 +1061,7 @@ function formatActivityDate(dateStr: string): string {
               <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3"/>
               <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
             </svg>
-            <span v-else class="commit-ai-label">{{ t('sidebar.aiLabel') }}</span>
+            <span v-else class="commit-ai-label">{{ t('common.ai') }}</span>
           </button>
           <button
             class="commit-ai-chevron"
@@ -1922,7 +1922,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .commit-ai-btn--loading {
-  color: var(--color-warning);
+  color: var(--color-ai);
 }
 
 .commit-ai-menu {
