@@ -229,6 +229,9 @@ const en = {
     aiPresetDefault: "Default",
     // Empty
     cleanTree: "Working tree clean",
+    viewLayout: "Changes layout",
+    viewAsList: "List view",
+    viewAsTree: "Tree view",
     // Dashboard-specific sidebar blocks
     pinnedBranches: "Pinned branches",
     archivedBranches: "Archived branches",

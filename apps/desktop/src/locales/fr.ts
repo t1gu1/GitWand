@@ -222,6 +222,9 @@ const fr: Locale = {
     aiChangeLang: "Changer de langue",
     // Empty
     cleanTree: "Espace de travail propre",
+    viewLayout: "Disposition des changements",
+    viewAsList: "Vue liste",
+    viewAsTree: "Vue arborescente",
     // Dashboard-specific sidebar blocks
     pinnedBranches: "Branches épinglées",
     archivedBranches: "Branches archivées",
