@@ -103,6 +103,11 @@ const branchFilter = ref("");
 const showCreate = ref(false);
 const newBranchName = ref("");
 
+// Collapsible LOCAL / REMOTE sections — open by default, toggled via
+// their section headers (same affordance as the submodules section).
+const showLocal = ref(true);
+const showRemote = ref(true);
+
 // External create-form trigger (currently used by the native macOS menu's
 // "New Branch…" item). Each bump of the injected counter opens the popover
 // and the inline create form. The input's `autofocus` does the rest.
@@ -499,8 +504,14 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       </div>
       <div v-else class="bp-lists">
         <div v-if="localBranches.length > 0" class="bp-section">
-          <div class="bp-section-label">{{ t('branches.local') }}</div>
-          <ul class="bp-list">
+          <button class="bp-section-toggle" :aria-expanded="showLocal ? 'true' : 'false'" @click.stop="showLocal = !showLocal">
+            <svg class="bp-section-toggle__chevron" :class="{ 'bp-section-toggle__chevron--open': showLocal }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branches.local') }}</span>
+            <span class="bp-section-toggle__count">{{ localBranches.length }}</span>
+          </button>
+          <ul v-if="showLocal" class="bp-list">
             <template v-for="branch in localBranches" :key="branch.name">
               <li
                 class="bp-item"
@@ -599,8 +610,14 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           </ul>
         </div>
         <div v-if="remoteBranches.length > 0" class="bp-section">
-          <div class="bp-section-label">{{ t('branches.remote') }}</div>
-          <ul class="bp-list">
+          <button class="bp-section-toggle" :aria-expanded="showRemote ? 'true' : 'false'" @click.stop="showRemote = !showRemote">
+            <svg class="bp-section-toggle__chevron" :class="{ 'bp-section-toggle__chevron--open': showRemote }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branches.remote') }}</span>
+            <span class="bp-section-toggle__count">{{ remoteBranches.length }}</span>
+          </button>
+          <ul v-if="showRemote" class="bp-list">
             <li
               v-for="branch in remoteBranches"
               :key="branch.name"
@@ -921,16 +938,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
 .bp-section { border-bottom: 1px solid var(--color-border); }
 .bp-section:last-child { border-bottom: none; }
-
-.bp-section-label {
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-}
 
 .bp-list { list-style: none; }
 

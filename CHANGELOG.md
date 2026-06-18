@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Branch selector polish** — the branch popover is wider and its lists grow to fit their contents; each branch row's actions are fused into a single segmented control, and the branch name is now a full-height hover/tooltip target so the whole row reacts to the pointer. The create-branch form reset is factored into a shared helper.
+- **Collapsible branch sections** — the `LOCAL` and `REMOTE` headers in the branch popover are now toggle buttons with a disclosure chevron and a branch count, collapsing/expanding their lists (same affordance as the Submodules section).
 - **Shared `BranchNameField`** — create-branch modals across `App.vue`, `CommitGraph.vue`, `RepoSidebar.vue`, and the branch selector now use one extracted `BranchNameField` component for consistent validation and UX, with new `branch.*` i18n keys in all 5 locales.
 - **AI button color** — the loading state of the commit AI button in `RepoSidebar.vue` now uses the AI accent color.
 
