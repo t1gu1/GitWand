@@ -10,7 +10,6 @@ import RepoSidebar from "./components/RepoSidebar.vue";
 import DiffViewer from "./components/DiffViewer.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import BaseModal from "./components/BaseModal.vue";
-import BranchNameField from "./components/BranchNameField.vue";
 // Always-mounted (state-driven internally — must stay eager):
 import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
@@ -57,6 +56,9 @@ const CloneModal = defineAsyncComponent(() => import("./components/CloneModal.vu
 const ForkModal = defineAsyncComponent(() => import("./components/ForkModal.vue"));
 const GitTerminal = defineAsyncComponent(() => import("./components/GitTerminal.vue"));
 const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.vue"));
+// Shared create-branch field — only mounted inside the v-if'd create-branch
+// modal, so keep it lazy (also lazy in BranchSelector) to stay out of main.
+const BranchNameField = defineAsyncComponent(() => import("./components/BranchNameField.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";

@@ -24,7 +24,7 @@
  * against the wrapper class on this component's root, so clicks on
  * either the trigger OR the popover count as "inside".
  */
-import { ref, computed, inject, onMounted, onUnmounted, watch, type Ref } from "vue";
+import { ref, computed, inject, onMounted, onUnmounted, watch, defineAsyncComponent, type Ref } from "vue";
 import { gitSubmoduleList, gitSubmoduleBranches, getGitLog, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
@@ -34,9 +34,13 @@ import { useRepoTabs } from "../../composables/useRepoTabs";
 import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
-import MergePreviewPanel from "../MergePreviewPanel.vue";
+// Lazy: the merge-preview panel only mounts when the user expands a branch's
+// preview row inside the (already v-if'd) popover. BranchSelector is eager via
+// AppHeader, so importing this 600-line panel statically would pin it in main.
+const MergePreviewPanel = defineAsyncComponent(() => import("../MergePreviewPanel.vue"));
 import BaseModal from "../BaseModal.vue";
-import BranchNameField from "../BranchNameField.vue";
+// Lazy too — only mounted inside the v-if'd create-branch modal.
+const BranchNameField = defineAsyncComponent(() => import("../BranchNameField.vue"));
 
 const { t } = useI18n();
 
