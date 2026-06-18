@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **External links in the Linux AppImage** — clicking external links (the GitHub/Azure sign-in buttons, PR/issue links in the Launchpad, "open repo on the web", the changelog link) did nothing in the released AppImage even though they worked under `pnpm tauri dev`. Two causes: (1) the `open_url` helper fired a lone fire-and-forget `xdg-open` whose spawned helper inherited the AppImage's polluted `LD_LIBRARY_PATH` and died silently — `open_url` now spawns via `hidden_cmd` (de-polluted env), tries `xdg-open` / `gio` / `kde-open5` / `$BROWSER` in turn, and checks exit status so a real failure surfaces (exit-status handling documented as Linux-only); (2) several links were bare `http(s)` anchors that the Tauri webview ignores (`target="_blank"`/`window.open` are no-ops) — a single catch-all now routes every external anchor click through `openExternalUrl`, so no link can silently do nothing again.
+
 ## [2.22.0] - 2026-06-18
 
 ### Added

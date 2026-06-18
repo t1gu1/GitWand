@@ -108,6 +108,7 @@ const { isOnline: probedOnline, probeConnectivity } = useConnectivity();
 const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState, openExternalUrl } from "./utils/backend";
 import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
+import { onMarkdownLinkClick } from "./composables/useSafeHtml";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
 const { theme, toggle: toggleTheme } = useTheme();
@@ -1813,6 +1814,21 @@ function onGlobalKeydown(e: KeyboardEvent) {
 }
 onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
 onUnmounted(() => window.removeEventListener("keydown", onGlobalKeydown));
+
+// The Tauri webview ignores `target="_blank"`/`window.open`, so a bare external
+// `<a href="http…">` opens nothing. Delegate every such click to the OS opener.
+// One document-level handler covers all current anchors and any added later, so
+// links can't silently die in the desktop build. Reuses `onMarkdownLinkClick`
+// (the same href→`openExternalUrl` hand-off already used for v-html content) for
+// the actual open, adding only a guard for modified / non-primary clicks.
+function onExternalLinkClick(e: MouseEvent) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  onMarkdownLinkClick(e);
+}
+onMounted(() => {
+  if (isTauri()) document.addEventListener("click", onExternalLinkClick);
+});
+onUnmounted(() => document.removeEventListener("click", onExternalLinkClick));
 
 function handleRebaseDone() {
   showRebase.value = false;
