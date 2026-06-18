@@ -2292,7 +2292,7 @@ async function handleRequest(req, res) {
           return "main";
         })();
 
-        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:${mainName})`;
+        const format = `%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(committerdate:iso-strict)\x1f%(ahead-behind:${mainName})`;
         const stdout = execSync(`git branch -a --format="${format}"`, {
           cwd: resolvedCwd,
           encoding: "utf-8",

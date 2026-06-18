@@ -662,7 +662,7 @@ pub(crate) async fn git_branches(cwd: String) -> Result<Vec<GitBranch>, String> 
     let output = git_cmd()
         .args([
             "branch", "-a",
-            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(creatordate:iso)\x1f%(ahead-behind:{})", main_name),
+            &format!("--format=%(HEAD)%(refname:short)\x1f%(upstream:short)\x1f%(upstream:track,nobracket)\x1f%(objectname:short) %(subject)\x1f%(committerdate:iso-strict)\x1f%(ahead-behind:{})", main_name),
         ])
         .current_dir(&cwd)
         .output()
