@@ -855,8 +855,9 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   position: absolute;
   top: calc(100% + var(--space-3));
   left: 0;
-  width: 340px;
-  max-height: 520px;
+  width: 420px;
+  max-width: calc(100vw - var(--space-7));
+  max-height: min(720px, 80vh);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -918,7 +919,9 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 .bp-lists {
   flex: 1;
   overflow-y: auto;
-  max-height: 300px;
+  /* Grows with the branch count, but the popover's own max-height keeps it
+     bounded and scrollable when there are a lot of branches. */
+  max-height: none;
 }
 
 .bp-section { border-bottom: 1px solid var(--color-border); }
