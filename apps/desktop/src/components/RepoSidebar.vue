@@ -1045,33 +1045,34 @@ function formatActivityDate(dateStr: string): string {
             <span class="section-label">{{ sectionMeta[sectionKey].label }}</span>
             <span class="section-count">{{ sections[sectionKey].length }}</span>
             <span class="section-spacer"></span>
-            <!-- Discard all / Stage all / Unstage all buttons -->
-            <button
-              v-if="sectionKey === 'staged' || sectionKey === 'unstaged' || sectionKey === 'untracked'"
-              class="section-action section-action--danger"
-              @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
-              :title="t('sidebar.discardAll')"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6"/>
-                <path d="M14 11v6"/>
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
-            </button>
-            <button
-              v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
-              class="section-action"
-              @click.stop="emit('stagePaths', sections[sectionKey].map(f => f.path))"
-              :title="t('sidebar.stageAll')"
-            >+</button>
-            <button
-              v-if="sectionKey === 'staged'"
-              class="section-action"
-              @click.stop="emit('unstageAll')"
-              :title="t('sidebar.unstageAll')"
-            >-</button>
+            <!-- Stage all / Unstage all + Discard all -->
+            <div v-if="sectionKey !== 'conflicted'" class="action-group" @click.stop>
+              <button
+                v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
+                class="action-group-btn"
+                @click.stop="emit('stagePaths', sections[sectionKey].map(f => f.path))"
+                :title="t('sidebar.stageAll')"
+              >+</button>
+              <button
+                v-if="sectionKey === 'staged'"
+                class="action-group-btn"
+                @click.stop="emit('unstageAll')"
+                :title="t('sidebar.unstageAll')"
+              >-</button>
+              <button
+                class="action-group-btn action-group-btn--danger"
+                @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
+                :title="t('sidebar.discardAll')"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6"/>
+                  <path d="M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <ul v-if="!collapsedSections[sectionKey]" class="file-items" role="listbox">
@@ -1105,19 +1106,34 @@ function formatActivityDate(dateStr: string): string {
                   <span class="file-name mono">{{ fileName(file.path) }}</span>
                   <span class="file-dir muted" v-if="fileDir(file.path)">{{ fileDir(file.path) }}</span>
                 </div>
-                <!-- Stage / Unstage per file -->
-                <button
-                  v-if="file.section === 'unstaged' || file.section === 'untracked'"
-                  class="file-action"
-                  @click="onStageClick($event, file.path)"
-                  :title="t('sidebar.stage')"
-                >+</button>
-                <button
-                  v-if="file.section === 'staged'"
-                  class="file-action"
-                  @click="onUnstageClick($event, file.path)"
-                  :title="t('sidebar.unstage')"
-                >-</button>
+                <!-- Stage / Unstage + Discard per file -->
+                <div v-if="file.section !== 'conflicted'" class="action-group" @click.stop>
+                  <button
+                    v-if="file.section === 'unstaged' || file.section === 'untracked'"
+                    class="action-group-btn"
+                    @click="onStageClick($event, file.path)"
+                    :title="t('sidebar.stage')"
+                  >+</button>
+                  <button
+                    v-if="file.section === 'staged'"
+                    class="action-group-btn"
+                    @click="onUnstageClick($event, file.path)"
+                    :title="t('sidebar.unstage')"
+                  >-</button>
+                  <button
+                    class="action-group-btn action-group-btn--danger"
+                    @click.stop="emit('discard', file.path, file.section)"
+                    :title="file.section === 'untracked' ? t('sidebar.ctxDeleteFile') : t('sidebar.ctxDiscardChanges')"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      <path d="M10 11v6"/>
+                      <path d="M14 11v6"/>
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                  </button>
+                </div>
               </li>
 
               <!-- Sub-files for expanded untracked directory -->
@@ -1153,7 +1169,7 @@ function formatActivityDate(dateStr: string): string {
                 <li
                   v-if="row.kind === 'folder'"
                   class="file-item tree-folder"
-                  :style="{ paddingLeft: `${row.depth * 14 + 10}px` }"
+                  :style="{ paddingLeft: `${row.depth * 14 + 5}px` }"
                   role="option"
                   tabindex="0"
                   @click="toggleFolder(sectionKey, row.path)"
@@ -1171,17 +1187,25 @@ function formatActivityDate(dateStr: string): string {
                     <path d="M3 5h6l2 2h10v12H3z"/>
                   </svg>
                   <span class="file-name mono tree-folder-name">{{ row.name }}</span>
-                  <span class="section-count tree-folder-count">{{ row.count }}</span>
-                  <!-- Folder-level stage / unstage / discard -->
-                  <button
-                    v-if="sectionKey === 'staged'"
-                    class="file-action"
-                    @click.stop="unstagePaths(filesUnderFolder(sectionKey, row.path))"
-                    :title="t('sidebar.unstageAll')"
-                  >-</button>
-                  <template v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'">
+                  <span class="tree-folder-count">{{ row.count }}</span>
+                  <span class="section-spacer"></span>
+                  <!-- Folder-level stage / unstage + discard -->
+                  <div class="action-group" @click.stop>
                     <button
-                      class="file-action file-action--danger"
+                      v-if="sectionKey === 'staged'"
+                      class="action-group-btn"
+                      @click.stop="unstagePaths(filesUnderFolder(sectionKey, row.path))"
+                      :title="t('sidebar.unstageAll')"
+                    >-</button>
+                    <button
+                      v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
+                      class="action-group-btn"
+                      @click.stop="emit('stagePaths', filesUnderFolder(sectionKey, row.path))"
+                      :title="t('sidebar.stageAll')"
+                    >+</button>
+                    <button
+                      v-if="sectionKey !== 'conflicted'"
+                      class="action-group-btn action-group-btn--danger"
                       @click.stop="emit('discardSection', sectionKey, filesUnderFolder(sectionKey, row.path))"
                       :title="t('sidebar.discardAll')"
                     >
@@ -1193,12 +1217,7 @@ function formatActivityDate(dateStr: string): string {
                         <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                       </svg>
                     </button>
-                    <button
-                      class="file-action"
-                      @click.stop="emit('stagePaths', filesUnderFolder(sectionKey, row.path))"
-                      :title="t('sidebar.stageAll')"
-                    >+</button>
-                  </template>
+                  </div>
                 </li>
 
                 <!-- File row -->
@@ -1226,18 +1245,33 @@ function formatActivityDate(dateStr: string): string {
                     <div class="file-info">
                       <span class="file-name mono">{{ row.name }}</span>
                     </div>
-                    <button
-                      v-if="row.file!.section === 'unstaged' || row.file!.section === 'untracked'"
-                      class="file-action"
-                      @click="onStageClick($event, row.path)"
-                      :title="t('sidebar.stage')"
-                    >+</button>
-                    <button
-                      v-if="row.file!.section === 'staged'"
-                      class="file-action"
-                      @click="onUnstageClick($event, row.path)"
-                      :title="t('sidebar.unstage')"
-                    >-</button>
+                    <div v-if="row.file!.section !== 'conflicted'" class="action-group" @click.stop>
+                      <button
+                        v-if="row.file!.section === 'unstaged' || row.file!.section === 'untracked'"
+                        class="action-group-btn"
+                        @click="onStageClick($event, row.path)"
+                        :title="t('sidebar.stage')"
+                      >+</button>
+                      <button
+                        v-if="row.file!.section === 'staged'"
+                        class="action-group-btn"
+                        @click="onUnstageClick($event, row.path)"
+                        :title="t('sidebar.unstage')"
+                      >-</button>
+                      <button
+                        class="action-group-btn action-group-btn--danger"
+                        @click.stop="emit('discard', row.path, row.file!.section)"
+                        :title="row.file!.section === 'untracked' ? t('sidebar.ctxDeleteFile') : t('sidebar.ctxDiscardChanges')"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                          <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    </div>
                   </li>
 
                   <!-- Sub-files for an expanded untracked directory entry -->
@@ -1879,7 +1913,7 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-2);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   line-height: 1;
@@ -1900,6 +1934,7 @@ function formatActivityDate(dateStr: string): string {
   transition: transform 0.2s ease;
   color: var(--color-text-subtle);
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .section-chevron--collapsed {
@@ -1912,6 +1947,12 @@ function formatActivityDate(dateStr: string): string {
   font-weight: var(--font-weight-bold);
   width: 16px;
   text-align: center;
+  margin-right: -7px;
+  margin-left:-2px;
+}
+
+.section-label {
+  margin-top: -1px;
 }
 
 .section-spacer {
@@ -1926,32 +1967,9 @@ function formatActivityDate(dateStr: string): string {
   height: 16px;
   display: flex;
   align-items: center;
-}
-
-.section-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-  color: var(--color-text-muted);
-  background: none;
-  transition: background var(--transition-hover), color var(--transition-hover);
-}
-
-.section-action:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-
-.section-action--danger:hover {
-  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
-  color: var(--color-danger);
+  padding-bottom: 1px;
+  margin-left: -3px;
+  font-size: 9px;
 }
 
 .file-items {
@@ -1962,7 +1980,7 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-6) var(--space-3) 18px;
+  padding: var(--space-3) var(--space-2) var(--space-3);
   cursor: pointer;
   transition: background var(--transition-hover);
   border-left: 3px solid transparent;
@@ -2047,33 +2065,44 @@ function formatActivityDate(dateStr: string): string {
   white-space: nowrap;
 }
 
-.file-action {
+/* ── Segmented action group (stage / unstage / discard) ──────── */
+/* Square-ish buttons fused into one pill, divided by a vertical hairline.
+   Shared by per-file rows, tree folder rows and section headers. */
+.action-group {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+}
+
+.action-group-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
+  width: 22px;
   height: 20px;
-  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-bold);
+  line-height: 1;
   color: var(--color-text-muted);
   background: none;
-  opacity: 0;
-  transition: opacity var(--transition-hover), background var(--transition-hover), color var(--transition-hover);
-  flex-shrink: 0;
+  transition: background var(--transition-hover), color var(--transition-hover);
 }
 
-.file-item:hover .file-action {
-  opacity: 1;
+.action-group-btn + .action-group-btn {
+  border-left: 1px solid var(--color-border);
 }
 
-.file-action:hover {
-  background: var(--color-bg-tertiary);
+.action-group-btn:hover {
+  background: var(--color-bg);
   color: var(--color-text);
 }
 
-.file-action--danger:hover {
+.action-group-btn--danger:hover {
   background: color-mix(in srgb, var(--color-danger) 15%, transparent);
   color: var(--color-danger);
 }
@@ -2100,7 +2129,7 @@ function formatActivityDate(dateStr: string): string {
 .layout-toggle {
   display: flex;
   gap: 2px;
-  padding: 2px;
+  padding: 1px;
   margin-left: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -2113,9 +2142,9 @@ function formatActivityDate(dateStr: string): string {
   align-items: center;
   justify-content: center;
   width: 20px;
-  height: 17px;
+  height: 19px;
   gap: var(--space-2);
-  border-radius: 3px;
+  border-radius: 5px;
   color: var(--color-text-muted);
   background: none;
   transition: background var(--transition-hover), color var(--transition-hover);
@@ -2179,7 +2208,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .tree-folder-name {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2187,9 +2216,12 @@ function formatActivityDate(dateStr: string): string {
   color: var(--color-text);
 }
 
+/* Count sits snug to the right of the folder name (not pushed to the edge). */
 .tree-folder-count {
-  font-size: var(--font-size-xs);
   flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-subtle);
 }
 
 .empty-section {
