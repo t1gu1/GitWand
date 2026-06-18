@@ -64,6 +64,7 @@ import type { GitLogEntry } from "./utils/backend";
 import { getPersistedDiffMode, persistDiffMode, type DiffMode } from "./utils/diffMode";
 import { isImagePath } from "./utils/imagePath";
 import { useGitWand } from "./composables/useGitWand";
+import { useResolutionMemory, type ResolutionMemoryEntry, type ResolutionStrategy } from "./composables/useResolutionMemory";
 import { useRepoTabs } from "./composables/useRepoTabs";
 import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useWorkspaceScope } from "./composables/useWorkspaceScope";
@@ -96,6 +97,7 @@ import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
 const { settings, refreshSettings } = useSettings();
+const { saveMemory } = useResolutionMemory();
 // `useNetworkStatus` covers `navigator.onLine` — kept around because
 // `useScheduler` already consumes it and we don't want to retire that path
 // in this commit. `useConnectivity` (F1) adds a real probe-based signal
@@ -126,6 +128,11 @@ const {
   resolveFile,
   resolveHunkManual,
   resolveHunkCustom,
+  resolveFileBulk,
+  resolveTreeConflictFile,
+  reconstructAndResolve,
+  resolveByStaging,
+  applyMemoryToFile,
   saveFile,
   saveAllFiles,
   undo,
@@ -485,6 +492,7 @@ async function onMergeSuccessDeleteBranch(branch: string, alsoRemote: boolean) {
 const successToast = ref<string | null>(null);
 const successToastDetail = ref<string | null>(null);
 const successToastLeaving = ref(false);
+const memorizeToast = ref<{ path: string; strategy: ResolutionStrategy } | null>(null);
 let successTimer: number | null = null;
 
 function dismissToast() {
@@ -549,6 +557,18 @@ watch(
  * After resolving a hunk or file, check if the file is fully resolved.
  * If so: save to disk, git add, refresh status, move to next conflicted file.
  */
+async function advanceToNextConflictOrFinalize() {
+  await repoRefresh();
+  if (repoStatus.value && repoStatus.value.conflicted.length > 0) {
+    await repoSelectFile(repoStatus.value.conflicted[0], false);
+  } else if (isCherryPicking.value) {
+    await doCherryPickContinue();
+  } else {
+    await doMergeContinue();
+    showMergeSuccess.value = true;
+  }
+}
+
 async function checkAndSaveIfResolved(filePath: string) {
   const file = mergeFiles.value.find((f) => f.path === filePath);
   if (!file) return;
@@ -562,20 +582,7 @@ async function checkAndSaveIfResolved(filePath: string) {
   try {
     await saveFile(filePath);
     await stageFiles([filePath]);
-    await repoRefresh();
-
-    // Move to the next conflicted file, if any
-    if (repoStatus.value && repoStatus.value.conflicted.length > 0) {
-      await repoSelectFile(repoStatus.value.conflicted[0], false);
-    } else if (isCherryPicking.value) {
-      // Cherry-pick in progress — run cherry-pick --continue
-      await doCherryPickContinue();
-      // No merge-success modal for cherry-pick; a toast is enough
-    } else {
-      // Merge in progress — finalize the merge commit, then show modal
-      await doMergeContinue();
-      showMergeSuccess.value = true;
-    }
+    await advanceToNextConflictOrFinalize();
   } catch (err: any) {
     repoError.value = `save: ${err?.message || String(err)}`;
   }
@@ -594,6 +601,52 @@ function handleResolveFile(path: string) {
 
 function handleResolveHunkCustom(path: string, hunkIndex: number, content: string) {
   resolveHunkCustom(path, hunkIndex, content);
+  checkAndSaveIfResolved(path);
+}
+
+function handleResolveFileBulk(path: string, choice: "ours" | "theirs" | "both") {
+  resolveFileBulk(path, choice);
+  checkAndSaveIfResolved(path);
+  memorizeToast.value = { path, strategy: choice };
+}
+
+async function handleResolveTreeConflict(path: string, choice: "ours" | "theirs" | "delete") {
+  try {
+    await resolveTreeConflictFile(path, choice);
+    await advanceToNextConflictOrFinalize();
+  } catch (err: any) {
+    repoError.value = `tree-resolve: ${err?.message || String(err)}`;
+  }
+}
+
+function handleReconstructConflict(path: string) {
+  // Swap to reconstructed markers; the file now flows through the normal hunk UI.
+  reconstructAndResolve(path);
+}
+
+async function handleKeepWorkingTree(path: string) {
+  try {
+    await resolveByStaging(path);
+    await advanceToNextConflictOrFinalize();
+  } catch (err: any) {
+    repoError.value = `keep-working-tree: ${err?.message || String(err)}`;
+  }
+}
+
+function acceptMemorizeToast() {
+  if (!memorizeToast.value) return;
+  const { path, strategy } = memorizeToast.value;
+  const label = `${strategy} — ${path.split("/").pop()}`;
+  saveMemory(path, strategy, label, null);
+  memorizeToast.value = null;
+}
+
+function dismissMemorizeToast() {
+  memorizeToast.value = null;
+}
+
+function handleApplyFileMemory(path: string, entry: ResolutionMemoryEntry) {
+  applyMemoryToFile(path, entry);
   checkAndSaveIfResolved(path);
 }
 
@@ -2326,9 +2379,19 @@ onUnmounted(() => {
 
             <!-- Changes view: conflict editor, file history, or diff viewer -->
             <template v-else-if="viewMode === 'changes'">
+              <div v-if="memorizeToast && showingMergeEditor" class="me-memory-offer">
+                <span>{{ t("mergeEditor.memorizeFileOffer", memorizeToast.path.split('/').pop() || memorizeToast.path) }}</span>
+                <button class="me-memory-btn me-memory-btn--save" @click="acceptMemorizeToast">{{ t("mergeEditor.memorySave") }}</button>
+                <button class="me-memory-btn" @click="dismissMemorizeToast">{{ t("common.close") }}</button>
+              </div>
               <MergeEditor v-if="showingMergeEditor && mergeSelectedFile" :file="mergeSelectedFile"
                 @resolve="handleResolveFile" @resolve-hunk="(path, idx, choice) => handleResolveHunk(path, idx, choice)"
-                @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)" />
+                @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)"
+                @resolve-file-bulk="(path, choice) => handleResolveFileBulk(path, choice)"
+                @apply-file-memory="(path, entry) => handleApplyFileMemory(path, entry)"
+                @resolve-tree-conflict="(path, choice) => handleResolveTreeConflict(path, choice)"
+                @reconstruct-conflict="(path) => handleReconstructConflict(path)"
+                @keep-working-tree="(path) => handleKeepWorkingTree(path)" />
               <FileHistoryViewer v-else-if="fileHistoryPath && repoFolderPath" :file-path="fileHistoryPath"
                 :cwd="repoFolderPath" @close="closeFileHistory"
                 @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }" />
@@ -3482,5 +3545,42 @@ onUnmounted(() => {
 .cam-radio-hint {
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
+}
+
+/* ── App-level bulk-resolution memorize toast ── */
+.me-memory-offer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+
+.me-memory-btn {
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 2px 7px;
+  color: var(--color-text-muted);
+  transition: background 0.12s;
+}
+
+.me-memory-btn:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.me-memory-btn--save {
+  color: var(--color-success, #22c55e);
+  border-color: var(--color-success, #22c55e);
+}
+
+.me-memory-btn--save:hover {
+  background: var(--color-success-soft, rgba(34,197,94,.12));
 }
 </style>
