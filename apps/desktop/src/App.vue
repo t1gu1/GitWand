@@ -1761,6 +1761,25 @@ function onGlobalKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
 onUnmounted(() => window.removeEventListener("keydown", onGlobalKeydown));
 
+// The Tauri webview ignores `target="_blank"`/`window.open`, so a bare external
+// `<a href="http…">` opens nothing. Delegate every such click to the OS opener
+// (`openExternalUrl` → Rust `open_url`). One handler covers all current anchors
+// and any added later, so links can't silently die in the desktop build.
+function onExternalLinkClick(e: MouseEvent) {
+  // Respect modifier-clicks and non-primary buttons; let the webview ignore them.
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const anchor = (e.target as HTMLElement | null)?.closest?.("a[href]");
+  const href = anchor?.getAttribute("href");
+  if (href && /^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+  }
+}
+onMounted(() => {
+  if (isTauri()) document.addEventListener("click", onExternalLinkClick);
+});
+onUnmounted(() => document.removeEventListener("click", onExternalLinkClick));
+
 function handleRebaseDone() {
   showRebase.value = false;
   repoRefresh();
