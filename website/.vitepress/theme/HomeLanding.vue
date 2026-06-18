@@ -1574,6 +1574,33 @@ function cellClass(v: CompareValue | undefined): string {
     </section>
 
     <!-- ══════════════════════════════════════
+         CONTRIBUTORS
+    ══════════════════════════════════════ -->
+    <section class="contributors-section">
+      <div class="section-inner">
+        <div class="contributors-header">
+          <span class="contributors-label">Contributors</span>
+        </div>
+        <div class="contributors-grid">
+          <a href="https://github.com/devlint" class="contributor-card" target="_blank" rel="noopener">
+            <img src="https://github.com/devlint.png" alt="devlint on GitHub" class="contributor-avatar" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+            <span class="contributor-meta">
+              <span class="contributor-name">devlint</span>
+              <span class="contributor-role">Creator &amp; maintainer</span>
+            </span>
+          </a>
+          <a href="https://github.com/t1gu1" class="contributor-card" target="_blank" rel="noopener">
+            <img src="https://github.com/t1gu1.png" alt="t1gu1 on GitHub" class="contributor-avatar" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" />
+            <span class="contributor-meta">
+              <span class="contributor-name">t1gu1</span>
+              <span class="contributor-role">Contributor</span>
+            </span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════
          FINAL CTA
     ══════════════════════════════════════ -->
     <section class="cta-section">
@@ -2609,6 +2636,67 @@ function cellClass(v: CompareValue | undefined): string {
   font-size: 0.85rem;
   color: var(--gw-purple);
   font-weight: 500;
+}
+
+/* ───────────────────────────────────────────
+   CONTRIBUTORS
+─────────────────────────────────────────── */
+.contributors-section {
+  padding: 64px 24px;
+  border-top: 1px solid var(--gw-border);
+}
+.contributors-header {
+  margin-bottom: 1.5rem;
+}
+.contributors-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gw-purple);
+  font-family: var(--vp-font-family-mono, monospace);
+}
+.contributors-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.contributor-card {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--gw-border);
+  border-radius: var(--gw-radius);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s, background 0.2s;
+  min-width: 220px;
+}
+.contributor-card:hover {
+  border-color: var(--gw-purple);
+  background: var(--gw-surface);
+}
+.contributor-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--gw-border);
+  flex-shrink: 0;
+}
+.contributor-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.contributor-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gw-text);
+}
+.contributor-role {
+  font-size: 0.8rem;
+  color: var(--gw-text-muted);
 }
 
 /* ───────────────────────────────────────────
