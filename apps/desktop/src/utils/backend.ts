@@ -93,6 +93,68 @@ export async function getConflictedFiles(cwd: string): Promise<string[]> {
   return data.files;
 }
 
+export interface TreeConflict {
+  path: string;
+  /** git short-status code, e.g. "UD", "DU", "DD", "AU", "UA" */
+  code: string;
+  hasBase: boolean;
+  hasOurs: boolean;
+  hasTheirs: boolean;
+}
+
+/**
+ * Return unmerged paths that are markerless tree conflicts (modify/delete,
+ * both-deleted). Pure content conflicts (UU/AA with <<<<<<< markers) are
+ * excluded — they are already handled by the existing conflict flow.
+ */
+export async function getTreeConflicts(cwd: string): Promise<TreeConflict[]> {
+  if (isTauri()) {
+    return tauriInvoke<TreeConflict[]>("get_tree_conflicts", { cwd });
+  }
+  const res = await fetch(`${DEV_SERVER}/api/tree-conflicts?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Dev server error: ${res.status}`);
+  const data = await res.json();
+  return data.conflicts;
+}
+
+export async function resolveTreeConflict(
+  cwd: string,
+  path: string,
+  choice: "ours" | "theirs" | "delete",
+): Promise<void> {
+  if (isTauri()) {
+    await tauriInvoke("resolve_tree_conflict", { cwd, path, choice });
+    return;
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/resolve-tree-conflict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, path, choice }),
+  });
+  if (!res.ok) throw new Error(`Failed to resolve tree conflict: ${res.status}`);
+}
+
+export interface ReconstructedConflict {
+  content: string;
+  wtMatchesSide: boolean;
+}
+
+export async function reconstructConflict(
+  cwd: string,
+  path: string,
+): Promise<ReconstructedConflict> {
+  if (isTauri()) {
+    return tauriInvoke<ReconstructedConflict>("reconstruct_conflict", { cwd, path });
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/reconstruct-conflict`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, path }),
+  });
+  if (!res.ok) throw new Error(`Failed to reconstruct conflict: ${res.status}`);
+  return res.json();
+}
+
 /**
  * Read a file's content.
  */
@@ -307,6 +369,12 @@ export interface FileChange {
 export interface GitStatus {
   branch: string;
   remote: string | null;
+  /**
+   * True when a remote-tracking branch matching the current branch exists,
+   * even without a configured upstream (`@{u}`). Lets the UI distinguish
+   * "never pushed" (offer Publish) from "pushed but not tracked" (offer Push).
+   */
+  remoteBranchExists: boolean;
   ahead: number;
   behind: number;
   mainCommitCount: number;
@@ -334,6 +402,7 @@ export async function getGitStatus(cwd: string, pathspec?: string): Promise<GitS
     const raw = await tauriInvoke<{
       branch: string;
       remote: string | null;
+      remote_branch_exists: boolean;
       ahead: number;
       behind: number;
       main_commit_count: number;
@@ -348,6 +417,7 @@ export async function getGitStatus(cwd: string, pathspec?: string): Promise<GitS
     return {
       branch: raw.branch,
       remote: raw.remote,
+      remoteBranchExists: raw.remote_branch_exists ?? raw.remote != null,
       ahead: raw.ahead,
       behind: raw.behind,
       mainCommitCount: raw.main_commit_count,
@@ -372,7 +442,7 @@ export async function getGitStatus(cwd: string, pathspec?: string): Promise<GitS
     if (!res.ok) throw new Error(`Failed to get git status: ${res.status}`);
     const data = await res.json();
     // dev-server doesn't compute push remote — fill defaults
-    return { pushRemote: null, aheadPush: 0, mainCommitCount: 1, ...data };}
+    return { pushRemote: null, aheadPush: 0, mainCommitCount: 1, remoteBranchExists: data.remote != null, ...data };}
 
 // ─── Git diff ──────────────────────────────────────────────
 

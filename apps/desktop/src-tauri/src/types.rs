@@ -59,6 +59,11 @@ pub struct FileChange {
 pub struct GitStatus {
     pub branch: String,
     pub remote: Option<String>,
+    /// True when a remote-tracking branch matching the current branch exists,
+    /// even if no upstream is configured (`@{u}` missing). Lets the UI tell
+    /// "never pushed" apart from "pushed but not tracked" so it doesn't offer
+    /// to publish an already-published branch.
+    pub remote_branch_exists: bool,
     pub ahead: i32,
     pub behind: i32,
     pub main_commit_count: i32,
@@ -849,4 +854,28 @@ pub struct ShortlogEntry {
     pub name: String,
     pub email: String,
     pub count: u32,
+}
+
+// ─── Tree conflict types ───────────────────────────────────────────
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeConflict {
+    pub path: String,
+    /// git short-status code, e.g. "UD", "DU", "DD", "AU", "UA"
+    pub code: String,
+    pub has_base: bool,
+    pub has_ours: bool,
+    pub has_theirs: bool,
+}
+
+// ─── Reconstructed conflict (content conflict from index stages) ────
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconstructedConflict {
+    /// 3-way merge of the index stages, with diff3 conflict markers.
+    pub content: String,
+    /// Whether the current working-tree bytes equal stage 2 (ours) or stage 3 (theirs).
+    pub wt_matches_side: bool,
 }

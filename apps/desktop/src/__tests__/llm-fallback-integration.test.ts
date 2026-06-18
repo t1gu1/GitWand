@@ -40,6 +40,13 @@ vi.mock("../utils/backend", () => ({
   readFile: (cwd: string, path: string) => mockReadFile(cwd, path),
   writeFile: vi.fn(),
   readGitwandrc: (cwd: string) => mockReadGitwandrc(cwd),
+  // Tree conflicts not exercised in this suite — return empty list.
+  getTreeConflicts: vi.fn().mockResolvedValue([]),
+  resolveTreeConflict: vi.fn(),
+  // Markerless reconstruction — return empty content (no markers) so the
+  // normal conflict flow proceeds unaffected in these LLM-focused tests.
+  reconstructConflict: vi.fn().mockResolvedValue({ content: "", wtMatchesSide: false }),
+  gitStage: vi.fn(),
   // Stubs the composable also references transitively (folder history, etc.).
   isTauri: () => false,
 }));
