@@ -537,6 +537,93 @@ pub(crate) async fn git_rebase_action(cwd: String, action: String) -> Result<(),
     Ok(())
 }
 
+/// Result of starting an interactive rebase. `conflict` is true when the rebase
+/// halted on a merge conflict (the frontend then drives continue/abort/skip).
+#[derive(serde::Serialize)]
+pub(crate) struct InteractiveRebaseResult {
+    pub conflict: bool,
+}
+
+/// Start an interactive rebase with a caller-supplied todo list.
+///
+/// Git's interactive rebase normally opens `$GIT_SEQUENCE_EDITOR` on the todo
+/// file. We bypass the editor by pointing `GIT_SEQUENCE_EDITOR` at a `cp`/`copy`
+/// command that overwrites the todo file with `todo_lines` (written to a temp
+/// file we control). `GIT_EDITOR=true` neutralises any reword/commit-message
+/// editor so the command never blocks waiting for input.
+///
+/// Security: `base` and the todo content are passed as discrete args / file
+/// content — never interpolated into a shell. The only shell string is
+/// `GIT_SEQUENCE_EDITOR`, and the path it embeds is a temp file *we* generate
+/// (pid + nanos), not user input, so there is no injection surface.
+#[tauri::command]
+pub(crate) async fn git_interactive_rebase(
+    cwd: String,
+    base: String,
+    todo_lines: Vec<String>,
+) -> Result<InteractiveRebaseResult, String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp_file = std::env::temp_dir().join(format!(
+        "gitwand-rebase-todo-{}-{}.txt",
+        std::process::id(),
+        nanos
+    ));
+
+    let mut content = todo_lines.join("\n");
+    content.push('\n');
+    std::fs::write(&tmp_file, &content)
+        .map_err(|e| format!("Failed to write rebase todo file: {}", e))?;
+
+    // GIT_SEQUENCE_EDITOR is invoked as `<editor> <todo-path>`. Use cp/copy to
+    // overwrite the sequencer's todo file with ours.
+    let tmp_str = tmp_file.to_string_lossy();
+    let editor_cmd = if cfg!(windows) {
+        format!("copy /Y \"{}\"", tmp_str)
+    } else {
+        format!("cp \"{}\"", tmp_str)
+    };
+
+    let _t0 = Instant::now();
+    let result = git_cmd()
+        .args(["rebase", "-i", &base])
+        .env("GIT_SEQUENCE_EDITOR", &editor_cmd)
+        .env("GIT_EDITOR", "true")
+        .env("EDITOR", "true")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .current_dir(&cwd)
+        .output();
+
+    // Best-effort cleanup; the temp file holds no secrets but shouldn't linger.
+    let _ = std::fs::remove_file(&tmp_file);
+
+    let output = result.map_err(|e| format!("Failed to run git rebase -i: {}", e))?;
+    record_cmd(
+        "git rebase -i",
+        &cwd,
+        _t0.elapsed().as_millis() as u64,
+        output.status.code().unwrap_or(-1),
+    );
+
+    if output.status.success() {
+        return Ok(InteractiveRebaseResult { conflict: false });
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if stderr.contains("CONFLICT") || stderr.contains("could not apply")
+        || stdout.contains("CONFLICT") || stdout.contains("could not apply")
+    {
+        return Ok(InteractiveRebaseResult { conflict: true });
+    }
+    let msg = if stderr.is_empty() { stdout } else { stderr };
+    Err(format!("git rebase -i failed: {}", msg))
+}
+
 // ─── Git discard ───────────────────────────────────────────────
 
 #[tauri::command]

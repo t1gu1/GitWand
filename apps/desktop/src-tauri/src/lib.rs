@@ -298,6 +298,7 @@ pub fn run() {
             commands::ops::git_merge_continue,
             commands::read::git_repo_state,
             commands::ops::git_rebase_action,
+            commands::ops::git_interactive_rebase,
             commands::ops::git_discard,
             commands::read::git_show,
             commands::ops::git_branches,

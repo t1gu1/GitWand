@@ -981,6 +981,35 @@ export async function gitRebaseAction(
   }
 }
 
+/**
+ * Start an interactive rebase with a caller-supplied todo list.
+ * Returns `{ conflict }` — true when the rebase halted on a merge conflict.
+ * Throws on a hard failure.
+ */
+export async function gitInteractiveRebase(
+  cwd: string,
+  base: string,
+  todoLines: string[]
+): Promise<{ conflict: boolean }> {
+  if (isTauri()) {
+    return tauriInvoke<{ conflict: boolean }>("git_interactive_rebase", {
+      cwd,
+      base,
+      todoLines,
+    });
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/git-interactive-rebase`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cwd, base, todoLines }),
+  });
+  const data = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok || data.error) {
+    throw new Error(data.error ?? "interactive rebase failed");
+  }
+  return { conflict: !!data.conflict };
+}
+
 // ─── Git show (commit diff) ───────────────────────────────────
 
 /**
