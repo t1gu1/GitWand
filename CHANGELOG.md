@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.22.0] - 2026-06-18
+
 ### Added
 
 - **File-level bulk conflict resolution** — in the merge editor header, "Accept all: Current · Incoming · Both" resolves *every* hunk of a file in one click (including complex/low-confidence hunks the safe "Resolve auto" leaves behind), with a non-blocking "⚠ may break a generated file" hint on Both for build-generated files. After a bulk action, a memorize offer surfaces as a persistent app-level toast (survives the auto-advance to the next conflicted file) so the rule can be saved; the saved-rule banner becomes one-click actionable ("Apply rule to N hunks") with an applicability count, gracefully skipping hunks the rule can't apply. Built on a single pure `resolveAllConflictBlocks` engine (one marker pass, callback-driven) with `resolveFileBulk` / `applyMemoryToFile` composable methods; reuses the existing undo and save/stage/advance flow. No `packages/core` change. New `merge.bulk*` / `mergeEditor.memory*` i18n keys in all 5 locales; pure-engine unit tests.
@@ -1067,6 +1069,7 @@ Design-system foundations — the app header and every overlay now ride on a sha
 [2.11.0]: https://github.com/devlint/GitWand/compare/v2.10.0...v2.11.0
 [2.10.0]: https://github.com/devlint/GitWand/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/devlint/GitWand/compare/v2.8.2...v2.9.0
+[2.22.0]: https://github.com/devlint/GitWand/compare/v2.21.0...v2.22.0
 [2.21.0]: https://github.com/devlint/GitWand/compare/v2.20.1...v2.21.0
 [2.20.1]: https://github.com/devlint/GitWand/compare/v2.20.0...v2.20.1
 [2.8.2]: https://github.com/devlint/GitWand/compare/v2.8.0...v2.8.2

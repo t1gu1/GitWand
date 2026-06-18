@@ -5,6 +5,24 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.22.0 — June 2026
+
+### Resolve a whole file in one click
+
+The merge editor gains a file-level shortcut: **"Accept all — Current · Incoming · Both"** resolves *every* hunk of a file at once, including the complex, low-confidence hunks that the safe "Resolve auto" deliberately leaves for you. Picking "Both" on a build-generated file shows a discreet "⚠ may break a generated file" hint, but never blocks you. Once you've resolved a file by hand, GitWand offers to remember the rule — and that offer now rides along as a persistent toast, surviving the jump to the next conflicted file, so you can save it when you're ready. The saved-rule banner becomes actionable: one click applies it to all matching hunks, with a live count and graceful skipping of anything it can't touch.
+
+### Conflicts that have no markers, finally resolvable
+
+Some conflicts never write `<<<<<<<` markers into your files. A file modified on one side and deleted on the other, deleted on both, or added on both — git records these as conflicts, but the working tree looks clean, and GitWand used to show "0 conflicts" with no way to act. v2.22.0 reads the unmerged index stages directly: tree conflicts now appear in the file list with a distinct badge and open a dedicated panel that explains the case ("modified on the current side, deleted on the incoming side", …) and offers the right choices — keep current, keep incoming, or accept the deletion — with a read-only preview of the surviving content.
+
+The same is true for content conflicts that lost their markers — after a one-sided `checkout`, a `-X ours/theirs` merge, or `rerere`. GitWand is now stage-authoritative: it rebuilds the full three-way conflict from the index stages. When your working tree matches one side, it's reconstructed silently with a small "reconstructed from the index" banner; when it matches neither (a manual resolution you may have started), GitWand asks rather than assumes — reconstruct the conflict, or keep your version as-is — so nothing you typed is ever discarded.
+
+### Remote-state signals that tell the truth
+
+Three "false alarm" fixes that were quietly getting in the way. GitWand no longer offers to "Publish" a branch that's already on the remote but missing its local tracking link — it shows the real ahead/behind state instead. The offline indicator no longer trusts the macOS WebView's unreliable offline events: it confirms with a real connectivity probe before blocking anything, so a stable connection is never mistaken for an outage — while a genuine outage still stops an action before it hangs. And the "unpushed tags" prompt no longer lists tags that are already on GitHub: GitWand now targets `origin` rather than whichever remote happened to sort first, which also makes pull-request lookups and other remote operations more reliable on repos with multiple remotes.
+
+---
+
 ## v2.21.0 — June 2026
 
 ### Scope a monorepo to one sub-workspace
