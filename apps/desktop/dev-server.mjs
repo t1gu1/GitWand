@@ -10,7 +10,7 @@
 
 import { createServer } from "node:http";
 import { execSync, execFileSync, spawnSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, existsSync, unlinkSync, realpathSync, renameSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { resolve, join, dirname, basename, sep, isAbsolute } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { Socket } from "node:net";
@@ -718,6 +718,94 @@ async function handleRequest(req, res) {
       }
     }
 
+    // GET /api/tree-conflicts?cwd=/path/to/repo  — mirrors Rust collect_tree_conflicts
+    if (url.pathname === "/api/tree-conflicts" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
+      const resolvedCwd = resolve(cwd);
+      // `-z` => NUL-terminated records with verbatim paths (mirrors Rust collect_tree_conflicts),
+      // so paths with quotes/newlines/non-ASCII parse correctly.
+      const out = spawnSync(GIT, ["status", "--porcelain=v2", "-z", "--untracked-files=no"], {
+        cwd: resolvedCwd, encoding: "utf-8",
+      });
+      if (out.status !== 0) return jsonResponse(req, res, { cwd: resolvedCwd, conflicts: [] });
+      const conflicts = [];
+      for (const record of (out.stdout || "").split("\0")) {
+        if (!record.startsWith("u ")) continue;
+        const rest = record.slice(2);
+        // u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+        const parts = rest.split(" ");
+        if (parts.length < 10) continue;
+        const code = parts[0];
+        const m1 = parts[2], m2 = parts[3], m3 = parts[4];
+        const path = parts.slice(9).join(" ");
+        if (!path) continue;
+        const hasBase = m1 !== "000000";
+        const hasOurs = m2 !== "000000";
+        const hasTheirs = m3 !== "000000";
+        if (hasOurs && hasTheirs) continue; // content conflict (UU/AA) — not a tree conflict
+        conflicts.push({ path, code, hasBase, hasOurs, hasTheirs });
+      }
+      return jsonResponse(req, res, { cwd: resolvedCwd, conflicts });
+    }
+
+    // POST /api/resolve-tree-conflict {cwd, path, choice}  — mirrors Rust resolve_tree_conflict
+    if (url.pathname === "/api/resolve-tree-conflict" && req.method === "POST") {
+      const { cwd, path, choice } = await readBody(req);
+      if (!cwd || !path) return jsonResponse(req, res, { error: "Missing cwd or path" }, 400);
+      const resolvedCwd = resolve(cwd);
+      // Traversal guard (mirrors Rust apply_tree_resolution); git still gets the relative path.
+      try { safeRepoPath(resolvedCwd, path); }
+      catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
+      const run = (args) => {
+        const r = spawnSync(GIT, args, { cwd: resolvedCwd, encoding: "utf-8" });
+        if (r.status !== 0) throw new Error(`git ${args.join(" ")}: ${r.stderr || ""}`);
+      };
+      try {
+        if (choice === "ours") { run(["checkout", "--ours", "--", path]); run(["add", "--", path]); }
+        else if (choice === "theirs") { run(["checkout", "--theirs", "--", path]); run(["add", "--", path]); }
+        else if (choice === "delete") { run(["rm", "-f", "--", path]); }
+        else return jsonResponse(req, res, { error: `unknown choice: ${choice}` }, 400);
+      } catch (e) {
+        return jsonResponse(req, res, { error: String(e.message || e) }, 500);
+      }
+      return jsonResponse(req, res, { ok: true });
+    }
+
+    // POST /api/reconstruct-conflict {cwd, path}  — mirrors Rust reconstruct_conflict
+    if (url.pathname === "/api/reconstruct-conflict" && req.method === "POST") {
+      const { cwd, path } = await readBody(req);
+      if (!cwd || !path) return jsonResponse(req, res, { error: "Missing cwd or path" }, 400);
+      const resolvedCwd = resolve(cwd);
+      // Traversal guard (mirrors Rust reconstruct_conflict_impl); git still gets the relative path.
+      try { safeRepoPath(resolvedCwd, path); }
+      catch (e) { return jsonResponse(req, res, { error: e.message }, 400); }
+      const blob = (stage) => {
+        const r = spawnSync(GIT, ["show", `:${stage}:${path}`], { cwd: resolvedCwd, encoding: "buffer" });
+        return r.status === 0 ? r.stdout : Buffer.alloc(0);
+      };
+      const base = blob(1), ours = blob(2), theirs = blob(3);
+      if (ours.length === 0 && theirs.length === 0) {
+        return jsonResponse(req, res, { error: `no index stages for ${path}` }, 404);
+      }
+      const dir = mkdtempSync(join(tmpdir(), "gitwand-recon-"));
+      let content = "";
+      try {
+        const oursP = join(dir, "ours"), baseP = join(dir, "base"), theirsP = join(dir, "theirs");
+        writeFileSync(oursP, ours); writeFileSync(baseP, base); writeFileSync(theirsP, theirs);
+        const r = spawnSync(GIT, ["merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", oursP, baseP, theirsP], { cwd: resolvedCwd, encoding: "utf-8" });
+        if (r.status === 255) return jsonResponse(req, res, { error: `git merge-file error: ${r.stderr || ""}` }, 500);
+        content = r.stdout || "";
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+      let wt = Buffer.alloc(0);
+      try { wt = readFileSync(safeRepoPath(resolvedCwd, path)); } catch { /* absent */ }
+      const wtMatchesSide = (ours.length > 0 && Buffer.compare(wt, ours) === 0) ||
+                            (theirs.length > 0 && Buffer.compare(wt, theirs) === 0);
+      return jsonResponse(req, res, { content, wtMatchesSide });
+    }
+
     // POST /api/read-file  { cwd, path }
     if (url.pathname === "/api/read-file" && req.method === "POST") {
       const { cwd, path } = await readBody(req);
@@ -1118,6 +1206,47 @@ async function handleRequest(req, res) {
           }
         }
 
+        // ── Remote branch existence (no upstream configured) ───────────────
+        // Mirror git_status_cli: when there's no `@{u}`, the branch may still
+        // be on a remote. Detect a matching remote-tracking ref and compute
+        // ahead/behind against it so the UI doesn't offer to "publish" an
+        // already-pushed branch. `remote` stays null — a first push still needs
+        // --set-upstream.
+        let remoteBranchExists = remote != null;
+        if (remote == null && branch && branch !== "unknown") {
+          try {
+            const remotesOut = spawnSync(GIT, ["remote"], {
+              cwd: resolvedCwd, encoding: "utf-8",
+            });
+            const names = (remotesOut.stdout || "")
+              .split("\n").map((s) => s.trim()).filter(Boolean);
+            const ordered = [
+              ...(names.includes("origin") ? ["origin"] : []),
+              ...names.filter((n) => n !== "origin"),
+            ];
+            for (const remoteName of ordered) {
+              const candidate = `${remoteName}/${branch}`;
+              const rp = spawnSync(GIT, [
+                "rev-parse", "--verify", "--quiet", `refs/remotes/${candidate}`,
+              ], { cwd: resolvedCwd, encoding: "utf-8" });
+              if (rp.status === 0) {
+                remoteBranchExists = true;
+                const rl = spawnSync(GIT, [
+                  "rev-list", "--left-right", "--count", `${candidate}...HEAD`,
+                ], { cwd: resolvedCwd, encoding: "utf-8" });
+                if (rl.status === 0) {
+                  const [b, a] = (rl.stdout || "").trim().split(/\s+/).map(Number);
+                  if (!isNaN(b)) behind = b;
+                  if (!isNaN(a)) ahead = a;
+                }
+                break;
+              }
+            }
+          } catch {
+            // no remotes / detached — leave remoteBranchExists = false
+          }
+        }
+
         // ── Triangular / fork workflow ─────────────────────────────────────
         // Mirror git_status_cli: resolve @{push}; only report a separate push
         // remote (+ ahead count) when it differs from the upstream.
@@ -1160,7 +1289,7 @@ async function handleRequest(req, res) {
           }
         }
 
-        return jsonResponse(req, res, { branch, remote, ahead, behind, mainCommitCount, pushRemote, aheadPush, staged, unstaged, untracked, conflicted });
+        return jsonResponse(req, res, { branch, remote, remoteBranchExists, ahead, behind, mainCommitCount, pushRemote, aheadPush, staged, unstaged, untracked, conflicted });
       } catch (err) {
         return jsonResponse(req, res, { error: err.stderr?.toString() || err.message }, 500);
       }
@@ -4873,15 +5002,30 @@ async function handleRequest(req, res) {
           return jsonResponse(req, res, { error: r.stderr || "git remote failed" }, 500);
         }
         const lines = (r.stdout || "").split("\n");
+        // Prefer `origin` over whatever sorts first — `git remote -v` lists
+        // remotes alphabetically, so a `fork` remote would otherwise shadow
+        // `origin` and target the wrong repo. Mirrors the Rust command.
         let name = "";
         let remoteUrl = "";
+        let firstName = "";
+        let firstUrl = "";
         for (const line of lines) {
           if (!line.includes("(fetch)")) continue;
           const parts = line.split(/\s+/).filter(Boolean);
           if (parts.length < 2) continue;
-          name = parts[0];
-          remoteUrl = parts[1];
-          break;
+          if (parts[0] === "origin") {
+            name = parts[0];
+            remoteUrl = parts[1];
+            break;
+          }
+          if (!firstUrl) {
+            firstName = parts[0];
+            firstUrl = parts[1];
+          }
+        }
+        if (!remoteUrl) {
+          name = firstName;
+          remoteUrl = firstUrl;
         }
         if (!remoteUrl) {
           return jsonResponse(req, res, { error: "No remote found" }, 404);
