@@ -1922,7 +1922,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .commit-ai-btn--loading {
-  color: var(--color-warning);
+  color: var(--color-ai);
 }
 
 .commit-ai-menu {
