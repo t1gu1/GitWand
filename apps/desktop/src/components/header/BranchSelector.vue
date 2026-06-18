@@ -517,41 +517,40 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
                   <span v-if="branch.behind > 0">&darr;{{ branch.behind }}</span>
                 </span>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-preview"
-                  :class="{ 'bp-item-preview--active': previewingBranch === branch.name }"
-                  :title="t('branches.previewMerge')"
-                  @click.stop="togglePreview(branch.name)"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
-                    <path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  </svg>
-                </button>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-worktree"
-                  :title="t('worktree.openInWorktreeTabTooltip')"
-                  @click.stop="emit('openWorktrees', branch.name); closePopover();"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-                  </svg>
-                </button>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-delete"
-                  :title="t('branches.deleteLabel')"
-                  @click.stop="emit('deleteBranch', branch.name)"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
+                <span v-if="!branch.isCurrent" class="bp-item-actions" @click.stop>
+                  <button
+                    class="bp-item-action"
+                    :class="{ 'bp-item-action--active': previewingBranch === branch.name }"
+                    :title="t('branches.previewMerge')"
+                    @click.stop="togglePreview(branch.name)"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
+                      <path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <button
+                    class="bp-item-action"
+                    :title="t('worktree.openInWorktreeTabTooltip')"
+                    @click.stop="emit('openWorktrees', branch.name); closePopover();"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <button
+                    class="bp-item-action bp-item-action--danger"
+                    :title="t('branches.deleteLabel')"
+                    @click.stop="emit('deleteBranch', branch.name)"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
               </li>
               <li v-if="previewingBranch === branch.name" class="bp-preview-row">
                 <!-- Commit picker — only visible when cherry-pick is selected -->
@@ -973,9 +972,41 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   flex-shrink: 0;
 }
 
-.bp-item-preview,
-.bp-item-worktree,
-.bp-item-delete {
+/* Fused action group — reads as one segmented control, like the
+   branch-trigger + "new branch" pair. Always visible (no hover reveal). */
+.bp-item-actions {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  /* Nudge toward the row's right edge — claws back most of the item's
+     right padding without affecting the branch-name column. */
+  margin-right: calc(var(--space-5) * -0.6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.bp-item-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.bp-item-action:first-child { border-left: 0; }
+.bp-item-action:hover { background: var(--color-bg-tertiary); color: var(--color-accent); }
+.bp-item-action--active { color: var(--color-accent); background: var(--color-accent-soft); }
+.bp-item-action--danger:hover { color: var(--color-danger); }
+
+/* Submodule row "view tree" button — single icon, hover-reveal. */
+.bp-item-preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -985,15 +1016,10 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   color: var(--color-text-muted);
   background: none;
   opacity: 0;
-  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  transition: opacity var(--transition-fast), color var(--transition-fast);
 }
-.bp-item:hover .bp-item-preview,
-.bp-item:hover .bp-item-worktree,
-.bp-item:hover .bp-item-delete { opacity: 0.6; }
+.bp-item:hover .bp-item-preview { opacity: 0.6; }
 .bp-item-preview:hover { opacity: 1 !important; color: var(--color-accent); }
-.bp-item-preview--active { opacity: 1 !important; color: var(--color-accent); background: var(--color-accent-soft); }
-.bp-item-worktree:hover { opacity: 1 !important; color: var(--color-accent); }
-.bp-item-delete:hover { opacity: 1 !important; color: var(--color-danger); }
 
 .bp-preview-row {
   list-style: none;
