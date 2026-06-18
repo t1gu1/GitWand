@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-06-18
+
 ### Added
 
 - **File-tree view for the changes sidebar** — the Changes view gains a list/tree layout toggle (in the controls row, to the right of the monorepo scope picker; full-width with text labels when no scope picker is present). The tree layout nests each git section's files under their folders, with collapsible folders (per-section collapse state, persisted in `localStorage`); selecting a file auto-expands its ancestor folders. The chosen layout is persisted. Pure tree-building logic lives in a new `useFileTree` composable with unit tests; `viewLayout` / `viewAsList` / `viewAsTree` i18n keys added in all 5 locales.

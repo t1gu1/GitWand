@@ -5,7 +5,7 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
-## Unreleased
+## v2.23.0 — June 2026
 
 ### See your changes as a folder tree
 
