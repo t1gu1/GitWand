@@ -218,7 +218,6 @@ const en = {
     trailerSobHelp: "Adds \u201cSigned-off-by: your name\u201d to the commit. Certifies you have the right to submit this code under the project\u2019s license (Developer Certificate of Origin, DCO). Required by some open-source projects (e.g. Linux kernel).",
     trailerRbLabel: "Reviewed by",
     trailerRbHelp: "Adds \u201cReviewed-by: name\u201d to the commit. Records who reviewed and approved this change. Appears in the git history for traceability.",
-    aiLabel: "AI",
     aiGenerateTooltip: "Generate message with AI",
     aiGeneratingTooltip: "Generating\u2026",
     aiRegenerate: "Regenerate",
@@ -229,6 +228,9 @@ const en = {
     aiPresetDefault: "Default",
     // Empty
     cleanTree: "Working tree clean",
+    viewLayout: "Changes layout",
+    viewAsList: "List view",
+    viewAsTree: "Tree view",
     // Dashboard-specific sidebar blocks
     pinnedBranches: "Pinned branches",
     archivedBranches: "Archived branches",
@@ -477,7 +479,7 @@ const en = {
     deleteLabel: "Delete",
     noBranch: "No branches found",
     previewMerge: "Preview merge",
-    aiHint: "Suggest a name with AI (from your description or the current diff)",
+    aiHint: "Generate a branch name with AI, based on your WIP changes.",
     switchRefusedDirty: "Switch refused: uncommitted changes are present.",
     switchConfirmDirty: "Uncommitted changes will be lost. Continue anyway?",
     switchConfirmDirtyTitle: "Discard changes?",

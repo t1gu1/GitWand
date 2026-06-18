@@ -36,7 +36,8 @@ import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
 import MergePreviewPanel from "../MergePreviewPanel.vue";
-import AiSparkle from "../AiSparkle.vue";
+import BaseModal from "../BaseModal.vue";
+import BranchNameField from "../BranchNameField.vue";
 
 const { t } = useI18n();
 
@@ -103,6 +104,11 @@ const branchFilter = ref("");
 const showCreate = ref(false);
 const newBranchName = ref("");
 
+// Collapsible LOCAL / REMOTE sections — open by default, toggled via
+// their section headers (same affordance as the submodules section).
+const showLocal = ref(true);
+const showRemote = ref(true);
+
 // External create-form trigger (currently used by the native macOS menu's
 // "New Branch…" item). Each bump of the injected counter opens the popover
 // and the inline create form. The input's `autofocus` does the rest.
@@ -142,10 +148,24 @@ function togglePopover() {
   }
 }
 
-function closePopover() {
-  showPopover.value = false;
+/** Close the create form and clear its draft name. */
+function resetCreate() {
   showCreate.value = false;
   newBranchName.value = "";
+}
+
+function closePopover() {
+  showPopover.value = false;
+  resetCreate();
+}
+
+function openCreate() {
+  newBranchName.value = "";
+  showCreate.value = true;
+}
+
+function cancelCreate() {
+  resetCreate();
 }
 
 // ─── Submodules section (v2.15.1) ────────────────────────────────
@@ -205,19 +225,7 @@ function handleBranchCreate() {
   const name = newBranchName.value.trim();
   if (!name) return;
   emit("createBranch", name);
-  newBranchName.value = "";
-  showCreate.value = false;
   closePopover();
-}
-
-function onCreateKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    handleBranchCreate();
-  } else if (e.key === "Escape") {
-    showCreate.value = false;
-    newBranchName.value = "";
-  }
 }
 
 // ─── Merge Preview (inside popover) ──────────────────────────────
@@ -373,6 +381,9 @@ function closePreview() {
 // wrapper root).
 function onDocClick(e: MouseEvent) {
   if (!showPopover.value) return;
+  // The new-branch modal teleports to <body>, outside the wrapper. Keep the
+  // popover open while it's up — the modal owns its own backdrop dismissal.
+  if (showCreate.value) return;
   const target = e.target as HTMLElement | null;
   if (!target?.closest(".branch-popover-wrapper")) {
     closePopover();
@@ -392,6 +403,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       When stats are absent, the chip collapses to a single line via
       the `branch-trigger--with-stats` modifier being dropped.
     -->
+    <div class="branch-trigger-group">
     <button
       class="branch-trigger"
       :class="{
@@ -452,6 +464,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         <path d="M2.5 3.5l2.5 3 2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </button>
+      <!-- Fused "new branch" button, sits flush to the right of the trigger -->
+      <button class="branch-add-btn" :title="t('branches.create')" :aria-label="t('branches.create')" @click="openCreate">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
 
     <div v-if="showPopover" class="branch-popover">
       <div class="bp-header">
@@ -462,50 +481,21 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           autofocus
           @keydown.escape="closePopover"
         />
-        <button class="bp-action-btn" :title="t('branches.create')" @click="showCreate = !showCreate">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-        </button>
       </div>
-
-      <div v-if="showCreate" class="bp-create">
-        <input
-          v-model="newBranchName"
-          class="bp-create-input mono"
-          :placeholder="t('branches.namePlaceholder')"
-          autofocus
-          @keydown="onCreateKeydown"
-        />
-        <button
-          v-if="ai.isAvailable.value"
-          type="button"
-          class="btn btn--ai btn--icon"
-          :disabled="isGeneratingBranchName"
-          :title="t('branches.aiHint')"
-          :aria-label="t('branches.aiHint')"
-          @click="handleBranchNameAI"
-        >
-          <span v-if="isGeneratingBranchName">…</span>
-          <AiSparkle v-else :size="14" />
-        </button>
-        <button
-          class="bp-create-btn"
-          :disabled="!newBranchName.trim()"
-          @click="handleBranchCreate"
-        >
-          {{ t('common.create') }}
-        </button>
-      </div>
-      <p v-if="showCreate && branchNameAiError" class="bp-create-error">{{ branchNameAiError }}</p>
 
       <div v-if="branchesLoading" class="bp-loading">
         <div class="bp-spinner"></div>
       </div>
       <div v-else class="bp-lists">
         <div v-if="localBranches.length > 0" class="bp-section">
-          <div class="bp-section-label">{{ t('branches.local') }}</div>
-          <ul class="bp-list">
+          <button class="bp-section-toggle" :aria-expanded="showLocal ? 'true' : 'false'" @click.stop="showLocal = !showLocal">
+            <svg class="bp-section-toggle__chevron" :class="{ 'bp-section-toggle__chevron--open': showLocal }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branches.local') }}</span>
+            <span class="bp-section-toggle__count">{{ localBranches.length }}</span>
+          </button>
+          <ul v-if="showLocal" class="bp-list">
             <template v-for="branch in localBranches" :key="branch.name">
               <li
                 class="bp-item"
@@ -519,46 +509,45 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
                   <circle cx="11.5" cy="8.5" r="2.5" />
                   <rect x="7.5" y="8" width="1" height="6" />
                 </svg>
-                <span class="bp-item-name mono">{{ branch.name }}</span>
+                <span class="bp-item-name mono" :title="branch.name"><span class="bp-item-name__text">{{ branch.name }}</span></span>
                 <span v-if="branch.ahead > 0 || branch.behind > 0" class="bp-item-meta muted">
                   <span v-if="branch.ahead > 0">&uarr;{{ branch.ahead }}</span>
                   <span v-if="branch.behind > 0">&darr;{{ branch.behind }}</span>
                 </span>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-preview"
-                  :class="{ 'bp-item-preview--active': previewingBranch === branch.name }"
-                  :title="t('branches.previewMerge')"
-                  @click.stop="togglePreview(branch.name)"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
-                    <path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  </svg>
-                </button>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-worktree"
-                  :title="t('worktree.openInWorktreeTabTooltip')"
-                  @click.stop="emit('openWorktrees', branch.name); closePopover();"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-                    <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-                  </svg>
-                </button>
-                <button
-                  v-if="!branch.isCurrent"
-                  class="bp-item-delete"
-                  :title="t('branches.deleteLabel')"
-                  @click.stop="emit('deleteBranch', branch.name)"
-                >
-                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                    <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
+                <span v-if="!branch.isCurrent" class="bp-item-actions" @click.stop>
+                  <button
+                    class="bp-item-action"
+                    :class="{ 'bp-item-action--active': previewingBranch === branch.name }"
+                    :title="t('branches.previewMerge')"
+                    @click.stop="togglePreview(branch.name)"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" />
+                      <path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <button
+                    class="bp-item-action"
+                    :title="t('worktree.openInWorktreeTabTooltip')"
+                    @click.stop="emit('openWorktrees', branch.name); closePopover();"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <rect x="5.5" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+                      <path d="M4.5 7v1.5M11.5 7v1.5M4.5 8.5h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <button
+                    class="bp-item-action bp-item-action--danger"
+                    :title="t('branches.deleteLabel')"
+                    @click.stop="emit('deleteBranch', branch.name)"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2 4h12M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M3 4v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
               </li>
               <li v-if="previewingBranch === branch.name" class="bp-preview-row">
                 <!-- Commit picker — only visible when cherry-pick is selected -->
@@ -605,15 +594,21 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           </ul>
         </div>
         <div v-if="remoteBranches.length > 0" class="bp-section">
-          <div class="bp-section-label">{{ t('branches.remote') }}</div>
-          <ul class="bp-list">
+          <button class="bp-section-toggle" :aria-expanded="showRemote ? 'true' : 'false'" @click.stop="showRemote = !showRemote">
+            <svg class="bp-section-toggle__chevron" :class="{ 'bp-section-toggle__chevron--open': showRemote }" width="9" height="9" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 6l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span>{{ t('branches.remote') }}</span>
+            <span class="bp-section-toggle__count">{{ remoteBranches.length }}</span>
+          </button>
+          <ul v-if="showRemote" class="bp-list">
             <li
               v-for="branch in remoteBranches"
               :key="branch.name"
               class="bp-item bp-item--remote"
               @click="handleBranchSwitch(branch.name.replace(/^origin\//, ''))"
             >
-              <span class="bp-item-name mono">{{ branch.name }}</span>
+              <span class="bp-item-name mono" :title="branch.name"><span class="bp-item-name__text">{{ branch.name }}</span></span>
             </li>
           </ul>
         </div>
@@ -667,6 +662,30 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         </div>
       </div>
     </div>
+
+    <!-- New-branch modal -->
+    <BaseModal
+      v-if="showCreate"
+      :title="t('branches.create')"
+      size="sm"
+      @close="cancelCreate"
+    >
+      <BranchNameField
+        v-model="newBranchName"
+        :ai-available="ai.isAvailable.value"
+        :suggesting="isGeneratingBranchName"
+        :error="branchNameAiError ?? ''"
+        @suggest="handleBranchNameAI"
+        @submit="handleBranchCreate"
+      />
+
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="cancelCreate">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--primary" :disabled="!newBranchName.trim()" @click="handleBranchCreate">
+          {{ t('common.create') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -674,6 +693,33 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 /* ─── Branch trigger ────────────────────────────────────── */
 .branch-popover-wrapper {
   position: relative;
+}
+
+/* Trigger + "new branch" button read as one fused control. */
+.branch-trigger-group {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.branch-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  padding: 0 2px 0 0;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  border-left: 1px solid var(--color-bg);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+.branch-add-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .branch-trigger {
@@ -690,6 +736,10 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   cursor: pointer;
   max-width: 320px;
   min-width: 0;
+}
+.branch-trigger-group .branch-trigger {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
 }
 .branch-trigger:hover {
   background: var(--color-border);
@@ -803,8 +853,9 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   position: absolute;
   top: calc(100% + var(--space-3));
   left: 0;
-  width: 340px;
-  max-height: 520px;
+  width: 420px;
+  max-width: calc(100vw - var(--space-7));
+  max-height: min(720px, 80vh);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
@@ -825,7 +876,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -836,68 +887,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 .bp-filter:focus {
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
-}
-
-.bp-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  background: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.bp-action-btn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-
-.bp-create {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-}
-.bp-create-input {
-  flex: 1;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-base);
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  outline: none;
-}
-.bp-create-input:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
-}
-
-.bp-create-btn {
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-radius: var(--radius-pill);
-}
-.bp-create-btn:disabled { opacity: 0.4; }
-
-.bp-create-error {
-  margin: 0;
-  padding: 0 var(--space-5) var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-danger, #ef4444);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .bp-loading {
@@ -919,21 +915,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 .bp-lists {
   flex: 1;
   overflow-y: auto;
-  max-height: 300px;
+  /* Grows with the branch count, but the popover's own max-height keeps it
+     bounded and scrollable when there are a lot of branches. */
+  max-height: none;
 }
 
 .bp-section { border-bottom: 1px solid var(--color-border); }
 .bp-section:last-child { border-bottom: none; }
-
-.bp-section-label {
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
-  background: var(--color-bg);
-}
 
 .bp-list { list-style: none; }
 
@@ -959,10 +947,21 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
 .bp-item-name {
   flex: 1;
+  /* Stretch over the row's vertical padding so the hover/tooltip target
+     is the full row height — no dead gap above/below the text. */
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin-block: calc(var(--space-3) * -1);
+  padding-block: var(--space-3);
+  min-width: 0;
+  font-weight: var(--font-weight-medium);
+}
+.bp-item-name__text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: var(--font-weight-medium);
+  min-width: 0;
 }
 .bp-item--remote .bp-item-name { opacity: 0.7; }
 
@@ -971,9 +970,41 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   flex-shrink: 0;
 }
 
-.bp-item-preview,
-.bp-item-worktree,
-.bp-item-delete {
+/* Fused action group — reads as one segmented control, like the
+   branch-trigger + "new branch" pair. Always visible (no hover reveal). */
+.bp-item-actions {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  /* Nudge toward the row's right edge — claws back most of the item's
+     right padding without affecting the branch-name column. */
+  margin-right: calc(var(--space-5) * -0.6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg);
+}
+
+.bp-item-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.bp-item-action:first-child { border-left: 0; }
+.bp-item-action:hover { background: var(--color-bg-tertiary); color: var(--color-accent); }
+.bp-item-action--active { color: var(--color-accent); background: var(--color-accent-soft); }
+.bp-item-action--danger:hover { color: var(--color-danger); }
+
+/* Submodule row "view tree" button — single icon, hover-reveal. */
+.bp-item-preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -983,15 +1014,10 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   color: var(--color-text-muted);
   background: none;
   opacity: 0;
-  transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+  transition: opacity var(--transition-fast), color var(--transition-fast);
 }
-.bp-item:hover .bp-item-preview,
-.bp-item:hover .bp-item-worktree,
-.bp-item:hover .bp-item-delete { opacity: 0.6; }
+.bp-item:hover .bp-item-preview { opacity: 0.6; }
 .bp-item-preview:hover { opacity: 1 !important; color: var(--color-accent); }
-.bp-item-preview--active { opacity: 1 !important; color: var(--color-accent); background: var(--color-accent-soft); }
-.bp-item-worktree:hover { opacity: 1 !important; color: var(--color-accent); }
-.bp-item-delete:hover { opacity: 1 !important; color: var(--color-danger); }
 
 .bp-preview-row {
   list-style: none;
@@ -1110,35 +1136,4 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
-/* Local copies of .btn and .btn--icon so the AI button inside .bp-create
-   renders consistently. We don't import from the parent scoped styles. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-medium);
-  transition: background var(--transition-base), color var(--transition-base), transform var(--transition-fast);
-  white-space: nowrap;
-}
-
-.btn--icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text-muted);
-  transition: background var(--transition-base), color var(--transition-base);
-}
-.btn--icon:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-.btn--icon:disabled { opacity: 0.35; cursor: not-allowed; }
 </style>

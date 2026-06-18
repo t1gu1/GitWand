@@ -3107,10 +3107,21 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
     if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err("Refusing to open URL with whitespace or control characters".to_string());
     }
+
+    // macOS/Windows fire-and-forget on purpose: `open`/`explorer` are single,
+    // always-present launchers with no fallback chain to try, and neither
+    // platform has the AppImage env pollution that made the Linux opener (and
+    // its delegated helper) die silently — so the exit-status handling below is
+    // Linux-only by design, not an oversight.
     #[cfg(target_os = "macos")]
-    let mut cmd = hidden_cmd("open");
-    #[cfg(target_os = "linux")]
-    let mut cmd = hidden_cmd("xdg-open");
+    {
+        hidden_cmd("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+        Ok(())
+    }
+
     // Windows: invoke `explorer.exe <url>` directly rather than `cmd /C start`.
     // `cmd.exe` re-parses its command line and treats `& | ^ < >` as shell
     // metacharacters, so a link like `https://x/&calc` (legitimate query
@@ -3118,11 +3129,89 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
     // `explorer.exe` is not a shell — it receives the URL as a single argv
     // entry via the standard CommandLineToArgvW rules, with no `&` splitting.
     #[cfg(target_os = "windows")]
-    let mut cmd = hidden_cmd("explorer");
-    cmd.arg(&url)
+    {
+        hidden_cmd("explorer")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+        Ok(())
+    }
+
+    // Linux: a single fire-and-forget `xdg-open` swallowed every failure — in
+    // the released AppImage the spawned opener (and the Qt/KDE or GTK helper it
+    // delegates to) inherited `AppRun`'s `LD_LIBRARY_PATH`/`QT_PLUGIN_PATH`
+    // pollution, loaded ABI-incompatible bundled libs, and died before any
+    // browser appeared, with no error surfaced (issue #48 family). We now:
+    //   1. spawn through `hidden_cmd`, which de-pollutes the child env inside an
+    //      AppImage (see `git::cmd::appimage_env_fixes`);
+    //   2. try a chain of openers so one broken handler can't sink the click;
+    //   3. inspect the exit status instead of ignoring it, so a real failure
+    //      becomes a loud error rather than a silent no-op.
+    #[cfg(target_os = "linux")]
+    {
+        // (binary, prefix-args). `xdg-open` first to honour the user's default;
+        // `gio open` (GTK/portal — matches our bundled stack) and `kde-open5`
+        // as fallbacks for the common desktops.
+        let openers: [(&str, &[&str]); 3] =
+            [("xdg-open", &[]), ("gio", &["open"]), ("kde-open5", &[])];
+        let mut errors: Vec<String> = Vec::new();
+        for (bin, prefix) in openers {
+            let mut cmd = hidden_cmd(bin);
+            cmd.args(prefix).arg(&url);
+            match try_open_linux(cmd, bin) {
+                Ok(()) => return Ok(()),
+                Err(e) => errors.push(e),
+            }
+        }
+        // Last resort: an explicit `$BROWSER`.
+        if let Ok(browser) = std::env::var("BROWSER") {
+            let browser = browser.trim().to_string();
+            if !browser.is_empty() {
+                let mut cmd = hidden_cmd(&browser);
+                cmd.arg(&url);
+                match try_open_linux(cmd, "$BROWSER") {
+                    Ok(()) => return Ok(()),
+                    Err(e) => errors.push(e),
+                }
+            }
+        }
+        Err(format!(
+            "Failed to open URL via system openers: {}",
+            errors.join("; ")
+        ))
+    }
+}
+
+/// Spawn an opener and decide success without hanging the caller.
+///
+/// System openers (`xdg-open`, `gio open`, `kde-open5`) hand the URL to the
+/// desktop and exit promptly — a non-zero exit means the open genuinely failed
+/// (e.g. a Qt helper crashing on AppImage lib pollution), which we surface.
+/// A graphical browser launched directly via `$BROWSER` may instead stay in the
+/// foreground; if the child is still alive after a short grace period we treat
+/// that as a successful hand-off rather than blocking on it.
+#[cfg(target_os = "linux")]
+fn try_open_linux(mut cmd: std::process::Command, label: &str) -> Result<(), String> {
+    use std::time::Duration;
+    let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to open URL: {}", e))?;
-    Ok(())
+        .map_err(|e| format!("{}: failed to spawn: {}", label, e))?;
+    let deadline = Instant::now() + Duration::from_millis(400);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "{}: exited with status {}",
+                    label,
+                    status.code().unwrap_or(-1)
+                ))
+            }
+            Ok(None) if Instant::now() >= deadline => return Ok(()),
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(e) => return Err(format!("{}: wait failed: {}", label, e)),
+        }
+    }
 }
 
 // ─── Open in external editor ─────────────────────────────────
@@ -3147,6 +3236,43 @@ pub(crate) async fn open_in_editor(cwd: String, path: String, editor: String) ->
 #[tauri::command]
 pub(crate) async fn get_command_log() -> Vec<crate::git::cmd::CmdLogEntry> {
     crate::git::cmd::cmd_log_snapshot()
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod open_url_tests {
+    use super::try_open_linux;
+    use std::process::Command;
+
+    #[test]
+    fn opener_exiting_zero_is_success() {
+        assert!(try_open_linux(Command::new("true"), "true").is_ok());
+    }
+
+    #[test]
+    fn opener_exiting_nonzero_is_error() {
+        let err = try_open_linux(Command::new("false"), "false").unwrap_err();
+        assert!(err.contains("false"), "error should name the opener: {err}");
+        assert!(err.contains("status"), "error should report the exit: {err}");
+    }
+
+    #[test]
+    fn missing_opener_is_error() {
+        let err = try_open_linux(
+            Command::new("gitwand-no-such-opener-binary"),
+            "ghost",
+        )
+        .unwrap_err();
+        assert!(err.contains("ghost"), "error should name the opener: {err}");
+    }
+
+    #[test]
+    fn long_running_opener_is_treated_as_handed_off() {
+        // A handler still alive after the grace window (like a foreground
+        // browser) must not hang the caller — it counts as a successful open.
+        let mut cmd = Command::new("sleep");
+        cmd.arg("5");
+        assert!(try_open_linux(cmd, "sleep").is_ok());
+    }
 }
 
 #[cfg(test)]

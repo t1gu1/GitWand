@@ -16,6 +16,7 @@ import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useArchivedBranches } from "../composables/useArchivedBranches";
 import { usePinnedBranches } from "../composables/usePinnedBranches";
 import { useAiPromptPresets } from "../composables/useAiPromptPresets";
+import { buildFileTree, flattenTree, type TreeRow } from "../composables/useFileTree";
 import type { CommitTemplate } from "../composables/useSettings";
 import { gitBranchMerged } from "../utils/backend";
 import { loadSettings } from "../composables/useSettings";
@@ -157,7 +158,118 @@ function expandSectionForFile(path: string) {
 }
 
 watch(() => props.selectedFile, (path) => {
-  if (path) expandSectionForFile(path);
+  if (path) {
+    expandSectionForFile(path);
+    if (changesLayout.value === "tree") expandFoldersForFile(path);
+  }
+});
+
+// ─── Changes layout: flat list vs folder tree ──────────────────
+const CHANGES_LAYOUT_KEY = "gitwand-changes-layout";
+
+function loadChangesLayout(): "list" | "tree" {
+  try {
+    const raw = localStorage.getItem(CHANGES_LAYOUT_KEY);
+    if (raw === "tree" || raw === "list") return raw;
+  } catch {
+    // ignore
+  }
+  return "list";
+}
+
+const changesLayout = ref<"list" | "tree">(loadChangesLayout());
+
+function setChangesLayout(layout: "list" | "tree") {
+  changesLayout.value = layout;
+  try {
+    localStorage.setItem(CHANGES_LAYOUT_KEY, layout);
+  } catch {
+    // ignore
+  }
+  // Reveal the current file's folder path when switching into tree view.
+  if (layout === "tree" && props.selectedFile) expandFoldersForFile(props.selectedFile);
+}
+
+// ─── Tree view: collapsible folders (namespaced per section) ───
+const COLLAPSED_FOLDERS_KEY = "gitwand-collapsed-folders";
+
+function loadCollapsedFolders(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_FOLDERS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+const collapsedFolders = ref<Record<string, boolean>>(loadCollapsedFolders());
+
+function folderKey(sectionKey: string, path: string): string {
+  return `${sectionKey}::${path}`;
+}
+
+function persistCollapsedFolders() {
+  try {
+    localStorage.setItem(COLLAPSED_FOLDERS_KEY, JSON.stringify(collapsedFolders.value));
+  } catch {
+    // ignore
+  }
+}
+
+function toggleFolder(sectionKey: string, path: string) {
+  const k = folderKey(sectionKey, path);
+  collapsedFolders.value[k] = !collapsedFolders.value[k];
+  persistCollapsedFolders();
+}
+
+/** All file paths in `sectionKey` that live under the given folder path. */
+function filesUnderFolder(sectionKey: string, folderPath: string): string[] {
+  const prefix = `${folderPath}/`;
+  return sections.value[sectionKey].filter((f) => f.path.startsWith(prefix)).map((f) => f.path);
+}
+
+/** Unstage a specific set of paths (no batch emit exists, so emit per path). */
+function unstagePaths(paths: string[]) {
+  for (const p of paths) emit("unstageFile", p);
+}
+
+/** Un-collapse every ancestor folder of `path` so the file becomes visible. */
+function expandFoldersForFile(path: string) {
+  let sectionKey: string | null = null;
+  for (const sk of ["conflicted", "staged", "unstaged", "untracked"]) {
+    if (sections.value[sk].some((f) => f.path === path)) {
+      sectionKey = sk;
+      break;
+    }
+  }
+  if (!sectionKey) return;
+
+  const folderSegs = path.split("/").filter(Boolean).slice(0, -1);
+  let acc = "";
+  let changed = false;
+  for (const seg of folderSegs) {
+    acc = acc ? `${acc}/${seg}` : seg;
+    const k = folderKey(sectionKey, acc);
+    if (collapsedFolders.value[k]) {
+      collapsedFolders.value[k] = false;
+      changed = true;
+    }
+  }
+  if (changed) persistCollapsedFolders();
+}
+
+/** Flattened tree rows per section, recomputed when files or collapse state change. */
+const treeRowsBySection = computed<Record<string, TreeRow[]>>(() => {
+  const result: Record<string, TreeRow[]> = {};
+  for (const sectionKey of ["conflicted", "staged", "unstaged", "untracked"]) {
+    const root = buildFileTree(sections.value[sectionKey]);
+    result[sectionKey] = flattenTree(
+      root,
+      (folderPath) => !!collapsedFolders.value[folderKey(sectionKey, folderPath)],
+    );
+  }
+  return result;
 });
 
 function openContextMenu(e: MouseEvent, file: RepoFileEntry) {
@@ -830,8 +942,43 @@ function formatActivityDate(dateStr: string): string {
       </button>
     </div>
 
-    <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo -->
-    <ScopePicker v-if="cwd" :cwd="cwd" />
+    <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo.
+         In the changes view it shares a row with the layout toggle (pushed to the right). -->
+    <div v-if="cwd && viewMode === 'changes' && totalChanges > 0" class="changes-controls">
+      <ScopePicker :cwd="cwd" />
+      <div
+        class="layout-toggle"
+        role="group"
+        :aria-label="t('sidebar.viewLayout')"
+      >
+        <button
+          class="layout-toggle-btn"
+          :class="{ 'layout-toggle-btn--active': changesLayout === 'list' }"
+          @click="setChangesLayout('list')"
+          :title="t('sidebar.viewAsList')"
+          :aria-pressed="changesLayout === 'list'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          <span class="layout-toggle-label">{{ t('sidebar.viewAsList') }}</span>
+        </button>
+        <button
+          class="layout-toggle-btn"
+          :class="{ 'layout-toggle-btn--active': changesLayout === 'tree' }"
+          @click="setChangesLayout('tree')"
+          :title="t('sidebar.viewAsTree')"
+          :aria-pressed="changesLayout === 'tree'"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 5h6l2 2h10v12H3z"/>
+          </svg>
+          <span class="layout-toggle-label">{{ t('sidebar.viewAsTree') }}</span>
+        </button>
+      </div>
+    </div>
+    <ScopePicker v-else-if="cwd" :cwd="cwd" />
 
     <!-- History file list -->
     <div class="sections" v-if="viewMode === 'history'">
@@ -898,36 +1045,39 @@ function formatActivityDate(dateStr: string): string {
             <span class="section-label">{{ sectionMeta[sectionKey].label }}</span>
             <span class="section-count">{{ sections[sectionKey].length }}</span>
             <span class="section-spacer"></span>
-            <!-- Discard all / Stage all / Unstage all buttons -->
-            <button
-              v-if="sectionKey === 'staged' || sectionKey === 'unstaged' || sectionKey === 'untracked'"
-              class="section-action section-action--danger"
-              @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
-              :title="t('sidebar.discardAll')"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="3 6 5 6 21 6"/>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                <path d="M10 11v6"/>
-                <path d="M14 11v6"/>
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-              </svg>
-            </button>
-            <button
-              v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
-              class="section-action"
-              @click.stop="emit('stagePaths', sections[sectionKey].map(f => f.path))"
-              :title="t('sidebar.stageAll')"
-            >+</button>
-            <button
-              v-if="sectionKey === 'staged'"
-              class="section-action"
-              @click.stop="emit('unstageAll')"
-              :title="t('sidebar.unstageAll')"
-            >-</button>
+            <!-- Stage all / Unstage all + Discard all -->
+            <div v-if="sectionKey !== 'conflicted'" class="action-group" @click.stop>
+              <button
+                v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
+                class="action-group-btn"
+                @click.stop="emit('stagePaths', sections[sectionKey].map(f => f.path))"
+                :title="t('sidebar.stageAll')"
+              >+</button>
+              <button
+                v-if="sectionKey === 'staged'"
+                class="action-group-btn"
+                @click.stop="emit('unstageAll')"
+                :title="t('sidebar.unstageAll')"
+              >-</button>
+              <button
+                class="action-group-btn action-group-btn--danger"
+                @click.stop="emit('discardSection', sectionKey, sections[sectionKey].map(f => f.path))"
+                :title="t('sidebar.discardAll')"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                  <path d="M10 11v6"/>
+                  <path d="M14 11v6"/>
+                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <ul v-if="!collapsedSections[sectionKey]" class="file-items" role="listbox">
+            <!-- Flat list layout -->
+            <template v-if="changesLayout === 'list'">
             <template
               v-for="file in sections[sectionKey]"
               :key="`${file.section}-${file.path}`"
@@ -956,19 +1106,34 @@ function formatActivityDate(dateStr: string): string {
                   <span class="file-name mono">{{ fileName(file.path) }}</span>
                   <span class="file-dir muted" v-if="fileDir(file.path)">{{ fileDir(file.path) }}</span>
                 </div>
-                <!-- Stage / Unstage per file -->
-                <button
-                  v-if="file.section === 'unstaged' || file.section === 'untracked'"
-                  class="file-action"
-                  @click="onStageClick($event, file.path)"
-                  :title="t('sidebar.stage')"
-                >+</button>
-                <button
-                  v-if="file.section === 'staged'"
-                  class="file-action"
-                  @click="onUnstageClick($event, file.path)"
-                  :title="t('sidebar.unstage')"
-                >-</button>
+                <!-- Stage / Unstage + Discard per file -->
+                <div v-if="file.section !== 'conflicted'" class="action-group" @click.stop>
+                  <button
+                    v-if="file.section === 'unstaged' || file.section === 'untracked'"
+                    class="action-group-btn"
+                    @click="onStageClick($event, file.path)"
+                    :title="t('sidebar.stage')"
+                  >+</button>
+                  <button
+                    v-if="file.section === 'staged'"
+                    class="action-group-btn"
+                    @click="onUnstageClick($event, file.path)"
+                    :title="t('sidebar.unstage')"
+                  >-</button>
+                  <button
+                    class="action-group-btn action-group-btn--danger"
+                    @click.stop="emit('discard', file.path, file.section)"
+                    :title="file.section === 'untracked' ? t('sidebar.ctxDeleteFile') : t('sidebar.ctxDiscardChanges')"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      <path d="M10 11v6"/>
+                      <path d="M14 11v6"/>
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                  </button>
+                </div>
               </li>
 
               <!-- Sub-files for expanded untracked directory -->
@@ -991,6 +1156,144 @@ function formatActivityDate(dateStr: string): string {
                   <span class="file-dir muted">{{ subFile }}</span>
                 </div>
               </li>
+            </template>
+            </template>
+
+            <!-- Nested folder tree layout -->
+            <template v-else>
+              <template
+                v-for="row in treeRowsBySection[sectionKey]"
+                :key="`${row.kind}-${row.path}`"
+              >
+                <!-- Folder row -->
+                <li
+                  v-if="row.kind === 'folder'"
+                  class="file-item tree-folder"
+                  :style="{ paddingLeft: `${row.depth * 14 + 5}px` }"
+                  role="option"
+                  tabindex="0"
+                  @click="toggleFolder(sectionKey, row.path)"
+                  @keydown.enter="toggleFolder(sectionKey, row.path)"
+                  @keydown.space.prevent="toggleFolder(sectionKey, row.path)"
+                >
+                  <svg
+                    class="tree-chevron"
+                    :class="{ 'tree-chevron--collapsed': collapsedFolders[folderKey(sectionKey, row.path)] }"
+                    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                  >
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                  <svg class="tree-folder-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 5h6l2 2h10v12H3z"/>
+                  </svg>
+                  <span class="file-name mono tree-folder-name">{{ row.name }}</span>
+                  <span class="tree-folder-count">{{ row.count }}</span>
+                  <span class="section-spacer"></span>
+                  <!-- Folder-level stage / unstage + discard -->
+                  <div class="action-group" @click.stop>
+                    <button
+                      v-if="sectionKey === 'staged'"
+                      class="action-group-btn"
+                      @click.stop="unstagePaths(filesUnderFolder(sectionKey, row.path))"
+                      :title="t('sidebar.unstageAll')"
+                    >-</button>
+                    <button
+                      v-if="sectionKey === 'unstaged' || sectionKey === 'untracked'"
+                      class="action-group-btn"
+                      @click.stop="emit('stagePaths', filesUnderFolder(sectionKey, row.path))"
+                      :title="t('sidebar.stageAll')"
+                    >+</button>
+                    <button
+                      v-if="sectionKey !== 'conflicted'"
+                      class="action-group-btn action-group-btn--danger"
+                      @click.stop="emit('discardSection', sectionKey, filesUnderFolder(sectionKey, row.path))"
+                      :title="t('sidebar.discardAll')"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        <path d="M10 11v6"/>
+                        <path d="M14 11v6"/>
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </li>
+
+                <!-- File row -->
+                <template v-else>
+                  <li
+                    class="file-item"
+                    :class="{ 'file-item--selected': selectedFile === row.path }"
+                    :style="{ paddingLeft: `${row.depth * 14 + 18}px` }"
+                    role="option"
+                    :aria-selected="selectedFile === row.path"
+                    tabindex="0"
+                    @click="emit('select', row.path, row.file!.section === 'staged')"
+                    @dblclick="onFileItemDblClick"
+                    @keydown.enter="emit('select', row.path, row.file!.section === 'staged')"
+                    @keydown.space.prevent="emit('select', row.path, row.file!.section === 'staged')"
+                    @contextmenu.prevent.stop="openContextMenu($event, row.file!)"
+                  >
+                    <span
+                      class="file-status-badge mono"
+                      :style="{ color: statusColor(row.file!.status) }"
+                      :title="row.file!.status"
+                    >
+                      {{ statusBadge(row.file!.status) }}
+                    </span>
+                    <div class="file-info">
+                      <span class="file-name mono">{{ row.name }}</span>
+                    </div>
+                    <div v-if="row.file!.section !== 'conflicted'" class="action-group" @click.stop>
+                      <button
+                        v-if="row.file!.section === 'unstaged' || row.file!.section === 'untracked'"
+                        class="action-group-btn"
+                        @click="onStageClick($event, row.path)"
+                        :title="t('sidebar.stage')"
+                      >+</button>
+                      <button
+                        v-if="row.file!.section === 'staged'"
+                        class="action-group-btn"
+                        @click="onUnstageClick($event, row.path)"
+                        :title="t('sidebar.unstage')"
+                      >-</button>
+                      <button
+                        class="action-group-btn action-group-btn--danger"
+                        @click.stop="emit('discard', row.path, row.file!.section)"
+                        :title="row.file!.section === 'untracked' ? t('sidebar.ctxDeleteFile') : t('sidebar.ctxDiscardChanges')"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                          <path d="M10 11v6"/>
+                          <path d="M14 11v6"/>
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </li>
+
+                  <!-- Sub-files for an expanded untracked directory entry -->
+                  <li
+                    v-if="row.path.endsWith('/') && dirFiles?.length && (selectedFile === row.path || dirFiles.includes(selectedFile ?? ''))"
+                    v-for="subFile in dirFiles"
+                    :key="`tree-dir-sub-${subFile}`"
+                    class="file-item file-item--sub"
+                    :class="{ 'file-item--selected': selectedFile === subFile }"
+                    role="option"
+                    tabindex="0"
+                    @click.stop="emit('select-dir-file', subFile)"
+                    @dblclick.stop="onFileItemDblClick"
+                    @keydown.enter.stop="emit('select-dir-file', subFile)"
+                  >
+                    <span class="file-status-badge mono file-status-badge--added">A</span>
+                    <div class="file-info">
+                      <span class="file-name mono">{{ fileName(subFile) }}</span>
+                    </div>
+                  </li>
+                </template>
+              </template>
             </template>
           </ul>
         </div>
@@ -1061,7 +1364,7 @@ function formatActivityDate(dateStr: string): string {
               <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3"/>
               <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
             </svg>
-            <span v-else class="commit-ai-label">{{ t('sidebar.aiLabel') }}</span>
+            <span v-else class="commit-ai-label">{{ t('common.ai') }}</span>
           </button>
           <button
             class="commit-ai-chevron"
@@ -1577,11 +1880,11 @@ function formatActivityDate(dateStr: string): string {
 
 
 .tab-badge {
-  font-size: var(--font-size-xs);
+  font-size: 9px;
   font-weight: var(--font-weight-semibold);
   background: var(--color-accent);
   color: var(--color-accent-text);
-  padding: var(--space-1) var(--space-3);
+  padding: 1px var(--space-2);
   border-radius: var(--radius-pill);
   font-variant-numeric: tabular-nums;
 }
@@ -1610,7 +1913,7 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-2);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   line-height: 1;
@@ -1631,6 +1934,7 @@ function formatActivityDate(dateStr: string): string {
   transition: transform 0.2s ease;
   color: var(--color-text-subtle);
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .section-chevron--collapsed {
@@ -1643,6 +1947,12 @@ function formatActivityDate(dateStr: string): string {
   font-weight: var(--font-weight-bold);
   width: 16px;
   text-align: center;
+  margin-right: -7px;
+  margin-left:-2px;
+}
+
+.section-label {
+  margin-top: -1px;
 }
 
 .section-spacer {
@@ -1657,32 +1967,9 @@ function formatActivityDate(dateStr: string): string {
   height: 16px;
   display: flex;
   align-items: center;
-}
-
-.section-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-  color: var(--color-text-muted);
-  background: none;
-  transition: background var(--transition-hover), color var(--transition-hover);
-}
-
-.section-action:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-
-.section-action--danger:hover {
-  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
-  color: var(--color-danger);
+  padding-bottom: 1px;
+  margin-left: -3px;
+  font-size: 9px;
 }
 
 .file-items {
@@ -1693,7 +1980,7 @@ function formatActivityDate(dateStr: string): string {
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-3) var(--space-6) var(--space-3) 18px;
+  padding: var(--space-3) var(--space-2) var(--space-3);
   cursor: pointer;
   transition: background var(--transition-hover);
   border-left: 3px solid transparent;
@@ -1778,30 +2065,163 @@ function formatActivityDate(dateStr: string): string {
   white-space: nowrap;
 }
 
-.file-action {
+/* ── Segmented action group (stage / unstage / discard) ──────── */
+/* Square-ish buttons fused into one pill, divided by a vertical hairline.
+   Shared by per-file rows, tree folder rows and section headers. */
+.action-group {
+  display: inline-flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg-tertiary);
+}
+
+.action-group-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  color: var(--color-text-muted);
+  background: none;
+  transition: background var(--transition-hover), color var(--transition-hover);
+}
+
+.action-group-btn + .action-group-btn {
+  border-left: 1px solid var(--color-border);
+}
+
+.action-group-btn:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.action-group-btn--danger:hover {
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+  color: var(--color-danger);
+}
+
+/* ── Changes controls row: scope picker + layout toggle ──────── */
+.changes-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+/* The scope picker keeps its own chrome elsewhere; inside the controls row
+   the wrapper owns the padding + divider instead. */
+.changes-controls :deep(.scope-picker-row) {
+  border-bottom: none;
+  padding: 0;
+  flex: 1;
+}
+
+/* ── Changes layout toggle (list / tree) ─────────────────────── */
+.layout-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 1px;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-tertiary);
+  flex-shrink: 0;
+}
+
+.layout-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
+  height: 19px;
+  gap: var(--space-2);
+  border-radius: 5px;
   color: var(--color-text-muted);
   background: none;
-  opacity: 0;
-  transition: opacity var(--transition-hover), background var(--transition-hover), color var(--transition-hover);
+  transition: background var(--transition-hover), color var(--transition-hover);
+}
+
+.layout-toggle-btn svg {
   flex-shrink: 0;
 }
 
-.file-item:hover .file-action {
-  opacity: 1;
+.layout-toggle-btn:hover {
+  color: var(--color-text);
 }
 
-.file-action:hover {
-  background: var(--color-bg-tertiary);
+.layout-toggle-btn--active {
+  background: var(--color-bg);
+  color: var(--color-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Text label only shown in the full-width (no scope picker) layout. */
+.layout-toggle-label {
+  display: none;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+/* When the scope picker is absent the toggle is the row's only element child:
+   stretch it full width and reveal the text labels. */
+.layout-toggle:only-child {
+  flex: 1;
+  margin-left: 0;
+}
+
+.layout-toggle:only-child .layout-toggle-btn {
+  flex: 1;
+  width: auto;
+}
+
+.layout-toggle:only-child .layout-toggle-label {
+  display: inline;
+}
+
+/* ── Tree folder rows ────────────────────────────────────────── */
+.tree-folder {
+  border-left: 3px solid transparent;
+}
+
+.tree-chevron {
+  color: var(--color-text-subtle);
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.tree-chevron--collapsed {
+  transform: rotate(-90deg);
+}
+
+.tree-folder-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tree-folder-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--color-text);
+}
+
+/* Count sits snug to the right of the folder name (not pushed to the edge). */
+.tree-folder-count {
+  flex-shrink: 0;
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-subtle);
 }
 
 .empty-section {
@@ -1922,7 +2342,7 @@ function formatActivityDate(dateStr: string): string {
 }
 
 .commit-ai-btn--loading {
-  color: var(--color-warning);
+  color: var(--color-ai);
 }
 
 .commit-ai-menu {
