@@ -3537,3 +3537,140 @@ mod tree_conflict_tests {
         let _ = std::fs::remove_dir_all(&bare);
     }
 }
+
+#[cfg(test)]
+mod interactive_rebase_tests {
+    use super::*;
+    use crate::git::cmd::git_binary;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TempRepo {
+        path: PathBuf,
+    }
+    impl Drop for TempRepo {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+    impl TempRepo {
+        fn new() -> Self {
+            let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let pid = std::process::id();
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let dir =
+                std::env::temp_dir().join(format!("gitwand-rebase-test-{}-{}-{}", pid, n, nanos));
+            std::fs::create_dir_all(&dir).unwrap();
+            let repo = TempRepo { path: dir };
+            repo.git(&["init", "-q", "-b", "main"]);
+            repo.git(&["config", "user.name", "Test"]);
+            repo.git(&["config", "user.email", "test@example.com"]);
+            repo.git(&["config", "commit.gpgsign", "false"]);
+            repo
+        }
+        fn cwd(&self) -> String {
+            self.path.to_str().unwrap().to_string()
+        }
+        fn git(&self, args: &[&str]) -> std::process::Output {
+            Command::new(git_binary())
+                .args(args)
+                .current_dir(&self.path)
+                .output()
+                .unwrap_or_else(|e| panic!("git {:?} spawn: {}", args, e))
+        }
+        fn git_ok(&self, args: &[&str]) {
+            let out = self.git(args);
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+        fn write(&self, rel: &str, content: &str) {
+            std::fs::write(self.path.join(rel), content).unwrap();
+        }
+        fn commit_all(&self, msg: &str) {
+            self.git_ok(&["add", "-A"]);
+            self.git_ok(&["commit", "-q", "-m", msg]);
+        }
+        fn sha(&self, rev: &str) -> String {
+            String::from_utf8_lossy(&self.git(&["rev-parse", rev]).stdout)
+                .trim()
+                .to_string()
+        }
+        fn log_subjects(&self) -> String {
+            String::from_utf8_lossy(&self.git(&["log", "--format=%s"]).stdout).to_string()
+        }
+    }
+
+    fn run(
+        repo: &TempRepo,
+        base: &str,
+        todo: Vec<String>,
+    ) -> Result<InteractiveRebaseResult, String> {
+        tauri::async_runtime::block_on(git_interactive_rebase(repo.cwd(), base.to_string(), todo))
+    }
+
+    #[test]
+    fn applies_an_injected_todo_and_drops_a_commit() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "a\n");
+        repo.commit_all("A base");
+        repo.write("b.txt", "b\n");
+        repo.commit_all("B drop me");
+        repo.write("c.txt", "c\n");
+        repo.commit_all("C keep");
+
+        // Rebase the two commits after the base, dropping the middle one.
+        let base = repo.sha("HEAD~2");
+        let todo = vec![
+            format!("drop {} B drop me", repo.sha("HEAD~1")),
+            format!("pick {} C keep", repo.sha("HEAD")),
+        ];
+        let res = run(&repo, &base, todo).expect("clean rebase should succeed");
+
+        assert!(!res.conflict, "a clean drop must not report a conflict");
+        let subjects = repo.log_subjects();
+        assert!(
+            !subjects.contains("B drop me"),
+            "dropped commit should be gone: {subjects}"
+        );
+        assert!(subjects.contains("C keep"), "kept commit should remain");
+        assert!(
+            !repo.path.join("b.txt").exists(),
+            "dropped commit's file must be absent"
+        );
+        assert!(repo.path.join("c.txt").exists(), "kept commit's file remains");
+    }
+
+    #[test]
+    fn reports_conflict_when_a_reorder_clashes() {
+        let repo = TempRepo::new();
+        repo.write("f.txt", "line1\n");
+        repo.commit_all("base");
+        repo.write("f.txt", "line1-v2\n");
+        repo.commit_all("v2");
+        repo.write("f.txt", "line1-v3\n");
+        repo.commit_all("v3");
+
+        // Swap the two edits to the same line — replaying them out of order
+        // forces a 3-way conflict, which the command must surface.
+        let base = repo.sha("HEAD~2");
+        let todo = vec![
+            format!("pick {} v3", repo.sha("HEAD")),
+            format!("pick {} v2", repo.sha("HEAD~1")),
+        ];
+        let res = run(&repo, &base, todo).expect("a conflict is a normal result, not an error");
+
+        assert!(res.conflict, "a clashing reorder must report a conflict");
+        // The repo is left mid-rebase; TempRepo's Drop cleans it up.
+        let _ = repo.git(&["rebase", "--abort"]);
+    }
+}
