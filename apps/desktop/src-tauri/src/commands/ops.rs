@@ -2826,6 +2826,11 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
         return Err("Refusing to open URL with whitespace or control characters".to_string());
     }
 
+    // macOS/Windows fire-and-forget on purpose: `open`/`explorer` are single,
+    // always-present launchers with no fallback chain to try, and neither
+    // platform has the AppImage env pollution that made the Linux opener (and
+    // its delegated helper) die silently — so the exit-status handling below is
+    // Linux-only by design, not an oversight.
     #[cfg(target_os = "macos")]
     {
         hidden_cmd("open")
