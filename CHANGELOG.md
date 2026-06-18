@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **File-tree view for the changes sidebar** — the Changes view gains a list/tree layout toggle (in the controls row, to the right of the monorepo scope picker; full-width with text labels when no scope picker is present). The tree layout nests each git section's files under their folders, with collapsible folders (per-section collapse state, persisted in `localStorage`); selecting a file auto-expands its ancestor folders. The chosen layout is persisted. Pure tree-building logic lives in a new `useFileTree` composable with unit tests; `viewLayout` / `viewAsList` / `viewAsTree` i18n keys added in all 5 locales.
+- **Per-file and per-folder discard** — every file row now carries a discard button alongside stage/unstage, and tree folder rows carry folder-level stage/unstage + discard (operating on all files under the folder). Section-header, folder and file actions share a new segmented "action group" control (fused square buttons split by a hairline divider), and the stage/unstage/discard buttons are now always visible rather than hover-only.
+
 ### Changed
 
 - **Branch selector polish** — the branch popover is wider and its lists grow to fit their contents; each branch row's actions are fused into a single segmented control, and the branch name is now a full-height hover/tooltip target so the whole row reacts to the pointer. The create-branch form reset is factored into a shared helper.
