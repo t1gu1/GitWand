@@ -1006,7 +1006,7 @@ function formatActivityDate(dateStr: string): string {
     <div class="sections" v-if="viewMode === 'history'">
       <div class="section">
         <div class="section-header">
-          <span class="section-icon" style="color: var(--color-accent)">H</span>
+          <span class="section-icon section-icon--history" style="color: var(--color-accent)">H</span>
           <span class="section-label">{{ t('header.files') }}</span>
           <span class="section-count" v-if="commitDiffs">{{ commitDiffs.length }}</span>
           <span class="section-spacer"></span>
@@ -2065,6 +2065,12 @@ function formatActivityDate(dateStr: string): string {
   text-align: center;
   margin-right: -7px;
   margin-left:-2px;
+}
+
+/* History header has no chevron — indent the lone "H" to match the
+   icon alignment of the chevron-prefixed change sections. */
+.section-icon--history {
+  margin-left: var(--space-1);
 }
 
 .section-label {
