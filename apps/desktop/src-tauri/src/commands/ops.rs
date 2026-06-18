@@ -3158,6 +3158,10 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
         for (bin, prefix) in openers {
             let mut cmd = hidden_cmd(bin);
             cmd.args(prefix).arg(&url);
+            // De-pollute PATH/XDG_* so the opener resolves the *system*
+            // binary and mime/browser association, not the AppImage's bundled
+            // ones — the silent no-open in issue #52.
+            sanitize_appimage_search_paths(&mut cmd);
             match try_open_linux(cmd, bin) {
                 Ok(()) => return Ok(()),
                 Err(e) => errors.push(e),
@@ -3169,6 +3173,7 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
             if !browser.is_empty() {
                 let mut cmd = hidden_cmd(&browser);
                 cmd.arg(&url);
+                sanitize_appimage_search_paths(&mut cmd);
                 match try_open_linux(cmd, "$BROWSER") {
                     Ok(()) => return Ok(()),
                     Err(e) => errors.push(e),
@@ -3192,22 +3197,61 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
 /// that as a successful hand-off rather than blocking on it.
 #[cfg(target_os = "linux")]
 fn try_open_linux(mut cmd: std::process::Command, label: &str) -> Result<(), String> {
+    use std::io::Read;
+    use std::process::Stdio;
     use std::time::Duration;
+    let start = Instant::now();
+    // Capture stderr so a downstream failure (e.g. a Qt/GTK helper crashing on
+    // AppImage lib mismatch) is surfaced instead of swallowed; record each
+    // attempt's exit code in the command log (⌘⇧L) so a silent no-open in the
+    // released build is still diagnosable. See issue #52.
     let mut child = cmd
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("{}: failed to spawn: {}", label, e))?;
-    let deadline = Instant::now() + Duration::from_millis(400);
+    let log = |code: i32| {
+        record_cmd(
+            &format!("open_url[{}]", label),
+            "",
+            start.elapsed().as_millis() as u64,
+            code,
+        );
+    };
+    let deadline = start + Duration::from_millis(400);
     loop {
         match child.try_wait() {
-            Ok(Some(status)) if status.success() => return Ok(()),
             Ok(Some(status)) => {
-                return Err(format!(
-                    "{}: exited with status {}",
-                    label,
-                    status.code().unwrap_or(-1)
-                ))
+                let code = status.code().unwrap_or(-1);
+                log(code);
+                if status.success() {
+                    return Ok(());
+                }
+                let mut stderr = String::new();
+                if let Some(mut e) = child.stderr.take() {
+                    let _ = e.read_to_string(&mut stderr);
+                }
+                let stderr = stderr.trim();
+                return Err(if stderr.is_empty() {
+                    format!("{}: exited with status {}", label, code)
+                } else {
+                    format!("{}: exited with status {} ({})", label, code, stderr)
+                });
             }
-            Ok(None) if Instant::now() >= deadline => return Ok(()),
+            // Still alive after the grace period: a foreground browser launched
+            // directly. Treat as a successful hand-off, but drain its stderr in a
+            // detached thread so a chatty child can't block on a full pipe buffer.
+            Ok(None) if Instant::now() >= deadline => {
+                log(0);
+                if let Some(mut e) = child.stderr.take() {
+                    // O(1) memory: discard as it arrives. A foreground browser
+                    // can run for hours and log megabytes — never buffer it.
+                    std::thread::spawn(move || {
+                        let _ = std::io::copy(&mut e, &mut std::io::sink());
+                    });
+                }
+                return Ok(());
+            }
             Ok(None) => std::thread::sleep(Duration::from_millis(20)),
             Err(e) => return Err(format!("{}: wait failed: {}", label, e)),
         }

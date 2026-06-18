@@ -171,6 +171,62 @@ fn appimage_env_fixes(get: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str
     fixes
 }
 
+/// Real-environment lookup for the AppImage fix computations. Passed as a
+/// `&dyn Fn` so tests can inject a fixed map (see `lookup` in the test module)
+/// instead of touching the process environment.
+fn env_get(k: &str) -> Option<String> {
+    std::env::var(k).ok()
+}
+
+/// Search-path variables AppImage's `AppRun` prepends with `$APPDIR/...`
+/// entries. Distinct from `APPIMAGE_POLLUTED_VARS` (library loading): these
+/// steer *which binary* an opener resolves (`PATH`) and *where* it looks up the
+/// default-handler / mime association (`XDG_DATA_DIRS`, `XDG_CONFIG_DIRS`). Left
+/// polluted, a spawned `xdg-open` can resolve a bundled helper or miss the
+/// system browser association, then exit 0 without opening anything — the
+/// silent failure in the released AppImage (GitHub issue #52, follow-up to #48).
+const APPIMAGE_SEARCH_PATH_VARS: &[&str] = &["PATH", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS"];
+
+/// True when `entry` is `appdir` itself or lives beneath it.
+fn path_entry_under(entry: &str, appdir: &str) -> bool {
+    entry == appdir || entry.starts_with(&format!("{appdir}/"))
+}
+
+/// Compute search-path fixes so a spawned opener resolves *system* binaries and
+/// mime associations instead of the AppImage's bundled ones. For each variable
+/// every `:`-separated entry under `$APPDIR` is dropped, host entries kept in
+/// order. Returns the cleaned value to set; a variable is skipped when nothing
+/// changed or when stripping would empty it (never hand a child an empty
+/// `PATH`). No fixes outside an AppImage — `AppRun` always exports `APPDIR`.
+fn appimage_path_fixes(get: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str, String)> {
+    let Some(appdir) = get("APPDIR").filter(|d| !d.is_empty()) else {
+        return Vec::new();
+    };
+    let mut fixes = Vec::new();
+    for &var in APPIMAGE_SEARCH_PATH_VARS {
+        let Some(value) = get(var) else { continue };
+        let cleaned = value
+            .split(':')
+            .filter(|e| !e.is_empty() && !path_entry_under(e, &appdir))
+            .collect::<Vec<_>>()
+            .join(":");
+        if cleaned != value && !cleaned.is_empty() {
+            fixes.push((var, cleaned));
+        }
+    }
+    fixes
+}
+
+/// Apply AppImage search-path de-pollution to a command. No-op outside an
+/// AppImage. Pairs with `hidden_cmd`'s library-path de-pollution; kept separate
+/// and opt-in because we only want to override binary/mime resolution for the
+/// URL openers (issue #52), not for every spawned process.
+pub(crate) fn sanitize_appimage_search_paths(cmd: &mut std::process::Command) {
+    for (var, value) in appimage_path_fixes(&env_get) {
+        cmd.env(var, value);
+    }
+}
+
 /// Builds a `Command` for any binary with CREATE_NO_WINDOW on Windows.
 /// Prevents black CMD console windows from flashing when spawning child processes.
 ///
@@ -202,8 +258,7 @@ pub(crate) fn hidden_cmd(bin: &str) -> std::process::Command {
     // (gated by APPDIR/APPIMAGE), so it's safe to run on every platform. See
     // `appimage_env_fixes` — this is the fix for the Linux OAuth failure in
     // GitHub issue #48.
-    let get_env = |k: &str| std::env::var(k).ok();
-    for (var, fix) in appimage_env_fixes(&get_env) {
+    for (var, fix) in appimage_env_fixes(&env_get) {
         match fix {
             EnvFix::Restore(value) => { cmd.env(var, value); }
             EnvFix::Remove         => { cmd.env_remove(var); }
@@ -332,6 +387,56 @@ mod tests {
                 EnvFix::Restore("/usr/lib:/usr/local/lib".to_string())
             )]
         );
+    }
+
+    #[test]
+    fn appimage_path_fixes_noop_outside_appimage() {
+        // No APPDIR → a legitimately-set PATH is left untouched.
+        let env: HashMap<&str, &str> = [("PATH", "/usr/bin:/bin")].into_iter().collect();
+        assert!(appimage_path_fixes(&lookup(&env)).is_empty());
+    }
+
+    #[test]
+    fn appimage_path_fixes_strips_appdir_entries() {
+        // Inside an AppImage, $APPDIR entries are dropped so the opener resolves
+        // system binaries and the system mime/browser association.
+        let env: HashMap<&str, &str> = [
+            ("APPDIR", "/tmp/.mount_app"),
+            ("PATH", "/tmp/.mount_app/usr/bin:/usr/bin:/bin"),
+            ("XDG_DATA_DIRS", "/tmp/.mount_app/usr/share:/usr/share"),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(
+            appimage_path_fixes(&lookup(&env)),
+            vec![
+                ("PATH", "/usr/bin:/bin".to_string()),
+                ("XDG_DATA_DIRS", "/usr/share".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn appimage_path_fixes_leaves_clean_path_alone() {
+        // Inside an AppImage but a host-only PATH → nothing to strip.
+        let env: HashMap<&str, &str> =
+            [("APPDIR", "/tmp/.mount_app"), ("PATH", "/usr/bin:/bin")]
+                .into_iter()
+                .collect();
+        assert!(appimage_path_fixes(&lookup(&env)).is_empty());
+    }
+
+    #[test]
+    fn appimage_path_fixes_never_empties_a_var() {
+        // All entries under $APPDIR → skip rather than hand the child an empty
+        // PATH (which would make it unable to resolve anything).
+        let env: HashMap<&str, &str> = [
+            ("APPDIR", "/tmp/.mount_app"),
+            ("PATH", "/tmp/.mount_app/usr/bin:/tmp/.mount_app/bin"),
+        ]
+        .into_iter()
+        .collect();
+        assert!(appimage_path_fixes(&lookup(&env)).is_empty());
     }
 }
 
