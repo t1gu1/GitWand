@@ -6,15 +6,32 @@ import {
   readFile,
   writeFile,
   readGitwandrc,
+  getTreeConflicts,
+  resolveTreeConflict,
+  reconstructConflict,
+  gitStage,
 } from "../utils/backend";
 import { useFolderHistory } from "./useFolderHistory";
 import { useAIProvider } from "./useAIProvider";
 import { t } from "./useI18n";
+import { applyMemory, isGeneralizableStrategy, type ResolutionMemoryEntry } from "./useResolutionMemory";
+
+export interface TreeConflictInfo {
+  code: string;
+  hasOurs: boolean;
+  hasTheirs: boolean;
+  hasBase: boolean;
+}
 
 export interface ConflictFile {
   path: string;
   content: string;
   result: MergeResult;
+  tree?: TreeConflictInfo;
+  /** True when content was rebuilt from the index because the working tree had no markers. */
+  reconstructed?: boolean;
+  /** Set when an unmerged file has no markers AND the working tree matches no side (possible manual edit). */
+  markerless?: { reconstructed: string };
 }
 
 export interface GlobalStats {
@@ -116,6 +133,81 @@ function replaceConflictByIndex(
   }
 
   return result.join("\n");
+}
+
+/**
+ * Walk a file's conflict markers once and replace every block via `resolver`.
+ * Returns the new content plus counts. A resolver returning `null` leaves that
+ * block conflicted (markers kept, diff3 base preserved). Generalizes the
+ * single-hunk parser used by resolveHunkManual to the whole-file case.
+ */
+export function resolveAllConflictBlocks(
+  content: string,
+  resolver: (
+    block: { oursLines: string[]; baseLines: string[]; theirsLines: string[] },
+    index: number,
+  ) => string | null,
+): { content: string; applied: number; total: number } {
+  const lines = content.split("\n");
+  const newLines: string[] = [];
+  let conflictIdx = 0;
+  let applied = 0;
+  let total = 0;
+  let inConflict = false;
+  let oursLines: string[] = [];
+  let baseLines: string[] = [];
+  let theirsLines: string[] = [];
+  let hasBase = false;
+  let inBase = false;
+  let inTheirs = false;
+
+  for (const line of lines) {
+    if (line.startsWith("<<<<<<<")) {
+      inConflict = true;
+      hasBase = false;
+      inBase = false;
+      inTheirs = false;
+      oursLines = [];
+      baseLines = [];
+      theirsLines = [];
+    } else if (line.startsWith("|||||||") && inConflict) {
+      inBase = true;
+      hasBase = true;
+    } else if (line.startsWith("=======") && inConflict) {
+      inBase = false;
+      inTheirs = true;
+    } else if (line.startsWith(">>>>>>>") && inConflict) {
+      total++;
+      const replacement = resolver({ oursLines, baseLines, theirsLines }, conflictIdx);
+      if (replacement !== null) {
+        applied++;
+        if (replacement.length > 0) {
+          newLines.push(...replacement.split("\n"));
+        }
+      } else {
+        newLines.push("<<<<<<< ours");
+        newLines.push(...oursLines);
+        if (hasBase) {
+          newLines.push("||||||| base");
+          newLines.push(...baseLines);
+        }
+        newLines.push("=======");
+        newLines.push(...theirsLines);
+        newLines.push(">>>>>>> theirs");
+      }
+      conflictIdx++;
+      inConflict = false;
+      inTheirs = false;
+    } else if (inConflict) {
+      if (inTheirs) theirsLines.push(line);
+      else if (inBase) baseLines.push(line);
+      else oursLines.push(line);
+    } else {
+      newLines.push(line);
+    }
+  }
+
+  return { content: newLines.join("\n"), applied, total };
 }
 
 /**
@@ -247,8 +339,20 @@ export function useGitWand() {
    */
   async function loadRealFiles(cwd: string) {
     const conflictedPaths = await getConflictedFiles(cwd);
+    // Tree-conflict detection is enrichment, not core loading: if it fails (e.g. a
+    // stale dev-server without the /api/tree-conflicts route), degrade to "no tree
+    // conflicts" so the merge editor still loads, rather than blanking the whole view.
+    let treeConflicts: Awaited<ReturnType<typeof getTreeConflicts>> = [];
+    try {
+      treeConflicts = await getTreeConflicts(cwd);
+    } catch (err) {
+      console.warn("getTreeConflicts failed; continuing without tree-conflict detection", err);
+    }
+    const treeMap = new Map(treeConflicts.map(t => [t.path, t]));
+    // Union: tree conflicts may include paths (e.g. both-deleted) the marker scan would choke on.
+    const allPaths = Array.from(new Set([...conflictedPaths, ...treeConflicts.map(t => t.path)]));
 
-    if (conflictedPaths.length === 0) {
+    if (allPaths.length === 0) {
       error.value = "Aucun fichier en conflit trouvé dans ce dossier.";
       files.value = [];
       return;
@@ -326,13 +430,44 @@ export function useGitWand() {
       : resolveOptions.value;
 
     const loaded: ConflictFile[] = await Promise.all(
-      conflictedPaths.map(async (filePath) => {
+      allPaths.map(async (filePath) => {
+        const tc = treeMap.get(filePath);
+        if (tc) {
+          // Tree conflict: do not parse markers. Read working-tree content best-effort (for preview).
+          let content = "";
+          try { content = await readFile(cwd, filePath); } catch { /* file may be absent (both-deleted) */ }
+          return {
+            path: filePath,
+            content,
+            // Tree conflicts render the dedicated panel, never hunks — produce a
+            // trivial empty MergeResult instead of running the full resolver on
+            // (possibly large) working-tree content. `content` above is kept for the preview.
+            result: await resolveAsync("", filePath, resolveOptionsWithLlm, structuralOpts),
+            tree: { code: tc.code, hasOurs: tc.hasOurs, hasTheirs: tc.hasTheirs, hasBase: tc.hasBase },
+          };
+        }
         const content = await readFile(cwd, filePath);
-        return {
-          path: filePath,
-          content,
-          result: await resolveAsync(content, filePath, resolveOptionsWithLlm, structuralOpts),
-        };
+        const result = await resolveAsync(content, filePath, resolveOptionsWithLlm, structuralOpts);
+        // Unmerged file with no parseable markers → reconstruct the 3-way from the index.
+        if (result.stats.totalConflicts === 0) {
+          try {
+            const rec = await reconstructConflict(cwd, filePath);
+            if (rec.content.includes("<<<<<<<")) {
+              if (rec.wtMatchesSide) {
+                // Working tree is just one side → swap in reconstructed markers and resolve normally.
+                return {
+                  path: filePath,
+                  content: rec.content,
+                  result: await resolveAsync(rec.content, filePath, resolveOptionsWithLlm, structuralOpts),
+                  reconstructed: true,
+                };
+              }
+              // Working tree matches no side → possible manual edit; keep it, offer a choice.
+              return { path: filePath, content, result, markerless: { reconstructed: rec.content } };
+            }
+          } catch { /* not reconstructable → fall through to plain result */ }
+        }
+        return { path: filePath, content, result };
       }),
     );
 
@@ -667,6 +802,117 @@ export async function fetchUsers() {
   }
 
   /**
+   * Resolve EVERY hunk in a file with a single choice (ours/theirs/both),
+   * including complex/low-confidence hunks. Distinct from `resolveFile`
+   * (which only applies the core's safe auto-resolutions). Reversible via undo.
+   */
+  function resolveFileBulk(
+    path: string,
+    choice: "ours" | "theirs" | "both",
+  ): { applied: number; total: number } {
+    const file = files.value.find((f) => f.path === path);
+    if (!file) return { applied: 0, total: 0 };
+
+    const { content: newContent, applied, total } = resolveAllConflictBlocks(
+      file.content,
+      (b) => {
+        if (choice === "ours") return b.oursLines.join("\n");
+        if (choice === "theirs") return b.theirsLines.join("\n");
+        return [...b.oursLines, ...b.theirsLines].join("\n");
+      },
+    );
+
+    if (newContent !== file.content) {
+      pushUndo();
+      const idx = files.value.indexOf(file);
+      files.value[idx] = {
+        ...file,
+        content: newContent,
+        result: resolve(newContent, file.path, resolveOptions.value),
+      };
+    }
+    return { applied, total };
+  }
+
+  /**
+   * Resolve a tree conflict (modify/delete, both-deleted, …) via the backend,
+   * then drop the file from the conflict list. The backend stages/removes the
+   * path, so no save is needed. Throws on backend error.
+   */
+  async function resolveTreeConflictFile(
+    path: string,
+    choice: "ours" | "theirs" | "delete",
+  ): Promise<void> {
+    if (!folderPath.value) return;
+    await resolveTreeConflict(folderPath.value, path, choice);
+    files.value = files.value.filter((f) => f.path !== path);
+    if (selectedPath.value === path) {
+      selectedPath.value = files.value[0]?.path ?? null;
+    }
+  }
+
+  /** Markerless file → swap to the reconstructed conflict content and resolve via the normal pipeline. */
+  function reconstructAndResolve(path: string): void {
+    const file = files.value.find((f) => f.path === path);
+    if (!file?.markerless) return;
+    const newContent = file.markerless.reconstructed;
+    pushUndo();
+    const idx = files.value.indexOf(file);
+    files.value[idx] = {
+      path: file.path,
+      content: newContent,
+      result: resolve(newContent, file.path, resolveOptions.value),
+      reconstructed: true,
+    };
+  }
+
+  /** Resolve an unmerged file by staging the current working-tree content as the resolution. */
+  async function resolveByStaging(path: string): Promise<void> {
+    if (!folderPath.value) return;
+    await gitStage(folderPath.value, [path]);
+    files.value = files.value.filter((f) => f.path !== path);
+    if (selectedPath.value === path) {
+      selectedPath.value = files.value[0]?.path ?? null;
+    }
+  }
+
+  /**
+   * Apply a memorized resolution rule to every hunk in a file. Hunks where the
+   * rule can't apply (e.g. "date-latest" but content is no longer a date) keep
+   * their conflict markers and are reported via the returned counts.
+   */
+  function applyMemoryToFile(
+    path: string,
+    entry: ResolutionMemoryEntry,
+  ): { applied: number; total: number } {
+    const file = files.value.find((f) => f.path === path);
+    if (!file) return { applied: 0, total: 0 };
+    // A "custom" rule is a verbatim blob bound to one hunk — applying it to every
+    // hunk would clobber the file. Bulk apply only generalizable strategies.
+    if (!isGeneralizableStrategy(entry.strategy)) return { applied: 0, total: 0 };
+
+    const { content: newContent, applied, total } = resolveAllConflictBlocks(
+      file.content,
+      (b) =>
+        applyMemory(entry, {
+          oursLines: b.oursLines,
+          theirsLines: b.theirsLines,
+        } as ConflictHunk),
+    );
+
+    if (newContent !== file.content) {
+      pushUndo();
+      const idx = files.value.indexOf(file);
+      files.value[idx] = {
+        ...file,
+        content: newContent,
+        result: resolve(newContent, file.path, resolveOptions.value),
+      };
+    }
+    return { applied, total };
+  }
+
+  /**
    * Save a resolved file back to disk.
    */
   async function saveFile(path: string) {
@@ -764,6 +1010,8 @@ export async function fetchUsers() {
     resolveFile,
     resolveHunkManual,
     resolveHunkCustom,
+    resolveFileBulk,
+    applyMemoryToFile,
     saveFile,
     saveAllFiles,
     openPath,
@@ -771,5 +1019,8 @@ export async function fetchUsers() {
     redo,
     selectFile,
     refreshLlmFallbackConfig,
+    resolveTreeConflictFile,
+    reconstructAndResolve,
+    resolveByStaging,
   };
 }

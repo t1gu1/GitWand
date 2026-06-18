@@ -328,12 +328,27 @@ export function useGitRepo() {
   });
 
   /**
-   * True when the current branch has no upstream configured.
-   * In that case a push must use `--set-upstream` to publish the branch.
+   * True when the current branch has no upstream configured (`@{u}`).
+   * A push then must use `--set-upstream` to link it to the remote — whether
+   * or not the branch already exists there. Drives the push command, NOT the
+   * "Publish" UI (see `needsPublish`).
+   */
+  const needsUpstream = computed(() => {
+    if (!status.value) return false;
+    return !status.value.remote;
+  });
+
+  /**
+   * True only when the branch has genuinely never been pushed — no upstream
+   * AND no matching remote-tracking ref. This is what gates the "Publish"
+   * banner/primary action. A branch that exists on the remote but lost its
+   * tracking config (pushed without `-u`, `gh pr checkout`, fork checkout…)
+   * is NOT "to publish": it shows normal ahead/behind and pushes with
+   * `--set-upstream` under the hood.
    */
   const needsPublish = computed(() => {
     if (!status.value) return false;
-    return !status.value.remote;
+    return !status.value.remote && !status.value.remoteBranchExists;
   });
 
   /**
@@ -378,7 +393,7 @@ export function useGitRepo() {
     if (!folderPath.value || isFetching.value || isMerging.value || hasConflicts.value) return;
     // F1 — Mode hors-ligne: short-circuit before hitting the IPC so we
     // can never hang on the 5-min NETWORK timeout when the link is dead.
-    if (!requireOnline("fetch")) return;
+    if (!(await requireOnline("fetch"))) return;
     isFetching.value = true;
     try {
       await gitFetch(folderPath.value);
@@ -720,11 +735,13 @@ export function useGitRepo() {
 
   async function push(force: boolean = false) {
     if (!folderPath.value) return;
-    if (!requireOnline("push")) return;
+    if (!(await requireOnline("push"))) return;
     isPushing.value = true;
     try {
-      // If the current branch has no upstream, publish it with --set-upstream.
-      const publish = needsPublish.value;
+      // If the current branch has no upstream, push it with --set-upstream —
+      // this covers both a genuine first publish and a branch that exists on
+      // the remote but lost its tracking config.
+      const publish = needsUpstream.value;
       const result = await gitPush(folderPath.value, publish, force);
       if (!result.success) {
         error.value = `push: ${result.message}`;
@@ -742,7 +759,7 @@ export function useGitRepo() {
 
   async function pull(rebase: boolean = false) {
     if (!folderPath.value) return;
-    if (!requireOnline("pull")) return;
+    if (!(await requireOnline("pull"))) return;
     isPulling.value = true;
     try {
       // Fetch all branches first (updates origin/master, etc.)

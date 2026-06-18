@@ -13,7 +13,9 @@ import {
   useResolutionMemory,
   detectPattern,
   applyMemory,
+  isGeneralizableStrategy,
   type ResolutionStrategy,
+  type ResolutionMemoryEntry,
 } from "../composables/useResolutionMemory";
 import LlmTracePanel from "./LlmTracePanel.vue";
 
@@ -35,8 +37,13 @@ const emit = defineEmits<{
   resolve: [path: string];
   resolveHunk: [path: string, hunkIndex: number, choice: ManualChoice];
   resolveHunkCustom: [path: string, hunkIndex: number, content: string];
+  resolveFileBulk: [path: string, choice: "ours" | "theirs" | "both"];
+  applyFileMemory: [path: string, entry: ResolutionMemoryEntry];
   /** Custom automation ran and committed; parent should refresh status */
   automationDone: [commitHash: string];
+  resolveTreeConflict: [path: string, choice: "ours" | "theirs" | "delete"];
+  reconstructConflict: [path: string];
+  keepWorkingTree: [path: string];
 }>();
 
 // ─── Inline Edit State ──────────────────────────────────
@@ -262,6 +269,47 @@ const canResolve = computed(
 );
 
 const hunks = computed(() => props.file.result.hunks);
+
+const treeExplanation = computed(() => {
+  const tr = props.file.tree;
+  if (!tr) return "";
+  if (tr.hasOurs && !tr.hasTheirs) return t("merge.treeModifiedOursDeletedTheirs");
+  if (!tr.hasOurs && tr.hasTheirs) return t("merge.treeDeletedOursModifiedTheirs");
+  // Neither side present → both-deleted. Tree conflicts always have ≥1 side
+  // missing (add/add carries markers and flows through the content path), so
+  // there is no "added on both sides" case to handle here.
+  return t("merge.treeBothDeleted");
+});
+
+/** How many of this file's hunks the saved rule can actually resolve. */
+const memoryApplicableCount = computed(() => {
+  const mem = fileMemory.value;
+  if (!mem) return 0;
+  // A "custom" rule is one verbatim blob bound to a single hunk; never offer to
+  // stamp it across the whole file (would corrupt every other conflict).
+  if (!isGeneralizableStrategy(mem.strategy)) return 0;
+  return hunks.value.reduce(
+    (n, h) => (applyMemory(mem, h) !== null ? n + 1 : n),
+    0,
+  );
+});
+
+/** Apply the saved rule to every hunk in the file (one click). */
+function applyMemoryToWholeFile() {
+  if (!fileMemory.value) return;
+  emit("applyFileMemory", props.file.path, fileMemory.value);
+  markUsed(fileMemory.value.id);
+}
+
+// ─── File-level bulk resolution ─────────────────────────
+/** True when the core flagged any hunk as a generated (build) file. */
+const isGeneratedFileLocal = computed(() =>
+  hunks.value.some((h) => h.type === "generated_file"),
+);
+
+function bulkResolve(choice: "ours" | "theirs" | "both") {
+  emit("resolveFileBulk", props.file.path, choice);
+}
 
 /** Does a given hunk carry an `llm_proposed` decision with a trace? */
 function hasLlmTrace(hunk: ConflictHunk): boolean {
@@ -587,6 +635,13 @@ onMounted(() => {
           </template>
         </span>
       </div>
+      <div class="me-bulk-actions" v-if="file.result.stats.totalConflicts > 0">
+        <span class="me-bulk-label muted">{{ t('merge.bulkLabel') }}</span>
+        <button class="me-bulk-btn" @click="bulkResolve('ours')">{{ t('merge.bulkOurs') }}</button>
+        <button class="me-bulk-btn" @click="bulkResolve('theirs')">{{ t('merge.bulkTheirs') }}</button>
+        <button class="me-bulk-btn" @click="bulkResolve('both')">{{ t('merge.bulkBoth') }}</button>
+        <span v-if="isGeneratedFileLocal" class="me-bulk-warn">{{ t('merge.bulkGeneratedWarning') }}</span>
+      </div>
       <button
         v-if="canResolve"
         class="btn btn--resolve"
@@ -628,12 +683,22 @@ onMounted(() => {
       <button class="me-automation-btn me-automation-btn--dismiss" @click="dismissAutomation">{{ t("common.close") }}</button>
     </div>
 
-    <!-- Resolution Memory suggestion banner -->
+    <!-- Resolution Memory suggestion banner (actionable) -->
     <div v-if="fileMemory && !matchingRule" class="me-memory-banner">
       <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
         <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm.75 10.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5V4.5h1.5V8.5z"/>
       </svg>
       <span class="me-memory-text">{{ t("mergeEditor.memoryBannerHint", fileMemory.description) }}</span>
+      <button
+        v-if="memoryApplicableCount > 0"
+        class="me-memory-btn me-memory-btn--save"
+        @click="applyMemoryToWholeFile"
+      >
+        {{ t("mergeEditor.memoryApplyAll", memoryApplicableCount) }}
+      </button>
+      <span v-if="memoryApplicableCount > 0 && memoryApplicableCount < hunks.length" class="muted">
+        {{ t("mergeEditor.memoryApplyAllPartial", hunks.length - memoryApplicableCount) }}
+      </span>
     </div>
 
     <!-- Memory offer toast (after a manual choice) -->
@@ -643,8 +708,53 @@ onMounted(() => {
       <button class="me-memory-btn" @click="dismissMemoryOffer">{{ t("common.close") }}</button>
     </div>
 
+    <!-- Tree conflict panel (modify/delete, both-deleted, …) -->
+    <div v-if="file.tree" class="me-tree-panel">
+      <h3 class="me-tree-title">{{ t('merge.treeTitle') }} — <span class="mono">{{ file.path }}</span></h3>
+      <p class="me-tree-explanation">{{ treeExplanation }}</p>
+      <div class="me-tree-actions">
+        <button v-if="file.tree.hasOurs" class="me-bulk-btn" @click="emit('resolveTreeConflict', file.path, 'ours')">
+          {{ t('merge.treeKeepOurs') }}
+        </button>
+        <button v-if="file.tree.hasTheirs" class="me-bulk-btn" @click="emit('resolveTreeConflict', file.path, 'theirs')">
+          {{ t('merge.treeKeepTheirs') }}
+        </button>
+        <button class="me-bulk-btn me-tree-delete" @click="emit('resolveTreeConflict', file.path, 'delete')">
+          {{ t('merge.treeAcceptDelete') }}
+        </button>
+      </div>
+      <template v-if="file.content">
+        <div class="me-tree-preview-label muted">{{ t('merge.treePreviewLabel') }}</div>
+        <pre class="me-tree-preview">{{ file.content }}</pre>
+      </template>
+    </div>
+
+    <!-- Markerless content conflict: working tree matches no side (possible manual edit) -->
+    <div v-if="file.markerless" class="me-tree-panel">
+      <h3 class="me-tree-title">{{ t('merge.markerlessTitle') }} — <span class="mono">{{ file.path }}</span></h3>
+      <p class="me-tree-explanation">{{ t('merge.markerlessExplanation') }}</p>
+      <div class="me-tree-actions">
+        <button class="me-bulk-btn" @click="emit('reconstructConflict', file.path)">
+          {{ t('merge.reconstructConflict') }}
+        </button>
+        <button class="me-bulk-btn" @click="emit('keepWorkingTree', file.path)">
+          {{ t('merge.keepWorkingTree') }}
+        </button>
+      </div>
+      <template v-if="file.content">
+        <div class="me-tree-preview-label muted">{{ t('merge.treePreviewLabel') }}</div>
+        <pre class="me-tree-preview">{{ file.content }}</pre>
+      </template>
+    </div>
+
     <!-- Editor body: code + minimap -->
-    <div class="merge-body">
+    <div class="merge-body" v-if="!file.tree && !file.markerless">
+      <div v-if="file.reconstructed" class="me-reconstructed-banner">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm.75 10.5h-1.5v-1.5h1.5v1.5zm0-3h-1.5V4.5h1.5V8.5z"/>
+        </svg>
+        <span>{{ t('merge.reconstructedBanner') }}</span>
+      </div>
     <div
       class="editor-content"
       ref="contentEl"
@@ -917,6 +1027,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 10px 20px;
   border-bottom: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
@@ -927,6 +1038,8 @@ onMounted(() => {
   display: flex;
   align-items: baseline;
   gap: 12px;
+  /* Pin the filename to the far left so the action clusters group on the right. */
+  margin-right: auto;
 }
 
 .editor-filename {
@@ -1514,6 +1627,32 @@ onMounted(() => {
   overflow-y: auto;
 }
 
+/* ─── File-level bulk actions ──────────────────────────── */
+.me-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.me-bulk-label {
+  font-size: 12px;
+}
+.me-bulk-btn {
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-color, #d0d0d0);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+.me-bulk-btn:hover {
+  background: var(--hover-bg, rgba(0, 0, 0, 0.05));
+}
+.me-bulk-warn {
+  font-size: 11px;
+  color: var(--warning-color, #b8860b);
+}
+
 /* ─── Resolution Memory banner ─────────────────────────── */
 .me-memory-banner {
   display: flex;
@@ -1565,5 +1704,29 @@ onMounted(() => {
 
 .me-memory-btn--save:hover {
   background: var(--color-success-soft, rgba(34,197,94,.12));
+}
+
+.me-tree-panel { padding: 20px; overflow: auto; }
+.me-tree-title { font-size: 14px; margin: 0 0 8px; }
+.me-tree-explanation { margin: 0 0 14px; color: var(--color-text-secondary, #888); }
+.me-tree-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.me-tree-delete { color: var(--color-danger, #c0392b); }
+.me-tree-preview-label { font-size: 11px; margin-bottom: 4px; }
+.me-tree-preview {
+  margin: 0; padding: 10px; max-height: 320px; overflow: auto;
+  background: var(--color-bg-secondary, #f5f5f5); border-radius: 6px;
+  font-family: var(--font-mono, monospace); font-size: 12px; white-space: pre-wrap;
+}
+
+/* ─── Reconstructed-from-index info banner ─────────────── */
+.me-reconstructed-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary, #888);
+  background: var(--color-bg-secondary, rgba(0,0,0,0.03));
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
 }
 </style>

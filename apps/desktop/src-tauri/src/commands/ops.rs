@@ -2473,6 +2473,182 @@ pub(crate) async fn get_conflicted_files(cwd: String) -> Result<Vec<String>, Str
     Ok(files)
 }
 
+// ─── Tree conflicts (markerless: modify/delete, both-deleted) ─────
+
+/// Parse `git status --porcelain=v2` and return unmerged paths that are *tree*
+/// conflicts (not pure content conflicts). A porcelain-v2 unmerged line looks like:
+///   u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+/// where m1/m2/m3 are the octal modes for stages 1/2/3 ("000000" when the stage
+/// is absent) and mW is the worktree mode. We treat a path as a tree conflict
+/// when NOT (stage2 && stage3), i.e. at least one of ours/theirs is missing —
+/// modify/delete, both-deleted, add/delete. Pure content conflicts (UU, AA)
+/// have both stages and carry `<<<<<<<` markers, so the existing content flow
+/// handles them.
+fn collect_tree_conflicts(cwd: &str) -> Result<Vec<crate::types::TreeConflict>, String> {
+    let output = git_cmd()
+        // `-z` => NUL-terminated records with verbatim (un-C-quoted) paths, so a
+        // path containing a quote, newline or non-ASCII byte parses correctly.
+        .args(["status", "--porcelain=v2", "-z", "--untracked-files=no"])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git status: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git status failed: {}", stderr));
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut result = Vec::new();
+    for record in stdout.split('\0') {
+        // Unmerged entries start with "u ".
+        let Some(rest) = record.strip_prefix("u ") else { continue };
+        // Porcelain-v2 unmerged format (10 space-separated tokens):
+        //   XY sub m1 m2 m3 mW h1 h2 h3 path
+        // splitn(10, ' ') puts path at index 9.
+        let mut parts = rest.splitn(10, ' ');
+        let code = parts.next().unwrap_or("").to_string();   // XY
+        let _sub = parts.next();                              // submodule state
+        let m1 = parts.next().unwrap_or("000000");           // stage 1 (base)
+        let m2 = parts.next().unwrap_or("000000");           // stage 2 (ours)
+        let m3 = parts.next().unwrap_or("000000");           // stage 3 (theirs)
+        let _mw = parts.next();                               // worktree mode
+        let _h1 = parts.next();
+        let _h2 = parts.next();
+        let _h3 = parts.next();
+        let path = parts.next().unwrap_or("").to_string();   // remainder = path
+        if path.is_empty() { continue; }
+        let has_base = m1 != "000000";
+        let has_ours = m2 != "000000";
+        let has_theirs = m3 != "000000";
+        // Only markerless tree conflicts: at least one side missing.
+        if has_ours && has_theirs { continue; }
+        result.push(crate::types::TreeConflict { path, code, has_base, has_ours, has_theirs });
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub(crate) async fn get_tree_conflicts(cwd: String) -> Result<Vec<crate::types::TreeConflict>, String> {
+    collect_tree_conflicts(&cwd)
+}
+
+// ─── Tree conflict resolution ────────────────────────────────
+
+/// Run a git command (args array, no shell interpolation) in `cwd`, mapping failure to a message.
+fn run_git_checked(cwd: &str, args: &[&str], what: &str) -> Result<(), String> {
+    let output = git_cmd()
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("Failed to run git {}: {}", what, e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("git {} failed: {}", what, stderr.trim()));
+    }
+    Ok(())
+}
+
+/// Synchronous implementation — tested directly to avoid async test runtimes.
+fn apply_tree_resolution(cwd: &str, path: &str, choice: &str) -> Result<(), String> {
+    // Guard against path traversal; we still pass the *relative* path to git.
+    let _ = safe_repo_path(cwd, path)?;
+    match choice {
+        "ours" => {
+            run_git_checked(cwd, &["checkout", "--ours", "--", path], "checkout --ours")?;
+            run_git_checked(cwd, &["add", "--", path], "add")?;
+        }
+        "theirs" => {
+            run_git_checked(cwd, &["checkout", "--theirs", "--", path], "checkout --theirs")?;
+            run_git_checked(cwd, &["add", "--", path], "add")?;
+        }
+        "delete" => {
+            run_git_checked(cwd, &["rm", "-f", "--", path], "rm")?;
+        }
+        other => return Err(format!("unknown choice: {}", other)),
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub(crate) async fn resolve_tree_conflict(cwd: String, path: String, choice: String) -> Result<(), String> {
+    apply_tree_resolution(&cwd, &path, &choice)
+}
+
+// ─── Reconstruct content conflict from index stages ──────────
+
+use crate::types::ReconstructedConflict;
+
+/// Read the blob bytes for a given index stage of `path`, or empty if the stage is absent.
+fn read_stage_blob(cwd: &str, stage: u8, path: &str) -> Vec<u8> {
+    let spec = format!(":{}:{}", stage, path);
+    match git_cmd().args(["show", &spec]).current_dir(cwd).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        _ => Vec::new(),
+    }
+}
+
+/// Reconstruct a content conflict from the index stages. Sync so it is unit-testable
+/// without an async runtime; the #[tauri::command] is a thin wrapper.
+fn reconstruct_conflict_impl(cwd: &str, path: &str) -> Result<ReconstructedConflict, String> {
+    let _ = safe_repo_path(cwd, path)?; // traversal guard
+
+    let base = read_stage_blob(cwd, 1, path);   // may be empty (add/add)
+    let ours = read_stage_blob(cwd, 2, path);
+    let theirs = read_stage_blob(cwd, 3, path);
+    if ours.is_empty() && theirs.is_empty() {
+        return Err(format!("no index stages for {}", path));
+    }
+
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("gitwand-recon-{}-{}", std::process::id(), nanos));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("temp dir: {}", e))?;
+
+    let write_tmp = |name: &str, data: &[u8]| -> Result<std::path::PathBuf, String> {
+        let p = dir.join(name);
+        std::fs::File::create(&p)
+            .and_then(|mut f| { use std::io::Write; f.write_all(data) })
+            .map_err(|e| format!("write {}: {}", name, e))?;
+        Ok(p)
+    };
+
+    let result = (|| -> Result<String, String> {
+        let ours_p = write_tmp("ours", &ours)?;
+        let base_p = write_tmp("base", &base)?;
+        let theirs_p = write_tmp("theirs", &theirs)?;
+        let out = git_cmd()
+            .args([
+                "merge-file", "-p", "--diff3",
+                "-L", "ours", "-L", "base", "-L", "theirs",
+                ours_p.to_str().ok_or("bad temp path")?,
+                base_p.to_str().ok_or("bad temp path")?,
+                theirs_p.to_str().ok_or("bad temp path")?,
+            ])
+            .current_dir(cwd)
+            .output()
+            .map_err(|e| format!("git merge-file: {}", e))?;
+        // exit 255 = real error; 0/N = clean/conflicts (stdout is the merged content either way)
+        if out.status.code() == Some(255) {
+            return Err(format!("git merge-file error: {}", String::from_utf8_lossy(&out.stderr)));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    })();
+
+    let _ = std::fs::remove_dir_all(&dir); // always clean up
+    let content = result?;
+
+    let wt = std::fs::read(safe_repo_path(cwd, path)?).unwrap_or_default();
+    let wt_matches_side = (!ours.is_empty() && wt == ours) || (!theirs.is_empty() && wt == theirs);
+
+    Ok(ReconstructedConflict { content, wt_matches_side })
+}
+
+#[tauri::command]
+pub(crate) async fn reconstruct_conflict(cwd: String, path: String) -> Result<ReconstructedConflict, String> {
+    reconstruct_conflict_impl(&cwd, &path)
+}
+
 // ─── Git remote info ─────────────────────────────────────────
 
 #[tauri::command]
@@ -2485,6 +2661,13 @@ pub(crate) async fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
             .map_err(|e| format!("Failed to get remote info: {}", e))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
+        // Prefer `origin` (the canonical remote) over whatever sorts first.
+        // `git remote -v` lists remotes alphabetically, so a `fork` remote
+        // would otherwise shadow `origin` and make every origin-targeted
+        // operation (unpushed-tag detection, PR lookups, connectivity probe…)
+        // point at the wrong repository.
+        let mut first: Option<(String, String)> = None;
+        let mut origin: Option<(String, String)> = None;
         for line in stdout.lines() {
             if !line.contains("(fetch)") {
                 continue;
@@ -2495,7 +2678,16 @@ pub(crate) async fn git_remote_info(cwd: String) -> Result<RemoteInfo, String> {
             }
             let name = parts[0].to_string();
             let url = parts[1].to_string();
+            if name == "origin" {
+                origin = Some((name, url));
+                break;
+            }
+            if first.is_none() {
+                first = Some((name, url));
+            }
+        }
 
+        if let Some((name, url)) = origin.or(first) {
             let provider = if url.contains("github.com") {
                 "github"
             } else if url.contains("gitlab.com") || url.contains("gitlab") {
@@ -2825,10 +3017,21 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
     if url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Err("Refusing to open URL with whitespace or control characters".to_string());
     }
+
+    // macOS/Windows fire-and-forget on purpose: `open`/`explorer` are single,
+    // always-present launchers with no fallback chain to try, and neither
+    // platform has the AppImage env pollution that made the Linux opener (and
+    // its delegated helper) die silently — so the exit-status handling below is
+    // Linux-only by design, not an oversight.
     #[cfg(target_os = "macos")]
-    let mut cmd = hidden_cmd("open");
-    #[cfg(target_os = "linux")]
-    let mut cmd = hidden_cmd("xdg-open");
+    {
+        hidden_cmd("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+        Ok(())
+    }
+
     // Windows: invoke `explorer.exe <url>` directly rather than `cmd /C start`.
     // `cmd.exe` re-parses its command line and treats `& | ^ < >` as shell
     // metacharacters, so a link like `https://x/&calc` (legitimate query
@@ -2836,11 +3039,89 @@ pub(crate) async fn open_url(url: String) -> Result<(), String> {
     // `explorer.exe` is not a shell — it receives the URL as a single argv
     // entry via the standard CommandLineToArgvW rules, with no `&` splitting.
     #[cfg(target_os = "windows")]
-    let mut cmd = hidden_cmd("explorer");
-    cmd.arg(&url)
+    {
+        hidden_cmd("explorer")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+        Ok(())
+    }
+
+    // Linux: a single fire-and-forget `xdg-open` swallowed every failure — in
+    // the released AppImage the spawned opener (and the Qt/KDE or GTK helper it
+    // delegates to) inherited `AppRun`'s `LD_LIBRARY_PATH`/`QT_PLUGIN_PATH`
+    // pollution, loaded ABI-incompatible bundled libs, and died before any
+    // browser appeared, with no error surfaced (issue #48 family). We now:
+    //   1. spawn through `hidden_cmd`, which de-pollutes the child env inside an
+    //      AppImage (see `git::cmd::appimage_env_fixes`);
+    //   2. try a chain of openers so one broken handler can't sink the click;
+    //   3. inspect the exit status instead of ignoring it, so a real failure
+    //      becomes a loud error rather than a silent no-op.
+    #[cfg(target_os = "linux")]
+    {
+        // (binary, prefix-args). `xdg-open` first to honour the user's default;
+        // `gio open` (GTK/portal — matches our bundled stack) and `kde-open5`
+        // as fallbacks for the common desktops.
+        let openers: [(&str, &[&str]); 3] =
+            [("xdg-open", &[]), ("gio", &["open"]), ("kde-open5", &[])];
+        let mut errors: Vec<String> = Vec::new();
+        for (bin, prefix) in openers {
+            let mut cmd = hidden_cmd(bin);
+            cmd.args(prefix).arg(&url);
+            match try_open_linux(cmd, bin) {
+                Ok(()) => return Ok(()),
+                Err(e) => errors.push(e),
+            }
+        }
+        // Last resort: an explicit `$BROWSER`.
+        if let Ok(browser) = std::env::var("BROWSER") {
+            let browser = browser.trim().to_string();
+            if !browser.is_empty() {
+                let mut cmd = hidden_cmd(&browser);
+                cmd.arg(&url);
+                match try_open_linux(cmd, "$BROWSER") {
+                    Ok(()) => return Ok(()),
+                    Err(e) => errors.push(e),
+                }
+            }
+        }
+        Err(format!(
+            "Failed to open URL via system openers: {}",
+            errors.join("; ")
+        ))
+    }
+}
+
+/// Spawn an opener and decide success without hanging the caller.
+///
+/// System openers (`xdg-open`, `gio open`, `kde-open5`) hand the URL to the
+/// desktop and exit promptly — a non-zero exit means the open genuinely failed
+/// (e.g. a Qt helper crashing on AppImage lib pollution), which we surface.
+/// A graphical browser launched directly via `$BROWSER` may instead stay in the
+/// foreground; if the child is still alive after a short grace period we treat
+/// that as a successful hand-off rather than blocking on it.
+#[cfg(target_os = "linux")]
+fn try_open_linux(mut cmd: std::process::Command, label: &str) -> Result<(), String> {
+    use std::time::Duration;
+    let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to open URL: {}", e))?;
-    Ok(())
+        .map_err(|e| format!("{}: failed to spawn: {}", label, e))?;
+    let deadline = Instant::now() + Duration::from_millis(400);
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) => {
+                return Err(format!(
+                    "{}: exited with status {}",
+                    label,
+                    status.code().unwrap_or(-1)
+                ))
+            }
+            Ok(None) if Instant::now() >= deadline => return Ok(()),
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            Err(e) => return Err(format!("{}: wait failed: {}", label, e)),
+        }
+    }
 }
 
 // ─── Open in external editor ─────────────────────────────────
@@ -2865,4 +3146,304 @@ pub(crate) async fn open_in_editor(cwd: String, path: String, editor: String) ->
 #[tauri::command]
 pub(crate) async fn get_command_log() -> Vec<crate::git::cmd::CmdLogEntry> {
     crate::git::cmd::cmd_log_snapshot()
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod open_url_tests {
+    use super::try_open_linux;
+    use std::process::Command;
+
+    #[test]
+    fn opener_exiting_zero_is_success() {
+        assert!(try_open_linux(Command::new("true"), "true").is_ok());
+    }
+
+    #[test]
+    fn opener_exiting_nonzero_is_error() {
+        let err = try_open_linux(Command::new("false"), "false").unwrap_err();
+        assert!(err.contains("false"), "error should name the opener: {err}");
+        assert!(err.contains("status"), "error should report the exit: {err}");
+    }
+
+    #[test]
+    fn missing_opener_is_error() {
+        let err = try_open_linux(
+            Command::new("gitwand-no-such-opener-binary"),
+            "ghost",
+        )
+        .unwrap_err();
+        assert!(err.contains("ghost"), "error should name the opener: {err}");
+    }
+
+    #[test]
+    fn long_running_opener_is_treated_as_handed_off() {
+        // A handler still alive after the grace window (like a foreground
+        // browser) must not hang the caller — it counts as a successful open.
+        let mut cmd = Command::new("sleep");
+        cmd.arg("5");
+        assert!(try_open_linux(cmd, "sleep").is_ok());
+    }
+}
+
+#[cfg(test)]
+mod tree_conflict_tests {
+    use super::*;
+    use crate::git::cmd::git_binary;
+    use std::path::PathBuf;
+    use std::process::Command;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct TempRepo { path: PathBuf }
+    impl Drop for TempRepo { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.path); } }
+    impl TempRepo {
+        fn new() -> Self {
+            let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+            let pid = std::process::id();
+            let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+            let dir = std::env::temp_dir().join(format!("gitwand-tree-test-{}-{}-{}", pid, n, nanos));
+            std::fs::create_dir_all(&dir).unwrap();
+            let repo = TempRepo { path: dir };
+            repo.git(&["init", "-q", "-b", "main"]);
+            repo.git(&["config", "user.name", "Test"]);
+            repo.git(&["config", "user.email", "test@example.com"]);
+            repo.git(&["config", "commit.gpgsign", "false"]);
+            repo
+        }
+        fn cwd(&self) -> String { self.path.to_str().unwrap().to_string() }
+        fn git(&self, args: &[&str]) -> std::process::Output {
+            let out = Command::new(git_binary()).args(args).current_dir(&self.path).output()
+                .unwrap_or_else(|e| panic!("git {:?} spawn: {}", args, e));
+            out
+        }
+        fn git_ok(&self, args: &[&str]) {
+            let out = self.git(args);
+            assert!(out.status.success(), "git {:?} failed: {}", args, String::from_utf8_lossy(&out.stderr));
+        }
+        fn write(&self, rel: &str, content: &str) {
+            let p = self.path.join(rel);
+            if let Some(parent) = p.parent() { std::fs::create_dir_all(parent).unwrap(); }
+            std::fs::write(p, content).unwrap();
+        }
+        fn commit_all(&self, msg: &str) { self.git_ok(&["add", "-A"]); self.git_ok(&["commit", "-q", "-m", msg]); }
+    }
+
+    /// Build a modify/delete conflict: main deletes the file, feature modifies it,
+    /// then merge main into feature → "UD" (modified by us / deleted by them).
+    fn make_modify_delete(repo: &TempRepo) {
+        repo.write("doomed.txt", "original\n");
+        repo.commit_all("base");
+        repo.git_ok(&["checkout", "-q", "-b", "feature"]);
+        repo.write("doomed.txt", "MODIFIED by feature\n");
+        repo.commit_all("feature modifies");
+        repo.git_ok(&["checkout", "-q", "main"]);
+        repo.git_ok(&["rm", "-q", "doomed.txt"]);
+        repo.commit_all("main deletes");
+        repo.git_ok(&["checkout", "-q", "feature"]);
+        // Merge main into feature — conflicts, returns non-zero; ignore status.
+        let _ = repo.git(&["merge", "--no-edit", "main"]);
+    }
+
+    #[test]
+    fn detects_modify_delete_as_tree_conflict() {
+        let repo = TempRepo::new();
+        make_modify_delete(&repo);
+        let conflicts = collect_tree_conflicts(&repo.cwd()).expect("collect_tree_conflicts failed");
+        let tc = conflicts.iter().find(|c| c.path == "doomed.txt").expect("doomed.txt is a tree conflict");
+        assert!(tc.has_ours, "feature (ours) modified it → stage 2 present");
+        assert!(!tc.has_theirs, "main (theirs) deleted it → stage 3 absent");
+        assert_eq!(tc.code, "UD");
+    }
+
+    #[test]
+    fn detects_modify_delete_with_spaced_path() {
+        // Locks in the `-z` parsing: a path containing a space must still be
+        // captured whole (porcelain v2 only C-quotes paths in non-`-z` mode).
+        let repo = TempRepo::new();
+        repo.write("my doomed file.txt", "original\n");
+        repo.commit_all("base");
+        repo.git_ok(&["checkout", "-q", "-b", "feature"]);
+        repo.write("my doomed file.txt", "MODIFIED by feature\n");
+        repo.commit_all("feature modifies");
+        repo.git_ok(&["checkout", "-q", "main"]);
+        repo.git_ok(&["rm", "-q", "my doomed file.txt"]);
+        repo.commit_all("main deletes");
+        repo.git_ok(&["checkout", "-q", "feature"]);
+        let _ = repo.git(&["merge", "--no-edit", "main"]);
+        let conflicts = collect_tree_conflicts(&repo.cwd()).expect("collect_tree_conflicts failed");
+        let tc = conflicts
+            .iter()
+            .find(|c| c.path == "my doomed file.txt")
+            .expect("spaced path is captured verbatim");
+        assert!(tc.has_ours && !tc.has_theirs);
+    }
+
+    #[test]
+    fn resolve_keep_ours_stages_modified_version() {
+        let repo = TempRepo::new();
+        make_modify_delete(&repo); // feature(ours) modified doomed.txt, main(theirs) deleted it
+        apply_tree_resolution(&repo.cwd(), "doomed.txt", "ours").unwrap();
+        // No longer unmerged:
+        assert!(collect_tree_conflicts(&repo.cwd()).unwrap().iter().all(|c| c.path != "doomed.txt"));
+        // Working tree keeps the modified version:
+        assert_eq!(std::fs::read_to_string(repo.path.join("doomed.txt")).unwrap(), "MODIFIED by feature\n");
+    }
+
+    #[test]
+    fn resolve_delete_removes_the_file() {
+        let repo = TempRepo::new();
+        make_modify_delete(&repo);
+        apply_tree_resolution(&repo.cwd(), "doomed.txt", "delete").unwrap();
+        assert!(collect_tree_conflicts(&repo.cwd()).unwrap().iter().all(|c| c.path != "doomed.txt"));
+        assert!(!repo.path.join("doomed.txt").exists(), "file removed from working tree");
+    }
+
+    #[test]
+    fn resolve_rejects_unknown_choice() {
+        let repo = TempRepo::new();
+        make_modify_delete(&repo);
+        let err = apply_tree_resolution(&repo.cwd(), "doomed.txt", "bogus");
+        assert!(err.is_err(), "unknown choice must error");
+    }
+
+    #[test]
+    fn excludes_pure_content_conflict() {
+        let repo = TempRepo::new();
+        repo.write("shared.txt", "a\nb\nc\n");
+        repo.commit_all("base");
+        repo.git_ok(&["checkout", "-q", "-b", "feature"]);
+        repo.write("shared.txt", "a\nFEATURE\nc\n");
+        repo.commit_all("feature");
+        repo.git_ok(&["checkout", "-q", "main"]);
+        repo.write("shared.txt", "a\nMAIN\nc\n");
+        repo.commit_all("main");
+        repo.git_ok(&["checkout", "-q", "feature"]);
+        let _ = repo.git(&["merge", "--no-edit", "main"]);
+        let conflicts = collect_tree_conflicts(&repo.cwd()).expect("collect_tree_conflicts failed");
+        assert!(conflicts.iter().all(|c| c.path != "shared.txt"), "content conflict (UU) must NOT be reported as a tree conflict");
+    }
+
+    /// Build a UU content conflict on `shared.txt`, leaving markers in the working tree.
+    fn make_content_conflict(repo: &TempRepo) {
+        repo.write("shared.txt", "line1\nbase\nline3\n");
+        repo.commit_all("base");
+        repo.git_ok(&["checkout", "-q", "-b", "feature"]);
+        repo.write("shared.txt", "line1\nFEATURE\nline3\n");
+        repo.commit_all("feature");
+        repo.git_ok(&["checkout", "-q", "main"]);
+        repo.write("shared.txt", "line1\nMAIN\nline3\n");
+        repo.commit_all("main");
+        repo.git_ok(&["checkout", "-q", "feature"]);
+        let _ = repo.git(&["merge", "--no-edit", "main"]); // conflicts; non-zero status expected
+    }
+
+    #[test]
+    fn reconstruct_produces_markers_and_matches_side_after_checkout_ours() {
+        let repo = TempRepo::new();
+        make_content_conflict(&repo);
+        // Remove markers, leave working tree == ours (stage 2).
+        repo.git_ok(&["checkout", "--ours", "--", "shared.txt"]);
+        let rec = reconstruct_conflict_impl(&repo.cwd(), "shared.txt").unwrap();
+        assert!(rec.content.contains("<<<<<<<"), "reconstructed content must carry conflict markers");
+        assert!(rec.content.contains(">>>>>>>"));
+        assert!(rec.wt_matches_side, "working tree == ours → matches a side");
+    }
+
+    #[test]
+    fn reconstruct_flags_manual_edit_when_wt_matches_no_side() {
+        let repo = TempRepo::new();
+        make_content_conflict(&repo);
+        // Working tree is a distinct manual resolution (matches neither ours nor theirs).
+        repo.write("shared.txt", "line1\nMANUAL RESOLUTION\nline3\n");
+        let rec = reconstruct_conflict_impl(&repo.cwd(), "shared.txt").unwrap();
+        assert!(rec.content.contains("<<<<<<<"));
+        assert!(!rec.wt_matches_side, "working tree matches neither side → manual edit");
+    }
+
+    // ── Remote selection + unpushed-tag detection ─────────────
+    //
+    // Reproduces the "push modal lists already-pushed tags" bug: with two
+    // remotes (`fork` + `origin`), `git remote -v` sorts `fork` first, so the
+    // old code probed the fork (which has no tags) and reported every local
+    // tag as unpushed.
+
+    fn make_bare_remote() -> PathBuf {
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("gitwand-ops-bare-{}-{}-{}", pid, n, nanos));
+        let out = Command::new(git_binary())
+            .args(["init", "--bare", "-q", "-b", "main"])
+            .arg(&dir)
+            .output()
+            .expect("git init --bare spawn");
+        assert!(out.status.success(), "git init --bare failed: {}", String::from_utf8_lossy(&out.stderr));
+        dir
+    }
+
+    #[test]
+    fn git_remote_info_prefers_origin_over_alphabetically_first() {
+        let repo = TempRepo::new();
+        // `fork` sorts before `origin` in `git remote -v`.
+        repo.git_ok(&["remote", "add", "fork", "git@github.com:someone/fork.git"]);
+        repo.git_ok(&["remote", "add", "origin", "git@github.com:owner/repo.git"]);
+
+        let info = tauri::async_runtime::block_on(git_remote_info(repo.cwd()))
+            .expect("git_remote_info failed");
+        assert_eq!(
+            info.name, "origin",
+            "origin must win over an alphabetically-earlier remote"
+        );
+    }
+
+    #[test]
+    fn git_remote_info_falls_back_to_sole_remote() {
+        let repo = TempRepo::new();
+        repo.git_ok(&["remote", "add", "upstream", "git@github.com:up/stream.git"]);
+
+        let info = tauri::async_runtime::block_on(git_remote_info(repo.cwd()))
+            .expect("git_remote_info failed");
+        assert_eq!(info.name, "upstream", "the only remote is the answer");
+    }
+
+    #[test]
+    fn git_unpushed_tags_reflects_what_the_remote_actually_has() {
+        let repo = TempRepo::new();
+        repo.write("a.txt", "1");
+        repo.commit_all("c1");
+        let bare = make_bare_remote();
+        repo.git_ok(&["remote", "add", "origin", bare.to_str().unwrap()]);
+        repo.git_ok(&["push", "-q", "origin", "main"]);
+
+        // A tag that lives on origin must NOT be reported as unpushed.
+        repo.git_ok(&["tag", "v1.0.0"]);
+        repo.git_ok(&["push", "-q", "origin", "v1.0.0"]);
+        let unpushed = tauri::async_runtime::block_on(
+            git_unpushed_tags(repo.cwd(), "origin".to_string()),
+        )
+        .expect("git_unpushed_tags failed");
+        assert!(
+            unpushed.is_empty(),
+            "v1.0.0 is on origin, expected none unpushed, got {:?}",
+            unpushed
+        );
+
+        // A local-only tag IS unpushed.
+        repo.git_ok(&["tag", "v2.0.0"]);
+        let unpushed2 = tauri::async_runtime::block_on(
+            git_unpushed_tags(repo.cwd(), "origin".to_string()),
+        )
+        .expect("git_unpushed_tags failed");
+        assert_eq!(
+            unpushed2,
+            vec!["v2.0.0".to_string()],
+            "only the local-only tag is unpushed"
+        );
+
+        let _ = std::fs::remove_dir_all(&bare);
+    }
 }
