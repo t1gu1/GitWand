@@ -1880,11 +1880,11 @@ function formatActivityDate(dateStr: string): string {
 
 
 .tab-badge {
-  font-size: var(--font-size-xs);
+  font-size: 9px;
   font-weight: var(--font-weight-semibold);
   background: var(--color-accent);
   color: var(--color-accent-text);
-  padding: var(--space-1) var(--space-3);
+  padding: 1px var(--space-2);
   border-radius: var(--radius-pill);
   font-variant-numeric: tabular-nums;
 }

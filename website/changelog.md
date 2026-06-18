@@ -5,6 +5,18 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## Unreleased
+
+### See your changes as a folder tree
+
+The Changes sidebar can now show your working-tree changes as a **nested folder tree**, not just a flat list. A small toggle (next to the monorepo scope picker) switches between list and tree; in tree mode each section — Staged, Modified, Untracked — nests its files under their folders, and you can collapse or expand folders just like the sections themselves. Open the folders you're working in, fold away the rest; GitWand remembers your choice and the collapsed folders, and automatically reveals a file's folder when you select it.
+
+### Discard, stage and unstage right where you are
+
+Every file row now has a **discard** button sitting next to stage/unstage, and folder rows in the tree get folder-level stage, unstage and discard that act on everything inside. The buttons are grouped into a tidy segmented control — and they're always visible now, so you no longer have to hover to find them.
+
+---
+
 ## v2.21.0 — June 2026
 
 ### Scope a monorepo to one sub-workspace
