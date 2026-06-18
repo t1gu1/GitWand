@@ -717,8 +717,8 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   transition: background var(--transition-base), color var(--transition-base);
 }
 .branch-add-btn:hover {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .branch-trigger {
@@ -741,9 +741,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   border-bottom-right-radius: 0;
 }
 .branch-trigger:hover {
-  background: var(--color-border);
-}
-.branch-trigger-group:hover .branch-add-btn:not(:hover) {
   background: var(--color-border);
 }
 .branch-trigger--loading {
