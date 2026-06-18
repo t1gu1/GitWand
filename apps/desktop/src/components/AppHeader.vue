@@ -32,6 +32,7 @@
 import { ref, computed, inject, watch, onMounted, onUnmounted, type Ref } from "vue";
 import type { Theme } from "../composables/useTheme";
 import type { GitBranch } from "../utils/backend";
+import { branchSort } from "../utils/branchSort";
 import { useI18n } from "../composables/useI18n";
 import { useUndoStack, type UndoEntry, type UndoOpType } from "../composables/useUndoStack";
 import {
@@ -161,26 +162,6 @@ function openMergePopover() {
 
 function closeMergePopover() {
   showMergePopover.value = false;
-}
-
-const mainNames = ["main", "master"];
-
-// Duplicated locally (also defined in BranchSelector) — kept tiny on
-// purpose. Pulling it into a shared util would be overkill for 12 lines
-// and adds an indirection for a function that rarely changes.
-function branchSort(a: GitBranch, b: GitBranch): number {
-  if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
-  const aName = a.name.replace(/^origin\//, "").toLowerCase();
-  const bName = b.name.replace(/^origin\//, "").toLowerCase();
-  const aMain = mainNames.includes(aName) ? 0 : 1;
-  const bMain = mainNames.includes(bName) ? 0 : 1;
-  if (aMain !== bMain) return aMain - bMain;
-  if (a.lastCommitDate && b.lastCommitDate) {
-    const da = new Date(a.lastCommitDate).getTime();
-    const db = new Date(b.lastCommitDate).getTime();
-    if (da !== db) return db - da;
-  }
-  return a.name.localeCompare(b.name);
 }
 
 const mergeBranches = computed(() => {

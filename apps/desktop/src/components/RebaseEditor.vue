@@ -10,6 +10,7 @@ import {
 } from "../composables/useInteractiveRebase";
 import { useSplitCommit } from "../composables/useSplitCommit";
 import { getGitBranches, type GitBranch } from "../utils/backend";
+import { branchSort } from "../utils/branchSort";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useSquashSuggestion, type SquashSuggestion } from "../composables/useSquashSuggestion";
 import BaseModal from "./BaseModal.vue";
@@ -29,7 +30,9 @@ const branchesLoading = ref(false);
 async function fetchBranches() {
   branchesLoading.value = true;
   try {
-    localBranches.value = await getGitBranches(props.cwd);
+    // Sort once here (order is invariant across filter keystrokes) using the
+    // app-wide canonical branch ordering.
+    localBranches.value = (await getGitBranches(props.cwd)).sort(branchSort);
 
     // If initialBase is provided, select it immediately after branches are loaded
     if (props.initialBase) {
@@ -100,6 +103,8 @@ const baseCandidates = computed(() => {
         !b.isRemote &&
         b.name.toLowerCase().includes(filter),
     )
+    // localBranches is already sorted (branchSort) at fetch time; filtering
+    // preserves order, so just project to names here.
     .map((b) => b.name);
 });
 
@@ -422,7 +427,7 @@ const hasTodo = computed(
       <!-- Base selection -->
       <template v-if="showBasePicker && !inProgress">
         <div class="rb-section">
-          <label class="rb-label" for="rb-base-input">{{ t('rebase.baseLabel') }}</label>
+          <label class="rb-label rb-label--base" for="rb-base-input">{{ t('rebase.baseLabel') }}</label>
           <p class="rb-hint">{{ t('rebase.baseHint') }}</p>
           <input
             id="rb-base-input"
@@ -438,10 +443,8 @@ const hasTodo = computed(
               class="rb-base-item"
               @click="selectBase(name)"
             >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.3"/>
-                <circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.3"/>
-                <path d="M5 6v4" stroke="currentColor" stroke-width="1.3"/>
+              <svg class="rb-base-icon" width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <path d="M9.5 3.25a2.25 2.25 0 1 1 3 2.122V6A2.5 2.5 0 0 1 10 8.5H6a1 1 0 0 0-1 1v1.128a2.251 2.251 0 1 1-1.5 0V5.372a2.25 2.25 0 1 1 1.5 0v1.836A2.492 2.492 0 0 1 6 7h4a1 1 0 0 0 1-1v-.628A2.25 2.25 0 0 1 9.5 3.25Zm-6 0a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Zm8.25-.75a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5ZM4.25 12a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"/>
               </svg>
               <span class="mono">{{ name }}</span>
             </li>
@@ -887,13 +890,19 @@ const hasTodo = computed(
 .rb-squash-cancel:hover { background: var(--color-bg-secondary); }
 
 /* ─── Base picker ──────────────────────────────────────────── */
+.rb-label--base {
+  font-size: var(--font-size-md);
+}
+
 .rb-base-input {
   width: 100%;
+  margin-top: var(--space-3);
   padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   color: var(--color-text);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
@@ -906,23 +915,46 @@ const hasTodo = computed(
 .rb-base-list {
   list-style: none;
   padding: 0;
-  margin: 6px 0 0;
-  max-height: 200px;
+  margin: var(--space-3) 0 0;
+  /* Tall enough to show many branches; capped to viewport so the modal
+     itself grows toward its 85vh ceiling instead of an inner 200px scroll. */
+  max-height: min(64vh, 580px);
   overflow-y: auto;
+  /* Breathing room so branch rows don't butt against the scrollbar. */
+  padding-right: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 .rb-base-item {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 6px var(--space-3);
+  padding: var(--space-2) var(--space-3);
   font-size: var(--font-size-sm);
   cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background 0.1s;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast), transform var(--transition-fast);
+}
+.rb-base-icon {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
 }
 .rb-base-item:hover {
-  background: var(--color-bg-secondary);
+  background: var(--color-accent-soft, rgba(124, 58, 237, 0.14));
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.rb-base-item:hover .rb-base-icon {
+  color: var(--color-accent);
+}
+.rb-base-item:active {
+  transform: translateY(1px);
 }
 
 /* ─── Todo list ────────────────────────────────────────────── */

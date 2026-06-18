@@ -13,9 +13,7 @@
  */
 
 import { ref, computed } from "vue";
-import { gitExec, isTauri } from "../utils/backend";
-
-const DEV_SERVER = "http://localhost:3001";
+import { gitExec, gitInteractiveRebase } from "../utils/backend";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -254,20 +252,11 @@ export function useInteractiveRebase() {
     pendingSplits.value = nextPending;
 
     try {
-      // Both Tauri and dev-server use the same endpoint pattern.
-      // For Tauri we'll add a Rust command later; for dev mode we
-      // need a dedicated endpoint because GIT_SEQUENCE_EDITOR requires
-      // env-var control that gitExec doesn't support.
-      const res = await fetch(
-        isTauri() ? "/api/git-interactive-rebase" : `${DEV_SERVER}/api/git-interactive-rebase`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cwd, base, todoLines }),
-        },
-      );
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      // `gitInteractiveRebase` writes a temp todo file and injects it via
+      // GIT_SEQUENCE_EDITOR. In Tauri it routes through the `git_interactive_rebase`
+      // Rust command; in web-dev mode it hits the dev-server endpoint — both
+      // because plain `gitExec` can't control the sequence-editor env var.
+      const data = await gitInteractiveRebase(cwd, base, todoLines);
       if (data.conflict) {
         await detectRebaseState(cwd);
         return { success: true, conflict: true, inProgress: true };

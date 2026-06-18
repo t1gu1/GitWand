@@ -26,6 +26,7 @@
  */
 import { ref, computed, inject, onMounted, onUnmounted, watch, defineAsyncComponent, type Ref } from "vue";
 import { gitSubmoduleList, gitSubmoduleBranches, getGitLog, type GitBranch, type SubmoduleEntry, type SubmoduleBranch } from "../../utils/backend";
+import { branchSort } from "../../utils/branchSort";
 import { useI18n } from "../../composables/useI18n";
 import type { LocaleKey } from "../../locales";
 import { useMergePreview, type PreviewOperation } from "../../composables/useMergePreview";
@@ -203,23 +204,6 @@ async function toggleSubmoduleExpand(path: string) {
 function openSubmoduleTree(path: string) {
   emit("openSubmodule", path);
   closePopover();
-}
-
-const mainNames = ["main", "master"];
-
-function branchSort(a: GitBranch, b: GitBranch): number {
-  if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
-  const aName = a.name.replace(/^origin\//, "").toLowerCase();
-  const bName = b.name.replace(/^origin\//, "").toLowerCase();
-  const aMain = mainNames.includes(aName) ? 0 : 1;
-  const bMain = mainNames.includes(bName) ? 0 : 1;
-  if (aMain !== bMain) return aMain - bMain;
-  if (a.lastCommitDate && b.lastCommitDate) {
-    const da = new Date(a.lastCommitDate).getTime();
-    const db = new Date(b.lastCommitDate).getTime();
-    if (da !== db) return db - da;
-  }
-  return a.name.localeCompare(b.name);
 }
 
 const localBranches = computed(() =>
