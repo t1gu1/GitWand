@@ -10,6 +10,7 @@ import RepoSidebar from "./components/RepoSidebar.vue";
 import DiffViewer from "./components/DiffViewer.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import BaseModal from "./components/BaseModal.vue";
+import BranchNameField from "./components/BranchNameField.vue";
 // Always-mounted (state-driven internally — must stay eager):
 import EditCommitOverlay from "./components/EditCommitOverlay.vue";
 import SplitCommitModal from "./components/SplitCommitModal.vue";
@@ -2700,21 +2701,15 @@ onUnmounted(() => {
     <BaseModal v-if="commitActionModal.type === 'createBranch'" :title="t('commitCtx.createBranch')"
       :subtitle="t('commitCtx.createBranchDesc', commitActionModal.entry?.hash ?? '')" size="sm"
       @close="closeCommitActionModal">
-      <div style="display: flex; flex-direction: column; gap: var(--space-3);">
-        <!-- AI suggestion strip (v2.12) -->
-        <div v-if="isAIAvailable" class="tag-ai-row">
-          <span class="tag-ai-hint" v-html="t('branches.aiHint').replace(' (', '<br/>(')"></span>
-          <button class="bm-btn btn--ai tag-ai-btn" :disabled="commitActionModal.busy || isBranchNameAISuggesting"
-            @click="suggestBranchNameWithAI">
-            <AiSparkle :size="13" :animated="isBranchNameAISuggesting" />
-            {{ isBranchNameAISuggesting ? t('common.loading') : t('commitCtx.tagAiSuggest') }}
-          </button>
-        </div>
-        <input v-model="commitActionModal.branchName" type="text" class="cam-input"
-          :placeholder="t('commitCtx.branchNamePlaceholder')" maxlength="100" autofocus
-          @keydown.enter.prevent="confirmCreateBranchFromCommit" />
-        <p v-if="commitActionModal.error" class="cam-error">{{ commitActionModal.error }}</p>
-      </div>
+      <BranchNameField
+        v-model="commitActionModal.branchName"
+        :ai-available="isAIAvailable"
+        :suggesting="isBranchNameAISuggesting"
+        :busy="commitActionModal.busy"
+        :error="commitActionModal.error"
+        @suggest="suggestBranchNameWithAI"
+        @submit="confirmCreateBranchFromCommit"
+      />
       <template #footer>
         <button class="bm-btn bm-btn--ghost" @click="closeCommitActionModal">{{ t('common.cancel') }}</button>
         <button class="bm-btn bm-btn--primary"

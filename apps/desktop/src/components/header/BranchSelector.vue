@@ -35,7 +35,8 @@ import { useAIProvider } from "../../composables/useAIProvider";
 import { useBranchName } from "../../composables/useBranchName";
 import { BRANCH_CREATE_REQUEST_KEY } from "../../composables/branchPickerBridge";
 import MergePreviewPanel from "../MergePreviewPanel.vue";
-import AiSparkle from "../AiSparkle.vue";
+import BaseModal from "../BaseModal.vue";
+import BranchNameField from "../BranchNameField.vue";
 
 const { t } = useI18n();
 
@@ -147,6 +148,16 @@ function closePopover() {
   newBranchName.value = "";
 }
 
+function openCreate() {
+  newBranchName.value = "";
+  showCreate.value = true;
+}
+
+function cancelCreate() {
+  showCreate.value = false;
+  newBranchName.value = "";
+}
+
 // ─── Submodules section (v2.15.1) ────────────────────────────────
 const submodules = ref<SubmoduleEntry[]>([]);
 const showSubmodules = ref(false);
@@ -224,16 +235,6 @@ function handleBranchCreate() {
   newBranchName.value = "";
   showCreate.value = false;
   closePopover();
-}
-
-function onCreateKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    handleBranchCreate();
-  } else if (e.key === "Escape") {
-    showCreate.value = false;
-    newBranchName.value = "";
-  }
 }
 
 // ─── Merge Preview (inside popover) ──────────────────────────────
@@ -389,6 +390,9 @@ function closePreview() {
 // wrapper root).
 function onDocClick(e: MouseEvent) {
   if (!showPopover.value) return;
+  // The new-branch modal teleports to <body>, outside the wrapper. Keep the
+  // popover open while it's up — the modal owns its own backdrop dismissal.
+  if (showCreate.value) return;
   const target = e.target as HTMLElement | null;
   if (!target?.closest(".branch-popover-wrapper")) {
     closePopover();
@@ -408,6 +412,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
       When stats are absent, the chip collapses to a single line via
       the `branch-trigger--with-stats` modifier being dropped.
     -->
+    <div class="branch-trigger-group">
     <button
       class="branch-trigger"
       :class="{
@@ -468,6 +473,13 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         <path d="M2.5 3.5l2.5 3 2.5-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </button>
+      <!-- Fused "new branch" button, sits flush to the right of the trigger -->
+      <button class="branch-add-btn" :title="t('branches.create')" :aria-label="t('branches.create')" @click="openCreate">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
 
     <div v-if="showPopover" class="branch-popover">
       <div class="bp-header">
@@ -478,42 +490,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
           autofocus
           @keydown.escape="closePopover"
         />
-        <button class="bp-action-btn" :title="t('branches.create')" @click="showCreate = !showCreate">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-        </button>
       </div>
-
-      <div v-if="showCreate" class="bp-create">
-        <input
-          v-model="newBranchName"
-          class="bp-create-input mono"
-          :placeholder="t('branches.namePlaceholder')"
-          autofocus
-          @keydown="onCreateKeydown"
-        />
-        <button
-          v-if="ai.isAvailable.value"
-          type="button"
-          class="btn btn--ai btn--icon"
-          :disabled="isGeneratingBranchName"
-          :title="t('branches.aiHint')"
-          :aria-label="t('branches.aiHint')"
-          @click="handleBranchNameAI"
-        >
-          <span v-if="isGeneratingBranchName">…</span>
-          <AiSparkle v-else :size="14" />
-        </button>
-        <button
-          class="bp-create-btn"
-          :disabled="!newBranchName.trim()"
-          @click="handleBranchCreate"
-        >
-          {{ t('common.create') }}
-        </button>
-      </div>
-      <p v-if="showCreate && branchNameAiError" class="bp-create-error">{{ branchNameAiError }}</p>
 
       <div v-if="branchesLoading" class="bp-loading">
         <div class="bp-spinner"></div>
@@ -683,6 +660,30 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         </div>
       </div>
     </div>
+
+    <!-- New-branch modal -->
+    <BaseModal
+      v-if="showCreate"
+      :title="t('branches.create')"
+      size="sm"
+      @close="cancelCreate"
+    >
+      <BranchNameField
+        v-model="newBranchName"
+        :ai-available="ai.isAvailable.value"
+        :suggesting="isGeneratingBranchName"
+        :error="branchNameAiError ?? ''"
+        @suggest="handleBranchNameAI"
+        @submit="handleBranchCreate"
+      />
+
+      <template #footer>
+        <button class="bm-btn bm-btn--ghost" @click="cancelCreate">{{ t('common.cancel') }}</button>
+        <button class="bm-btn bm-btn--primary" :disabled="!newBranchName.trim()" @click="handleBranchCreate">
+          {{ t('common.create') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -690,6 +691,34 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 /* ─── Branch trigger ────────────────────────────────────── */
 .branch-popover-wrapper {
   position: relative;
+}
+
+/* Trigger + "new branch" button read as one fused control. */
+.branch-trigger-group {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.branch-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 38px;
+  padding: 0;
+  padding-right: 2px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  border-left: 1px solid var(--color-bg);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: pointer;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+.branch-add-btn:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
 }
 
 .branch-trigger {
@@ -707,7 +736,14 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   max-width: 320px;
   min-width: 0;
 }
+.branch-trigger-group .branch-trigger {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
 .branch-trigger:hover {
+  background: var(--color-border);
+}
+.branch-trigger-group:hover .branch-add-btn:not(:hover) {
   background: var(--color-border);
 }
 .branch-trigger--loading {
@@ -841,7 +877,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4) var(--space-4);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -852,7 +888,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   background: var(--color-bg);
   color: var(--color-text);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   outline: none;
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -861,60 +897,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
-.bp-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  background: none;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-.bp-action-btn:hover {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
 
-.bp-create {
-  display: flex;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--color-border);
-}
-.bp-create-input {
-  flex: 1;
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--font-size-base);
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-pill);
-  outline: none;
-}
-.bp-create-input:focus {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-accent-soft);
-}
-
-.bp-create-btn {
-  padding: var(--space-3) var(--space-5);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-radius: var(--radius-pill);
-}
-.bp-create-btn:disabled { opacity: 0.4; }
-
-.bp-create-error {
-  margin: 0;
-  padding: 0 var(--space-5) var(--space-3);
-  font-size: var(--font-size-xs);
-  color: var(--color-danger, #ef4444);
-  border-bottom: 1px solid var(--color-border);
-}
 
 .bp-loading {
   display: flex;
@@ -1126,35 +1109,4 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
 
-/* Local copies of .btn and .btn--icon so the AI button inside .bp-create
-   renders consistently. We don't import from the parent scoped styles. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-medium);
-  transition: background var(--transition-base), color var(--transition-base), transform var(--transition-fast);
-  white-space: nowrap;
-}
-
-.btn--icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--color-text-muted);
-  transition: background var(--transition-base), color var(--transition-base);
-}
-.btn--icon:hover:not(:disabled) {
-  background: var(--color-bg-tertiary);
-  color: var(--color-text);
-}
-.btn--icon:disabled { opacity: 0.35; cursor: not-allowed; }
 </style>
