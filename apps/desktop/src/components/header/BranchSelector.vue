@@ -142,10 +142,15 @@ function togglePopover() {
   }
 }
 
-function closePopover() {
-  showPopover.value = false;
+/** Close the create form and clear its draft name. */
+function resetCreate() {
   showCreate.value = false;
   newBranchName.value = "";
+}
+
+function closePopover() {
+  showPopover.value = false;
+  resetCreate();
 }
 
 function openCreate() {
@@ -154,8 +159,7 @@ function openCreate() {
 }
 
 function cancelCreate() {
-  showCreate.value = false;
-  newBranchName.value = "";
+  resetCreate();
 }
 
 // ─── Submodules section (v2.15.1) ────────────────────────────────
@@ -232,8 +236,6 @@ function handleBranchCreate() {
   const name = newBranchName.value.trim();
   if (!name) return;
   emit("createBranch", name);
-  newBranchName.value = "";
-  showCreate.value = false;
   closePopover();
 }
 
@@ -706,8 +708,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   justify-content: center;
   flex-shrink: 0;
   width: 38px;
-  padding: 0;
-  padding-right: 2px;
+  padding: 0 2px 0 0;
   color: var(--color-text-muted);
   background: var(--color-bg-tertiary);
   border-left: 1px solid var(--color-bg);
@@ -877,7 +878,7 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-4);
+  padding: var(--space-4);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -896,8 +897,6 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
   border-color: var(--color-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
 }
-
-
 
 .bp-loading {
   display: flex;
