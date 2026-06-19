@@ -252,6 +252,12 @@ function commentTimeAgo(dateStr: string): string {
         </svg>
       </div>
       <span class="pdv-empty-label">{{ t('pr.detail.emptySelect') }}</span>
+      <button class="pdv-empty-new-btn" @click="p.showCreateForm.value = true">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M8 3v10M3 8h10" />
+        </svg>
+        <span>{{ t('pr.list.newBtn').replace(/^\+\s*/, '') }}</span>
+      </button>
     </div>
 
     <!-- Detail loading -->
@@ -929,6 +935,27 @@ function commentTimeAgo(dateStr: string): string {
 }
 .pdv-empty-label {
   font-size: var(--font-size-md);
+}
+.pdv-empty-new-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0 var(--color-accent-soft);
+  transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  margin-top: 8px;
+}
+.pdv-empty-new-btn:hover {
+  background: var(--color-accent-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 0 3px var(--color-accent-soft);
 }
 
 .pdv-spinner {

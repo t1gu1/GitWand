@@ -166,6 +166,9 @@ const en = {
     tabLog: "Log",
     tabGraph: "Graph",
     gitTree: "Git Tree",
+    toggleCommitPanel: "Commit panel",
+    togglePrPanel: "Pull requests panel",
+    toggleFilesPanel: "Files panel",
     tabDashboard: "Dashboard",
     stashTitle: "Stash manager",
     // Log scope toggle (current branch vs all refs)
