@@ -34,6 +34,8 @@ const zhCN: Locale = {
     ok: "确定",
     open: "打开",
     optional: "可选",
+    previous: "上一个",
+    next: "下一个",
     refresh: "刷新",
     save: "保存",
     ctrlEnter: "按 Ctrl+Enter 确认",

@@ -27,6 +27,8 @@ const ptBR: Locale = {
     ok: "OK",
     open: "Abrir",
     optional: "opcional",
+    previous: "Anterior",
+    next: "Próximo",
     refresh: "Atualizar",
     save: "Salvar",
     ctrlEnter: "Ctrl+Enter para confirmar",

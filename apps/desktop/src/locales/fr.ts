@@ -20,6 +20,8 @@ const fr: Locale = {
     ok: "OK",
     open: "Ouvrir",
     optional: "optionnel",
+    previous: "Précédent",
+    next: "Suivant",
     refresh: "Rafra\u00eechir",
     save: "Sauvegarder",
     ctrlEnter: "Ctrl+Entr\u00e9e pour valider",

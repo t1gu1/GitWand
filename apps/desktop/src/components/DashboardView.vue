@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import {
   getGitLog,
   getGitShortlog,
@@ -405,6 +405,29 @@ function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
 
 onMounted(loadDashboard);
 watch(() => props.cwd, loadDashboard);
+
+// ─── Contributors rail — arrow navigation ──────────────────
+const contribScroll = ref<HTMLElement | null>(null);
+const contribCanLeft = ref(false);
+const contribCanRight = ref(false);
+
+function updateContribArrows() {
+  const el = contribScroll.value;
+  if (!el) return;
+  // 20px dead-zone at each end so the arrow stays hidden near the edges.
+  const edge = 20;
+  contribCanLeft.value = el.scrollLeft > edge;
+  contribCanRight.value = el.scrollLeft + el.clientWidth < el.scrollWidth - edge;
+}
+
+function scrollContrib(dir: 1 | -1) {
+  const el = contribScroll.value;
+  if (!el) return;
+  el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+}
+
+// Recompute arrow visibility whenever the list changes.
+watch(topContributors, () => nextTick(updateContribArrows), { immediate: true });
 </script>
 
 <template>
@@ -430,26 +453,55 @@ watch(() => props.cwd, loadDashboard);
             <!-- Horizontal scrollable list (v2.0) — every contributor over the
                  entire HEAD history, not just a recent window. Card width is
                  ~33% so a third card peeks in to cue the scroll. -->
-            <div
-              v-if="topContributors.length > 0"
-              class="contributors-scroll"
-              role="list"
-              :aria-label="t('dashboard.contributorsTitle')"
-            >
-              <div
-                v-for="c in topContributors"
-                :key="c.email"
-                class="contrib"
-                role="listitem"
-                :title="`${c.name} <${c.email}> · ${c.count}`"
+            <div v-if="topContributors.length > 0" class="contributors-rail">
+              <button
+                v-if="contribCanLeft"
+                type="button"
+                class="contrib-arrow contrib-arrow--left"
+                :aria-label="t('common.previous')"
+                @click="scrollContrib(-1)"
               >
-                <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.name) }}</span>
-                <div class="contrib-body">
-                  <div class="contrib-name">{{ c.name }}</div>
-                  <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M15 18l-6-6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <!-- Horizontal scrollable list (v2.0) — every contributor over the
+                   entire HEAD history, not just a recent window. Card width is
+                   ~33% so a third card peeks in to cue the scroll. -->
+              <div
+                ref="contribScroll"
+                class="contributors-scroll"
+                :class="{ 'contributors-scroll--dense': topContributors.length > 4 }"
+                role="list"
+                :aria-label="t('dashboard.contributorsTitle')"
+                @scroll="updateContribArrows"
+              >
+                <div
+                  v-for="c in topContributors"
+                  :key="c.email"
+                  class="contrib"
+                  role="listitem"
+                  :title="`${c.name} <${c.email}> · ${c.count}`"
+                >
+                  <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.name) }}</span>
+                  <div class="contrib-body">
+                    <div class="contrib-name">{{ c.name }}</div>
+                    <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
+                  </div>
+                  <div class="contrib-stat">{{ c.count }}</div>
                 </div>
-                <div class="contrib-stat">{{ c.count }}</div>
               </div>
+              <button
+                v-if="contribCanRight"
+                type="button"
+                class="contrib-arrow contrib-arrow--right"
+                :aria-label="t('common.next')"
+                @click="scrollContrib(1)"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path d="M9 18l6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
             </div>
             <div v-else class="contrib-empty">
               {{ t("dashboard.noContributors") }}
@@ -1177,10 +1229,15 @@ button.stat-card:hover {
   gap: var(--space-3);
 }
 
+/* Rail = scroll viewport + overlaid prev/next arrows. */
+.contributors-rail {
+  position: relative;
+}
+
 /* Horizontal scrollable rail (v2.0). The full contributor list lives here;
    each card snaps to the start, and ~33% width means a third card peeks
-   in to make the scrollability obvious. `mask-image` fades the right edge
-   when there's overflow as an extra cue. */
+   in to make the scrollability obvious. `mask-image` fades both edges
+   as an extra cue; navigation is driven by the overlaid arrows. */
 .contributors-scroll {
   display: flex;
   flex-direction: row;
@@ -1188,13 +1245,60 @@ button.stat-card:hover {
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x mandatory;
-  scrollbar-width: thin;
+  /* Arrows replace the scrollbar as the navigation affordance. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   /* Negative margin + matching padding lets the cards bleed to the panel
      edges visually while keeping the scrollbar clear of the panel border. */
-  margin: 0 calc(var(--space-5) * -1);
-  /* Extra bottom padding keeps the horizontal scrollbar clear of the
-     contributor names instead of overlapping them. */
-  padding: 0 var(--space-5) var(--space-4);
+  padding: 0 var(--space-5) 0;
+  /* Fade both edges so cards appear to slide behind the panel sides. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--space-6),
+    #000 calc(100% - var(--space-6)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--space-6),
+    #000 calc(100% - var(--space-6)),
+    transparent 100%
+  );
+}
+.contributors-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Prev/next arrows — overlaid on the rail edges, replacing the scrollbar. */
+.contrib-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text);
+  cursor: pointer;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.25);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.contrib-arrow:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+}
+.contrib-arrow--left {
+  left: calc(var(--space-2) * -1);
+}
+.contrib-arrow--right {
+  right: calc(var(--space-2) * -1);
 }
 
 .contrib {
@@ -1205,11 +1309,16 @@ button.stat-card:hover {
   grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+/* >4 contributors: shrink cards so more fit and a partial card peeks in. */
+.contributors-scroll--dense .contrib {
+  flex-basis: calc((100% - var(--space-3) * 4) / 6);
 }
 
 .contrib:hover {

@@ -26,6 +26,8 @@ const en = {
     ok: "OK",
     open: "Open",
     optional: "optional",
+    previous: "Previous",
+    next: "Next",
     refresh: "Refresh",
     save: "Save",
     ctrlEnter: "Ctrl+Enter to confirm",

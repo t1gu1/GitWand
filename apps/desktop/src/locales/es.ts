@@ -26,6 +26,8 @@ const es: Locale = {
     ok: "Aceptar",
     open: "Abrir",
     optional: "opcional",
+    previous: "Anterior",
+    next: "Siguiente",
     refresh: "Actualizar",
     save: "Guardar",
     ctrlEnter: "Ctrl+Intro para confirmar",
