@@ -144,7 +144,6 @@ const emit = defineEmits<{
   openHelp: [];
   openStash: [];
   openTags: [];
-  openWorkspace: [];
   openAgents: [];
   discardAll: [];
   changeView: [mode: 'dashboard' | 'changes' | 'history' | 'prs' | 'launchpad'];
@@ -329,36 +328,27 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
         <div class="header-separator header-separator--offline" aria-hidden="true"></div>
       </template>
 
-      <!-- Workspace button -->
-      <button
-        v-if="hasRepo"
-        class="btn btn--icon"
-        v-tooltip="t('workspace.title')"
-        :aria-label="t('workspace.title')"
-        @click="emit('openWorkspace')"
-      >
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-          <rect x="1" y="4" width="14" height="10" rx="2"/>
-          <path d="M1 7h14M5 4V3a2 2 0 014 0v1" stroke-linejoin="round"/>
-        </svg>
-      </button>
+      <!-- Primary destinations — labeled pills so they stand out from the
+           utility icons (theme / help / settings) that follow the divider. -->
+      <template v-if="hasRepo">
+        <button
+          class="btn btn--secondary header-feature-btn"
+          v-tooltip="t('agents.sidebarTooltip')"
+          :aria-label="t('agents.title')"
+          @click="emit('openAgents')"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
+            <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
+            <path d="M9 20h6"/>
+          </svg>
+          <span>{{ t('agents.headerLabel') }}</span>
+        </button>
 
-      <!-- Agents button -->
-      <button
-        v-if="hasRepo"
-        class="btn btn--icon"
-        v-tooltip="t('agents.sidebarTooltip')"
-        :aria-label="t('agents.title')"
-        @click="emit('openAgents')"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="11" width="18" height="11" rx="2"/>
-          <path d="M12 2v4M8 11V9a4 4 0 0 1 8 0v2"/>
-          <circle cx="9" cy="16" r="1" fill="currentColor" stroke="none"/>
-          <circle cx="15" cy="16" r="1" fill="currentColor" stroke="none"/>
-          <path d="M9 20h6"/>
-        </svg>
-      </button>
+        <div class="header-separator" aria-hidden="true"></div>
+      </template>
 
       <!-- Theme toggle -->
       <button
@@ -775,6 +765,21 @@ onUnmounted(() => document.removeEventListener("click", onDocClick, true));
 
 .btn--secondary { background: var(--color-bg-tertiary); color: var(--color-text); }
 .btn--secondary:hover:not(:disabled) { background: var(--color-border); }
+
+/* Header feature pills (Launchpad / Workspace / Agents) — labeled, slightly
+   tighter than row-2 actions, with an accent active state for the open view. */
+.header-feature-btn {
+  height: 32px;
+  padding: 0 var(--space-4);
+  font-size: var(--font-size-sm);
+}
+.header-feature-btn svg { flex-shrink: 0; opacity: 0.85; }
+.btn--feature-active,
+.btn--feature-active:hover:not(:disabled) {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+.btn--feature-active svg { opacity: 1; }
 
 .btn--primary { background: var(--color-accent); color: var(--color-accent-text); }
 .btn--primary:hover:not(:disabled) { background: var(--color-accent-hover); }

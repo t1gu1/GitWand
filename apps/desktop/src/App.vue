@@ -7,12 +7,9 @@ import { ref, computed, watch, onMounted, onUnmounted, provide, defineAsyncCompo
 import AppHeader from "./components/AppHeader.vue";
 import EmptyState from "./components/EmptyState.vue";
 import RepoSidebar from "./components/RepoSidebar.vue";
-import DiffViewer from "./components/DiffViewer.vue";
+import AppDock from "./components/AppDock.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import BaseModal from "./components/BaseModal.vue";
-// Always-mounted (state-driven internally — must stay eager):
-import EditCommitOverlay from "./components/EditCommitOverlay.vue";
-import SplitCommitModal from "./components/SplitCommitModal.vue";
 
 // ─── Type-only imports ───────────────────────────────────────────────────────
 // SearchPalette exports a named type used in computed paletteActions.
@@ -28,11 +25,16 @@ import type UpdateModalType from "./components/UpdateModal.vue";
 // ─── Main content views (lazy — rendered only when the matching viewMode/flag
 // is active; never part of the initial paint) ─────────────────────────────────
 const MergeEditor = defineAsyncComponent(() => import("./components/MergeEditor.vue"));
+// DiffViewer is only shown in the `v-else` of the changes pane — never at the
+// Launchpad boot view. Lazy like its siblings (Image/CommitDiffViewer) to keep
+// its ~weight out of the main chunk (bundle budget).
+const DiffViewer = defineAsyncComponent(() => import("./components/DiffViewer.vue"));
 const ImageDiffViewer = defineAsyncComponent(() => import("./components/ImageDiffViewer.vue"));
 const CommitDiffViewer = defineAsyncComponent(() => import("./components/CommitDiffViewer.vue"));
 const FileHistoryViewer = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
 const CommitGraph = defineAsyncComponent(() => import("./components/CommitGraph.vue"));
 const PrDetailView = defineAsyncComponent(() => import("./components/PrDetailView.vue"));
+const IssueDetailView = defineAsyncComponent(() => import("./components/IssueDetailView.vue"));
 const PrCreateView = defineAsyncComponent(() => import("./components/PrCreateView.vue"));
 const DashboardView = defineAsyncComponent(() => import("./components/DashboardView.vue"));
 const SettingsPanel = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
@@ -45,7 +47,6 @@ const StashManager = defineAsyncComponent(() => import("./components/StashManage
 const TagsPanel = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
 const WorktreeManager = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
 const SubmodulePanel = defineAsyncComponent(() => import("./components/SubmodulePanel.vue"));
-const WorkspacePanel = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
 const LaunchpadView = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
 const AgentSessionsPanel = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
 const CommandLogPanel = defineAsyncComponent(() => import("./components/CommandLogPanel.vue"));
@@ -59,9 +60,15 @@ const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.
 // Shared create-branch field — only mounted inside the v-if'd create-branch
 // modal, so keep it lazy (also lazy in BranchSelector) to stay out of main.
 const BranchNameField = defineAsyncComponent(() => import("./components/BranchNameField.vue"));
+// Commit edit/split modals — gated by `v-if` in the template (entry set /
+// split.open), so they only pull their chunk when the user actually edits or
+// splits a commit. Kept lazy to stay out of the main bundle (bundle budget).
+const EditCommitOverlay = defineAsyncComponent(() => import("./components/EditCommitOverlay.vue"));
+const SplitCommitModal = defineAsyncComponent(() => import("./components/SplitCommitModal.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
+import { useIssuePanel, ISSUE_PANEL_KEY } from "./composables/useIssuePanel";
 import { useSplitCommit } from "./composables/useSplitCommit";
 import type { GitLogEntry } from "./utils/backend";
 import { getPersistedDiffMode, persistDiffMode, type DiffMode } from "./utils/diffMode";
@@ -95,7 +102,7 @@ import {
   TOGGLE_GIT_TREE_KEY,
   OPEN_SETTINGS_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
+import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -110,7 +117,7 @@ const { isOffline: navIsOffline } = useNetworkStatus();
 const { isOnline: probedOnline, probeConnectivity } = useConnectivity();
 const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState, openExternalUrl } from "./utils/backend";
-import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
+import type { UpdateInfo, RepoOperationState, WorkspaceRepo, PullRequest } from "./utils/backend";
 import { onMarkdownLinkClick } from "./composables/useSafeHtml";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
@@ -255,54 +262,16 @@ async function popStash(index: number) {
   switchToChangesWithFirstFile();
 }
 
-// ─── Git Tree panel ──────────────────────────────────────
-const GIT_TREE_VISIBLE_KEY = "gitwand-git-tree-visible";
-const GIT_TREE_WIDTH_KEY = "gitwand-git-tree-width";
-
-const showGitTree = ref(localStorage.getItem(GIT_TREE_VISIBLE_KEY) === "true");
-const gitTreeWidth = ref(parseInt(localStorage.getItem(GIT_TREE_WIDTH_KEY) || "720"));
-const gitTreeResizing = ref(false);
-
-watch(showGitTree, (val) => {
-  localStorage.setItem(GIT_TREE_VISIBLE_KEY, val.toString());
+// ─── Git Tree (now a full-screen view) ───────────────────
+// The Git Tree used to be a resizable right-hand aside toggled by `showGitTree`.
+// Since the v3 nav revamp it is a first-class `viewMode === 'graph'` view driven
+// by the floating AppDock. We keep a writable `showGitTree` computed as a thin
+// compatibility shim so the many "load the log when the graph is visible" call
+// sites and the native-menu / palette toggles keep working unchanged.
+const showGitTree = computed<boolean>({
+  get: () => viewMode.value === "graph",
+  set: (on) => { viewMode.value = on ? "graph" : "dashboard"; },
 });
-watch(gitTreeWidth, (val) => {
-  localStorage.setItem(GIT_TREE_WIDTH_KEY, val.toString());
-});
-
-function onGitTreeMouseDown(e: MouseEvent) {
-  const startX = e.clientX;
-  const startWidth = gitTreeWidth.value;
-  let dragged = false;
-
-  const onMouseMove = (ev: MouseEvent) => {
-    const delta = startX - ev.clientX;
-    if (!dragged && Math.abs(delta) >= 4) dragged = true;
-    if (dragged) {
-      gitTreeResizing.value = true;
-      gitTreeWidth.value = Math.max(200, Math.min(1400, startWidth + delta));
-    }
-  };
-
-  const onMouseUp = (ev: MouseEvent) => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    document.body.style.userSelect = '';
-    document.body.style.cursor = '';
-    if (!dragged && Math.abs(ev.clientX - startX) < 4) {
-      showGitTree.value = !showGitTree.value;
-    }
-    gitTreeResizing.value = false;
-  };
-
-  if (showGitTree.value) {
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'ew-resize';
-  }
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-  e.preventDefault();
-}
 
 // ─── Fork Point (v2.11) — graph view ─────────────────────
 // SHA of the merge-base between HEAD and the upstream tracking branch.
@@ -333,6 +302,8 @@ watch(
 const prCwd = computed(() => repoFolderPath.value ?? "");
 const prPanel = usePrPanel(prCwd);
 provide(PR_PANEL_KEY, prPanel);
+const issuePanel = useIssuePanel(prCwd);
+provide(ISSUE_PANEL_KEY, issuePanel);
 
 // Load branches when the PR create form opens (they're needed to compute baseCandidates).
 watch(() => prPanel.showCreateForm.value, (val) => {
@@ -842,16 +813,64 @@ function onRepoFileSelect(path: string, staged: boolean) {
 }
 
 function onViewModeChange(mode: ViewMode) {
-  if (mode === "graph") {
-    showGitTree.value = !showGitTree.value;
-    return;
-  }
   viewMode.value = mode;
   if (mode === "changes" && !repoSelectedFile.value && repoFiles.value.length > 0) {
     const first = repoFiles.value[0];
     repoSelectFile(first.path, first.section === "staged");
   }
 }
+
+// ─── Shared RepoSidebar binding (full-screen panes) ──────
+// Each full-screen view composes one or more RepoSidebar panes (files / commit
+// / history / prs / dashboard). They all need the same prop bundle and event
+// wiring, so we bind them via a single computed props object + a stable
+// listeners object instead of repeating ~18 attributes per instance.
+const repoSidebarProps = computed(() => ({
+  cwd: repoFolderPath.value ?? "",
+  files: repoFiles.value,
+  selectedFile: repoSelectedFile.value,
+  viewMode: viewMode.value,
+  repoStats: repoStats.value,
+  commitSummary: commitSummary.value,
+  commitDescription: commitDescription.value,
+  canCommit: canCommit.value,
+  isCommitting: isCommitting.value,
+  logEntries: repoLog.value,
+  currentBranch: repoStatus.value?.branch ?? "",
+  selectedCommitHash: selectedCommitHash.value,
+  aheadCount: aheadCount.value,
+  needsPublish: needsPublish.value,
+  dirFiles: expandedDirFiles.value,
+  branches: branches.value,
+  commitDiffs: commitDiffs.value,
+  visibleFileIdx: historyVisibleFileIdx.value,
+  gitUser: currentGitUser.value,
+}));
+
+const repoSidebarListeners = {
+  select: (path: string, staged: boolean) => onRepoFileSelect(path, staged),
+  changeView: (mode: ViewMode) => onViewModeChange(mode),
+  "select-dir-file": (path: string) => repoSelectFile(path, false),
+  stageFile: (path: string) => stageFiles([path]),
+  unstageFile: (path: string) => unstageFiles([path]),
+  stageAll: () => stageAll(),
+  stagePaths: (paths: string[]) => stageFiles(paths),
+  unstageAll: () => unstageAll(),
+  commit: (trailers: string) => doCommit(trailers),
+  "update:commitSummary": (val: string) => { commitSummary.value = val; },
+  "update:commitDescription": (val: string) => { commitDescription.value = val; },
+  discard: (path: string, section: string) => discardFiles([path], section === "untracked"),
+  discardSection: (sectionKey: string, paths: string[]) => onDiscardSection(sectionKey, paths),
+  addToGitignore: (path: string) => addToGitignore(path),
+  refresh: () => repoRefresh(),
+  openStash: () => { showStash.value = true; },
+  openTags: () => { showTags.value = true; },
+  openAgents: () => { showAgents.value = true; },
+  openLaunchpad: () => handleLaunchpadShortcut(),
+  scrollToFile: (idx: number) => onHistoryScrollToFile(idx),
+  deleteBranch: (name: string, hasLocal: boolean, hasRemote: boolean, remoteName?: string) =>
+    handleDeleteBranchRequest(name, hasLocal, hasRemote, remoteName),
+};
 
 function onDiscardSection(sectionKey: string, paths: string[]) {
   discardSectionConfirm.value = { sectionKey, paths };
@@ -1167,7 +1186,7 @@ function onPaletteAction(id: string) {
     case "view-dashboard": viewMode.value = "dashboard"; break;
     case "view-changes": viewMode.value = "changes"; break;
     case "view-log": viewMode.value = "history"; break;
-    case "view-graph": showGitTree.value = !showGitTree.value; break;
+    case "view-graph": viewMode.value = "graph"; break;
     case "open-settings": showSettings.value = true; break;
     case "open-stash": showStash.value = true; break;
     case "open-worktrees": showWorktrees.value = true; break;
@@ -1239,13 +1258,37 @@ watch(sidebarWidth, (val) => {
   localStorage.setItem(SIDEBAR_WIDTH_KEY, val.toString());
 });
 
+// ─── Commit rail (Changes view) ──────────────────────────
+// The commit composer lives in a collapsible right-hand rail in the
+// full-screen Changes view. Persisted so it stays the way the user left it.
+const COMMIT_RAIL_KEY = "gitwand-commit-rail-visible";
+const showCommitRail = ref(localStorage.getItem(COMMIT_RAIL_KEY) !== "false");
+watch(showCommitRail, (val) => {
+  localStorage.setItem(COMMIT_RAIL_KEY, val.toString());
+});
+
+// Right-rail visibility for the PRs view (PR list) and Git Tree view (file
+// list). Same collapsible/resizable pattern as the Changes commit rail.
+const PR_RAIL_KEY = "gitwand-pr-rail-visible";
+const showPrRail = ref(localStorage.getItem(PR_RAIL_KEY) !== "false");
+watch(showPrRail, (val) => {
+  localStorage.setItem(PR_RAIL_KEY, val.toString());
+});
+
+const GRAPH_RAIL_KEY = "gitwand-graph-rail-visible";
+const showGraphRail = ref(localStorage.getItem(GRAPH_RAIL_KEY) !== "false");
+watch(showGraphRail, (val) => {
+  localStorage.setItem(GRAPH_RAIL_KEY, val.toString());
+});
+
 function onSidebarMouseDown(e: MouseEvent) {
   const startX = e.clientX;
   const startWidth = sidebarWidth.value;
 
   const onMouseMove = (ev: MouseEvent) => {
     sidebarResizing.value = true;
-    const delta = ev.clientX - startX;
+    // Handle sits on the LEFT edge of a right-hand rail: dragging left widens it.
+    const delta = startX - ev.clientX;
     sidebarWidth.value = Math.max(230, Math.min(600, startWidth + delta));
   };
 
@@ -1372,7 +1415,6 @@ watch(repoOperationState, (op) => {
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
 const showTags = ref(false);
-const showWorkspace = ref(false);
 const showAgents = ref(false);
 const showCommandLog = ref(false);
 
@@ -1388,56 +1430,73 @@ watch(
 );
 
 // ─── Launchpad panel ─────────────────────────────────────
-// showLaunchpad removed — Launchpad is now a first-class viewMode ("launchpad").
-// launchpadRepos holds the workspace repos list loaded on demand; the
-// <LaunchpadView :repos="…"> in the main-content area consumes it.
-const launchpadRepos = ref<WorkspaceRepo[]>([]);
-function openLaunchpad(repos: WorkspaceRepo[]) {
-  launchpadRepos.value = repos;
+// Launchpad is a first-class viewMode ("launchpad"). Its repo set is the
+// currently open repo tabs (v3 nav: tabs are the source of truth — no more
+// workspace file). <LaunchpadView :repos="launchpadRepos"> consumes it.
+const launchpadRepos = computed<WorkspaceRepo[]>(() =>
+  repoTabs.value.map((t) => ({ path: t.path, name: t.name }))
+);
+function openLaunchpad() {
   viewMode.value = "launchpad";
-  showWorkspace.value = false;
 }
 
 /**
- * Handle the ⌘L / Ctrl+L shortcut.
+ * Open a PR picked in the Launchpad inside the in-app review surface
+ * (PrDetailView) instead of bouncing to the browser. The Launchpad is
+ * cross-repo, so we first switch the active repo to the PR's repo when it
+ * differs from the one currently open, then select the PR.
  *
- * Resolves the active workspace lazily — Launchpad needs the repo list and
- * the user might have a workspace persisted from a previous session that
- * App.vue hasn't loaded yet (WorkspacePanel owns that state). We read the
- * same localStorage key WorkspacePanel uses (`gitwand-workspace-dir`) and
- * call `workspaceRead` directly. If no workspace is configured, surface a
- * warning in the existing error-toast and pop WorkspacePanel so the user
- * can create one.
+ * `pr` is a `PullRequest` enriched with `repoPath` (PrWithRepo) — selectPr only
+ * needs the PullRequest shape and reads `cwd` (now the PR's repo) for its fetches.
+ */
+async function openLaunchpadPr(pr: PullRequest & { repoPath?: string }) {
+  if (pr.repoPath && pr.repoPath !== repoFolderPath.value) {
+    await handleOpenPath(pr.repoPath);
+    // Let the cwd watcher in usePrPanel run (it resets selectedPr / re-inits
+    // for the new repo) before we select, so our selection isn't clobbered.
+    await nextTick();
+  }
+  viewMode.value = "prs";
+  // Ensure the forge is resolved for this repo (GitLab/Bitbucket/Azure) before
+  // the detail bundle is fetched — selectPr derives the provider from `remote`.
+  await prPanel.loadRemote();
+  await prPanel.selectPr(pr);
+}
+
+/**
+ * Open an issue picked in the Launchpad inside the in-app IssueDetailView.
+ * Same cross-repo switch as `openLaunchpadPr`. `issue` carries `repoPath`
+ * (IssueWithRepo); issuePanel reads `cwd` (the issue's repo) for its fetches.
+ */
+async function openLaunchpadIssue(issue: { number: number; repoPath?: string }) {
+  if (issue.repoPath && issue.repoPath !== repoFolderPath.value) {
+    await handleOpenPath(issue.repoPath);
+    await nextTick();
+  }
+  viewMode.value = "issue";
+  await issuePanel.selectIssue(issue.number);
+}
+
+/**
+ * Open a repo's Changes view from a Launchpad local-action card (commit / push
+ * / publish / sync). Switches the active repo if needed, then shows Changes
+ * where the commit area + header sync controls live.
+ */
+async function openLaunchpadRepoChanges(repoPath: string) {
+  if (repoPath && repoPath !== repoFolderPath.value) {
+    await handleOpenPath(repoPath);
+    await nextTick();
+  }
+  viewMode.value = "changes";
+}
+
+/**
+ * Handle the ⌘L / Ctrl+L shortcut (and the header Launchpad pill / menu item):
+ * just switch to the Launchpad view. Its repos come from the open tabs, so
+ * there is nothing to resolve — if no repo is open, the EmptyState shows.
  */
 async function handleLaunchpadShortcut(): Promise<void> {
-  // If Launchpad already open with repos, just keep it visible (no-op).
-  if (viewMode.value === "launchpad" && launchpadRepos.value.length > 0) return;
-
-  // Re-use repos already loaded for this session (e.g. WorkspacePanel was
-  // opened earlier) — fastest path, no IPC.
-  if (launchpadRepos.value.length > 0) {
-    openLaunchpad(launchpadRepos.value);
-    return;
-  }
-
-  const savedDir = localStorage.getItem("gitwand-workspace-dir");
-  if (savedDir) {
-    try {
-      const cfg = await workspaceRead(savedDir);
-      if (cfg.repos.length > 0) {
-        openLaunchpad(cfg.repos);
-        return;
-      }
-    } catch {
-      // Fall through to the no-workspace branch — best-effort.
-    }
-  }
-
-  // No workspace defined (or empty) → toast + open WorkspacePanel so the
-  // user can configure one. Reuses the error-toast pipeline so the message
-  // dismisses on its own after 3s.
-  repoError.value = t("launchpad.noWorkspace.warning");
-  showWorkspace.value = true;
+  openLaunchpad();
 }
 
 // Watch the bridge counter — each menu invocation bumps it and triggers a
@@ -1454,18 +1513,9 @@ watch(launchpadOpenRequest, () => {
 // foreground the Launchpad updates visually and we just advance the snapshot.
 const { allPrs: notifyPrs, refresh: refreshNotifyPrs } = useLaunchpadPrs();
 
-/** Resolve workspace repos for the poll — uses the open Launchpad's list, else
- *  the persisted workspace (so notifications work even before opening it). */
+/** Repos for the background PR-activity poll — the open repo tabs. */
 async function resolveNotifyRepos(): Promise<WorkspaceRepo[]> {
-  if (launchpadRepos.value.length > 0) return launchpadRepos.value;
-  const savedDir = localStorage.getItem("gitwand-workspace-dir");
-  if (!savedDir) return [];
-  try {
-    const cfg = await workspaceRead(savedDir);
-    return cfg.repos;
-  } catch {
-    return [];
-  }
+  return launchpadRepos.value;
 }
 
 /** Granularity + "by people" gate for a single event. */
@@ -2248,7 +2298,40 @@ function onHistoryScrollToFile(idx: number) {
 watch(selectedCommitHash, () => {
   historyVisibleFileIdx.value = 0;
   scrollToFileIdx.value = null;
+  // Graph view: a fresh commit selection closes any open diff and clears the
+  // file focus (no file is auto-selected — the diff only opens on file click).
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
 });
+
+// ─── Git Tree view inline commit inspection ──────────────
+// In the full-screen graph view, clicking a commit pops its file list in the
+// right rail WITHOUT opening a diff or focusing any file. The CommitDiffViewer
+// only appears (above the graph) once the user clicks a file.
+//   graphFileIdx === null → no file opened → show graph only, nothing highlighted
+//   graphFileIdx >= 0     → diff panel open, scrolled to that file
+const graphFileIdx = ref<number | null>(null);
+const graphScrollIdx = ref<number | null>(null);
+
+/** Graph → select a commit: load its diffs, keep the graph, open no file. */
+function onGraphSelectCommit(hash: string) {
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
+  selectCommit(hash);
+}
+
+/** Graph → click a file in the right rail: open the diff scrolled to it. */
+function onGraphOpenFile(idx: number) {
+  graphFileIdx.value = idx;
+  graphScrollIdx.value = idx;
+  nextTick(() => { graphScrollIdx.value = null; });
+}
+
+/** Graph → close the full-screen diff and return to the graph + file rail. */
+function onGraphCloseDiff() {
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
+}
 
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
@@ -2290,33 +2373,9 @@ onUnmounted(() => {
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true" @open-submodule="handleOpenSubmodule" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
-      @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
+      @open-agents="showAgents = true" />
 
     <div class="app-body" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
-      <aside class="sidebar" v-if="hasRepo && showSidebar">
-        <RepoSidebar :cwd="repoFolderPath ?? ''" :files="repoFiles" :selected-file="repoSelectedFile"
-          :view-mode="viewMode" :repo-stats="repoStats" :commit-summary="commitSummary"
-          :commit-description="commitDescription" :can-commit="canCommit" :is-committing="isCommitting"
-          :log-entries="repoLog" :current-branch="repoStatus?.branch ?? ''" :selected-commit-hash="selectedCommitHash"
-          :ahead-count="aheadCount" :needs-publish="needsPublish" :dir-files="expandedDirFiles"
-          :branches="branches" :commit-diffs="commitDiffs" :visible-file-idx="historyVisibleFileIdx"
-          @select="onRepoFileSelect" @change-view="onViewModeChange"
-          @select-dir-file="(path) => repoSelectFile(path, false)" @stage-file="(path) => stageFiles([path])"
-          @unstage-file="(path) => unstageFiles([path])" @stage-all="stageAll"
-          @stage-paths="(paths) => stageFiles(paths)" @unstage-all="unstageAll" :git-user="currentGitUser"
-          @commit="(trailers) => doCommit(trailers)" @update:commit-summary="(val) => commitSummary = val"
-          @update:commit-description="(val) => commitDescription = val"
-          @discard="(path, section) => discardFiles([path], section === 'untracked')"
-          @discard-section="onDiscardSection" @add-to-gitignore="(path) => addToGitignore(path)"
-          @refresh="repoRefresh()" @open-stash="showStash = true" @open-tags="showTags = true"
-          @open-workspace="showWorkspace = true" @open-agents="showAgents = true"
-          @open-launchpad="handleLaunchpadShortcut" @scroll-to-file="onHistoryScrollToFile"
-          @delete-branch="handleDeleteBranchRequest" />
-      </aside>
-
-      <div v-if="hasRepo && showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
-        @mousedown="onSidebarMouseDown"></div>
-
       <main class="main" :class="{ 'main--dashboard': viewMode === 'dashboard' || viewMode === 'launchpad' }">
         <!-- No repo loaded → EmptyState full screen -->
         <EmptyState v-if="!hasRepo && !repoLoading" @open-folder="handleOpenFolder" @open-path="handleOpenPath"
@@ -2375,119 +2434,173 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <!-- Dashboard view (default when opening a repo) -->
-            <DashboardView v-if="viewMode === 'dashboard'" :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
+            <!-- ── Dashboard view: full-bleed, no side panel ── -->
+            <DashboardView v-if="viewMode === 'dashboard'" class="view__content"
+              :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
               :status="repoStats" :ahead="aheadCount" :behind="behindCount" :needs-publish="needsPublish"
               @change-view="onViewModeChange" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
 
-            <!-- Changes view: conflict editor, file history, or diff viewer -->
-            <template v-else-if="viewMode === 'changes'">
-              <div v-if="memorizeToast && showingMergeEditor" class="me-memory-offer">
-                <span>{{ t("mergeEditor.memorizeFileOffer", memorizeToast.path.split('/').pop() || memorizeToast.path) }}</span>
-                <button class="me-memory-btn me-memory-btn--save" @click="acceptMemorizeToast">{{ t("mergeEditor.memorySave") }}</button>
-                <button class="me-memory-btn" @click="dismissMemorizeToast">{{ t("common.close") }}</button>
+            <!-- ── Changes view: diff │ collapsible right rail (files + commit) ── -->
+            <div v-else-if="viewMode === 'changes'" class="view view--changes">
+              <div class="view__content">
+                <div v-if="memorizeToast && showingMergeEditor" class="me-memory-offer">
+                  <span>{{ t("mergeEditor.memorizeFileOffer", memorizeToast.path.split('/').pop() || memorizeToast.path) }}</span>
+                  <button class="me-memory-btn me-memory-btn--save" @click="acceptMemorizeToast">{{ t("mergeEditor.memorySave") }}</button>
+                  <button class="me-memory-btn" @click="dismissMemorizeToast">{{ t("common.close") }}</button>
+                </div>
+                <MergeEditor v-if="showingMergeEditor && mergeSelectedFile" :file="mergeSelectedFile"
+                  @resolve="handleResolveFile" @resolve-hunk="(path, idx, choice) => handleResolveHunk(path, idx, choice)"
+                  @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)"
+                  @resolve-file-bulk="(path, choice) => handleResolveFileBulk(path, choice)"
+                  @apply-file-memory="(path, entry) => handleApplyFileMemory(path, entry)"
+                  @resolve-tree-conflict="(path, choice) => handleResolveTreeConflict(path, choice)"
+                  @reconstruct-conflict="(path) => handleReconstructConflict(path)"
+                  @keep-working-tree="(path) => handleKeepWorkingTree(path)" />
+                <FileHistoryViewer v-else-if="fileHistoryPath && repoFolderPath" :file-path="fileHistoryPath"
+                  :cwd="repoFolderPath" @close="closeFileHistory"
+                  @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }" />
+                <!--
+                Image files (PNG, JPEG, WebP, GIF, SVG) get the ImageDiffViewer
+                branch; the line-based DiffViewer would hit its "binary file"
+                dead-end and show nothing useful.
+              -->
+                <ImageDiffViewer v-else-if="isImagePath(repoSelectedFile) && repoFolderPath && repoSelectedFile"
+                  :cwd="repoFolderPath" :file-path="repoSelectedFile" old-rev="HEAD"
+                  :new-rev="repoSelectedFileStaged ? ':0' : ''" status="modified" />
+                <DiffViewer v-else :diff="repoDiff" :file-path="repoSelectedFile" :diff-mode="diffMode" :selectable="true"
+                  @update:diff-mode="onDiffModeChange" @open-file-history="openFileHistory"
+                  @open-in-editor="handleOpenInEditor" @stage-patch="stagePatch"
+                  @select-dir-file="(path) => repoSelectFile(path, false)" />
               </div>
-              <MergeEditor v-if="showingMergeEditor && mergeSelectedFile" :file="mergeSelectedFile"
-                @resolve="handleResolveFile" @resolve-hunk="(path, idx, choice) => handleResolveHunk(path, idx, choice)"
-                @resolve-hunk-custom="(path, idx, content) => handleResolveHunkCustom(path, idx, content)"
-                @resolve-file-bulk="(path, choice) => handleResolveFileBulk(path, choice)"
-                @apply-file-memory="(path, entry) => handleApplyFileMemory(path, entry)"
-                @resolve-tree-conflict="(path, choice) => handleResolveTreeConflict(path, choice)"
-                @reconstruct-conflict="(path) => handleReconstructConflict(path)"
-                @keep-working-tree="(path) => handleKeepWorkingTree(path)" />
-              <FileHistoryViewer v-else-if="fileHistoryPath && repoFolderPath" :file-path="fileHistoryPath"
-                :cwd="repoFolderPath" @close="closeFileHistory"
-                @select-commit="(hash) => { closeFileHistory(); selectCommit(hash); viewMode = 'history'; }" />
-              <!--
-              Image files (PNG, JPEG, WebP, GIF, SVG) get the ImageDiffViewer
-              branch; the line-based DiffViewer would hit its "binary file"
-              dead-end and show nothing useful.
-              - oldRev is always HEAD (what the file looked like before this change)
-              - newRev is ":0" (the staged index version) when viewing staged
-                changes, otherwise "" (the working tree on disk).
-            -->
-              <ImageDiffViewer v-else-if="isImagePath(repoSelectedFile) && repoFolderPath && repoSelectedFile"
-                :cwd="repoFolderPath" :file-path="repoSelectedFile" old-rev="HEAD"
-                :new-rev="repoSelectedFileStaged ? ':0' : ''" status="modified" />
-              <DiffViewer v-else :diff="repoDiff" :file-path="repoSelectedFile" :diff-mode="diffMode" :selectable="true"
-                @update:diff-mode="onDiffModeChange" @open-file-history="openFileHistory"
-                @open-in-editor="handleOpenInEditor" @stage-patch="stagePatch"
-                @select-dir-file="(path) => repoSelectFile(path, false)" />
-            </template>
 
-            <!-- History view: commit diff (log is in sidebar) -->
-            <CommitDiffViewer v-else-if="viewMode === 'history'" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
-              :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
-              :scroll-to-file-idx="scrollToFileIdx" @update:diff-mode="onDiffModeChange"
-              @update:visible-file-idx="historyVisibleFileIdx = $event" />
+              <div v-if="showCommitRail" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+                @mousedown="onSidebarMouseDown"></div>
+              <button class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showCommitRail }"
+                @click="showCommitRail = !showCommitRail" :title="t('sidebar.toggleCommitPanel')"
+                :aria-pressed="showCommitRail">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M13.5 3.5l-7 7L3 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.toggleCommitPanel') }}</span>
+              </button>
+              <aside v-if="showCommitRail" class="view__rail view__rail--right">
+                <RepoSidebar pane="changes" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
+              </aside>
+            </div>
 
-            <!-- PRs view: creation form takes over when showCreateForm is true -->
-            <PrCreateView v-else-if="viewMode === 'prs' && prPanel.showCreateForm.value"
-              :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
+            <!-- ── History view: commit list │ commit diff ── -->
+            <div v-else-if="viewMode === 'history'" class="view view--history">
+              <aside v-if="showSidebar" class="view__rail">
+                <RepoSidebar pane="history" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
+              </aside>
+              <CommitDiffViewer class="view__content" :diffs="commitDiffs" :commit-hash="selectedCommitHash"
+                :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
+                :scroll-to-file-idx="scrollToFileIdx" @update:diff-mode="onDiffModeChange"
+                @update:visible-file-idx="historyVisibleFileIdx = $event" />
+            </div>
 
-            <!-- PRs view: detail panel fills the main area -->
-            <PrDetailView v-else-if="viewMode === 'prs'" @refresh="repoRefresh"
-              @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+            <!-- ── PRs view: detail / create │ PR list rail (right) ── -->
+            <div v-else-if="viewMode === 'prs'" class="view view--prs">
+              <PrCreateView v-if="prPanel.showCreateForm.value" class="view__content"
+                :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
+              <PrDetailView v-else class="view__content" @refresh="repoRefresh"
+                @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+              <div v-if="showPrRail" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+                @mousedown="onSidebarMouseDown"></div>
+              <button class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showPrRail }"
+                @click="showPrRail = !showPrRail" :title="t('sidebar.togglePrPanel')" :aria-pressed="showPrRail">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" />
+                  <path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" />
+                </svg>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.togglePrPanel') }}</span>
+              </button>
+              <aside v-if="showPrRail" class="view__rail view__rail--right">
+                <RepoSidebar pane="prs" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
+              </aside>
+            </div>
+
+            <!-- ── Git Tree view: full-screen commit graph ── -->
+            <!-- Clicking a commit pops its file list in the right rail (no file
+                 auto-focused); clicking a file swaps the graph for its diff while
+                 keeping the file rail visible. -->
+            <div v-else-if="viewMode === 'graph'" class="view view--graph">
+              <div class="graph-main">
+                <!-- A clicked file replaces the graph with its diff (X to return). -->
+                <div v-if="graphFileIdx !== null && selectedCommitHash" class="graph-diff-full">
+                  <button class="graph-diff-close" @click="onGraphCloseDiff" :title="t('common.close')"
+                    :aria-label="t('common.close')">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <CommitDiffViewer class="graph-diff"
+                    :diffs="commitDiffs" :commit-hash="selectedCommitHash"
+                    :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
+                    :scroll-to-file-idx="graphScrollIdx" @update:diff-mode="onDiffModeChange"
+                    @update:visible-file-idx="graphFileIdx = $event" />
+                </div>
+
+                <CommitGraph v-else class="graph-canvas"
+                  :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
+                  :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktree-branches="worktreeBranches" :stashes="stashes"
+                  :submodule-changes="submoduleChanges"
+                  :has-more="logHasMore" :loading-more="logLoadingMore"
+                  :hidden-commit-count="hiddenCommitCount"
+                  @select-commit="onGraphSelectCommit"
+                  @change-view="onViewModeChange"
+                  @edit-commit="handleEditCommit"
+                  @split-commit="handleSplitCommitRequest"
+                  @checkout-commit="handleCheckoutCommit"
+                  @checkout-branch="handleSwitchBranch"
+                  @reset-to-commit="handleResetToCommit"
+                  @revert-commit="handleRevertCommit"
+                  @create-branch-from-commit="handleCreateBranchFromCommit"
+                  @tag-commit="handleTagCommit"
+                  @cherry-pick-commit="handleCherryPickCommit"
+                  @view-on-forge="handleViewOnForge"
+                  @delete-branch="handleDeleteBranchRequest"
+                  @delete-tag="handleDeleteTagRequest"
+                  @merge-into-current="doMerge"
+                  @rebase-onto-current="handleRebaseOntoCurrent"
+                  @force-push-branch="doForcePush"
+                  @view-submodule="handleOpenSubmodule"
+                  @apply-stash="applyStash"
+                  @pop-stash="popStash"
+                  @drop-stash="dropStash"
+                  @wip-discard-all="handleWipDiscardAll"
+                  @wip-stash="handleWipStash"
+                  @wip-quick-stash="handleWipQuickStash"
+                  @wip-quick-stash-ai="handleWipQuickStashAi"
+                  @load-more="loadMoreLog" />
+              </div>
+              <div v-if="showGraphRail && selectedCommitHash" class="sidebar-handle"
+                :class="{ 'sidebar-handle--active': sidebarResizing }" @mousedown="onSidebarMouseDown"></div>
+              <button v-if="selectedCommitHash" class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showGraphRail }"
+                @click="showGraphRail = !showGraphRail" :title="t('sidebar.toggleFilesPanel')" :aria-pressed="showGraphRail">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.toggleFilesPanel') }}</span>
+              </button>
+              <aside v-if="showGraphRail && selectedCommitHash" class="view__rail view__rail--right">
+                <RepoSidebar pane="history" v-bind="repoSidebarProps"
+                  :visible-file-idx="graphFileIdx ?? -1" @scroll-to-file="onGraphOpenFile" />
+              </aside>
+            </div>
+
+            <!-- Issue detail view: in-app issue review (v2.22) -->
+            <IssueDetailView v-else-if="viewMode === 'issue'" />
 
             <!-- Launchpad view: cross-repo dashboard (v2.10 nav revamp) -->
-            <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" />
+            <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" @open-pr="openLaunchpadPr" @open-issue="openLaunchpadIssue" @open-repo-changes="openLaunchpadRepoChanges" />
           </template>
         </template>
       </main>
 
-      <!-- Git Tree toggle button (vertical strip between main and panel) -->
-      <button v-if="hasRepo" class="git-tree-toggle"
-        :class="{ 'git-tree-toggle--active': showGitTree, 'git-tree-toggle--resizing': gitTreeResizing }"
-        :style="showGitTree ? { cursor: 'ew-resize' } : {}" @mousedown="onGitTreeMouseDown"
-        :title="t('sidebar.gitTree')" :aria-pressed="showGitTree ? 'true' : 'false'">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true" class="git-tree-toggle__icon">
-          <circle cx="4" cy="3" r="1.8" stroke="currentColor" stroke-width="1.3" />
-          <circle cx="4" cy="13" r="1.8" stroke="currentColor" stroke-width="1.3" />
-          <circle cx="12" cy="8" r="1.8" stroke="currentColor" stroke-width="1.3" />
-          <path d="M4 4.8v6.4M10.2 8H7c-1.2 0-3-1-3-3" stroke="currentColor" stroke-width="1.3"
-            stroke-linecap="round" />
-        </svg>
-        <span class="git-tree-toggle__label">{{ t('sidebar.gitTree') }}</span>
-      </button>
-
-      <!-- Git Tree side panel -->
-      <Transition name="git-tree-panel">
-        <aside v-if="showGitTree && hasRepo" class="git-tree-panel"
-          :style="{ width: gitTreeWidth + 'px', minWidth: gitTreeWidth + 'px' }">
-          <CommitGraph :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-            :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktree-branches="worktreeBranches" :stashes="stashes"
-            :submodule-changes="submoduleChanges"
-            :has-more="logHasMore" :loading-more="logLoadingMore"
-            :hidden-commit-count="hiddenCommitCount"
-            @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-            @change-view="onViewModeChange"
-            @edit-commit="handleEditCommit"
-            @split-commit="handleSplitCommitRequest"
-            @checkout-commit="handleCheckoutCommit"
-            @checkout-branch="handleSwitchBranch"
-            @reset-to-commit="handleResetToCommit"
-            @revert-commit="handleRevertCommit"
-            @create-branch-from-commit="handleCreateBranchFromCommit"
-            @tag-commit="handleTagCommit"
-            @cherry-pick-commit="handleCherryPickCommit"
-            @view-on-forge="handleViewOnForge"
-            @delete-branch="handleDeleteBranchRequest"
-            @delete-tag="handleDeleteTagRequest"
-            @merge-into-current="doMerge"
-            @rebase-onto-current="handleRebaseOntoCurrent"
-            @force-push-branch="doForcePush"
-            @view-submodule="handleOpenSubmodule"
-            @apply-stash="applyStash"
-            @pop-stash="popStash"
-            @drop-stash="dropStash"
-            @wip-discard-all="handleWipDiscardAll"
-            @wip-stash="handleWipStash"
-            @wip-quick-stash="handleWipQuickStash"
-            @wip-quick-stash-ai="handleWipQuickStashAi"
-            @load-more="loadMoreLog" />
-
-        </aside>
-      </Transition>
+      <!-- Floating bottom-center navigation dock -->
+      <AppDock v-if="hasRepo" :view-mode="viewMode" :changes-count="repoFiles.length"
+        :pr-count="prPanel.prs.value.length" @change-view="onViewModeChange" />
     </div>
 
     <!-- In-app update modal -->
@@ -2497,16 +2610,17 @@ onUnmounted(() => {
     <!-- Folder picker modal (browser mode) -->
     <FolderPicker v-if="showFolderPicker" @select="onFolderSelected" @cancel="onFolderPickerCancel" />
 
-    <!-- Edit commit overlay -->
-    <EditCommitOverlay :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
+    <!-- Edit commit overlay (lazy — only mounted while editing a commit) -->
+    <EditCommitOverlay v-if="editingCommit" :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
 
     <!-- Merge success modal -->
     <MergeSuccessModal v-if="showMergeSuccess" :merged-branch="lastMergedBranch ?? undefined"
       @close="onMergeSuccessClose" @push="onMergeSuccessPush" @delete-branch="onMergeSuccessDeleteBranch" />
 
     <!-- Split commit modal (driven by the useSplitCommit composable's
-         module-level state — mounting once here is sufficient) -->
-    <SplitCommitModal @split-completed="handleSplitCompleted" @close="handleSplitClose" />
+         module-level state). Lazy — the `v-if` keeps its chunk out of main
+         until the user opens the split flow. -->
+    <SplitCommitModal v-if="splitCommit.open.value" @split-completed="handleSplitCompleted" @close="handleSplitClose" />
 
     <!-- Success toast -->
     <div v-if="successToast" class="toast" :class="{ 'toast--leaving': successToastLeaving }" role="status">
@@ -2540,10 +2654,6 @@ onUnmounted(() => {
 
     <!-- Fork modal (v2.0) -->
     <ForkModal v-if="showForkModal" @close="showForkModal = false" @forked="onForked" />
-
-    <!-- Workspace panel -->
-    <WorkspacePanel v-if="showWorkspace" @close="showWorkspace = false"
-      @open-tab="(path) => { openTab(path); showWorkspace = false; }" />
 
     <!-- Agent Sessions panel -->
     <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"
@@ -2867,16 +2977,126 @@ onUnmounted(() => {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative; /* anchor for the floating AppDock */
 }
 
-.sidebar {
+.main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.main--dashboard {
+  min-width: 760px;
+}
+
+/* ── Full-screen view scaffold (rail + content, composed per view) ── */
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.view__content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.view__rail {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   border-right: 1px solid var(--color-border);
-  overflow-y: auto;
   background: var(--color-bg-secondary);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
 }
 
+.view__rail--right {
+  border-right: none;
+  border-left: 1px solid var(--color-border);
+}
+
+.view__rail--commit {
+  width: var(--commit-rail-width, 340px);
+  min-width: var(--commit-rail-width, 340px);
+}
+
+/* Git Tree as a full-bleed view: graph (+ optional diff) | right file rail */
+.view--graph {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.graph-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A clicked file takes over the whole graph view */
+.graph-diff-full {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.graph-diff {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.graph-diff-close {
+  position: absolute;
+  top: var(--space-3, 8px);
+  right: var(--space-3, 8px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.graph-diff-close:hover {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.12));
+  color: var(--color-text);
+}
+
+.graph-diff-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Left-rail drag handle (resizes --sidebar-width) */
 .sidebar-handle {
   width: 4px;
   margin-left: -2px;
@@ -2892,40 +3112,27 @@ onUnmounted(() => {
   background: var(--color-accent);
 }
 
-.main {
-  flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.main--dashboard {
-  min-width: 760px;
-}
-
-.git-tree-toggle {
-  width: 24px;
-  min-width: 24px;
+/* Collapsible commit-rail toggle (vertical strip on the Changes view) */
+.commit-rail-toggle {
+  width: 26px;
+  min-width: 26px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--space-2, 4px);
   border: none;
-  border-left: 2px solid var(--color-accent);
+  border-left: 1px solid var(--color-border);
   cursor: pointer;
-  color: var(--color-accent);
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
   padding: var(--space-3, 6px) 0;
-  transition: background 0.15s, border-left-color 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s;
   user-select: none;
-}
-
-.git-tree-toggle__icon {
   flex-shrink: 0;
 }
 
-.git-tree-toggle__label {
+.commit-rail-toggle__label {
   writing-mode: vertical-rl;
   text-orientation: mixed;
   font-size: 10px;
@@ -2933,45 +3140,18 @@ onUnmounted(() => {
   letter-spacing: 0.07em;
 }
 
-.git-tree-toggle:hover {
-  background: var(--color-accent-soft, rgba(139, 92, 246, 0.14));
-  filter: brightness(1.05);
+.commit-rail-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.1));
 }
 
-.git-tree-toggle:focus-visible {
+.commit-rail-toggle:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
-.git-tree-toggle--active {
-  border-left-color: var(--color-accent);
-  background: var(--color-accent-soft, rgba(139, 92, 246, 0.12));
-}
-
-.git-tree-toggle--resizing {
-  cursor: ew-resize;
-  filter: brightness(1.08);
-}
-
-.git-tree-panel {
-  border-left: 1px solid var(--color-border);
-  background: var(--color-bg);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.git-tree-panel-enter-active,
-.git-tree-panel-leave-active {
-  transition: width 0.2s ease, min-width 0.2s ease, opacity 0.2s ease;
-  overflow: hidden;
-}
-
-.git-tree-panel-enter-from,
-.git-tree-panel-leave-to {
-  width: 0 !important;
-  min-width: 0 !important;
-  opacity: 0;
+.commit-rail-toggle--active {
+  color: var(--color-accent);
 }
 
 

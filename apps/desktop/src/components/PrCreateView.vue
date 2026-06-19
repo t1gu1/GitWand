@@ -382,8 +382,13 @@ function removeReviewer(name: string) {
 
 <template>
   <div class="pcv-root" @keydown="onKeydown">
-    <div class="pcv-container">
+    <button class="pcv-close" :title="t('common.close')" :aria-label="t('common.close')" @click="onCancel">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" />
+      </svg>
+    </button>
 
+    <div class="pcv-container">
       <!-- Hero header -->
       <header class="pcv-hero">
         <div class="pcv-hero-icon" aria-hidden="true">
@@ -660,9 +665,6 @@ function removeReviewer(name: string) {
 
       <!-- Footer -->
       <footer class="pcv-footer">
-        <button class="pcv-btn pcv-btn--ghost" @click="onCancel" :disabled="p.isCreating.value">
-          {{ t("common.cancel") }}
-        </button>
         <button
           class="pcv-btn pcv-btn--primary"
           :disabled="!canSubmit"
@@ -721,7 +723,9 @@ function removeReviewer(name: string) {
 .pcv-container {
   max-width: 880px;
   margin: 0 auto;
-  padding: var(--space-9) var(--space-9) var(--space-8);
+  /* Extra bottom padding clears the floating AppDock so the in-flow
+     footer buttons aren't covered when scrolled to the end. */
+  padding: var(--space-9) var(--space-9) calc(var(--space-12) + var(--space-12));
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -747,6 +751,29 @@ function removeReviewer(name: string) {
   background: var(--color-accent-soft);
   color: var(--color-accent);
   flex-shrink: 0;
+}
+.pcv-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  position: sticky;
+  top: 20px;
+  right: 20px;
+}
+.pcv-close:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 .pcv-hero-text {
   display: flex;
@@ -1441,10 +1468,8 @@ function removeReviewer(name: string) {
   gap: var(--space-3);
   padding: var(--space-5) 0;
   border-top: 1px solid var(--color-border);
-  position: sticky;
-  bottom: 0;
-  background: var(--color-bg-secondary);
   margin-top: auto;
+  padding-bottom: var(--space-12);
 }
 .pcv-btn {
   display: inline-flex;
@@ -1475,11 +1500,11 @@ function removeReviewer(name: string) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0 var(--color-accent-soft);
+  width: 100%;
 }
 .pcv-btn--primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 0 3px var(--color-accent-soft);
-  transform: translateY(-1px);
 }
 .pcv-btn--primary:active:not(:disabled) {
   transform: translateY(0);

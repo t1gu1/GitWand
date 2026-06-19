@@ -518,6 +518,8 @@ export function usePrPanel(cwd: Ref<string>) {
   }
 
   async function selectPr(pr: PullRequest) {
+    // Selecting a PR exits the create form so the detail view takes over.
+    showCreateForm.value = false;
     if (selectedPr.value?.number === pr.number) return;
     selectedPr.value = pr;
     resetDetail();

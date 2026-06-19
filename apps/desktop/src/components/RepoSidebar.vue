@@ -27,6 +27,12 @@ const props = defineProps<{
   files: RepoFileEntry[];
   selectedFile: string | null;
   viewMode: ViewMode;
+  /**
+   * Which slice of the sidebar to render. Lets a single view compose the
+   * file list, commit composer and per-view rails as separate full-screen
+   * panes. Defaults to the legacy all-in-one rail.
+   */
+  pane?: "all" | "files" | "commit" | "changes" | "history" | "prs" | "dashboard";
   repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   commitSummary: string;
   commitDescription: string;
@@ -79,7 +85,6 @@ const emit = defineEmits<{
   /** Open the stash manager panel. */
   openStash: [];
   openTags: [];
-  openWorkspace: [];
   openAgents: [];
   openLaunchpad: [];
   /** Scroll to a specific file in the history view */
@@ -88,6 +93,13 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale } = useI18n();
+
+/** Resolved pane (legacy callers omit the prop → render everything). */
+const pane = computed(() => props.pane ?? "all");
+/** True when the given pane slice should render. */
+function showPane(...names: Array<"files" | "commit" | "changes" | "history" | "prs" | "dashboard">): boolean {
+  return pane.value === "all" || names.includes(pane.value as any);
+}
 
 const toggleGitTree = inject(TOGGLE_GIT_TREE_KEY, () => {});
 function onFileItemDblClick() {
@@ -189,6 +201,28 @@ function setChangesLayout(layout: "list" | "tree") {
   // Reveal the current file's folder path when switching into tree view.
   if (layout === "tree" && props.selectedFile) expandFoldersForFile(props.selectedFile);
 }
+
+// History reuses the shared `changesLayout` state so the list/tree choice
+// stays in sync between the changes view and the read-only commit file list.
+
+/** Section namespace used for the history tree's collapsed-folder state. */
+const HISTORY_SECTION = "history";
+
+/** Flattened tree rows for the commit file list, recomputed when diffs or collapse state change. */
+const historyTreeRows = computed<TreeRow<GitDiff>[]>(() => {
+  const root = buildFileTree(props.commitDiffs ?? []);
+  return flattenTree(
+    root,
+    (folderPath) => !!collapsedFolders.value[folderKey(HISTORY_SECTION, folderPath)],
+  );
+});
+
+/** Map a diff path → its index in `commitDiffs`, for the scrollToFile emit. */
+const historyIndexByPath = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {};
+  (props.commitDiffs ?? []).forEach((d, i) => { map[d.path] = i; });
+  return map;
+});
 
 // ─── Tree view: collapsible folders (namespaced per section) ───
 const COLLAPSED_FOLDERS_KEY = "gitwand-collapsed-folders";
@@ -915,36 +949,10 @@ function formatActivityDate(dateStr: string): string {
 </script>
 
 <template>
-  <nav class="repo-sidebar" :aria-label="t('sidebar.tabChanges')">
-    <!-- ── Navigation tabs (content-switching) ─────────────────── -->
-    <div class="view-tabs">
-      <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'dashboard' }"
-        @click="emit('changeView', 'dashboard')"
-      >
-        {{ t('sidebar.tabDashboard') }}
-      </button>
-      <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'changes' }"
-        @click="emit('changeView', 'changes')"
-      >
-        {{ t('sidebar.tabChanges') }}
-        <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
-      </button>
-      <button
-        class="view-tab view-tab--pr"
-        :class="{ 'view-tab--active': viewMode === 'prs' }"
-        @click="emit('changeView', 'prs')"
-      >
-        PRs
-      </button>
-    </div>
-
+  <nav class="repo-sidebar" :class="`repo-sidebar--${pane}`" :aria-label="t('sidebar.tabChanges')">
     <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo.
          In the changes view it shares a row with the layout toggle (pushed to the right). -->
-    <div v-if="cwd && viewMode === 'changes' && totalChanges > 0" class="changes-controls">
+    <div v-if="cwd && showPane('files', 'changes') && totalChanges > 0" class="changes-controls">
       <ScopePicker :cwd="cwd" />
       <div
         class="layout-toggle"
@@ -978,41 +986,135 @@ function formatActivityDate(dateStr: string): string {
         </button>
       </div>
     </div>
-    <ScopePicker v-else-if="cwd" :cwd="cwd" />
+    <ScopePicker v-else-if="cwd && showPane('files', 'changes')" :cwd="cwd" />
 
     <!-- History file list -->
-    <div class="sections" v-if="viewMode === 'history'">
+    <div class="sections" v-if="showPane('history')">
       <div class="section">
         <div class="section-header">
-          <span class="section-icon" style="color: var(--color-accent)">H</span>
+          <span class="section-icon section-icon--history" style="color: var(--color-accent)">H</span>
           <span class="section-label">{{ t('header.files') }}</span>
           <span class="section-count" v-if="commitDiffs">{{ commitDiffs.length }}</span>
+          <span class="section-spacer"></span>
+          <!-- List / tree layout toggle -->
+          <div
+            v-if="commitDiffs && commitDiffs.length > 0"
+            class="layout-toggle"
+            role="group"
+            :aria-label="t('sidebar.viewLayout')"
+            @click.stop
+          >
+            <button
+              class="layout-toggle-btn"
+              :class="{ 'layout-toggle-btn--active': changesLayout === 'list' }"
+              @click="setChangesLayout('list')"
+              :title="t('sidebar.viewAsList')"
+              :aria-pressed="changesLayout === 'list'"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle-btn"
+              :class="{ 'layout-toggle-btn--active': changesLayout === 'tree' }"
+              @click="setChangesLayout('tree')"
+              :title="t('sidebar.viewAsTree')"
+              :aria-pressed="changesLayout === 'tree'"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 5h6l2 2h10v12H3z"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <ul class="file-items" role="listbox" v-if="commitDiffs">
-          <li
-            v-for="(diff, idx) in commitDiffs"
-            :key="idx"
-            class="file-item"
-            :class="{ 'file-item--selected': idx === visibleFileIdx }"
-            role="option"
-            :aria-selected="idx === visibleFileIdx"
-            tabindex="0"
-            @click="emit('scrollToFile', idx)"
-            @dblclick="onFileItemDblClick"
-            @keydown.enter="emit('scrollToFile', idx)"
-            @keydown.space.prevent="emit('scrollToFile', idx)"
-          >
-            <span
-              class="file-status-badge mono"
-              :style="{ color: getFileStatus(diff).color }"
+          <!-- Flat list layout -->
+          <template v-if="changesLayout === 'list'">
+            <li
+              v-for="(diff, idx) in commitDiffs"
+              :key="idx"
+              class="file-item"
+              :class="{ 'file-item--selected': idx === visibleFileIdx }"
+              role="option"
+              :aria-selected="idx === visibleFileIdx"
+              tabindex="0"
+              @click="emit('scrollToFile', idx)"
+              @dblclick="onFileItemDblClick"
+              @keydown.enter="emit('scrollToFile', idx)"
+              @keydown.space.prevent="emit('scrollToFile', idx)"
             >
-              {{ getFileStatus(diff).icon }}
-            </span>
-            <div class="file-info">
-              <span class="file-name mono">{{ fileName(diff.path) }}</span>
-              <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
-            </div>
-          </li>
+              <span
+                class="file-status-badge mono"
+                :style="{ color: getFileStatus(diff).color }"
+              >
+                {{ getFileStatus(diff).icon }}
+              </span>
+              <div class="file-info">
+                <span class="file-name mono">{{ fileName(diff.path) }}</span>
+                <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
+              </div>
+            </li>
+          </template>
+
+          <!-- Nested folder tree layout -->
+          <template v-else>
+            <template
+              v-for="row in historyTreeRows"
+              :key="`${row.kind}-${row.path}`"
+            >
+              <!-- Folder row -->
+              <li
+                v-if="row.kind === 'folder'"
+                class="file-item tree-folder"
+                :style="{ paddingLeft: `${row.depth * 14 + 5}px` }"
+                role="option"
+                tabindex="0"
+                @click="toggleFolder(HISTORY_SECTION, row.path)"
+                @keydown.enter="toggleFolder(HISTORY_SECTION, row.path)"
+                @keydown.space.prevent="toggleFolder(HISTORY_SECTION, row.path)"
+              >
+                <svg
+                  class="tree-chevron"
+                  :class="{ 'tree-chevron--collapsed': collapsedFolders[folderKey(HISTORY_SECTION, row.path)] }"
+                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <svg class="tree-folder-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 5h6l2 2h10v12H3z"/>
+                </svg>
+                <span class="file-name mono tree-folder-name">{{ row.name }}</span>
+                <span class="tree-folder-count">{{ row.count }}</span>
+              </li>
+
+              <!-- File row -->
+              <li
+                v-else
+                class="file-item"
+                :class="{ 'file-item--selected': historyIndexByPath[row.path] === visibleFileIdx }"
+                :style="{ paddingLeft: `${row.depth * 14 + 18}px` }"
+                role="option"
+                :aria-selected="historyIndexByPath[row.path] === visibleFileIdx"
+                tabindex="0"
+                @click="emit('scrollToFile', historyIndexByPath[row.path])"
+                @dblclick="onFileItemDblClick"
+                @keydown.enter="emit('scrollToFile', historyIndexByPath[row.path])"
+                @keydown.space.prevent="emit('scrollToFile', historyIndexByPath[row.path])"
+              >
+                <span
+                  class="file-status-badge mono"
+                  :style="{ color: getFileStatus(row.file!).color }"
+                >
+                  {{ getFileStatus(row.file!).icon }}
+                </span>
+                <div class="file-info">
+                  <span class="file-name mono">{{ row.name }}</span>
+                </div>
+              </li>
+            </template>
+          </template>
         </ul>
         <div v-else-if="selectedCommitHash" class="empty-section">
           <span class="empty-text">{{ t('log.noDiffForCommit') }}</span>
@@ -1024,7 +1126,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- File sections -->
-    <div class="sections" v-if="viewMode === 'changes'">
+    <div class="sections" v-if="showPane('files', 'changes')">
       <template v-for="sectionKey in ['conflicted', 'staged', 'unstaged', 'untracked']" :key="sectionKey">
         <div
           v-if="sections[sectionKey].length > 0"
@@ -1311,7 +1413,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- Commit panel — fixed at bottom, always visible in changes view -->
-    <div class="commit-panel" v-if="viewMode === 'changes'">
+    <div class="commit-panel" v-if="showPane('commit', 'changes')">
       <!-- Conventional Commits type picker -->
       <div class="cc-types-wrapper">
         <button v-show="ccCanScrollLeft" class="cc-scroll-btn cc-scroll-btn--left" @click="scrollCcTypes(-1)" tabindex="-1">‹</button>
@@ -1586,12 +1688,12 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- PRs view: compact PR list in sidebar -->
-    <div class="sidebar-prs" v-if="viewMode === 'prs'">
+    <div class="sidebar-prs" v-if="showPane('prs')">
       <PrListSidebar />
     </div>
 
     <!-- Dashboard view: pinned branches, activity, quick actions -->
-    <div class="sidebar-dashboard" v-if="viewMode === 'dashboard'">
+    <div class="sidebar-dashboard" v-if="showPane('dashboard')">
       <!-- Pinned branches -->
       <div class="side-block">
         <div class="side-label">
@@ -1951,6 +2053,12 @@ function formatActivityDate(dateStr: string): string {
   margin-left:-2px;
 }
 
+/* History header has no chevron — indent the lone "H" to match the
+   icon alignment of the chevron-prefixed change sections. */
+.section-icon--history {
+  margin-left: var(--space-1);
+}
+
 .section-label {
   margin-top: -1px;
 }
@@ -2247,6 +2355,22 @@ function formatActivityDate(dateStr: string): string {
   gap: var(--space-4);
   background: var(--color-bg-secondary);
   flex-shrink: 0;
+}
+
+/* ── Single-pane usage (full-screen views compose panes side by side) ── */
+/* Commit rail: no top divider, scroll independently. */
+.repo-sidebar--commit {
+  overflow-y: auto;
+}
+.repo-sidebar--commit .commit-panel {
+  border-top: none;
+}
+/* Files / history / prs / dashboard rails scroll on their own. */
+.repo-sidebar--files,
+.repo-sidebar--history,
+.repo-sidebar--prs,
+.repo-sidebar--dashboard {
+  overflow-y: auto;
 }
 
 .commit-summary-row {
