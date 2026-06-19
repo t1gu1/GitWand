@@ -11,7 +11,12 @@
  */
 import type { RepoFileEntry } from "./useGitRepo";
 
-export interface TreeRow {
+/** Minimal shape the tree builder needs from an entry: just a path. */
+export interface PathLike {
+  path: string;
+}
+
+export interface TreeRow<T extends PathLike = RepoFileEntry> {
   kind: "folder" | "file";
   /** Folder rows: cumulative dir path (no trailing slash). File rows: the entry's full path. */
   path: string;
@@ -19,21 +24,21 @@ export interface TreeRow {
   name: string;
   /** Nesting depth (0 = section root). */
   depth: number;
-  /** File rows only: the underlying git entry. */
-  file?: RepoFileEntry;
+  /** File rows only: the underlying entry. */
+  file?: T;
   /** Folder rows only: rolled-up count of files under this folder. */
   count?: number;
 }
 
-interface FolderNode {
+interface FolderNode<T extends PathLike> {
   name: string;
   path: string;
-  folders: Map<string, FolderNode>;
-  files: RepoFileEntry[];
+  folders: Map<string, FolderNode<T>>;
+  files: T[];
   count: number;
 }
 
-function newNode(name: string, path: string): FolderNode {
+function newNode<T extends PathLike>(name: string, path: string): FolderNode<T> {
   return { name, path, folders: new Map(), files: [], count: 0 };
 }
 
@@ -45,8 +50,8 @@ function leafName(path: string): string {
 }
 
 /** Build a nested folder tree from a flat list of entries. */
-export function buildFileTree(files: RepoFileEntry[]): FolderNode {
-  const root = newNode("", "");
+export function buildFileTree<T extends PathLike>(files: T[]): FolderNode<T> {
+  const root = newNode<T>("", "");
   for (const f of files) {
     // The leaf (last non-empty segment) is the file; preceding segments are folders.
     // Trailing "/" entries (untracked dirs) collapse to a single leaf node.
@@ -69,7 +74,7 @@ export function buildFileTree(files: RepoFileEntry[]): FolderNode {
   return root;
 }
 
-function computeCount(node: FolderNode): number {
+function computeCount<T extends PathLike>(node: FolderNode<T>): number {
   let c = node.files.length;
   for (const child of node.folders.values()) c += computeCount(child);
   node.count = c;
@@ -81,12 +86,12 @@ function computeCount(node: FolderNode): number {
  * before files at each level, both sorted by name. A folder for which
  * `isCollapsed(path)` returns true hides its descendants.
  */
-export function flattenTree(
-  root: FolderNode,
+export function flattenTree<T extends PathLike>(
+  root: FolderNode<T>,
   isCollapsed: (folderPath: string) => boolean,
   depth = 0,
-  out: TreeRow[] = [],
-): TreeRow[] {
+  out: TreeRow<T>[] = [],
+): TreeRow<T>[] {
   const folders = [...root.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
   for (const folder of folders) {
     out.push({ kind: "folder", path: folder.path, name: folder.name, depth, count: folder.count });

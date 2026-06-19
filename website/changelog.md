@@ -15,6 +15,10 @@ The Changes sidebar can now show your working-tree changes as a **nested folder 
 
 Every file row now has a **discard** button sitting next to stage/unstage, and folder rows in the tree get folder-level stage, unstage and discard that act on everything inside. The buttons are grouped into a tidy segmented control — and they're always visible now, so you no longer have to hover to find them.
 
+### The folder tree follows you into history
+
+The same list/tree toggle now works when you're looking at an earlier, already-pushed commit. Open any commit and its changed files can be shown as a nested folder tree instead of a flat list — collapse the folders you don't care about, click a file to jump straight to its diff, just like in the Changes view. The choice is shared: flip to tree once and it stays tree everywhere, whether you're staging new work or reviewing past commits.
+
 ### Every external link works in the Linux AppImage
 
 External links did nothing in the released Linux AppImage — clicking "Open GitHub" or "Open Azure" during sign-in, a pull-request or issue link in the Launchpad, the "open this repo on the web" button, or the changelog link simply went nowhere, even though all of them worked when running GitWand from source. There were two reasons. The first: the helper GitWand used to hand a URL to your browser ran without checking whether it actually succeeded, so when the AppImage runtime's polluted library path made that helper (or the desktop tool it calls) crash on the wrong libraries, the failure vanished silently. The second: a handful of links were plain web anchors, which the desktop webview quietly ignores, so they never reached the opener at all. GitWand now tries several system openers in turn, cleans up the environment before each one, and reports a real error if they all fail — and a single catch-all sends every external link in the app through your system browser, so none of them can silently do nothing again. Thanks to @t1gu1 for the report.

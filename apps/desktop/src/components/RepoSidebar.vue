@@ -202,6 +202,28 @@ function setChangesLayout(layout: "list" | "tree") {
   if (layout === "tree" && props.selectedFile) expandFoldersForFile(props.selectedFile);
 }
 
+// History reuses the shared `changesLayout` state so the list/tree choice
+// stays in sync between the changes view and the read-only commit file list.
+
+/** Section namespace used for the history tree's collapsed-folder state. */
+const HISTORY_SECTION = "history";
+
+/** Flattened tree rows for the commit file list, recomputed when diffs or collapse state change. */
+const historyTreeRows = computed<TreeRow<GitDiff>[]>(() => {
+  const root = buildFileTree(props.commitDiffs ?? []);
+  return flattenTree(
+    root,
+    (folderPath) => !!collapsedFolders.value[folderKey(HISTORY_SECTION, folderPath)],
+  );
+});
+
+/** Map a diff path → its index in `commitDiffs`, for the scrollToFile emit. */
+const historyIndexByPath = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {};
+  (props.commitDiffs ?? []).forEach((d, i) => { map[d.path] = i; });
+  return map;
+});
+
 // ─── Tree view: collapsible folders (namespaced per section) ───
 const COLLAPSED_FOLDERS_KEY = "gitwand-collapsed-folders";
 
@@ -970,35 +992,129 @@ function formatActivityDate(dateStr: string): string {
     <div class="sections" v-if="showPane('history')">
       <div class="section">
         <div class="section-header">
-          <span class="section-icon" style="color: var(--color-accent)">H</span>
+          <span class="section-icon section-icon--history" style="color: var(--color-accent)">H</span>
           <span class="section-label">{{ t('header.files') }}</span>
           <span class="section-count" v-if="commitDiffs">{{ commitDiffs.length }}</span>
+          <span class="section-spacer"></span>
+          <!-- List / tree layout toggle -->
+          <div
+            v-if="commitDiffs && commitDiffs.length > 0"
+            class="layout-toggle"
+            role="group"
+            :aria-label="t('sidebar.viewLayout')"
+            @click.stop
+          >
+            <button
+              class="layout-toggle-btn"
+              :class="{ 'layout-toggle-btn--active': changesLayout === 'list' }"
+              @click="setChangesLayout('list')"
+              :title="t('sidebar.viewAsList')"
+              :aria-pressed="changesLayout === 'list'"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+                <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle-btn"
+              :class="{ 'layout-toggle-btn--active': changesLayout === 'tree' }"
+              @click="setChangesLayout('tree')"
+              :title="t('sidebar.viewAsTree')"
+              :aria-pressed="changesLayout === 'tree'"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 5h6l2 2h10v12H3z"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <ul class="file-items" role="listbox" v-if="commitDiffs">
-          <li
-            v-for="(diff, idx) in commitDiffs"
-            :key="idx"
-            class="file-item"
-            :class="{ 'file-item--selected': idx === visibleFileIdx }"
-            role="option"
-            :aria-selected="idx === visibleFileIdx"
-            tabindex="0"
-            @click="emit('scrollToFile', idx)"
-            @dblclick="onFileItemDblClick"
-            @keydown.enter="emit('scrollToFile', idx)"
-            @keydown.space.prevent="emit('scrollToFile', idx)"
-          >
-            <span
-              class="file-status-badge mono"
-              :style="{ color: getFileStatus(diff).color }"
+          <!-- Flat list layout -->
+          <template v-if="changesLayout === 'list'">
+            <li
+              v-for="(diff, idx) in commitDiffs"
+              :key="idx"
+              class="file-item"
+              :class="{ 'file-item--selected': idx === visibleFileIdx }"
+              role="option"
+              :aria-selected="idx === visibleFileIdx"
+              tabindex="0"
+              @click="emit('scrollToFile', idx)"
+              @dblclick="onFileItemDblClick"
+              @keydown.enter="emit('scrollToFile', idx)"
+              @keydown.space.prevent="emit('scrollToFile', idx)"
             >
-              {{ getFileStatus(diff).icon }}
-            </span>
-            <div class="file-info">
-              <span class="file-name mono">{{ fileName(diff.path) }}</span>
-              <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
-            </div>
-          </li>
+              <span
+                class="file-status-badge mono"
+                :style="{ color: getFileStatus(diff).color }"
+              >
+                {{ getFileStatus(diff).icon }}
+              </span>
+              <div class="file-info">
+                <span class="file-name mono">{{ fileName(diff.path) }}</span>
+                <span class="file-dir muted">{{ fileDir(diff.path) }}</span>
+              </div>
+            </li>
+          </template>
+
+          <!-- Nested folder tree layout -->
+          <template v-else>
+            <template
+              v-for="row in historyTreeRows"
+              :key="`${row.kind}-${row.path}`"
+            >
+              <!-- Folder row -->
+              <li
+                v-if="row.kind === 'folder'"
+                class="file-item tree-folder"
+                :style="{ paddingLeft: `${row.depth * 14 + 5}px` }"
+                role="option"
+                tabindex="0"
+                @click="toggleFolder(HISTORY_SECTION, row.path)"
+                @keydown.enter="toggleFolder(HISTORY_SECTION, row.path)"
+                @keydown.space.prevent="toggleFolder(HISTORY_SECTION, row.path)"
+              >
+                <svg
+                  class="tree-chevron"
+                  :class="{ 'tree-chevron--collapsed': collapsedFolders[folderKey(HISTORY_SECTION, row.path)] }"
+                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                >
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+                <svg class="tree-folder-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 5h6l2 2h10v12H3z"/>
+                </svg>
+                <span class="file-name mono tree-folder-name">{{ row.name }}</span>
+                <span class="tree-folder-count">{{ row.count }}</span>
+              </li>
+
+              <!-- File row -->
+              <li
+                v-else
+                class="file-item"
+                :class="{ 'file-item--selected': historyIndexByPath[row.path] === visibleFileIdx }"
+                :style="{ paddingLeft: `${row.depth * 14 + 18}px` }"
+                role="option"
+                :aria-selected="historyIndexByPath[row.path] === visibleFileIdx"
+                tabindex="0"
+                @click="emit('scrollToFile', historyIndexByPath[row.path])"
+                @dblclick="onFileItemDblClick"
+                @keydown.enter="emit('scrollToFile', historyIndexByPath[row.path])"
+                @keydown.space.prevent="emit('scrollToFile', historyIndexByPath[row.path])"
+              >
+                <span
+                  class="file-status-badge mono"
+                  :style="{ color: getFileStatus(row.file!).color }"
+                >
+                  {{ getFileStatus(row.file!).icon }}
+                </span>
+                <div class="file-info">
+                  <span class="file-name mono">{{ row.name }}</span>
+                </div>
+              </li>
+            </template>
+          </template>
         </ul>
         <div v-else-if="selectedCommitHash" class="empty-section">
           <span class="empty-text">{{ t('log.noDiffForCommit') }}</span>
@@ -1935,6 +2051,12 @@ function formatActivityDate(dateStr: string): string {
   text-align: center;
   margin-right: -7px;
   margin-left:-2px;
+}
+
+/* History header has no chevron — indent the lone "H" to match the
+   icon alignment of the chevron-prefixed change sections. */
+.section-icon--history {
+  margin-left: var(--space-1);
 }
 
 .section-label {
