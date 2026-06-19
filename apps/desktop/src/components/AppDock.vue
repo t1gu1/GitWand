@@ -110,7 +110,7 @@ function isActive(id: ViewMode): boolean {
   align-items: stretch;
   gap: var(--space-1, 4px);
   padding: var(--space-2, 6px);
-  background: var(--color-bg-secondary);
+  background: color-mix(in srgb, var(--color-bg-secondary) 97%, transparent);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md, 10px);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18);
