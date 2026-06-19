@@ -17,6 +17,8 @@ const props = defineProps<{
   viewMode: ViewMode;
   /** Uncommitted-file count — shown as a badge on the Changes entry. */
   changesCount?: number;
+  /** Open-PR count — shown as a badge on the PRs entry. */
+  prCount?: number;
 }>();
 
 const emit = defineEmits<{
@@ -61,6 +63,7 @@ function isActive(id: ViewMode): boolean {
           <path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" />
         </svg>
         <span class="dock-label">{{ item.label }}</span>
+        <span v-if="item.id === 'prs' && prCount" class="dock-badge">{{ prCount }}</span>
       </button>
 
       <button
@@ -169,6 +172,6 @@ function isActive(id: ViewMode): boolean {
   color: #fff;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 0;
 }
 </style>

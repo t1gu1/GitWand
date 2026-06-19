@@ -2583,7 +2583,7 @@ onUnmounted(() => {
 
       <!-- Floating bottom-center navigation dock -->
       <AppDock v-if="hasRepo" :view-mode="viewMode" :changes-count="repoFiles.length"
-        @change-view="onViewModeChange" />
+        :pr-count="prPanel.prs.value.length" @change-view="onViewModeChange" />
     </div>
 
     <!-- In-app update modal -->
