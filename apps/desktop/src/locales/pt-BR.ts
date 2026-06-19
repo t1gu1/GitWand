@@ -166,6 +166,7 @@ const ptBR: Locale = {
     tabLog: "Histórico",
     tabGraph: "Grafo",
     gitTree: "Árvore Git",
+    toggleCommitPanel: "Painel de commit",
     tabDashboard: "Painel",
     stashTitle: "Gerenciador de stash",
     logScopeLabel: "Escopo do histórico",

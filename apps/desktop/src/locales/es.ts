@@ -165,6 +165,7 @@ const es: Locale = {
     tabLog: "Historial",
     tabGraph: "Gráfico",
     gitTree: "Árbol Git",
+    toggleCommitPanel: "Panel de commit",
     tabDashboard: "Panel",
     stashTitle: "Gestor de stash",
     logScopeLabel: "Ámbito del historial",

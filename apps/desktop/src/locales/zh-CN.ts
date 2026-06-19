@@ -169,6 +169,7 @@ const zhCN: Locale = {
     tabLog: "日志",
     tabGraph: "图谱",
     gitTree: "Git 树图",
+    toggleCommitPanel: "提交面板",
     tabDashboard: "概览",
     stashTitle: "储藏管理",
     logScopeLabel: "日志范围",
