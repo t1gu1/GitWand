@@ -32,7 +32,7 @@ const props = defineProps<{
    * file list, commit composer and per-view rails as separate full-screen
    * panes. Defaults to the legacy all-in-one rail.
    */
-  pane?: "all" | "files" | "commit" | "history" | "prs" | "dashboard";
+  pane?: "all" | "files" | "commit" | "changes" | "history" | "prs" | "dashboard";
   repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   commitSummary: string;
   commitDescription: string;
@@ -98,7 +98,7 @@ const { t, locale } = useI18n();
 /** Resolved pane (legacy callers omit the prop → render everything). */
 const pane = computed(() => props.pane ?? "all");
 /** True when the given pane slice should render. */
-function showPane(...names: Array<"files" | "commit" | "history" | "prs" | "dashboard">): boolean {
+function showPane(...names: Array<"files" | "commit" | "changes" | "history" | "prs" | "dashboard">): boolean {
   return pane.value === "all" || names.includes(pane.value as any);
 }
 
@@ -931,7 +931,7 @@ function formatActivityDate(dateStr: string): string {
   <nav class="repo-sidebar" :class="`repo-sidebar--${pane}`" :aria-label="t('sidebar.tabChanges')">
     <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo.
          In the changes view it shares a row with the layout toggle (pushed to the right). -->
-    <div v-if="cwd && showPane('files') && totalChanges > 0" class="changes-controls">
+    <div v-if="cwd && showPane('files', 'changes') && totalChanges > 0" class="changes-controls">
       <ScopePicker :cwd="cwd" />
       <div
         class="layout-toggle"
@@ -965,7 +965,7 @@ function formatActivityDate(dateStr: string): string {
         </button>
       </div>
     </div>
-    <ScopePicker v-else-if="cwd && showPane('files')" :cwd="cwd" />
+    <ScopePicker v-else-if="cwd && showPane('files', 'changes')" :cwd="cwd" />
 
     <!-- History file list -->
     <div class="sections" v-if="showPane('history')">
@@ -1011,7 +1011,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- File sections -->
-    <div class="sections" v-if="showPane('files')">
+    <div class="sections" v-if="showPane('files', 'changes')">
       <template v-for="sectionKey in ['conflicted', 'staged', 'unstaged', 'untracked']" :key="sectionKey">
         <div
           v-if="sections[sectionKey].length > 0"
@@ -1298,7 +1298,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- Commit panel — fixed at bottom, always visible in changes view -->
-    <div class="commit-panel" v-if="showPane('commit')">
+    <div class="commit-panel" v-if="showPane('commit', 'changes')">
       <!-- Conventional Commits type picker -->
       <div class="cc-types-wrapper">
         <button v-show="ccCanScrollLeft" class="cc-scroll-btn cc-scroll-btn--left" @click="scrollCcTypes(-1)" tabindex="-1">‹</button>

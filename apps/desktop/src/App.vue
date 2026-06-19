@@ -1266,7 +1266,8 @@ function onSidebarMouseDown(e: MouseEvent) {
 
   const onMouseMove = (ev: MouseEvent) => {
     sidebarResizing.value = true;
-    const delta = ev.clientX - startX;
+    // Handle sits on the LEFT edge of a right-hand rail: dragging left widens it.
+    const delta = startX - ev.clientX;
     sidebarWidth.value = Math.max(230, Math.min(600, startWidth + delta));
   };
 
@@ -2415,14 +2416,8 @@ onUnmounted(() => {
               </aside>
             </div>
 
-            <!-- ── Changes view: files │ diff │ commit rail ── -->
+            <!-- ── Changes view: diff │ collapsible right rail (files + commit) ── -->
             <div v-else-if="viewMode === 'changes'" class="view view--changes">
-              <aside v-if="showSidebar" class="view__rail">
-                <RepoSidebar pane="files" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
-              </aside>
-              <div v-if="showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
-                @mousedown="onSidebarMouseDown"></div>
-
               <div class="view__content">
                 <div v-if="memorizeToast && showingMergeEditor" class="me-memory-offer">
                   <span>{{ t("mergeEditor.memorizeFileOffer", memorizeToast.path.split('/').pop() || memorizeToast.path) }}</span>
@@ -2454,16 +2449,18 @@ onUnmounted(() => {
                   @select-dir-file="(path) => repoSelectFile(path, false)" />
               </div>
 
+              <div v-if="showCommitRail" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+                @mousedown="onSidebarMouseDown"></div>
               <button class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showCommitRail }"
                 @click="showCommitRail = !showCommitRail" :title="t('sidebar.toggleCommitPanel')"
                 :aria-pressed="showCommitRail">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M13.5 3.5l-7 7L3 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
-                <span class="commit-rail-toggle__label">{{ t('sidebar.commitButton', repoStats.staged) }}</span>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.toggleCommitPanel') }}</span>
               </button>
-              <aside v-if="showCommitRail" class="view__rail view__rail--right view__rail--commit">
-                <RepoSidebar pane="commit" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
+              <aside v-if="showCommitRail" class="view__rail view__rail--right">
+                <RepoSidebar pane="changes" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
               </aside>
             </div>
 
