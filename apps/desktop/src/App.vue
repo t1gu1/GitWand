@@ -2269,7 +2269,40 @@ function onHistoryScrollToFile(idx: number) {
 watch(selectedCommitHash, () => {
   historyVisibleFileIdx.value = 0;
   scrollToFileIdx.value = null;
+  // Graph view: a fresh commit selection closes any open diff and clears the
+  // file focus (no file is auto-selected — the diff only opens on file click).
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
 });
+
+// ─── Git Tree view inline commit inspection ──────────────
+// In the full-screen graph view, clicking a commit pops its file list in the
+// right rail WITHOUT opening a diff or focusing any file. The CommitDiffViewer
+// only appears (above the graph) once the user clicks a file.
+//   graphFileIdx === null → no file opened → show graph only, nothing highlighted
+//   graphFileIdx >= 0     → diff panel open, scrolled to that file
+const graphFileIdx = ref<number | null>(null);
+const graphScrollIdx = ref<number | null>(null);
+
+/** Graph → select a commit: load its diffs, keep the graph, open no file. */
+function onGraphSelectCommit(hash: string) {
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
+  selectCommit(hash);
+}
+
+/** Graph → click a file in the right rail: open the diff scrolled to it. */
+function onGraphOpenFile(idx: number) {
+  graphFileIdx.value = idx;
+  graphScrollIdx.value = idx;
+  nextTick(() => { graphScrollIdx.value = null; });
+}
+
+/** Graph → close the full-screen diff and return to the graph + file rail. */
+function onGraphCloseDiff() {
+  graphFileIdx.value = null;
+  graphScrollIdx.value = null;
+}
 
 onMounted(() => {
   window.addEventListener("keydown", onKeyDown);
@@ -2457,38 +2490,64 @@ onUnmounted(() => {
             </div>
 
             <!-- ── Git Tree view: full-screen commit graph ── -->
-            <CommitGraph v-else-if="viewMode === 'graph'" class="view view--graph"
-              :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
-              :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktree-branches="worktreeBranches" :stashes="stashes"
-              :submodule-changes="submoduleChanges"
-              :has-more="logHasMore" :loading-more="logLoadingMore"
-              :hidden-commit-count="hiddenCommitCount"
-              @select-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }"
-              @change-view="onViewModeChange"
-              @edit-commit="handleEditCommit"
-              @split-commit="handleSplitCommitRequest"
-              @checkout-commit="handleCheckoutCommit"
-              @checkout-branch="handleSwitchBranch"
-              @reset-to-commit="handleResetToCommit"
-              @revert-commit="handleRevertCommit"
-              @create-branch-from-commit="handleCreateBranchFromCommit"
-              @tag-commit="handleTagCommit"
-              @cherry-pick-commit="handleCherryPickCommit"
-              @view-on-forge="handleViewOnForge"
-              @delete-branch="handleDeleteBranchRequest"
-              @delete-tag="handleDeleteTagRequest"
-              @merge-into-current="doMerge"
-              @rebase-onto-current="handleRebaseOntoCurrent"
-              @force-push-branch="doForcePush"
-              @view-submodule="handleOpenSubmodule"
-              @apply-stash="applyStash"
-              @pop-stash="popStash"
-              @drop-stash="dropStash"
-              @wip-discard-all="handleWipDiscardAll"
-              @wip-stash="handleWipStash"
-              @wip-quick-stash="handleWipQuickStash"
-              @wip-quick-stash-ai="handleWipQuickStashAi"
-              @load-more="loadMoreLog" />
+            <!-- Clicking a commit pops its file list in the right rail (no file
+                 auto-focused); clicking a file swaps the graph for its diff while
+                 keeping the file rail visible. -->
+            <div v-else-if="viewMode === 'graph'" class="view view--graph">
+              <div class="graph-main">
+                <!-- A clicked file replaces the graph with its diff (X to return). -->
+                <div v-if="graphFileIdx !== null && selectedCommitHash" class="graph-diff-full">
+                  <button class="graph-diff-close" @click="onGraphCloseDiff" :title="t('common.close')"
+                    :aria-label="t('common.close')">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <CommitDiffViewer class="graph-diff"
+                    :diffs="commitDiffs" :commit-hash="selectedCommitHash"
+                    :commit-info="repoLog.find(e => e.hashFull === selectedCommitHash) ?? null" :diff-mode="diffMode"
+                    :scroll-to-file-idx="graphScrollIdx" @update:diff-mode="onDiffModeChange"
+                    @update:visible-file-idx="graphFileIdx = $event" />
+                </div>
+
+                <CommitGraph v-else class="graph-canvas"
+                  :commits="repoLog" :selected-hash="selectedCommitHash" :current-branch="repoStatus?.branch"
+                  :fork-point-sha="graphForkPointSha" :repo-stats="repoStats" :branches="branches" :worktree-branches="worktreeBranches" :stashes="stashes"
+                  :submodule-changes="submoduleChanges"
+                  :has-more="logHasMore" :loading-more="logLoadingMore"
+                  :hidden-commit-count="hiddenCommitCount"
+                  @select-commit="onGraphSelectCommit"
+                  @change-view="onViewModeChange"
+                  @edit-commit="handleEditCommit"
+                  @split-commit="handleSplitCommitRequest"
+                  @checkout-commit="handleCheckoutCommit"
+                  @checkout-branch="handleSwitchBranch"
+                  @reset-to-commit="handleResetToCommit"
+                  @revert-commit="handleRevertCommit"
+                  @create-branch-from-commit="handleCreateBranchFromCommit"
+                  @tag-commit="handleTagCommit"
+                  @cherry-pick-commit="handleCherryPickCommit"
+                  @view-on-forge="handleViewOnForge"
+                  @delete-branch="handleDeleteBranchRequest"
+                  @delete-tag="handleDeleteTagRequest"
+                  @merge-into-current="doMerge"
+                  @rebase-onto-current="handleRebaseOntoCurrent"
+                  @force-push-branch="doForcePush"
+                  @view-submodule="handleOpenSubmodule"
+                  @apply-stash="applyStash"
+                  @pop-stash="popStash"
+                  @drop-stash="dropStash"
+                  @wip-discard-all="handleWipDiscardAll"
+                  @wip-stash="handleWipStash"
+                  @wip-quick-stash="handleWipQuickStash"
+                  @wip-quick-stash-ai="handleWipQuickStashAi"
+                  @load-more="loadMoreLog" />
+              </div>
+              <aside v-if="selectedCommitHash" class="view__rail view__rail--right">
+                <RepoSidebar pane="history" v-bind="repoSidebarProps"
+                  :visible-file-idx="graphFileIdx ?? -1" @scroll-to-file="onGraphOpenFile" />
+              </aside>
+            </div>
 
             <!-- Launchpad view: cross-repo dashboard (v2.10 nav revamp) -->
             <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" />
@@ -2931,11 +2990,70 @@ onUnmounted(() => {
   min-width: var(--commit-rail-width, 340px);
 }
 
-/* Git Tree as a full-bleed view */
+/* Git Tree as a full-bleed view: graph (+ optional diff) | right file rail */
 .view--graph {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+}
+
+.graph-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A clicked file takes over the whole graph view */
+.graph-diff-full {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.graph-diff {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.graph-diff-close {
+  position: absolute;
+  top: var(--space-3, 8px);
+  right: var(--space-3, 8px);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.graph-diff-close:hover {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.12));
+  color: var(--color-text);
+}
+
+.graph-diff-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* Left-rail drag handle (resizes --sidebar-width) */
