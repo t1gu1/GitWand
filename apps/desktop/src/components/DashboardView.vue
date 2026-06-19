@@ -1399,7 +1399,7 @@ button.stat-card:hover {
 .type-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--space-6);
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
