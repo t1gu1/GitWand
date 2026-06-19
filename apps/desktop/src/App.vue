@@ -1260,6 +1260,20 @@ watch(showCommitRail, (val) => {
   localStorage.setItem(COMMIT_RAIL_KEY, val.toString());
 });
 
+// Right-rail visibility for the PRs view (PR list) and Git Tree view (file
+// list). Same collapsible/resizable pattern as the Changes commit rail.
+const PR_RAIL_KEY = "gitwand-pr-rail-visible";
+const showPrRail = ref(localStorage.getItem(PR_RAIL_KEY) !== "false");
+watch(showPrRail, (val) => {
+  localStorage.setItem(PR_RAIL_KEY, val.toString());
+});
+
+const GRAPH_RAIL_KEY = "gitwand-graph-rail-visible";
+const showGraphRail = ref(localStorage.getItem(GRAPH_RAIL_KEY) !== "false");
+watch(showGraphRail, (val) => {
+  localStorage.setItem(GRAPH_RAIL_KEY, val.toString());
+});
+
 function onSidebarMouseDown(e: MouseEvent) {
   const startX = e.clientX;
   const startWidth = sidebarWidth.value;
@@ -2477,9 +2491,17 @@ onUnmounted(() => {
                 :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
               <PrDetailView v-else class="view__content" @refresh="repoRefresh"
                 @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
-              <div v-if="showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+              <div v-if="showPrRail" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
                 @mousedown="onSidebarMouseDown"></div>
-              <aside v-if="showSidebar" class="view__rail view__rail--right">
+              <button class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showPrRail }"
+                @click="showPrRail = !showPrRail" :title="t('sidebar.togglePrPanel')" :aria-pressed="showPrRail">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" />
+                  <path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" />
+                </svg>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.togglePrPanel') }}</span>
+              </button>
+              <aside v-if="showPrRail" class="view__rail view__rail--right">
                 <RepoSidebar pane="prs" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
               </aside>
             </div>
@@ -2538,7 +2560,16 @@ onUnmounted(() => {
                   @wip-quick-stash-ai="handleWipQuickStashAi"
                   @load-more="loadMoreLog" />
               </div>
-              <aside v-if="selectedCommitHash" class="view__rail view__rail--right">
+              <div v-if="showGraphRail && selectedCommitHash" class="sidebar-handle"
+                :class="{ 'sidebar-handle--active': sidebarResizing }" @mousedown="onSidebarMouseDown"></div>
+              <button class="commit-rail-toggle" :class="{ 'commit-rail-toggle--active': showGraphRail }"
+                @click="showGraphRail = !showGraphRail" :title="t('sidebar.toggleFilesPanel')" :aria-pressed="showGraphRail">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span class="commit-rail-toggle__label">{{ t('sidebar.toggleFilesPanel') }}</span>
+              </button>
+              <aside v-if="showGraphRail && selectedCommitHash" class="view__rail view__rail--right">
                 <RepoSidebar pane="history" v-bind="repoSidebarProps"
                   :visible-file-idx="graphFileIdx ?? -1" @scroll-to-file="onGraphOpenFile" />
               </aside>

@@ -160,6 +160,8 @@ const fr: Locale = {
     tabGraph: "Graphe",
     gitTree: "Arbre Git",
     toggleCommitPanel: "Panneau de commit",
+    togglePrPanel: "Panneau de pull requests",
+    toggleFilesPanel: "Panneau de fichiers",
     tabDashboard: "Tableau de bord",
     stashTitle: "Gestionnaire de stash",
     // Log scope toggle (current branch vs all refs)
