@@ -8,7 +8,6 @@ import AppHeader from "./components/AppHeader.vue";
 import EmptyState from "./components/EmptyState.vue";
 import RepoSidebar from "./components/RepoSidebar.vue";
 import AppDock from "./components/AppDock.vue";
-import DiffViewer from "./components/DiffViewer.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import BaseModal from "./components/BaseModal.vue";
 
@@ -26,6 +25,10 @@ import type UpdateModalType from "./components/UpdateModal.vue";
 // ─── Main content views (lazy — rendered only when the matching viewMode/flag
 // is active; never part of the initial paint) ─────────────────────────────────
 const MergeEditor = defineAsyncComponent(() => import("./components/MergeEditor.vue"));
+// DiffViewer is only shown in the `v-else` of the changes pane — never at the
+// Launchpad boot view. Lazy like its siblings (Image/CommitDiffViewer) to keep
+// its ~weight out of the main chunk (bundle budget).
+const DiffViewer = defineAsyncComponent(() => import("./components/DiffViewer.vue"));
 const ImageDiffViewer = defineAsyncComponent(() => import("./components/ImageDiffViewer.vue"));
 const CommitDiffViewer = defineAsyncComponent(() => import("./components/CommitDiffViewer.vue"));
 const FileHistoryViewer = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
@@ -862,7 +865,6 @@ const repoSidebarListeners = {
   refresh: () => repoRefresh(),
   openStash: () => { showStash.value = true; },
   openTags: () => { showTags.value = true; },
-  openWorkspace: () => { showWorkspace.value = true; },
   openAgents: () => { showAgents.value = true; },
   openLaunchpad: () => handleLaunchpadShortcut(),
   scrollToFile: (idx: number) => onHistoryScrollToFile(idx),
@@ -2371,8 +2373,7 @@ onUnmounted(() => {
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true" @open-submodule="handleOpenSubmodule" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
-      @open-agents="showAgents = true"
-      :active-view="viewMode" @open-launchpad="handleLaunchpadShortcut" />
+      @open-agents="showAgents = true" />
 
     <div class="app-body" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
       <main class="main" :class="{ 'main--dashboard': viewMode === 'dashboard' || viewMode === 'launchpad' }">

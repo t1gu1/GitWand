@@ -45,6 +45,27 @@ function isActive(id: ViewMode): boolean {
 <template>
   <nav class="app-dock" :aria-label="t('sidebar.tabChanges')">
     <div class="app-dock__pill">
+      <!-- Launchpad — cross-repo hub (relocated here from the header). -->
+      <button
+        class="dock-btn"
+        :class="{ 'dock-btn--active': isActive('launchpad') }"
+        :aria-pressed="isActive('launchpad')"
+        :title="t('launchpad.openTooltip')"
+        @click="emit('changeView', 'launchpad')"
+      >
+        <svg class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.5 16.5c-1.5 1-2 4-2 4s3-.5 4-2c.6-.85.5-2 .5-2"/>
+          <path d="M12 15l-3-3a11 11 0 0 1 7-9c2.5 0 4 1.5 4 4a11 11 0 0 1-9 7l1 1z"/>
+          <path d="M9 12H5s.5-2.5 2-3.5c1.3-.85 3-.5 3-.5"/>
+          <path d="M12 15v4s2.5-.5 3.5-2c.85-1.3.5-3 .5-3"/>
+          <circle cx="15" cy="9" r="1.2"/>
+        </svg>
+        <span class="dock-label">{{ t('launchpad.title') }}</span>
+      </button>
+
+      <!-- Separates the cross-repo Launchpad from the per-repo views. -->
+      <span class="dock-sep" aria-hidden="true"></span>
+
       <button
         v-for="item in items"
         :key="item.id"
@@ -150,6 +171,14 @@ function isActive(id: ViewMode): boolean {
 .dock-btn:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+
+.dock-sep {
+  flex-shrink: 0;
+  align-self: stretch;
+  width: 1px;
+  margin: var(--space-1, 4px) var(--space-1, 4px);
+  background: var(--color-border);
 }
 
 .dock-icon {
