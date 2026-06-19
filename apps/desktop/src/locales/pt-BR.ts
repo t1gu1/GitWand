@@ -1312,6 +1312,7 @@ const ptBR: Locale = {
 
   workspace: {
     title: "Espaços de trabalho",
+    headerLabel: "Espaços",
     panelTitle: "Espaço de trabalho",
     empty: "Nenhum espaço de trabalho aberto. Crie um para agrupar vários repositórios.",
     newWorkspace: "Novo espaço de trabalho",
@@ -1342,8 +1343,44 @@ const ptBR: Locale = {
     errorStatus: "Falha ao obter status: {0}",
   },
 
+  issue: {
+    loadingLabel: "Carregando a issue…",
+    empty: "Selecione uma issue.",
+    openBadge: "Aberta",
+    closedBadge: "Fechada",
+    close: "Fechar issue",
+    reopen: "Reabrir",
+    openOnWeb: "Abrir na web",
+    noBody: "Sem descrição.",
+    commentsTitle: "Comentários",
+    noComments: "Ainda não há comentários.",
+    commentPlaceholder: "Adicionar um comentário…",
+    addComment: "Comentar",
+    posting: "Enviando…",
+    milestone: "Marco",
+  },
+
   launchpad: {
     title: "Launchpad",
+    openTooltip: "Launchpad — visão geral multi-repositórios (⌘L)",
+    scopeAll: "Todos",
+    scopeCount: "{0} repositórios",
+    scopeTooltip: "Escopo de exibição",
+    localSection: "Nos seus repositórios",
+    card: {
+      commit: "{0} para commitar",
+      push: "{0} para enviar",
+      publish: "Publicar branch",
+      sync: "{0} para puxar",
+    },
+    inboxTab: "A tratar",
+    inboxEmpty: "Nada requer sua ação no momento. 🎉",
+    inbox: {
+      review: "Aguardando sua revisão",
+      changes: "Alterações solicitadas nos seus PRs",
+      ci: "CI com falha nos seus PRs",
+      merge: "Aprovados — prontos para mesclar",
+    },
     wipTab: "Em andamento",
     noRepos: "Nenhum repositório neste espaço de trabalho.",
     refresh: "Atualizar",
@@ -1628,6 +1665,7 @@ const ptBR: Locale = {
   // ─── Agent Sessions (v2.8) ───────────────────────
   agents: {
     title: "Sessões de agente",
+    headerLabel: "Agentes",
     sidebarTooltip: "Sessões de agente ativas nos worktrees deste repositório",
     empty: "Nenhuma sessão de agente detectada. Abra um worktree no Claude Code, Cursor ou Windsurf para vê-lo aqui.",
     reload: "Atualizar",

@@ -1346,6 +1346,7 @@ const en = {
   // \u2500\u2500\u2500 Workspaces \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   workspace: {
     title: "Workspaces",
+    headerLabel: "Workspaces",
     panelTitle: "Workspace",
     empty: "No workspace open. Create one to group multiple repos.",
     newWorkspace: "New workspace",
@@ -1376,8 +1377,44 @@ const en = {
     errorStatus: "Failed to get status: {0}",
   },
 
+  issue: {
+    loadingLabel: "Loading issue…",
+    empty: "Select an issue.",
+    openBadge: "Open",
+    closedBadge: "Closed",
+    close: "Close issue",
+    reopen: "Reopen",
+    openOnWeb: "Open on web",
+    noBody: "No description.",
+    commentsTitle: "Comments",
+    noComments: "No comments yet.",
+    commentPlaceholder: "Add a comment…",
+    addComment: "Comment",
+    posting: "Posting…",
+    milestone: "Milestone",
+  },
+
   launchpad: {
     title: "Launchpad",
+    openTooltip: "Launchpad — cross-repo overview (⌘L)",
+    scopeAll: "All",
+    scopeCount: "{0} repos",
+    scopeTooltip: "Display scope",
+    localSection: "On your repos",
+    card: {
+      commit: "{0} to commit",
+      push: "{0} to push",
+      publish: "Publish branch",
+      sync: "{0} to pull",
+    },
+    inboxTab: "To handle",
+    inboxEmpty: "Nothing needs your action right now. 🎉",
+    inbox: {
+      review: "Awaiting your review",
+      changes: "Changes requested on your PRs",
+      ci: "Failing CI on your PRs",
+      merge: "Approved — ready to merge",
+    },
     wipTab: "WIP",
     noRepos: "No repositories in this workspace.",
     refresh: "Refresh",
@@ -1669,6 +1706,7 @@ const en = {
   // ─── Agent Sessions (v2.8) ───────────────────────────────
   agents: {
     title: "Agent Sessions",
+    headerLabel: "Agents",
     sidebarTooltip: "Active agent sessions on this repo’s worktrees",
     empty: "No agent sessions detected. Open a worktree in Claude Code, Cursor, or Windsurf to see it here.",
     reload: "Refresh",

@@ -11,9 +11,6 @@ import AppDock from "./components/AppDock.vue";
 import DiffViewer from "./components/DiffViewer.vue";
 import AiSparkle from "./components/AiSparkle.vue";
 import BaseModal from "./components/BaseModal.vue";
-// Always-mounted (state-driven internally — must stay eager):
-import EditCommitOverlay from "./components/EditCommitOverlay.vue";
-import SplitCommitModal from "./components/SplitCommitModal.vue";
 
 // ─── Type-only imports ───────────────────────────────────────────────────────
 // SearchPalette exports a named type used in computed paletteActions.
@@ -34,6 +31,7 @@ const CommitDiffViewer = defineAsyncComponent(() => import("./components/CommitD
 const FileHistoryViewer = defineAsyncComponent(() => import("./components/FileHistoryViewer.vue"));
 const CommitGraph = defineAsyncComponent(() => import("./components/CommitGraph.vue"));
 const PrDetailView = defineAsyncComponent(() => import("./components/PrDetailView.vue"));
+const IssueDetailView = defineAsyncComponent(() => import("./components/IssueDetailView.vue"));
 const PrCreateView = defineAsyncComponent(() => import("./components/PrCreateView.vue"));
 const DashboardView = defineAsyncComponent(() => import("./components/DashboardView.vue"));
 const SettingsPanel = defineAsyncComponent(() => import("./components/SettingsPanel.vue"));
@@ -46,7 +44,6 @@ const StashManager = defineAsyncComponent(() => import("./components/StashManage
 const TagsPanel = defineAsyncComponent(() => import("./components/TagsPanel.vue"));
 const WorktreeManager = defineAsyncComponent(() => import("./components/WorktreeManager.vue"));
 const SubmodulePanel = defineAsyncComponent(() => import("./components/SubmodulePanel.vue"));
-const WorkspacePanel = defineAsyncComponent(() => import("./components/WorkspacePanel.vue"));
 const LaunchpadView = defineAsyncComponent(() => import("./components/LaunchpadView.vue"));
 const AgentSessionsPanel = defineAsyncComponent(() => import("./components/AgentSessionsPanel.vue"));
 const CommandLogPanel = defineAsyncComponent(() => import("./components/CommandLogPanel.vue"));
@@ -60,9 +57,15 @@ const UpdateModal = defineAsyncComponent(() => import("./components/UpdateModal.
 // Shared create-branch field — only mounted inside the v-if'd create-branch
 // modal, so keep it lazy (also lazy in BranchSelector) to stay out of main.
 const BranchNameField = defineAsyncComponent(() => import("./components/BranchNameField.vue"));
+// Commit edit/split modals — gated by `v-if` in the template (entry set /
+// split.open), so they only pull their chunk when the user actually edits or
+// splits a commit. Kept lazy to stay out of the main bundle (bundle budget).
+const EditCommitOverlay = defineAsyncComponent(() => import("./components/EditCommitOverlay.vue"));
+const SplitCommitModal = defineAsyncComponent(() => import("./components/SplitCommitModal.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
+import { useIssuePanel, ISSUE_PANEL_KEY } from "./composables/useIssuePanel";
 import { useSplitCommit } from "./composables/useSplitCommit";
 import type { GitLogEntry } from "./utils/backend";
 import { getPersistedDiffMode, persistDiffMode, type DiffMode } from "./utils/diffMode";
@@ -96,7 +99,7 @@ import {
   TOGGLE_GIT_TREE_KEY,
   OPEN_SETTINGS_KEY,
 } from "./composables/branchPickerBridge";
-import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, workspaceRead, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
+import { gitStash, gitStashPop, gitStashList, openInEditor, setGitConfig, gitDiscard, gitAddToGitignore, gitDeleteBranch, gitDeleteTag, gitDeleteRemoteTag, gitRemoteInfo, gitUnpushedTags, gitPushTags, gitMergeBase, gitResetToCommit, gitCommitSubmoduleChanges, type CommitSubmoduleChange } from "./utils/backend";
 import { useCommitActions } from "./composables/useCommitActions";
 
 const { t } = useI18n();
@@ -111,7 +114,7 @@ const { isOffline: navIsOffline } = useNetworkStatus();
 const { isOnline: probedOnline, probeConnectivity } = useConnectivity();
 const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState, openExternalUrl } from "./utils/backend";
-import type { UpdateInfo, RepoOperationState, WorkspaceRepo } from "./utils/backend";
+import type { UpdateInfo, RepoOperationState, WorkspaceRepo, PullRequest } from "./utils/backend";
 import { onMarkdownLinkClick } from "./composables/useSafeHtml";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
@@ -296,6 +299,8 @@ watch(
 const prCwd = computed(() => repoFolderPath.value ?? "");
 const prPanel = usePrPanel(prCwd);
 provide(PR_PANEL_KEY, prPanel);
+const issuePanel = useIssuePanel(prCwd);
+provide(ISSUE_PANEL_KEY, issuePanel);
 
 // Load branches when the PR create form opens (they're needed to compute baseCandidates).
 watch(() => prPanel.showCreateForm.value, (val) => {
@@ -1408,7 +1413,6 @@ watch(repoOperationState, (op) => {
 // ─── Stash manager panel ────────────────────────────────
 const showStash = ref(false);
 const showTags = ref(false);
-const showWorkspace = ref(false);
 const showAgents = ref(false);
 const showCommandLog = ref(false);
 
@@ -1424,56 +1428,73 @@ watch(
 );
 
 // ─── Launchpad panel ─────────────────────────────────────
-// showLaunchpad removed — Launchpad is now a first-class viewMode ("launchpad").
-// launchpadRepos holds the workspace repos list loaded on demand; the
-// <LaunchpadView :repos="…"> in the main-content area consumes it.
-const launchpadRepos = ref<WorkspaceRepo[]>([]);
-function openLaunchpad(repos: WorkspaceRepo[]) {
-  launchpadRepos.value = repos;
+// Launchpad is a first-class viewMode ("launchpad"). Its repo set is the
+// currently open repo tabs (v3 nav: tabs are the source of truth — no more
+// workspace file). <LaunchpadView :repos="launchpadRepos"> consumes it.
+const launchpadRepos = computed<WorkspaceRepo[]>(() =>
+  repoTabs.value.map((t) => ({ path: t.path, name: t.name }))
+);
+function openLaunchpad() {
   viewMode.value = "launchpad";
-  showWorkspace.value = false;
 }
 
 /**
- * Handle the ⌘L / Ctrl+L shortcut.
+ * Open a PR picked in the Launchpad inside the in-app review surface
+ * (PrDetailView) instead of bouncing to the browser. The Launchpad is
+ * cross-repo, so we first switch the active repo to the PR's repo when it
+ * differs from the one currently open, then select the PR.
  *
- * Resolves the active workspace lazily — Launchpad needs the repo list and
- * the user might have a workspace persisted from a previous session that
- * App.vue hasn't loaded yet (WorkspacePanel owns that state). We read the
- * same localStorage key WorkspacePanel uses (`gitwand-workspace-dir`) and
- * call `workspaceRead` directly. If no workspace is configured, surface a
- * warning in the existing error-toast and pop WorkspacePanel so the user
- * can create one.
+ * `pr` is a `PullRequest` enriched with `repoPath` (PrWithRepo) — selectPr only
+ * needs the PullRequest shape and reads `cwd` (now the PR's repo) for its fetches.
+ */
+async function openLaunchpadPr(pr: PullRequest & { repoPath?: string }) {
+  if (pr.repoPath && pr.repoPath !== repoFolderPath.value) {
+    await handleOpenPath(pr.repoPath);
+    // Let the cwd watcher in usePrPanel run (it resets selectedPr / re-inits
+    // for the new repo) before we select, so our selection isn't clobbered.
+    await nextTick();
+  }
+  viewMode.value = "prs";
+  // Ensure the forge is resolved for this repo (GitLab/Bitbucket/Azure) before
+  // the detail bundle is fetched — selectPr derives the provider from `remote`.
+  await prPanel.loadRemote();
+  await prPanel.selectPr(pr);
+}
+
+/**
+ * Open an issue picked in the Launchpad inside the in-app IssueDetailView.
+ * Same cross-repo switch as `openLaunchpadPr`. `issue` carries `repoPath`
+ * (IssueWithRepo); issuePanel reads `cwd` (the issue's repo) for its fetches.
+ */
+async function openLaunchpadIssue(issue: { number: number; repoPath?: string }) {
+  if (issue.repoPath && issue.repoPath !== repoFolderPath.value) {
+    await handleOpenPath(issue.repoPath);
+    await nextTick();
+  }
+  viewMode.value = "issue";
+  await issuePanel.selectIssue(issue.number);
+}
+
+/**
+ * Open a repo's Changes view from a Launchpad local-action card (commit / push
+ * / publish / sync). Switches the active repo if needed, then shows Changes
+ * where the commit area + header sync controls live.
+ */
+async function openLaunchpadRepoChanges(repoPath: string) {
+  if (repoPath && repoPath !== repoFolderPath.value) {
+    await handleOpenPath(repoPath);
+    await nextTick();
+  }
+  viewMode.value = "changes";
+}
+
+/**
+ * Handle the ⌘L / Ctrl+L shortcut (and the header Launchpad pill / menu item):
+ * just switch to the Launchpad view. Its repos come from the open tabs, so
+ * there is nothing to resolve — if no repo is open, the EmptyState shows.
  */
 async function handleLaunchpadShortcut(): Promise<void> {
-  // If Launchpad already open with repos, just keep it visible (no-op).
-  if (viewMode.value === "launchpad" && launchpadRepos.value.length > 0) return;
-
-  // Re-use repos already loaded for this session (e.g. WorkspacePanel was
-  // opened earlier) — fastest path, no IPC.
-  if (launchpadRepos.value.length > 0) {
-    openLaunchpad(launchpadRepos.value);
-    return;
-  }
-
-  const savedDir = localStorage.getItem("gitwand-workspace-dir");
-  if (savedDir) {
-    try {
-      const cfg = await workspaceRead(savedDir);
-      if (cfg.repos.length > 0) {
-        openLaunchpad(cfg.repos);
-        return;
-      }
-    } catch {
-      // Fall through to the no-workspace branch — best-effort.
-    }
-  }
-
-  // No workspace defined (or empty) → toast + open WorkspacePanel so the
-  // user can configure one. Reuses the error-toast pipeline so the message
-  // dismisses on its own after 3s.
-  repoError.value = t("launchpad.noWorkspace.warning");
-  showWorkspace.value = true;
+  openLaunchpad();
 }
 
 // Watch the bridge counter — each menu invocation bumps it and triggers a
@@ -1490,18 +1511,9 @@ watch(launchpadOpenRequest, () => {
 // foreground the Launchpad updates visually and we just advance the snapshot.
 const { allPrs: notifyPrs, refresh: refreshNotifyPrs } = useLaunchpadPrs();
 
-/** Resolve workspace repos for the poll — uses the open Launchpad's list, else
- *  the persisted workspace (so notifications work even before opening it). */
+/** Repos for the background PR-activity poll — the open repo tabs. */
 async function resolveNotifyRepos(): Promise<WorkspaceRepo[]> {
-  if (launchpadRepos.value.length > 0) return launchpadRepos.value;
-  const savedDir = localStorage.getItem("gitwand-workspace-dir");
-  if (!savedDir) return [];
-  try {
-    const cfg = await workspaceRead(savedDir);
-    return cfg.repos;
-  } catch {
-    return [];
-  }
+  return launchpadRepos.value;
 }
 
 /** Granularity + "by people" gate for a single event. */
@@ -2359,7 +2371,8 @@ onUnmounted(() => {
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
       @open-submodules="showSubmodules = true" @open-submodule="handleOpenSubmodule" @open-search="handleOpenSearch" @open-help="showHelp = true"
       :stash-count="stashCount" @open-stash="showStash = true" @open-tags="showTags = true"
-      @open-workspace="showWorkspace = true" @open-agents="showAgents = true" />
+      @open-agents="showAgents = true"
+      :active-view="viewMode" @open-launchpad="handleLaunchpadShortcut" />
 
     <div class="app-body" :style="{ '--sidebar-width': sidebarWidth + 'px' }">
       <main class="main" :class="{ 'main--dashboard': viewMode === 'dashboard' || viewMode === 'launchpad' }">
@@ -2575,8 +2588,11 @@ onUnmounted(() => {
               </aside>
             </div>
 
+            <!-- Issue detail view: in-app issue review (v2.22) -->
+            <IssueDetailView v-else-if="viewMode === 'issue'" />
+
             <!-- Launchpad view: cross-repo dashboard (v2.10 nav revamp) -->
-            <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" />
+            <LaunchpadView v-else-if="viewMode === 'launchpad'" :repos="launchpadRepos" @open-pr="openLaunchpadPr" @open-issue="openLaunchpadIssue" @open-repo-changes="openLaunchpadRepoChanges" />
           </template>
         </template>
       </main>
@@ -2593,16 +2609,17 @@ onUnmounted(() => {
     <!-- Folder picker modal (browser mode) -->
     <FolderPicker v-if="showFolderPicker" @select="onFolderSelected" @cancel="onFolderPickerCancel" />
 
-    <!-- Edit commit overlay -->
-    <EditCommitOverlay :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
+    <!-- Edit commit overlay (lazy — only mounted while editing a commit) -->
+    <EditCommitOverlay v-if="editingCommit" :entry="editingCommit" @confirm="handleAmendConfirm" @cancel="editingCommit = null" />
 
     <!-- Merge success modal -->
     <MergeSuccessModal v-if="showMergeSuccess" :merged-branch="lastMergedBranch ?? undefined"
       @close="onMergeSuccessClose" @push="onMergeSuccessPush" @delete-branch="onMergeSuccessDeleteBranch" />
 
     <!-- Split commit modal (driven by the useSplitCommit composable's
-         module-level state — mounting once here is sufficient) -->
-    <SplitCommitModal @split-completed="handleSplitCompleted" @close="handleSplitClose" />
+         module-level state). Lazy — the `v-if` keeps its chunk out of main
+         until the user opens the split flow. -->
+    <SplitCommitModal v-if="splitCommit.open.value" @split-completed="handleSplitCompleted" @close="handleSplitClose" />
 
     <!-- Success toast -->
     <div v-if="successToast" class="toast" :class="{ 'toast--leaving': successToastLeaving }" role="status">
@@ -2636,10 +2653,6 @@ onUnmounted(() => {
 
     <!-- Fork modal (v2.0) -->
     <ForkModal v-if="showForkModal" @close="showForkModal = false" @forked="onForked" />
-
-    <!-- Workspace panel -->
-    <WorkspacePanel v-if="showWorkspace" @close="showWorkspace = false"
-      @open-tab="(path) => { openTab(path); showWorkspace = false; }" />
 
     <!-- Agent Sessions panel -->
     <AgentSessionsPanel v-if="showAgents && repoFolderPath" :cwd="repoFolderPath" @close="showAgents = false"
