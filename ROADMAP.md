@@ -6,7 +6,7 @@
 
 ## What's Next
 
-### v2.24.0 — Safety Bundle: pre-commit secrets scanner
+### v2.25.0 — Safety Bundle: pre-commit secrets scanner
 
 _Inspired by GitSquid. A "safety" feature with zero network dependency — everything local._
 
@@ -18,7 +18,7 @@ _Inspired by GitSquid. A "safety" feature with zero network dependency — every
 
 ---
 
-### v2.25.0 — Stacked Branches (native)
+### v2.26.0 — Stacked Branches (native)
 
 _A differentiating feature: stacked PRs workflow without an external CLI (Graphite, ghstack…)._
 
@@ -36,7 +36,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.26.0 — Voice Input (experimental)
+### v2.27.0 — Voice Input (experimental)
 
 - **Local dictation**: microphone button in the commit panel — transcription via embedded Whisper (`whisper-rs` Rust) — zero cloud
 - **Optional AI enrichment**: pass dictated text through `useAIProvider` for conventional commit formatting
@@ -46,7 +46,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v2.27.0 — Terminal tabs & AI workspace
+### v2.28.0 — Terminal tabs & AI workspace
 
 _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand as a native AI workspace._
 
@@ -60,7 +60,7 @@ _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand 
 
 - "New AI task" button: opens a blank worktree + launches a Claude Code (or Codex CLI) session in a dedicated terminal tab — the worktree diff displays live in GitWand
 - Vision: GitWand as the command center for coding with AI — see what the agent changes, stage what you want, commit — without leaving the app
-- User feedback expected to shape v2.26+
+- User feedback expected to shape v2.28+
 
 ---
 
@@ -101,6 +101,7 @@ Positioning: neither "yet another Git GUI" nor an IDE. A first-class Git navigat
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.24.0** | Full-screen views & in-app Launchpad — the permanent sidebar/Git-Tree strips give way to a floating bottom-center `AppDock`; Dashboard, Changes, History, PRs and a first-class full-screen Git Tree each render full-bleed (`RepoSidebar` gains a `pane` prop; collapsible, persisted commit composer rail). Launchpad gains in-app issue review (`IssueDetailView` + `useIssuePanel`), an action inbox (`useLaunchpadInbox` / `useRepoActionCards`), extracted scope (`useLaunchpadScope`) and internal navigation. The list/tree file-tree toggle extends to the history (commit) sidebar (`useFileTree` generalised over any `{ path }` entry). Plus a Linux AppImage follow-up: URL openers de-pollute `PATH`/`XDG_*` so a spawned `xdg-open` resolves the system browser instead of silently no-opening (#52), with opener stderr/exit captured. `EditCommitOverlay`/`SplitCommitModal` lazy-loaded. Full dev:web parity + 5-locale i18n |
 | **v2.23.0** | Changes sidebar & rebase polish — list/tree layout toggle for the changes view (collapsible folders, persisted layout + per-section collapse state, auto-expand to the selected file) via a new `useFileTree` composable; per-file and per-folder stage/unstage/discard fused into an always-visible segmented "action group". Interactive rebase now works in the packaged desktop app (dedicated `git_interactive_rebase` Tauri command replacing a dev-only HTTP endpoint) and branch pickers list branches by most-recent commit (shared `branchSort`). Plus a Linux AppImage fix: external links/OAuth buttons route through a robust multi-opener chain. Full dev:web parity + 5-locale i18n |
 | **v2.22.0** | Advanced conflict resolution — file-level bulk resolution ("Accept all: Current · Incoming · Both" in one click, persistent memorize-rule toast, one-click "Apply rule to N hunks"); tree-conflict resolution for markerless conflicts (modify/delete, both-deleted, add/delete) via `get_tree_conflicts`/`resolve_tree_conflict` with a dedicated editor panel + sidebar badge; markerless content-conflict reconstruction (`reconstruct_conflict` rebuilds the 3-way text from index stages when the working tree lost its `<<<<<<<` markers). Plus remote-state reliability fixes: false "Publish branch" on already-published branches (`remote_branch_exists`), false "offline" blocking push/pull (WKWebView spurious events → hysteresis + authoritative `confirmOnline` probe), and `git_remote_info` preferring `origin` (fixes the bogus "unpushed tags" modal). Full dev:web parity + 5-locale i18n |
 | **v2.21.0** | Monorepo Scope — pick a sub-workspace and scope the commit graph, search & stats to its file tree. Auto-detects 6 workspace formats (pnpm, npm/yarn, Cargo `[workspace]`, `nx.json`, `turbo.json`, `go.work`), parsed natively in Rust with a documented precedence; scope persisted per repo (additive `scope` field in `.gitwand-workspace.json`, validated on load); `git_log` pathspec filtering + a new `git_rev_count` driving a stable "N commits hidden" badge; sidebar `ScopePicker` (auto-detected packages + "Custom folder…" ad-hoc), active-scope chip & badge in the graph header. Picker shows only on detected monorepos; full dev:web parity via a mock `detect-monorepo` route |

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.24.0] - 2026-06-19
+
+### Added
+
+- **Full-screen views + floating navigation dock** — the permanent left sidebar (3 tabs) and right Git Tree strip are gone. Navigation now lives in a floating bottom-center `AppDock` (Dashboard · Changes · PRs · Git Tree), so each view renders full-bleed. Dashboard, Changes (files │ diff │ collapsible commit rail), History (commit list │ diff) and PRs (list │ detail) compose their own panes; the Git Tree becomes a first-class full-screen `graph` view (selecting a commit drills into History). `RepoSidebar` gained a `pane` prop so a single component renders any one slice; the commit composer rail is collapsible and its state persisted. New `sidebar.toggleCommitPanel` i18n key in all 5 locales.
+- **Launchpad — in-app issue review, action inbox & internal navigation** — issues now open in an in-app detail view (`IssueDetailView` + `useIssuePanel`) instead of bouncing to the browser. A new action inbox surfaces per-repo action cards (`useLaunchpadInbox` / `useRepoActionCards`), Launchpad scope selection is extracted into `useLaunchpadScope`, and internal navigation lets you move between Launchpad surfaces (and the branch selector) without leaving the app. New i18n keys in all 5 locales; composable unit tests added.
+- **File-tree view for the history (commit) sidebar** — the list/tree toggle now also applies when browsing a previously committed (already pushed) commit: the commit's changed-files list can render as a nested, collapsible folder tree, with the status badge per file and click-to-scroll preserved. The layout choice is shared with the Changes view — switching to tree in one switches both — and folder collapse state is persisted per folder path. The pure tree-builder (`useFileTree`) was generalised over any `{ path: string }` entry so it serves both the working-tree `RepoFileEntry` list and the commit `GitDiff` list. The lone "H" header icon is indented to align with the chevron-prefixed change sections.
+
+### Changed
+
+- **Lazy-load `EditCommitOverlay` and `SplitCommitModal`** — both were always-mounted despite being gated by user actions; `v-if` guards plus `defineAsyncComponent` keep their chunks out of the main bundle until they're actually needed.
+
 ### Fixed
 
 - **AppImage external links — silent no-open** — inside the released Linux AppImage, `AppRun` prepends `$APPDIR` entries to `PATH`, `XDG_DATA_DIRS` and `XDG_CONFIG_DIRS`, so a spawned `xdg-open` could resolve a bundled helper or miss the system browser/mime association and exit `0` without opening anything. URL openers now strip the `$APPDIR`-injected search-path entries before spawning (never emptying a variable), and capture each opener's stderr + exit code into the command log so a future silent failure stays diagnosable. Follow-up to the v2.22 AppImage link fix (GitHub issue #52).
@@ -15,10 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Full-screen views + floating navigation dock** — the permanent left sidebar (3 tabs) and right Git Tree strip are gone. Navigation now lives in a floating bottom-center `AppDock` (Dashboard · Changes · PRs · Git Tree), so each view renders full-bleed. Dashboard, Changes (files │ diff │ collapsible commit rail), History (commit list │ diff) and PRs (list │ detail) compose their own panes; the Git Tree becomes a first-class full-screen `graph` view (selecting a commit drills into History). `RepoSidebar` gained a `pane` prop so a single component renders any one slice; the commit composer rail is collapsible and its state persisted. New `sidebar.toggleCommitPanel` i18n key in all 5 locales.
 - **File-tree view for the changes sidebar** — the Changes view gains a list/tree layout toggle (in the controls row, to the right of the monorepo scope picker; full-width with text labels when no scope picker is present). The tree layout nests each git section's files under their folders, with collapsible folders (per-section collapse state, persisted in `localStorage`); selecting a file auto-expands its ancestor folders. The chosen layout is persisted. Pure tree-building logic lives in a new `useFileTree` composable with unit tests; `viewLayout` / `viewAsList` / `viewAsTree` i18n keys added in all 5 locales.
 - **Per-file and per-folder discard** — every file row now carries a discard button alongside stage/unstage, and tree folder rows carry folder-level stage/unstage + discard (operating on all files under the folder). Section-header, folder and file actions share a new segmented "action group" control (fused square buttons split by a hairline divider), and the stage/unstage/discard buttons are now always visible rather than hover-only.
-- **File-tree view for the history (commit) sidebar** — the list/tree toggle now also applies when browsing a previously committed (already pushed) commit: the commit's changed-files list can render as a nested, collapsible folder tree, with the status badge per file and click-to-scroll preserved. The layout choice is shared with the Changes view — switching to tree in one switches both — and folder collapse state is persisted per folder path. The pure tree-builder (`useFileTree`) was generalised over any `{ path: string }` entry so it serves both the working-tree `RepoFileEntry` list and the commit `GitDiff` list. The lone "H" header icon is indented to align with the chevron-prefixed change sections.
 
 ### Changed
 

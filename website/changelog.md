@@ -5,6 +5,24 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v2.24.0 — June 2026
+
+### Full-screen views and a floating dock
+
+GitWand's permanent left sidebar and right Git-Tree strip are gone. Navigation now lives in a small floating dock at the bottom of the window — Dashboard, Changes, PRs and Git Tree — and every view uses the full width of the window instead of being boxed in by rails. The Git Tree graduates to a first-class full-screen view: pick a commit and you drop straight into its history. And in the Changes view, the commit composer rail can be folded away when you just want to read your diff — GitWand remembers whether you left it open.
+
+### The Launchpad becomes a place you work, not just a list
+
+The Launchpad no longer just lists things and sends you to the browser. Issues now open in a detail view right inside GitWand, a new action inbox surfaces what each of your repos needs from you, and you can move between Launchpad surfaces — and the branch selector — without ever leaving the app.
+
+### The folder tree follows you into history
+
+The same list/tree toggle now works when you're looking at an earlier, already-pushed commit. Open any commit and its changed files can be shown as a nested folder tree instead of a flat list — collapse the folders you don't care about, click a file to jump straight to its diff, just like in the Changes view. The choice is shared: flip to tree once and it stays tree everywhere, whether you're staging new work or reviewing past commits.
+
+### External links in the AppImage, fixed for good this time
+
+We thought we'd fixed external links in the Linux AppImage — and we had, mostly. But one silent case remained. Inside the packaged AppImage, the system's search paths are rewired to point at GitWand's own bundled files first, so the little tool that hands a link to your browser could pick up a bundled helper, or miss your system's browser association entirely, and then quietly exit as if it had succeeded. GitWand now strips those AppImage-injected entries before opening a link, so your real system browser is the one that's found — and it captures what each opener reports, so if anything ever does fail again it shows up in the command log instead of vanishing without a trace. Thanks again to @t1gu1.
+
 ## v2.23.0 — June 2026
 
 ### See your changes as a folder tree
@@ -14,10 +32,6 @@ The Changes sidebar can now show your working-tree changes as a **nested folder 
 ### Discard, stage and unstage right where you are
 
 Every file row now has a **discard** button sitting next to stage/unstage, and folder rows in the tree get folder-level stage, unstage and discard that act on everything inside. The buttons are grouped into a tidy segmented control — and they're always visible now, so you no longer have to hover to find them.
-
-### The folder tree follows you into history
-
-The same list/tree toggle now works when you're looking at an earlier, already-pushed commit. Open any commit and its changed files can be shown as a nested folder tree instead of a flat list — collapse the folders you don't care about, click a file to jump straight to its diff, just like in the Changes view. The choice is shared: flip to tree once and it stays tree everywhere, whether you're staging new work or reviewing past commits.
 
 ### Every external link works in the Linux AppImage
 
