@@ -665,9 +665,6 @@ function removeReviewer(name: string) {
 
       <!-- Footer -->
       <footer class="pcv-footer">
-        <button class="pcv-btn pcv-btn--ghost" @click="onCancel" :disabled="p.isCreating.value">
-          {{ t("common.cancel") }}
-        </button>
         <button
           class="pcv-btn pcv-btn--primary"
           :disabled="!canSubmit"
@@ -726,7 +723,9 @@ function removeReviewer(name: string) {
 .pcv-container {
   max-width: 880px;
   margin: 0 auto;
-  padding: var(--space-9) var(--space-9) var(--space-8);
+  /* Extra bottom padding clears the floating AppDock so the in-flow
+     footer buttons aren't covered when scrolled to the end. */
+  padding: var(--space-9) var(--space-9) calc(var(--space-12) + var(--space-12));
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
@@ -1469,10 +1468,8 @@ function removeReviewer(name: string) {
   gap: var(--space-3);
   padding: var(--space-5) 0;
   border-top: 1px solid var(--color-border);
-  position: sticky;
-  bottom: 0;
-  background: var(--color-bg-secondary);
   margin-top: auto;
+  padding-bottom: var(--space-12);
 }
 .pcv-btn {
   display: inline-flex;
@@ -1503,11 +1500,11 @@ function removeReviewer(name: string) {
   background: var(--color-accent);
   color: var(--color-accent-text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0 var(--color-accent-soft);
+  width: 100%;
 }
 .pcv-btn--primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 0 3px var(--color-accent-soft);
-  transform: translateY(-1px);
 }
 .pcv-btn--primary:active:not(:disabled) {
   transform: translateY(0);
