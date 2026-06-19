@@ -54,4 +54,29 @@ describe("buildFileTree / flattenTree", () => {
       "a/b",
     ]);
   });
+
+  it("is generic over any PathLike entry (e.g. commit diffs)", () => {
+    // Mirrors the history sidebar: entries carry a `path` plus extra fields
+    // (here a diff `status`) that must survive on the file row via `row.file`.
+    interface DiffLike {
+      path: string;
+      status: "added" | "modified" | "deleted";
+    }
+    const diff = (path: string, status: DiffLike["status"]): DiffLike => ({ path, status });
+
+    const root = buildFileTree<DiffLike>([
+      diff("src/a.ts", "modified"),
+      diff("src/b.ts", "added"),
+    ]);
+    const rows = flattenTree(root, never);
+
+    expect(rows.map((r) => `${r.kind}:${r.name}`)).toEqual([
+      "folder:src",
+      "file:a.ts",
+      "file:b.ts",
+    ]);
+    // The underlying typed entry is preserved on file rows.
+    const aRow = rows.find((r) => r.kind === "file" && r.name === "a.ts");
+    expect(aRow?.file).toEqual({ path: "src/a.ts", status: "modified" });
+  });
 });
