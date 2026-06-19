@@ -2406,15 +2406,11 @@ onUnmounted(() => {
               </button>
             </div>
 
-            <!-- ── Dashboard view: content + optional pinned-branches rail ── -->
-            <div v-if="viewMode === 'dashboard'" class="view view--dashboard">
-              <DashboardView class="view__content" :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
-                :status="repoStats" :ahead="aheadCount" :behind="behindCount" :needs-publish="needsPublish"
-                @change-view="onViewModeChange" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
-              <aside v-if="showSidebar" class="view__rail view__rail--right">
-                <RepoSidebar pane="dashboard" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
-              </aside>
-            </div>
+            <!-- ── Dashboard view: full-bleed, no side panel ── -->
+            <DashboardView v-if="viewMode === 'dashboard'" class="view__content"
+              :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
+              :status="repoStats" :ahead="aheadCount" :behind="behindCount" :needs-publish="needsPublish"
+              @change-view="onViewModeChange" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
 
             <!-- ── Changes view: diff │ collapsible right rail (files + commit) ── -->
             <div v-else-if="viewMode === 'changes'" class="view view--changes">
