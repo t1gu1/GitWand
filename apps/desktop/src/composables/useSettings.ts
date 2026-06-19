@@ -18,7 +18,7 @@ import type { AIProvider } from "./useAIProvider";
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
-export type LaunchpadTab = "wip" | "prs" | "issues" | "team";
+export type LaunchpadTab = "inbox" | "wip" | "prs" | "issues" | "team";
 /** Granularity of PR-activity OS notifications (v2.16). */
 export type NotificationLevel = "all" | "reviews" | "ci" | "none";
 
@@ -125,6 +125,13 @@ export interface AppSettings {
    * triggered. Default: true.
    */
   launchpadTeamTabEnabled: boolean;
+  /**
+   * Launchpad repo scope (v3): explicit list of repo paths to show. Empty array
+   * means "all open repos" (the default). Persisted so the user's filter
+   * (e.g. only Dendreo) survives across sessions; stale paths are ignored at
+   * read time (intersected with the currently-open tabs).
+   */
+  launchpadScopePaths: string[];
   /** Automation settings (v2.8). */
   automations: {
     /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
@@ -219,8 +226,9 @@ export const defaultAppSettings: AppSettings = {
   aiModelByProvider: {},
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
-  launchpadActiveTab: "wip",
+  launchpadActiveTab: "inbox",
   launchpadTeamTabEnabled: true,
+  launchpadScopePaths: [],
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },
