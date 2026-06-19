@@ -52,11 +52,11 @@ function isActive(id: ViewMode): boolean {
         :title="item.label"
         @click="emit('changeView', item.id)"
       >
-        <svg v-if="item.id === 'dashboard'" class="dock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg v-if="item.id === 'dashboard'" class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
           <rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
         </svg>
-        <svg v-else class="dock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg v-else class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="18" cy="18" r="3" /><circle cx="6" cy="6" r="3" />
           <path d="M13 6h3a2 2 0 0 1 2 2v7" /><line x1="6" y1="9" x2="6" y2="21" />
         </svg>
@@ -70,7 +70,7 @@ function isActive(id: ViewMode): boolean {
         :title="t('sidebar.gitTree')"
         @click="emit('changeView', 'graph')"
       >
-        <svg class="dock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" />
           <circle cx="18" cy="12" r="3" /><path d="M6 9v6" /><path d="M18 9a9 9 0 0 1-9 9" />
         </svg>
@@ -84,7 +84,7 @@ function isActive(id: ViewMode): boolean {
         :title="t('sidebar.tabChanges')"
         @click="emit('changeView', 'changes')"
       >
-        <svg class="dock-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
         </svg>
         <span class="dock-label">{{ t('sidebar.tabChanges') }}</span>
@@ -108,8 +108,8 @@ function isActive(id: ViewMode): boolean {
   pointer-events: auto;
   display: flex;
   align-items: stretch;
-  gap: var(--space-1, 2px);
-  padding: var(--space-2, 4px);
+  gap: var(--space-1, 4px);
+  padding: var(--space-2, 6px);
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md, 10px);
@@ -121,13 +121,13 @@ function isActive(id: ViewMode): boolean {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2, 6px);
-  padding: var(--space-2, 6px) var(--space-4, 14px);
+  gap: var(--space-2, 8px);
+  padding: var(--space-3, 9px) var(--space-5, 18px);
   border: none;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-sm, 8px);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: var(--font-size-sm, 13px);
+  font-size: var(--font-size-md, 14px);
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
