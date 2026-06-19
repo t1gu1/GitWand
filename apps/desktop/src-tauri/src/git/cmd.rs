@@ -185,9 +185,15 @@ fn env_get(k: &str) -> Option<String> {
 /// polluted, a spawned `xdg-open` can resolve a bundled helper or miss the
 /// system browser association, then exit 0 without opening anything — the
 /// silent failure in the released AppImage (GitHub issue #52, follow-up to #48).
+///
+/// `allow(dead_code)` off Linux: the only callers live in
+/// `#[cfg(target_os = "linux")]` opener code, so this whole helper chain is
+/// (legitimately) unused on the macOS/Windows release builds.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const APPIMAGE_SEARCH_PATH_VARS: &[&str] = &["PATH", "XDG_DATA_DIRS", "XDG_CONFIG_DIRS"];
 
 /// True when `entry` is `appdir` itself or lives beneath it.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn path_entry_under(entry: &str, appdir: &str) -> bool {
     entry == appdir || entry.starts_with(&format!("{appdir}/"))
 }
@@ -198,6 +204,7 @@ fn path_entry_under(entry: &str, appdir: &str) -> bool {
 /// order. Returns the cleaned value to set; a variable is skipped when nothing
 /// changed or when stripping would empty it (never hand a child an empty
 /// `PATH`). No fixes outside an AppImage — `AppRun` always exports `APPDIR`.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn appimage_path_fixes(get: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str, String)> {
     let Some(appdir) = get("APPDIR").filter(|d| !d.is_empty()) else {
         return Vec::new();
@@ -221,6 +228,7 @@ fn appimage_path_fixes(get: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static st
 /// AppImage. Pairs with `hidden_cmd`'s library-path de-pollution; kept separate
 /// and opt-in because we only want to override binary/mime resolution for the
 /// URL openers (issue #52), not for every spawned process.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(crate) fn sanitize_appimage_search_paths(cmd: &mut std::process::Command) {
     for (var, value) in appimage_path_fixes(&env_get) {
         cmd.env(var, value);

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **AppImage external links — silent no-open** — inside the released Linux AppImage, `AppRun` prepends `$APPDIR` entries to `PATH`, `XDG_DATA_DIRS` and `XDG_CONFIG_DIRS`, so a spawned `xdg-open` could resolve a bundled helper or miss the system browser/mime association and exit `0` without opening anything. URL openers now strip the `$APPDIR`-injected search-path entries before spawning (never emptying a variable), and capture each opener's stderr + exit code into the command log so a future silent failure stays diagnosable. Follow-up to the v2.22 AppImage link fix (GitHub issue #52).
+
 ## [2.23.0] - 2026-06-18
 
 ### Added
