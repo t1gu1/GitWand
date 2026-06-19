@@ -1721,7 +1721,11 @@ button.stat-card:hover {
   color: var(--color-text);
 }
 .btn.btn--ai.panel-link-ai:hover:not(:disabled) {
-  color: var(--color-text);
+  color: var(--color-ai-text);
+  transform: none;
+  background:
+    linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-hover) 100%) padding-box,
+    linear-gradient(135deg, var(--color-accent) 0%, #c084fc 50%, var(--color-accent) 100%) border-box;
 }
 .dv-ai-label {
   display: inline-flex;
