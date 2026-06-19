@@ -382,8 +382,13 @@ function removeReviewer(name: string) {
 
 <template>
   <div class="pcv-root" @keydown="onKeydown">
-    <div class="pcv-container">
+    <button class="pcv-close" :title="t('common.close')" :aria-label="t('common.close')" @click="onCancel">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" />
+      </svg>
+    </button>
 
+    <div class="pcv-container">
       <!-- Hero header -->
       <header class="pcv-hero">
         <div class="pcv-hero-icon" aria-hidden="true">
@@ -747,6 +752,29 @@ function removeReviewer(name: string) {
   background: var(--color-accent-soft);
   color: var(--color-accent);
   flex-shrink: 0;
+}
+.pcv-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  position: sticky;
+  top: 20px;
+  right: 20px;
+}
+.pcv-close:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 .pcv-hero-text {
   display: flex;

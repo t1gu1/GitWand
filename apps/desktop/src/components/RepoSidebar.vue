@@ -27,6 +27,12 @@ const props = defineProps<{
   files: RepoFileEntry[];
   selectedFile: string | null;
   viewMode: ViewMode;
+  /**
+   * Which slice of the sidebar to render. Lets a single view compose the
+   * file list, commit composer and per-view rails as separate full-screen
+   * panes. Defaults to the legacy all-in-one rail.
+   */
+  pane?: "all" | "files" | "commit" | "changes" | "history" | "prs" | "dashboard";
   repoStats: { staged: number; unstaged: number; untracked: number; conflicted: number; added: number; modified: number; deleted: number; renamed: number };
   commitSummary: string;
   commitDescription: string;
@@ -88,6 +94,13 @@ const emit = defineEmits<{
 }>();
 
 const { t, locale } = useI18n();
+
+/** Resolved pane (legacy callers omit the prop → render everything). */
+const pane = computed(() => props.pane ?? "all");
+/** True when the given pane slice should render. */
+function showPane(...names: Array<"files" | "commit" | "changes" | "history" | "prs" | "dashboard">): boolean {
+  return pane.value === "all" || names.includes(pane.value as any);
+}
 
 const toggleGitTree = inject(TOGGLE_GIT_TREE_KEY, () => {});
 function onFileItemDblClick() {
@@ -915,36 +928,10 @@ function formatActivityDate(dateStr: string): string {
 </script>
 
 <template>
-  <nav class="repo-sidebar" :aria-label="t('sidebar.tabChanges')">
-    <!-- ── Navigation tabs (content-switching) ─────────────────── -->
-    <div class="view-tabs">
-      <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'dashboard' }"
-        @click="emit('changeView', 'dashboard')"
-      >
-        {{ t('sidebar.tabDashboard') }}
-      </button>
-      <button
-        class="view-tab"
-        :class="{ 'view-tab--active': viewMode === 'changes' }"
-        @click="emit('changeView', 'changes')"
-      >
-        {{ t('sidebar.tabChanges') }}
-        <span class="tab-badge" v-if="totalChanges > 0">{{ totalChanges }}</span>
-      </button>
-      <button
-        class="view-tab view-tab--pr"
-        :class="{ 'view-tab--active': viewMode === 'prs' }"
-        @click="emit('changeView', 'prs')"
-      >
-        PRs
-      </button>
-    </div>
-
+  <nav class="repo-sidebar" :class="`repo-sidebar--${pane}`" :aria-label="t('sidebar.tabChanges')">
     <!-- Monorepo scope picker (v2.21.0) — self-hides unless the repo is a detected monorepo.
          In the changes view it shares a row with the layout toggle (pushed to the right). -->
-    <div v-if="cwd && viewMode === 'changes' && totalChanges > 0" class="changes-controls">
+    <div v-if="cwd && showPane('files', 'changes') && totalChanges > 0" class="changes-controls">
       <ScopePicker :cwd="cwd" />
       <div
         class="layout-toggle"
@@ -978,10 +965,10 @@ function formatActivityDate(dateStr: string): string {
         </button>
       </div>
     </div>
-    <ScopePicker v-else-if="cwd" :cwd="cwd" />
+    <ScopePicker v-else-if="cwd && showPane('files', 'changes')" :cwd="cwd" />
 
     <!-- History file list -->
-    <div class="sections" v-if="viewMode === 'history'">
+    <div class="sections" v-if="showPane('history')">
       <div class="section">
         <div class="section-header">
           <span class="section-icon" style="color: var(--color-accent)">H</span>
@@ -1024,7 +1011,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- File sections -->
-    <div class="sections" v-if="viewMode === 'changes'">
+    <div class="sections" v-if="showPane('files', 'changes')">
       <template v-for="sectionKey in ['conflicted', 'staged', 'unstaged', 'untracked']" :key="sectionKey">
         <div
           v-if="sections[sectionKey].length > 0"
@@ -1311,7 +1298,7 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- Commit panel — fixed at bottom, always visible in changes view -->
-    <div class="commit-panel" v-if="viewMode === 'changes'">
+    <div class="commit-panel" v-if="showPane('commit', 'changes')">
       <!-- Conventional Commits type picker -->
       <div class="cc-types-wrapper">
         <button v-show="ccCanScrollLeft" class="cc-scroll-btn cc-scroll-btn--left" @click="scrollCcTypes(-1)" tabindex="-1">‹</button>
@@ -1586,12 +1573,12 @@ function formatActivityDate(dateStr: string): string {
     </div>
 
     <!-- PRs view: compact PR list in sidebar -->
-    <div class="sidebar-prs" v-if="viewMode === 'prs'">
+    <div class="sidebar-prs" v-if="showPane('prs')">
       <PrListSidebar />
     </div>
 
     <!-- Dashboard view: pinned branches, activity, quick actions -->
-    <div class="sidebar-dashboard" v-if="viewMode === 'dashboard'">
+    <div class="sidebar-dashboard" v-if="showPane('dashboard')">
       <!-- Pinned branches -->
       <div class="side-block">
         <div class="side-label">
@@ -2247,6 +2234,22 @@ function formatActivityDate(dateStr: string): string {
   gap: var(--space-4);
   background: var(--color-bg-secondary);
   flex-shrink: 0;
+}
+
+/* ── Single-pane usage (full-screen views compose panes side by side) ── */
+/* Commit rail: no top divider, scroll independently. */
+.repo-sidebar--commit {
+  overflow-y: auto;
+}
+.repo-sidebar--commit .commit-panel {
+  border-top: none;
+}
+/* Files / history / prs / dashboard rails scroll on their own. */
+.repo-sidebar--files,
+.repo-sidebar--history,
+.repo-sidebar--prs,
+.repo-sidebar--dashboard {
+  overflow-y: auto;
 }
 
 .commit-summary-row {
