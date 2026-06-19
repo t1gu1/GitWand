@@ -2475,15 +2475,17 @@ onUnmounted(() => {
                 @update:visible-file-idx="historyVisibleFileIdx = $event" />
             </div>
 
-            <!-- ── PRs view: PR list │ detail / create ── -->
+            <!-- ── PRs view: detail / create │ PR list rail (right) ── -->
             <div v-else-if="viewMode === 'prs'" class="view view--prs">
-              <aside v-if="showSidebar" class="view__rail">
-                <RepoSidebar pane="prs" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
-              </aside>
               <PrCreateView v-if="prPanel.showCreateForm.value" class="view__content"
                 :current-branch="repoStatus?.branch ?? ''" :branches="branches" :cwd="repoFolderPath ?? ''" />
               <PrDetailView v-else class="view__content" @refresh="repoRefresh"
                 @navigate-commit="(hash) => { selectCommit(hash); viewMode = 'history'; }" />
+              <div v-if="showSidebar" class="sidebar-handle" :class="{ 'sidebar-handle--active': sidebarResizing }"
+                @mousedown="onSidebarMouseDown"></div>
+              <aside v-if="showSidebar" class="view__rail view__rail--right">
+                <RepoSidebar pane="prs" v-bind="repoSidebarProps" v-on="repoSidebarListeners" />
+              </aside>
             </div>
 
             <!-- ── Git Tree view: full-screen commit graph ── -->
