@@ -300,8 +300,12 @@ const fr: Locale = {
     less: "Moins",
     more: "Plus",
     dayMon: "Lun",
+    dayTue: "Mar",
     dayWed: "Mer",
+    dayThu: "Jeu",
     dayFri: "Ven",
+    daySat: "Sam",
+    daySun: "Dim",
     // Contributors / commit types
     contributorsTitle: "Contributeurs",
     noContributors: "Aucun contributeur",
@@ -309,7 +313,8 @@ const fr: Locale = {
     // Commits + chart
     recentCommits: "Commits récents",
     noCommits: "Aucun commit",
-    chartTitle: "Commits par jour (14j)",
+    chartTitle: "Activité des 14 derniers jours",
+    chartCommits: "commits",
     // README
     formatted: "Formaté",
     raw: "Brut",

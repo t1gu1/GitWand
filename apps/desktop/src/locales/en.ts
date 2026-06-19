@@ -307,8 +307,12 @@ const en = {
     less: "Less",
     more: "More",
     dayMon: "Mon",
+    dayTue: "Tue",
     dayWed: "Wed",
+    dayThu: "Thu",
     dayFri: "Fri",
+    daySat: "Sat",
+    daySun: "Sun",
     // Contributors / commit types
     contributorsTitle: "Contributors",
     noContributors: "No contributors",
@@ -316,7 +320,8 @@ const en = {
     // Commits + chart
     recentCommits: "Recent commits",
     noCommits: "No commits",
-    chartTitle: "Commits per day (14d)",
+    chartTitle: "Activity in the last 14 days",
+    chartCommits: "commits",
     // README
     formatted: "Formatted",
     raw: "Raw",
