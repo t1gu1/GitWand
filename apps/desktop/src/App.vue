@@ -723,7 +723,7 @@ const {
   repoRefresh,
   onReset: () => {
     forcePushPreferred.value = true;
-    switchToChangesWithFirstFile();
+    // Stay on the Git Tree after any reset (soft/mixed/hard) — don't jump to Changes.
   },
   cherryPick: doCherryPick,
   deleteBranch,
