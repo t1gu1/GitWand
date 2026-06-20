@@ -145,6 +145,7 @@ interface Settings {
   dashboardReadmeFirst: boolean;
   dashboardHideContributors: boolean;
   dashboardHideActivity: boolean;
+  dashboardHideReadme: boolean;
   // Automation settings (v2.8)
   automations: {
     autoResolve: { enabled: boolean };
@@ -196,6 +197,7 @@ const defaultSettings: Settings = {
   dashboardReadmeFirst: false,
   dashboardHideContributors: false,
   dashboardHideActivity: false,
+  dashboardHideReadme: false,
   automations: {
     autoResolve: { enabled: false },
     nightlyPull: { enabled: false, hour: 8, minute: 0 },
@@ -1271,6 +1273,17 @@ function savePresetForm() {
               <span>{{ t('settings.dashboard.hideActivity.label') }}</span>
             </label>
             <span class="sp-hint">{{ t('settings.dashboard.hideActivity.help') }}</span>
+          </div>
+
+          <!-- Hide README -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dashboard-hide-readme">
+              <input id="setting-dashboard-hide-readme" type="checkbox" class="sp-checkbox"
+                :checked="settings.dashboardHideReadme"
+                @change="updateSetting('dashboardHideReadme', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dashboard.hideReadme.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dashboard.hideReadme.help') }}</span>
           </div>
         </template>
 

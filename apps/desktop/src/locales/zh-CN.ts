@@ -1156,6 +1156,10 @@ const zhCN: Locale = {
         label: "\u9690\u85cf\u6d3b\u52a8\u884c",
         help: "\u9690\u85cf\u6d3b\u52a8\u70ed\u529b\u56fe\u3001\u6bcf\u65e5\u63d0\u4ea4\u56fe\u8868\u548c\u8fd1\u671f\u63d0\u4ea4\u3002",
       },
+      hideReadme: {
+        label: "\u9690\u85cf README",
+        help: "\u5728\u4eea\u8868\u677f\u4e0a\u9690\u85cf README \u5361\u7247\u3002",
+      },
     },
 
     // Hooks tab (v2.7)

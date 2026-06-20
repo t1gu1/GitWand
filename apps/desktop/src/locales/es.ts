@@ -1169,6 +1169,10 @@ const es: Locale = {
         label: "Ocultar la fila de actividad",
         help: "Oculta el mapa de calor de actividad, el gráfico de commits por día y los commits recientes.",
       },
+      hideReadme: {
+        label: "Ocultar el README",
+        help: "Oculta la tarjeta README en el panel.",
+      },
     },
 
     // Hooks tab (v2.7)

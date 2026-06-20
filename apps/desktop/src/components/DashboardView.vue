@@ -742,7 +742,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
       </section>
 
       <!-- ─── README card (kept, slight styling refresh) ─── -->
-      <div class="card readme-card" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-if="readmeContent !== null">
+      <div class="card readme-card" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-if="!settings.dashboardHideReadme && readmeContent !== null">
         <div class="card-header">
           <h3 class="panel-title">
             <button
@@ -789,7 +789,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
         </div>
       </div>
 
-      <div class="card readme-empty" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-else-if="readmeError">
+      <div class="card readme-empty" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-else-if="!settings.dashboardHideReadme && readmeError">
         <div class="readme-empty-inner">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>

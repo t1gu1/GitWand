@@ -1169,6 +1169,10 @@ const ptBR: Locale = {
         label: "Ocultar a linha de atividade",
         help: "Oculta o mapa de calor de atividade, o gr\u00e1fico de commits por dia e os commits recentes.",
       },
+      hideReadme: {
+        label: "Ocultar o README",
+        help: "Oculta o cart\u00e3o README no painel.",
+      },
     },
 
     // Hooks tab (v2.7)

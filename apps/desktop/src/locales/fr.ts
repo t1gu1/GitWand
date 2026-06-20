@@ -1178,6 +1178,10 @@ const fr: Locale = {
         label: "Masquer la rangée activité",
         help: "Masque la heatmap d'activité, le graphique des commits par jour et les commits récents.",
       },
+      hideReadme: {
+        label: "Masquer le README",
+        help: "Masque la carte README sur le tableau de bord.",
+      },
     },
 
     // Hooks tab (v2.7)

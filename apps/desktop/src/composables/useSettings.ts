@@ -141,6 +141,8 @@ export interface AppSettings {
   dashboardHideContributors: boolean;
   /** Hide the activity row (heatmap / commits-per-day / recent commits). */
   dashboardHideActivity: boolean;
+  /** Hide the README card on the dashboard. */
+  dashboardHideReadme: boolean;
 
   /** Automation settings (v2.8). */
   automations: {
@@ -242,6 +244,7 @@ export const defaultAppSettings: AppSettings = {
   dashboardReadmeFirst: false,
   dashboardHideContributors: false,
   dashboardHideActivity: false,
+  dashboardHideReadme: false,
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },

@@ -1194,6 +1194,10 @@ const en = {
         label: "Hide activity row",
         help: "Hide the activity heatmap, commits-per-day chart and recent commits.",
       },
+      hideReadme: {
+        label: "Hide README",
+        help: "Hide the README card on the dashboard.",
+      },
     },
 
       // Hooks tab (v2.7)
