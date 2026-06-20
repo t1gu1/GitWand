@@ -277,6 +277,7 @@ const ptBR: Locale = {
     formatted: "Formatado",
     raw: "Bruto",
     noReadme: "Nenhum README.md encontrado neste repositório",
+    backToReadme: "Voltar ao README",
     releaseNotes: "Notas de versão",
     releaseNotesHint: "Gerar notas de versão em Markdown com IA",
     releaseNotesTitle: "Gerador de notas de versão",

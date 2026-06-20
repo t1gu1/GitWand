@@ -276,6 +276,7 @@ const es: Locale = {
     formatted: "Formateado",
     raw: "Crudo",
     noReadme: "No se encontró README.md en este repositorio",
+    backToReadme: "Volver al README",
     releaseNotes: "Notas de versión",
     releaseNotesHint: "Generar notas de versión en Markdown con IA",
     releaseNotesTitle: "Generador de notas de versión",

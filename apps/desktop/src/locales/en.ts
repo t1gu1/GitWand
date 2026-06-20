@@ -287,6 +287,7 @@ const en = {
     formatted: "Formatted",
     raw: "Raw",
     noReadme: "No README.md found in this repository",
+    backToReadme: "Back to README",
     // Release notes
     releaseNotes: "Release notes",
     releaseNotesHint: "Generate Markdown release notes with AI",

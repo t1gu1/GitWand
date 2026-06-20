@@ -4,6 +4,7 @@ import {
   getGitLog,
   getGitShortlog,
   readFile,
+  openExternalUrl,
   type GitLogEntry,
   type ShortlogEntry,
 } from "../utils/backend";
@@ -98,6 +99,10 @@ const recentCommits = ref<GitLogEntry[]>([]);
 const readmeContent = ref<string | null>(null);
 const readmeError = ref(false);
 const readmeTab = ref<"formatted" | "raw">("formatted");
+const readmeFormattedEl = ref<HTMLElement | null>(null);
+// Path (repo-relative) of the doc currently shown in the README pane. Relative
+// `.md` links inside the README swap this out; `README.md` is the home doc.
+const readmeDoc = ref("README.md");
 /**
  * Full-history per-author commit counts. Populated from `git shortlog -sne HEAD`,
  * which sums the entire HEAD history rather than just a recent window — way more
@@ -299,6 +304,7 @@ async function loadReadme() {
   for (const name of candidates) {
     try {
       readmeContent.value = await readFile(props.cwd, name);
+      readmeDoc.value = name;
       return;
     } catch {
       // try next
@@ -306,6 +312,41 @@ async function loadReadme() {
   }
   readmeContent.value = null;
   readmeError.value = true;
+}
+
+// Resolve a repo-relative href (`./ROADMAP.md`, `docs/x.md`, `../FOO.md`)
+// against the directory of the doc currently shown, stripping any query/hash.
+// Returns a clean repo-relative path; `safe_repo_path()` on the Rust side
+// rejects anything that escapes the repo.
+function resolveRepoPath(href: string): string {
+  const clean = href.replace(/[?#].*$/, "");
+  const baseDir = readmeDoc.value.includes("/")
+    ? readmeDoc.value.replace(/\/[^/]*$/, "")
+    : "";
+  const segments = (baseDir ? baseDir.split("/") : []).concat(clean.split("/"));
+  const out: string[] = [];
+  for (const seg of segments) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") out.pop();
+    else out.push(seg);
+  }
+  return out.join("/");
+}
+
+// Load another markdown doc from the repo into the README pane. Returns false
+// when the file can't be read so the caller can fall back.
+async function openRepoDoc(href: string): Promise<boolean> {
+  const path = resolveRepoPath(href);
+  if (!/\.(md|markdown)$/i.test(path)) return false;
+  try {
+    readmeContent.value = await readFile(props.cwd, path);
+    readmeDoc.value = path;
+    readmeError.value = false;
+    readmeFormattedEl.value?.scrollTo({ top: 0 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function formatDate(dateStr: string): string {
@@ -339,6 +380,42 @@ function renderReadme(md: string): string {
   // READMEs soft-wrap single newlines (GitHub behaviour) — disable `breaks` so
   // wrapped prose isn't broken up with spurious <br> tags.
   return headerHtml + renderMarkdown(cleaned, { breaks: false });
+}
+
+// The README is injected via `v-html`, so its anchors are plain DOM links the
+// Tauri webview can't act on by itself: `http(s)` links would navigate the app
+// away (or no-op), and in-page `#anchor` links don't reliably scroll inside the
+// dashboard's own scroll container. Intercept every click here:
+//   - external `http(s)` → hand off to the OS browser (same as PR markdown)
+//   - `#anchor` → scroll the matching heading (slug `id`) into view
+//   - repo-relative `.md` (e.g. `./ROADMAP.md`) → render it in the pane in-place
+//   - anything else → swallow so the webview never navigates away from the app
+function onReadmeLinkClick(e: MouseEvent) {
+  const anchor = (e.target as HTMLElement | null)?.closest("a");
+  const href = anchor?.getAttribute("href");
+  if (!href) return;
+
+  if (/^https?:\/\//i.test(href)) {
+    e.preventDefault();
+    void openExternalUrl(href);
+    return;
+  }
+
+  if (href.startsWith("#")) {
+    e.preventDefault();
+    const id = decodeURIComponent(href.slice(1));
+    const target = readmeFormattedEl.value?.querySelector(
+      `#${CSS.escape(id)}`,
+    );
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  // Repo-relative link (e.g. `./ROADMAP.md`). The webview would otherwise
+  // navigate to the dev/app origin (`http://localhost:1420/ROADMAP.md`) and
+  // break out of the app. Try to render the target markdown in-place instead.
+  e.preventDefault();
+  void openRepoDoc(href);
 }
 
 function extractReadmeHeader(md: string): { headerHtml: string; rest: string } {
@@ -666,10 +743,20 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
       <div class="card readme-card" v-if="readmeContent !== null">
         <div class="card-header">
           <h3 class="panel-title">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <button
+              v-if="readmeDoc !== 'README.md'"
+              class="readme-back"
+              :title="t('dashboard.backToReadme')"
+              @click="loadReadme"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M10 3 5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M2 3h5l1 1h6v9H2V3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
             </svg>
-            README.md
+            {{ readmeDoc }}
           </h3>
           <div class="readme-tabs">
             <button
@@ -691,7 +778,9 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
         <div class="readme-body">
           <div
             v-if="readmeTab === 'formatted'"
+            ref="readmeFormattedEl"
             class="readme-formatted"
+            @click="onReadmeLinkClick"
             v-html="safeHtml(renderReadme(readmeContent))"
           />
           <pre v-else class="readme-raw"><code>{{ readmeContent }}</code></pre>
@@ -1343,6 +1432,24 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   justify-content: space-between;
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--color-border);
+}
+
+.readme-back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.readme-back:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-tertiary);
 }
 
 .readme-card {

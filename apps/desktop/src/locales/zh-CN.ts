@@ -279,6 +279,7 @@ const zhCN: Locale = {
     formatted: "格式化",
     raw: "原文",
     noReadme: "此仓库中未找到 README.md",
+    backToReadme: "返回 README",
     releaseNotes: "发布说明",
     releaseNotesHint: "用 AI 生成 Markdown 发布说明",
     releaseNotesTitle: "发布说明生成器",

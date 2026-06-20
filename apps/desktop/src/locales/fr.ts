@@ -280,6 +280,7 @@ const fr: Locale = {
     formatted: "Formaté",
     raw: "Brut",
     noReadme: "Aucun README.md trouvé dans ce dépôt",
+    backToReadme: "Retour au README",
     // Release notes
     releaseNotes: "Release notes",
     releaseNotesHint: "G\u00e9n\u00e9rer des release notes Markdown avec l'IA",
