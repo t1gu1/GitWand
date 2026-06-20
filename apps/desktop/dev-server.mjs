@@ -5403,6 +5403,60 @@ async function handleRequest(req, res) {
       return jsonResponse(req, res, entries);
     }
 
+    // GET /api/git-branch-top-authors?cwd=...&branches=a,b,c
+    // Mirror of Rust git_branch_top_authors — top contributor per branch.
+    if (url.pathname === "/api/git-branch-top-authors" && req.method === "GET") {
+      const cwd = url.searchParams.get("cwd");
+      if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
+      const resolvedCwd = resolve(cwd);
+      const branches = (url.searchParams.get("branches") || "")
+        .split(",")
+        .map((b) => b.trim())
+        .filter(Boolean);
+      // Mirror get_main_branch_name in Rust.
+      const base = (() => {
+        for (const name of ["main", "master", "origin/main", "origin/master"]) {
+          try {
+            execSync(`git rev-parse --verify ${name}`, { cwd: resolvedCwd, stdio: "ignore" });
+            return name;
+          } catch { /* next */ }
+        }
+        return "main";
+      })();
+      // Top author for a revspec, or null.
+      const shortlogTop = (branch, revspec) => {
+        const r = spawnSync(GIT, ["shortlog", "-sne", revspec], {
+          cwd: resolvedCwd,
+          encoding: "utf-8",
+        });
+        if (r.status !== 0) return null;
+        let top = null;
+        for (const line of r.stdout.split("\n")) {
+          const trimmed = line.trimStart();
+          const tabIdx = trimmed.indexOf("\t");
+          if (tabIdx < 0) continue;
+          const count = parseInt(trimmed.slice(0, tabIdx).trim(), 10);
+          if (Number.isNaN(count)) continue;
+          const rest = trimmed.slice(tabIdx + 1).trim();
+          const lt = rest.lastIndexOf("<");
+          const gt = rest.lastIndexOf(">");
+          if (lt < 0 || gt <= lt) continue;
+          const name = rest.slice(0, lt).trim();
+          const email = rest.slice(lt + 1, gt);
+          if (!top || count > top.count) top = { branch, name, email, count };
+        }
+        return top;
+      };
+      const results = [];
+      for (const branch of branches) {
+        // Commits unique to the branch first; fall back to full history.
+        const top =
+          shortlogTop(branch, `${base}..${branch}`) ?? shortlogTop(branch, branch);
+        if (top) results.push(top);
+      }
+      return jsonResponse(req, res, results);
+    }
+
     // ─── Clone & Fork (v2.0) ──────────────────────────────
     // Synchronous shell-outs — see Rust mirror in lib.rs for the rationale
     // around deferring real-time progress. Returns the destination path on

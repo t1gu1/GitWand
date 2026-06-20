@@ -901,6 +901,17 @@ pub struct ShortlogEntry {
     pub count: u32,
 }
 
+/// Top contributor (most commits) for a single branch. Powers the
+/// per-branch contributor avatar in the branch picker.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BranchTopAuthor {
+    pub branch: String,
+    pub name: String,
+    pub email: String,
+    pub count: u32,
+}
+
 // ─── Tree conflict types ───────────────────────────────────────────
 
 #[derive(Serialize)]

@@ -475,6 +475,7 @@ const fr: Locale = {
     deleteLabel: "Supprimer",
     noBranch: "Aucune branche trouv\u00e9e",
     previewMerge: "Aperçu du merge",
+    topContributor: "Plus de commits sur cette branche : {0} ({1})",
     aiHint: "G\u00e9n\u00e8re un nom de branche via l'IA, \u00e0 partir de tes changements en cours.",
     switchRefusedDirty: "Switch refus\u00e9 : des changements non commit\u00e9s sont pr\u00e9sents.",
     switchConfirmDirty: "Des changements non commités seront perdus. Continuer quand même ?",

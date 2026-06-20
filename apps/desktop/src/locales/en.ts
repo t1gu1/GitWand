@@ -482,6 +482,7 @@ const en = {
     deleteLabel: "Delete",
     noBranch: "No branches found",
     previewMerge: "Preview merge",
+    topContributor: "Most commits on this branch: {0} ({1})",
     aiHint: "Generate a branch name with AI, based on your WIP changes.",
     switchRefusedDirty: "Switch refused: uncommitted changes are present.",
     switchConfirmDirty: "Uncommitted changes will be lost. Continue anyway?",
