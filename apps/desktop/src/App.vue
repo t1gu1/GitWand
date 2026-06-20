@@ -76,6 +76,7 @@ import { isImagePath } from "./utils/imagePath";
 import { useGitWand } from "./composables/useGitWand";
 import { useResolutionMemory, type ResolutionMemoryEntry, type ResolutionStrategy } from "./composables/useResolutionMemory";
 import { useRepoTabs } from "./composables/useRepoTabs";
+import { usePinnedBranches } from "./composables/usePinnedBranches";
 import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useWorkspaceScope } from "./composables/useWorkspaceScope";
 import { useTheme } from "./composables/useTheme";
@@ -2271,6 +2272,16 @@ function handleRebaseOntoCurrent(branchName: string) {
   showRebase.value = true;
 }
 
+// ─── Pinned branches in the Git Tree (shared with the sidebar) ──
+const _graphPins = usePinnedBranches(() => repoFolderPath.value ?? "");
+const graphPinnedBranches = _graphPins.pinned;
+function handlePinBranch(name: string) {
+  _graphPins.pin(name);
+}
+function handleUnpinBranch(name: string) {
+  _graphPins.unpin(name);
+}
+
 async function onRebaseDone() {
   showRebase.value = false;
   rebaseInitialBase.value = undefined;
@@ -2547,6 +2558,7 @@ onUnmounted(() => {
                   :submodule-changes="submoduleChanges"
                   :has-more="logHasMore" :loading-more="logLoadingMore"
                   :hidden-commit-count="hiddenCommitCount"
+                  :pinned-branches="graphPinnedBranches"
                   @select-commit="onGraphSelectCommit"
                   @change-view="onViewModeChange"
                   @edit-commit="handleEditCommit"
@@ -2564,6 +2576,8 @@ onUnmounted(() => {
                   @merge-into-current="doMerge"
                   @rebase-onto-current="handleRebaseOntoCurrent"
                   @force-push-branch="doForcePush"
+                  @pin-branch="handlePinBranch"
+                  @unpin-branch="handleUnpinBranch"
                   @view-submodule="handleOpenSubmodule"
                   @apply-stash="applyStash"
                   @pop-stash="popStash"
