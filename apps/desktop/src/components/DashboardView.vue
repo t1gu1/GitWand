@@ -668,7 +668,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
         <div class="panel">
           <div class="panel-head panel-head--chart">
             <h3 class="panel-title">{{ t("dashboard.chartTitle") }}</h3>
-            <span class="chart-total">({{ fortnightCommits }} {{ t("dashboard.chartCommits") }})</span>
+            <span class="chart-total panel-count">{{ fortnightCommits }} {{ t("dashboard.chartCommits") }}</span>
             <span
               v-if="fortnightTrendPct !== 0"
               class="trend chart-trend"
@@ -1378,6 +1378,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   padding: 1px var(--space-2);
   border-radius: var(--radius-pill);
   font-variant-numeric: tabular-nums;
+  padding: 1px 6px;
 }
 
 .bar-wrap {
