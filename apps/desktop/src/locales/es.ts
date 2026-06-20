@@ -956,6 +956,7 @@ const es: Locale = {
   settings: {
     title: "Ajustes",
     tabGeneral: "General",
+    tabDashboard: "Panel",
     tabGit: "Git",
     tabEditor: "Editor",
     tabAi: "IA",
@@ -1151,6 +1152,22 @@ const es: Locale = {
       disableTeamTab: {
         label: "Desactivar la pestaña Equipo del Launchpad",
         help: "La pestaña Equipo hace una llamada API por cada PR de un compañero (~10s en workspaces grandes). Desactívala si no necesitas la vista de solapamientos.",
+      },
+    },
+
+    // Disposición del panel
+    dashboard: {
+      readmeFirst: {
+        label: "Mostrar el README primero",
+        help: "Coloca la tarjeta README encima de las filas de colaboradores y actividad.",
+      },
+      hideContributors: {
+        label: "Ocultar la fila de colaboradores",
+        help: "Oculta el panel de colaboradores y tipos de commit.",
+      },
+      hideActivity: {
+        label: "Ocultar la fila de actividad",
+        help: "Oculta el mapa de calor de actividad, el gráfico de commits por día y los commits recientes.",
       },
     },
 

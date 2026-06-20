@@ -965,6 +965,7 @@ const fr: Locale = {
   settings: {
     title: "Param\u00e8tres",
     tabGeneral: "G\u00e9n\u00e9ral",
+    tabDashboard: "Tableau de bord",
     tabGit: "Git",
     tabEditor: "\u00c9diteur",
     tabAi: "IA",
@@ -1160,6 +1161,22 @@ const fr: Locale = {
       disableTeamTab: {
         label: "Désactiver l'onglet Équipe du Launchpad",
         help: "L'onglet Équipe fait un appel API par PR de collègue (~10s sur un gros workspace). Désactive-le si tu n'as pas besoin de la vue chevauchement.",
+      },
+    },
+
+    // Disposition du tableau de bord
+    dashboard: {
+      readmeFirst: {
+        label: "Afficher le README en premier",
+        help: "Place la carte README au-dessus des rangées contributeurs et activité.",
+      },
+      hideContributors: {
+        label: "Masquer la rangée contributeurs",
+        help: "Masque le panneau des contributeurs et des types de commits.",
+      },
+      hideActivity: {
+        label: "Masquer la rangée activité",
+        help: "Masque la heatmap d'activité, le graphique des commits par jour et les commits récents.",
       },
     },
 

@@ -973,6 +973,7 @@ const en = {
     title: "Settings",
     // Tab titles
     tabGeneral: "General",
+    tabDashboard: "Dashboard",
     tabGit: "Git",
     tabEditor: "Editor",
     tabAi: "AI",
@@ -1176,6 +1177,22 @@ const en = {
       disableTeamTab: {
         label: "Disable Launchpad Team tab",
         help: "The Team tab fires one API call per colleague PR (~10s on large workspaces). Turn this off if you don't need the overlap view.",
+      },
+    },
+
+    // Dashboard layout
+    dashboard: {
+      readmeFirst: {
+        label: "Show README first",
+        help: "Move the README card above the contributors and activity rows.",
+      },
+      hideContributors: {
+        label: "Hide contributors row",
+        help: "Hide the contributors and commit-type panel on the dashboard.",
+      },
+      hideActivity: {
+        label: "Hide activity row",
+        help: "Hide the activity heatmap, commits-per-day chart and recent commits.",
       },
     },
 

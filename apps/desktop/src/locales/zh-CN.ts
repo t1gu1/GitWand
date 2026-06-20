@@ -944,6 +944,7 @@ const zhCN: Locale = {
   settings: {
     title: "设置",
     tabGeneral: "通用",
+    tabDashboard: "仪表盘",
     tabGit: "Git",
     tabEditor: "编辑器",
     tabAi: "AI",
@@ -1138,6 +1139,22 @@ const zhCN: Locale = {
       disableTeamTab: {
         label: "\u7981\u7528 Launchpad \u56e2\u961f\u6807\u7b7e",
         help: "\u56e2\u961f\u6807\u7b7e\u6bcf\u4e2a\u540c\u4e8b PR \u90fd\u4f1a\u8c03\u7528\u4e00\u6b21 API\uff08\u5728\u5927\u578b\u5de5\u4f5c\u533a\u4e0a\u7ea6 10 \u79d2\uff09\u3002\u5982\u679c\u4f60\u4e0d\u9700\u8981\u6587\u4ef6\u91cd\u53e0\u89c6\u56fe\uff0c\u53ef\u4ee5\u5173\u95ed\u3002",
+      },
+    },
+
+    // \u4eea\u8868\u76d8\u5e03\u5c40
+    dashboard: {
+      readmeFirst: {
+        label: "\u4f18\u5148\u663e\u793a README",
+        help: "\u5c06 README \u5361\u7247\u79fb\u5230\u8d21\u732e\u8005\u548c\u6d3b\u52a8\u884c\u7684\u4e0a\u65b9\u3002",
+      },
+      hideContributors: {
+        label: "\u9690\u85cf\u8d21\u732e\u8005\u884c",
+        help: "\u9690\u85cf\u4eea\u8868\u76d8\u4e0a\u7684\u8d21\u732e\u8005\u548c\u63d0\u4ea4\u7c7b\u578b\u9762\u677f\u3002",
+      },
+      hideActivity: {
+        label: "\u9690\u85cf\u6d3b\u52a8\u884c",
+        help: "\u9690\u85cf\u6d3b\u52a8\u70ed\u529b\u56fe\u3001\u6bcf\u65e5\u63d0\u4ea4\u56fe\u8868\u548c\u8fd1\u671f\u63d0\u4ea4\u3002",
       },
     },
 

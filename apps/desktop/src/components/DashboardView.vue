@@ -10,6 +10,7 @@ import {
 } from "../utils/backend";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
+import { useSettings } from "../composables/useSettings";
 import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
@@ -17,6 +18,7 @@ import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 import AiSparkle from "./AiSparkle.vue";
 
 const { t, locale } = useI18n();
+const { settings } = useSettings();
 const ai = useAIProvider();
 const {
   isGenerating: isGeneratingReleaseNotes,
@@ -529,7 +531,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
 
     <template v-else>
       <!-- ─── Contributors + Recent commits ─────────────── -->
-      <section class="row-contrib">
+      <section v-if="!settings.dashboardHideContributors" class="row-contrib">
         <!-- Contributors -->
         <div class="panel">
           <div class="panel-head">
@@ -616,7 +618,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
       </section>
 
       <!-- ─── Activity + Commits/day + Recent commits ──── -->
-      <section class="row-activity">
+      <section v-if="!settings.dashboardHideActivity" class="row-activity">
         <!-- Activity — last 6 months (far left) -->
         <div class="panel">
           <div class="panel-head">
@@ -740,7 +742,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
       </section>
 
       <!-- ─── README card (kept, slight styling refresh) ─── -->
-      <div class="card readme-card" v-if="readmeContent !== null">
+      <div class="card readme-card" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-if="readmeContent !== null">
         <div class="card-header">
           <h3 class="panel-title">
             <button
@@ -787,7 +789,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
         </div>
       </div>
 
-      <div class="card readme-empty" v-else-if="readmeError">
+      <div class="card readme-empty" :class="{ 'readme--first': settings.dashboardReadmeFirst }" v-else-if="readmeError">
         <div class="readme-empty-inner">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="1.5" opacity="0.4"/>
@@ -868,6 +870,10 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   flex-direction: column;
   gap: var(--space-6);
 }
+
+/* "README first" dashboard option — pull the README card above the
+   contributors / activity rows without reordering the DOM. */
+.readme--first { order: -1; }
 
 .dashboard-loading {
   display: flex;
