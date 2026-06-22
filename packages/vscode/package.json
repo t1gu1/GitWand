@@ -60,9 +60,10 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "package": "vsce package --no-dependencies",
-    "publish": "vsce publish --no-dependencies",
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.mjs",
+    "package": "pnpm run build && vsce package --no-dependencies",
+    "publish": "pnpm run build && vsce publish --no-dependencies",
     "clean": "rm -rf dist *.vsix"
   },
   "dependencies": {
@@ -71,6 +72,7 @@
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
     "typescript": "^5.4.0"
   },
   "license": "MIT"
