@@ -1806,7 +1806,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { success: true, message: stdout.trim() });
       } catch (err) {
-        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: ((err.stdout || "") + (err.stderr || "")).toString().trim() || err.message });
       }
     }
 
@@ -1824,7 +1824,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { success: true });
       } catch (err) {
-        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: ((err.stdout || "") + (err.stderr || "")).toString().trim() || err.message });
       }
     }
 
@@ -1885,7 +1885,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { success: true, message: "Merge aborted" });
       } catch (err) {
-        return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+        return jsonResponse(req, res, { success: false, message: ((err.stdout || "") + (err.stderr || "")).toString().trim() || err.message });
       }
     }
 
@@ -1925,7 +1925,7 @@ async function handleRequest(req, res) {
         execSync("git cherry-pick --abort 2>&1", { cwd: resolvedCwd, encoding: "utf-8", shell: true });
         return jsonResponse(req, res, { success: true, message: "Cherry-pick aborted" });
       } catch (err) {
-        return jsonResponse(req, res, { success: false, message: (err.stderr || err.message || "").trim() });
+        return jsonResponse(req, res, { success: false, message: ((err.stdout || "") + (err.stderr || "")).toString().trim() || err.message });
       }
     }
 
@@ -1970,7 +1970,7 @@ async function handleRequest(req, res) {
         });
         return jsonResponse(req, res, { success: true, message: stdout.trim() });
       } catch (err) {
-        return jsonResponse(req, res, { success: false, message: err.stderr || err.message });
+        return jsonResponse(req, res, { success: false, message: ((err.stdout || "") + (err.stderr || "")).toString().trim() || err.message });
       }
     }
 
