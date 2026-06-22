@@ -99,9 +99,24 @@ onMounted(() => {
   else if (/Win|Windows/.test(ua))
     downloadUrl.value = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
   else if (/Linux/.test(ua))
-    downloadUrl.value = `${RELEASES}/download/v${LATEST}/git-wand_${LATEST}_amd64.AppImage`
+    downloadUrl.value = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_amd64.AppImage`
   setTimeout(runTerminalDemo, 900)
 })
+
+// ── Hero visual: CLI ⇄ GUI toggle (#71) ───────────────────────────────────
+// The hero used to show only the terminal animation, which made GitWand read
+// as a CLI-only tool. This tab lets visitors flip to the desktop GUI screenshot
+// so the product's two faces are both visible above the fold.
+const heroTab = ref<'cli' | 'gui'>('cli')
+
+// ── Destinations for the clickable platform cards (#71) ───────────────────
+// Desktop cards point at the primary installer for each OS; asset names mirror
+// the release bundle (verified against the GitHub release). CLI/VS Code cards
+// point at their install homes. `${LATEST}` is kept in sync by bump-version.sh.
+const dlMac = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_universal.dmg`
+const dlLinux = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_amd64.AppImage`
+const dlWin = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
+const VSCODE_MARKETPLACE = 'https://marketplace.visualstudio.com/items?itemName=gitwand.gitwand-vscode'
 
 const i18n: Record<Locale, any> = {
   fr: {
@@ -114,6 +129,10 @@ const i18n: Record<Locale, any> = {
     whatsNew: 'Nouveautés v2.24',
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
+    heroTabCli: 'CLI',
+    heroTabGui: 'App desktop',
+    heroGuiAlt: 'GitWand — tableau de bord du dépôt',
+    heroVisualAria: 'Aperçu : CLI ou interface graphique',
     statPatterns: 'patterns de résolution',
     statResolved: 'conflits résolus automatiquement',
     statInterfaces: 'interfaces (Desktop, CLI, VS Code)',
@@ -256,6 +275,10 @@ const i18n: Record<Locale, any> = {
     whatsNew: "What's new in v2.24",
     docs: 'Documentation →',
     platforms: 'macOS · Linux · Windows',
+    heroTabCli: 'CLI',
+    heroTabGui: 'Desktop app',
+    heroGuiAlt: 'GitWand — repository dashboard',
+    heroVisualAria: 'Preview: CLI or graphical interface',
     statPatterns: 'resolution patterns',
     statResolved: 'conflicts auto-resolved',
     statInterfaces: 'interfaces (Desktop, CLI, VS Code)',
@@ -398,6 +421,10 @@ const i18n: Record<Locale, any> = {
     whatsNew: 'Novedades v2.24',
     docs: 'Documentación →',
     platforms: 'macOS · Linux · Windows',
+    heroTabCli: 'CLI',
+    heroTabGui: 'App de escritorio',
+    heroGuiAlt: 'GitWand — panel del repositorio',
+    heroVisualAria: 'Vista previa: CLI o interfaz gráfica',
     statPatterns: 'patrones de resolución',
     statResolved: 'conflictos resueltos automáticamente',
     statInterfaces: 'interfaces (Escritorio, CLI, VS Code)',
@@ -540,6 +567,10 @@ const i18n: Record<Locale, any> = {
     whatsNew: 'Novidades v2.24',
     docs: 'Documentação →',
     platforms: 'macOS · Linux · Windows',
+    heroTabCli: 'CLI',
+    heroTabGui: 'App desktop',
+    heroGuiAlt: 'GitWand — painel do repositório',
+    heroVisualAria: 'Prévia: CLI ou interface gráfica',
     statPatterns: 'padrões de resolução',
     statResolved: 'conflitos resolvidos automaticamente',
     statInterfaces: 'interfaces (Desktop, CLI, VS Code)',
@@ -682,6 +713,10 @@ const i18n: Record<Locale, any> = {
     whatsNew: 'v2.24 新特性',
     docs: '文档 →',
     platforms: 'macOS · Linux · Windows',
+    heroTabCli: '命令行',
+    heroTabGui: '桌面应用',
+    heroGuiAlt: 'GitWand — 仓库仪表盘',
+    heroVisualAria: '预览：命令行或图形界面',
     statPatterns: '种解决模式',
     statResolved: '冲突自动解决',
     statInterfaces: '种界面(桌面端、CLI、VS Code)',
@@ -952,9 +987,30 @@ function cellClass(v: CompareValue | undefined): string {
           <p class="hero-platforms">{{ t.platforms }}</p>
         </div>
 
-        <!-- Right: terminal animation -->
+        <!-- Right: CLI ⇄ GUI toggle (#71) — GitWand is both a desktop app and a CLI -->
         <div class="hero-visual">
-          <div class="hero-term">
+          <div class="hero-tabs" role="tablist" :aria-label="t.heroVisualAria">
+            <button
+              class="hero-tab" :class="{ 'hero-tab--active': heroTab === 'gui' }"
+              role="tab" :aria-selected="heroTab === 'gui'" @click="heroTab = 'gui'"
+            >{{ t.heroTabGui }}</button>
+            <button
+              class="hero-tab" :class="{ 'hero-tab--active': heroTab === 'cli' }"
+              role="tab" :aria-selected="heroTab === 'cli'" @click="heroTab = 'cli'"
+            >{{ t.heroTabCli }}</button>
+          </div>
+
+          <!-- GUI: desktop dashboard screenshot -->
+          <div v-show="heroTab === 'gui'" class="hero-gui" role="tabpanel">
+            <img
+              src="/screenshots/app-dashboard.png" :alt="t.heroGuiAlt"
+              class="hero-gui__img" width="1200" height="617"
+              loading="lazy" decoding="async"
+            />
+          </div>
+
+          <!-- CLI: terminal animation -->
+          <div v-show="heroTab === 'cli'" class="hero-term" role="tabpanel">
             <div class="hero-term__bar">
               <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
               <span class="hero-term__title">~/projects/myapp — gitwand</span>
@@ -1433,31 +1489,31 @@ function cellClass(v: CompareValue | undefined): string {
       <div class="section-inner">
         <h2 class="section-title">{{ t.platformsTitle }}</h2>
         <div class="platforms-grid">
-          <div class="platform-card">
+          <a class="platform-card" :href="dlMac" target="_blank" rel="noopener">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z" stroke="#8B5CF6" stroke-width="1.5"/><path d="M8 12.5c0-2.2 1.8-4 4-4s4 1.8 4 4-1.8 4-4 4-4-1.8-4-4z" stroke="#8B5CF6" stroke-width="1.5"/></svg>
             <span class="pl-name">macOS</span>
             <span class="pl-sub">{{ t.plMacSub }}</span>
-          </div>
-          <div class="platform-card">
+          </a>
+          <a class="platform-card" :href="dlLinux" target="_blank" rel="noopener">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#8B5CF6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span class="pl-name">Linux</span>
             <span class="pl-sub">{{ t.plLinuxSub }}</span>
-          </div>
-          <div class="platform-card">
+          </a>
+          <a class="platform-card" :href="dlWin" target="_blank" rel="noopener">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" rx="1" stroke="#8B5CF6" stroke-width="1.5"/><rect x="13" y="3" width="8" height="8" rx="1" stroke="#8B5CF6" stroke-width="1.5"/><rect x="3" y="13" width="8" height="8" rx="1" stroke="#8B5CF6" stroke-width="1.5"/><rect x="13" y="13" width="8" height="8" rx="1" stroke="#8B5CF6" stroke-width="1.5"/></svg>
             <span class="pl-name">Windows</span>
             <span class="pl-sub">{{ t.plWinSub }}</span>
-          </div>
-          <div class="platform-card">
+          </a>
+          <a class="platform-card" href="/guide/cli">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7l3-7z" stroke="#10B981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             <span class="pl-name">{{ t.plCli }}</span>
             <span class="pl-sub">{{ t.plCliSub }}</span>
-          </div>
-          <div class="platform-card">
+          </a>
+          <a class="platform-card" :href="VSCODE_MARKETPLACE" target="_blank" rel="noopener">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" stroke="#10B981" stroke-width="1.5"/><path d="M8 14l2.5-5L13 14M9 12h3" stroke="#10B981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 9v6" stroke="#10B981" stroke-width="1.5" stroke-linecap="round"/></svg>
             <span class="pl-name">{{ t.plVscode }}</span>
             <span class="pl-sub">{{ t.plVscodeSub }}</span>
-          </div>
+          </a>
         </div>
       </div>
     </section>
@@ -2330,6 +2386,9 @@ function cellClass(v: CompareValue | undefined): string {
   border: 1px solid var(--gw-border);
   border-radius: var(--gw-radius);
   min-width: 140px;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
   transition: border-color 0.15s, transform 0.1s;
 }
 .platform-card:hover {
@@ -2871,12 +2930,51 @@ function cellClass(v: CompareValue | undefined): string {
 }
 
 /* ───────────────────────────────────────────
-   HERO TERMINAL ANIMATION
+   HERO VISUAL — CLI ⇄ GUI toggle (#71)
 ─────────────────────────────────────────── */
 .hero-visual {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 12px;
+}
+.hero-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--gw-bg-card);
+  border: 1px solid var(--gw-border);
+  border-radius: 999px;
+}
+.hero-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--gw-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.hero-tab:hover { color: var(--gw-text); }
+.hero-tab--active {
+  background: var(--gw-purple);
+  color: #fff;
+}
+.hero-gui {
+  width: 100%;
+  max-width: 560px;
+}
+.hero-gui__img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.45), 0 0 0 1px rgba(124,58,237,0.12);
 }
 .hero-term {
   width: 100%;
