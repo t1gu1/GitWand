@@ -2331,6 +2331,12 @@ function onGraphSelectCommit(hash: string) {
   selectCommit(hash);
 }
 
+/** Dashboard → click a recent commit: open the Git Tree on that commit. */
+function onDashboardSelectCommit(hash: string) {
+  onViewModeChange("graph");
+  onGraphSelectCommit(hash);
+}
+
 /** Graph → click a file in the right rail: open the diff scrolled to it. */
 function onGraphOpenFile(idx: number) {
   graphFileIdx.value = idx;
@@ -2449,7 +2455,7 @@ onUnmounted(() => {
             <DashboardView v-if="viewMode === 'dashboard'" class="view__content"
               :cwd="repoFolderPath ?? ''" :branch="branchDisplay"
               :status="repoStats" :ahead="aheadCount" :behind="behindCount" :needs-publish="needsPublish"
-              @change-view="onViewModeChange" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
+              @change-view="onViewModeChange" @select-commit="onDashboardSelectCommit" @push="handlePush" @sync="() => doPull(pullMode === 'rebase')" />
 
             <!-- ── Changes view: diff │ collapsible right rail (files + commit) ── -->
             <div v-else-if="viewMode === 'changes'" class="view view--changes">

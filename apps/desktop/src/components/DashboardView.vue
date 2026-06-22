@@ -91,6 +91,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   changeView: [mode: ViewMode];
+  selectCommit: [hashFull: string];
   sync: [];
   push: [];
 }>();
@@ -720,7 +721,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
               v-for="c in recentCommits.slice(0, 6)"
               :key="c.hashFull"
               class="commit"
-              @click="emit('changeView', 'history')"
+              @click="emit('selectCommit', c.hashFull)"
             >
               <span class="avatar avatar--sm" :style="avatarStyle(c.email || c.author)">{{ initials(c.author) }}</span>
               <div class="commit-body">
