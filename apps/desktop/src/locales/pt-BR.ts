@@ -1543,6 +1543,7 @@ const ptBR: Locale = {
       title: "Resolvido por LLM (experimental)",
       reject: "Rejeitar → resolver manualmente",
       accept: "Aceitar",
+      accepted: "Aceito",
       details: "Detalhes do rastro",
     },
   },

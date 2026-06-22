@@ -1543,6 +1543,7 @@ const es: Locale = {
       title: "Resuelto por LLM (experimental)",
       reject: "Rechazar → resolver manualmente",
       accept: "Aceptar",
+      accepted: "Aceptado",
       details: "Detalles de la traza",
     },
   },

@@ -1576,6 +1576,7 @@ const en = {
       title: "Resolved by LLM (experimental)",
       reject: "Reject \u2192 resolve manually",
       accept: "Accept",
+      accepted: "Accepted",
       details: "Trace details",
     },
   },

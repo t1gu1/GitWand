@@ -1553,6 +1553,7 @@ const fr: Locale = {
       title: "Résolu par LLM (expérimental)",
       reject: "Rejeter → résolution manuelle",
       accept: "Accepter",
+      accepted: "Accepté",
       details: "Détails de la trace",
     },
   },

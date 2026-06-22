@@ -1528,6 +1528,7 @@ const zhCN: Locale = {
       title: "由 LLM 解决（实验性）",
       reject: "拒绝 → 手动解决",
       accept: "接受",
+      accepted: "已接受",
       details: "追踪详情",
     },
   },
