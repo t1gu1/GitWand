@@ -289,6 +289,11 @@ export function saveSettings(s: AppSettings): void {
   } catch {
     // ignore
   }
+  // Notify reactive readers that persisted settings changed. Composables that
+  // read settings directly from localStorage (usePinnedBranches,
+  // useArchivedBranches, …) have no other reactive dependency, so without this
+  // bump their computeds would stay stale until a full reload.
+  settingsRevision.value++;
 }
 
 // ─── Singleton reactive ref ───────────────────────────────
@@ -296,9 +301,18 @@ export function saveSettings(s: AppSettings): void {
 
 const _settings = ref<AppSettings>(loadSettings());
 
+/**
+ * Monotonic counter bumped on every saveSettings() / refreshSettings().
+ * Read it inside a computed (`settingsRevision.value`) to register a reactive
+ * dependency on "settings changed", even when the underlying value is read
+ * straight from localStorage rather than the `_settings` ref.
+ */
+export const settingsRevision = ref(0);
+
 /** Re-read all settings from localStorage (call after SettingsPanel saves). */
 export function refreshSettings(): void {
   _settings.value = loadSettings();
+  settingsRevision.value++;
 }
 
 // ─── Composable ───────────────────────────────────────────

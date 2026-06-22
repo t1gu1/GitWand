@@ -438,6 +438,7 @@ const ptBR: Locale = {
     deleteLabel: "Excluir",
     noBranch: "Nenhum branch encontrado",
     previewMerge: "Pré-visualizar merge",
+    topContributor: "Mais commits nesta branch: {0} ({1})",
     aiHint: "Gera um nome de branch com IA, com base nas suas alterações em andamento.",
     switchRefusedDirty: "Troca recusada: há alterações não commitadas.",
     switchConfirmDirty: "Alterações não commitadas serão perdidas. Continuar mesmo assim?",

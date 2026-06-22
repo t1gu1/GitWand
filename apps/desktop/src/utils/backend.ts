@@ -1842,6 +1842,39 @@ export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
   return Array.from(merged.values()).sort((a, b) => b.count - a.count);
 }
 
+export interface BranchTopAuthor {
+  branch: string;
+  name: string;
+  email: string;
+  count: number;
+}
+
+/**
+ * Top contributor (most commits) for each given branch. Powers the
+ * per-branch contributor avatar in the branch picker. Branches with no
+ * resolvable author are omitted from the result.
+ */
+export async function getGitBranchTopAuthors(
+  cwd: string,
+  branches: string[],
+): Promise<BranchTopAuthor[]> {
+  if (branches.length === 0) return [];
+  if (isTauri()) {
+    return await tauriInvoke<BranchTopAuthor[]>("git_branch_top_authors", {
+      cwd,
+      branches,
+    });
+  }
+  const res = await fetch(
+    `${DEV_SERVER}/api/git-branch-top-authors?cwd=${encodeURIComponent(cwd)}&branches=${encodeURIComponent(branches.join(","))}`,
+  );
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `git branch top authors failed: ${res.status}`);
+  }
+  return (await res.json()) as BranchTopAuthor[];
+}
+
 // ─── Clone & Fork (v2.0) ───────────────────────────────────
 // Synchronous on both backends — no real-time progress events. The caller
 // (CloneModal / ForkModal) shows a spinner while the promise settles.

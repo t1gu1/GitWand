@@ -437,6 +437,7 @@ const es: Locale = {
     deleteLabel: "Eliminar",
     noBranch: "No se encontraron ramas",
     previewMerge: "Previsualizar merge",
+    topContributor: "Más commits en esta rama: {0} ({1})",
     aiHint: "Genera un nombre de rama con IA, según tus cambios en curso.",
     switchRefusedDirty: "Cambio rechazado: hay cambios sin confirmar.",
     switchConfirmDirty: "Los cambios sin confirmar se perderán. ¿Continuar de todos modos?",

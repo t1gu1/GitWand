@@ -434,6 +434,7 @@ const zhCN: Locale = {
     deleteLabel: "删除",
     noBranch: "未找到分支",
     previewMerge: "预览合并",
+    topContributor: "此分支提交最多：{0}（{1} 次）",
     aiHint: "根据当前工作区改动用 AI 生成分支名称。",
     switchRefusedDirty: "切换被拒绝：存在未提交的更改。",
     switchConfirmDirty: "未提交的更改将会丢失。仍要继续吗？",
