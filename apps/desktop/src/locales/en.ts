@@ -254,8 +254,8 @@ const en = {
     quickStash: "Quick Stash",
     quickStashAi: "Quick Stash AI",
     footerTags: "Tags",
-    footerLaunchpad: "Launchpad",
-    launchpad: "Launchpad",
+    footerLaunchpad: "Today",
+    launchpad: "Today",
     footerWorkspaces: "Workspaces",
     footerAgents: "Agents",
   },
@@ -1175,7 +1175,7 @@ const en = {
     // Launchpad \u2014 Team tab toggle (v2.9)
     launchpad: {
       disableTeamTab: {
-        label: "Disable Launchpad Team tab",
+        label: "Disable Today Team tab",
         help: "The Team tab fires one API call per colleague PR (~10s on large workspaces). Turn this off if you don't need the overlap view.",
       },
     },
@@ -1353,7 +1353,7 @@ const en = {
     pullAll: "Pull all",
     pullingAll: "Pulling\u2026",
     openAll: "Open all in tabs",
-    openLaunchpad: "Launchpad",
+    openLaunchpad: "Today",
     statusAll: "Refresh",
     ahead: "\u2191{0}",
     behind: "\u2193{0}",
@@ -1383,8 +1383,8 @@ const en = {
   },
 
   launchpad: {
-    title: "Launchpad",
-    openTooltip: "Launchpad — cross-repo overview (⌘L)",
+    title: "Today",
+    openTooltip: "Today — cross-repo overview (⌘L)",
     scopeAll: "All",
     scopeCount: "{0} repos",
     scopeTooltip: "Display scope",
@@ -1395,13 +1395,50 @@ const en = {
       publish: "Publish branch",
       sync: "{0} to pull",
     },
+    cardAction: {
+      commit: "Commit",
+      push: "Push",
+      publish: "Publish",
+      sync: "Sync",
+    },
     inboxTab: "To handle",
     inboxEmpty: "Nothing needs your action right now. 🎉",
-    inbox: {
-      review: "Awaiting your review",
-      changes: "Changes requested on your PRs",
-      ci: "Failing CI on your PRs",
-      merge: "Approved — ready to merge",
+    inboxFilterEmpty: "Nothing matches this filter.",
+    inboxSummary: "{0} items · {1} to handle",
+    timeMin: "{0} min",
+    timeHour: "{0} h",
+    timeDay: "{0} d",
+    timeWeek: "{0} w",
+    section: {
+      repos: "Repository status",
+      mine: "My PRs",
+      assigned: "Assigned PRs",
+      review: "PRs to review",
+      issues: "Issues",
+      deps: "Dependencies",
+    },
+    action: {
+      merge: "Merge",
+      review: "Review",
+      seeFailure: "See failure",
+      reply: "Reply",
+      resolve: "Resolve",
+      follow: "Follow",
+      nudge: "Nudge",
+      autoMerge: "Auto-merge",
+      view: "View",
+    },
+    case: {
+      review: "Review requested",
+      changes: "Changes requested",
+      conflicts: "Merge conflicts",
+      ci: "CI failing",
+      merge: "Ready to merge",
+      waiting: "Awaiting review",
+      ciRunning: "CI running",
+      blocked: "Merge blocked",
+      assigned: "Assigned to you",
+      issue: "Issue",
     },
     wipTab: "WIP",
     noRepos: "No repositories in this workspace.",
@@ -1458,8 +1495,18 @@ const en = {
     refreshAll: "Refresh all",
     refreshAllTooltip: "Refresh all tabs in parallel",
     noWorkspace: {
-      warning: "Create a workspace first to use the Launchpad",
+      warning: "Create a workspace first to use Today",
     },
+  },
+
+  // ─── Forge connect banners (multi-forge Today) ──────────
+  forgeConnect: {
+    banner: "Connect your {0} account to see its pull requests and issues",
+    github: "GitHub",
+    gitlab: "GitLab",
+    bitbucket: "Bitbucket",
+    azure: "Azure DevOps",
+    action: "Open Settings",
   },
 
   // ─── Undo ───────────────────────────────────────────────
@@ -1879,7 +1926,7 @@ const en = {
     // View
     toggleSidebar: "Toggle Sidebar",
     toggleTheme: "Toggle Light/Dark Mode",
-    openLaunchpad: "Open Launchpad",
+    openLaunchpad: "Open Today",
     // Help
     documentation: "GitWand Documentation",
     whatsNew: "What's New",
