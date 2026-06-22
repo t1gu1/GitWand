@@ -152,6 +152,7 @@ const es: Locale = {
     deleteModalGuardPlaceholder: "Escribe \u00ab {0} \u00bb",
     deleteModalConfirm: "Eliminar rama",
     deleteOptionsDesc: "Eliminar rama \u00ab {0} \u00bb. Elige qu\u00e9 copias eliminar.",
+    forceDeleteConfirm: "La rama \u00ab {0} \u00bb no est\u00e1 completamente fusionada. \u00bfForzar la eliminaci\u00f3n de todos modos? Se perder\u00e1n los commits no fusionados que no est\u00e9n en otra rama ni subidos a un remoto.",
     deleteLocalOnly: "Eliminar rama local",
     deleteLocalOnlyHint: "Elimina la rama de seguimiento local. Los commits no enviados se perder\u00e1n.",
     deleteRemoteOnly: "Eliminar rama en Origin",

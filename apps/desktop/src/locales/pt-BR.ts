@@ -153,6 +153,7 @@ const ptBR: Locale = {
     deleteModalGuardPlaceholder: "Digite \u00ab {0} \u00bb",
     deleteModalConfirm: "Excluir branch",
     deleteOptionsDesc: "Excluir branch \u00ab {0} \u00bb. Escolha quais c\u00f3pias remover.",
+    forceDeleteConfirm: "O branch \u00ab {0} \u00bb n\u00e3o est\u00e1 totalmente mesclado. For\u00e7ar a exclus\u00e3o mesmo assim? Commits n\u00e3o mesclados que n\u00e3o estejam em outro branch nem enviados a um remoto ser\u00e3o perdidos.",
     deleteLocalOnly: "Excluir branch local",
     deleteLocalOnlyHint: "Remove a branch de rastreamento local. Commits n\u00e3o enviados ser\u00e3o perdidos.",
     deleteRemoteOnly: "Excluir branch no Origin",

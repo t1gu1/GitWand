@@ -146,6 +146,7 @@ const fr: Locale = {
     deleteModalGuardPlaceholder: "Tapez \u00ab {0} \u00bb",
     deleteModalConfirm: "Supprimer la branche",
     deleteOptionsDesc: "Supprimer la branche \u00ab {0} \u00bb. Choisissez les copies \u00e0 retirer.",
+    forceDeleteConfirm: "La branche \u00ab {0} \u00bb n'est pas enti\u00e8rement merg\u00e9e. Forcer la suppression quand m\u00eame ? Les commits non merg\u00e9s qui ne sont sur aucune autre branche ni pouss\u00e9s sur un remote seront perdus.",
     deleteLocalOnly: "Supprimer localement",
     deleteLocalOnlyHint: "Retire la branche locale. Les commits non push\u00e9s seront perdus.",
     deleteRemoteOnly: "Supprimer sur le remote",

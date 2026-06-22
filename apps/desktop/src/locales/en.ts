@@ -153,6 +153,7 @@ const en = {
     deleteModalGuardPlaceholder: "Type \u00ab {0} \u00bb",
     deleteModalConfirm: "Delete branch",
     deleteOptionsDesc: "Delete branch \u00ab {0} \u00bb. Choose which copies to remove.",
+    forceDeleteConfirm: "The branch \u00ab {0} \u00bb is not fully merged. Force delete anyway? Unmerged commits not on another branch or pushed to a remote will be lost.",
     deleteLocalOnly: "Delete local branch",
     deleteLocalOnlyHint: "Removes the local tracking branch. Commits not pushed will be lost.",
     deleteRemoteOnly: "Delete Origin branch",

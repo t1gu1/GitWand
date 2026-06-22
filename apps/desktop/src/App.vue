@@ -242,7 +242,7 @@ const {
   popStash: popStashRepo,
   dropStash,
   worktreeBranches,
-} = useGitRepo();
+} = useGitRepo({ confirm: askConfirm });
 
 // Monorepo scope (v2.21.0) — restore persisted scope on repo open.
 const { loadScope } = useWorkspaceScope();
