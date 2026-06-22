@@ -137,6 +137,18 @@ export interface AppSettings {
    * read time (intersected with the currently-open tabs).
    */
   launchpadScopePaths: string[];
+
+  // ── Dashboard layout ──────────────────────────────────────
+
+  /** Render the README card above the contributors/activity rows. */
+  dashboardReadmeFirst: boolean;
+  /** Hide the contributors row on the dashboard. */
+  dashboardHideContributors: boolean;
+  /** Hide the activity row (heatmap / commits-per-day / recent commits). */
+  dashboardHideActivity: boolean;
+  /** Hide the README card on the dashboard. */
+  dashboardHideReadme: boolean;
+
   /** Automation settings (v2.8). */
   automations: {
     /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
@@ -234,6 +246,10 @@ export const defaultAppSettings: AppSettings = {
   launchpadActiveTab: "inbox",
   launchpadTeamTabEnabled: true,
   launchpadScopePaths: [],
+  dashboardReadmeFirst: false,
+  dashboardHideContributors: false,
+  dashboardHideActivity: false,
+  dashboardHideReadme: false,
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },

@@ -1496,6 +1496,314 @@ watch(scopedRepos, () => {
   color: var(--color-warning);
 }
 
+/* ── ⋮ row menu ────────────────────────────────────────── */
+.launchpad-view__item-menu {
+  margin-left: auto;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.launchpad-view__menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  opacity: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: var(--font-size-lg);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  line-height: 1;
+  transition: opacity var(--transition-fast), background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.launchpad-view__pr-item:hover .launchpad-view__menu-btn,
+.launchpad-view__issue-item:hover .launchpad-view__menu-btn,
+.launchpad-view__menu-btn--open,
+.launchpad-view__menu-btn:focus,
+.launchpad-view__menu-btn:focus-visible {
+  opacity: 1;
+}
+
+.launchpad-view__menu-btn:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
+}
+
+.launchpad-view__menu-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.launchpad-view__menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-2));
+  z-index: 100;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  min-width: 180px;
+  padding: var(--space-2) 0;
+  animation: launchpad-pop var(--transition-fast) ease-out;
+}
+
+@keyframes launchpad-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.launchpad-view__menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  color: var(--color-text);
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.launchpad-view__menu-item:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.launchpad-view__menu-item:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Sub items (snooze durations) have no leading icon — keep them visually
+   indented past where the icon column would sit on the parent rows. */
+.launchpad-view__menu-item--sub {
+  padding-left: calc(var(--space-5) + 14px + var(--space-2));
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.launchpad-view__snooze-options {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+/* ── Snoozed bandeau ───────────────────────────────────── */
+.launchpad-view__snoozed-bandeau {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.launchpad-view__snoozed-bandeau:hover {
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.launchpad-view__snoozed-bandeau:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.launchpad-view__snoozed-show-label {
+  margin-left: auto;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+}
+
+.launchpad-view__snoozed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.launchpad-view__snoozed-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  opacity: 0.8;
+  transition: opacity var(--transition-fast);
+}
+
+.launchpad-view__snoozed-item:hover {
+  opacity: 1;
+}
+
+.launchpad-view__snoozed-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.launchpad-view__snoozed-until {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+
+.launchpad-view__snooze-cancel {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  color: var(--color-text);
+  flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.launchpad-view__snooze-cancel:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.launchpad-view__snooze-cancel:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── Issue filters ─────────────────────────────────────── */
+.launchpad-view__issue-filters {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.launchpad-view__filter-btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.launchpad-view__filter-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.launchpad-view__filter-btn:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.launchpad-view__filter-btn--active {
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent);
+}
+
+.launchpad-view__filter-btn--active:hover {
+  background: var(--color-accent-hover);
+  color: var(--color-accent-text);
+  border-color: var(--color-accent-hover);
+}
+
+/* ── Issue list ────────────────────────────────────────── */
+.launchpad-view__issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.launchpad-view__issue-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-md);
+  position: relative;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.launchpad-view__issue-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-tertiary);
+}
+
+.launchpad-view__issue-title {
+  flex: 1;
+  min-width: 200px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.launchpad-view__issue-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.launchpad-view__issue-title a:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.launchpad-view__issue-title a:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+.launchpad-view__issue-milestone {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
 /* ── Team panel ────────────────────────────────────────── */
 .launchpad-view__team-section {
   margin-bottom: var(--space-6);

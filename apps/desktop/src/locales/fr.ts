@@ -20,6 +20,8 @@ const fr: Locale = {
     ok: "OK",
     open: "Ouvrir",
     optional: "optionnel",
+    previous: "Précédent",
+    next: "Suivant",
     refresh: "Rafra\u00eechir",
     save: "Sauvegarder",
     ctrlEnter: "Ctrl+Entr\u00e9e pour valider",
@@ -254,54 +256,17 @@ const fr: Locale = {
   // ─── Dashboard ──────────────────────────────────────────
   dashboard: {
     loading: "Chargement du tableau de bord\u2026",
-    // Hero
-    repoState: "État du dépôt",
-    stateClean: "Tout est propre",
-    stateDirty: "{0} changement(s) en attente",
-    stateAhead: "Prêt à pousser — {0} commit(s) en avance",
-    stateBehind: "Synchronisation requise — {0} commit(s) en retard",
-    stateConflicts: "Conflits à résoudre",
-    stateVsRemote: "Par rapport à origin/{0}",
-    stateOnBranch: "Sur la branche {0}",
-    chipNoConflict: "Aucun conflit",
-    chipConflicts: "{0} conflit(s)",
-    chipAhead: "{0} en avance",
-    chipBehind: "{0} en retard",
-    chipClean: "propre",
-    healthTitle: "Santé du dépôt",
-    healthExcellent: "Excellente",
-    healthGood: "Bonne",
-    healthFair: "Correcte",
-    healthPoor: "À améliorer",
-    nextStep: "Prochaine étape",
-    nextResolveConflicts: "Résoudre les {0} conflit(s)",
-    nextCommit: "Commiter les {0} changement(s)",
-    nextPush: "Pousser {0} commit(s)",
-    nextPublish: "Publier la branche sur origin",
-    nextSync: "Synchroniser ({0} en retard)",
-    nextReviewPrs: "Reviewer les {0} PR ouverte(s)",
-    nextAllCaughtUp: "Tout est à jour — explorer l'historique",
-    openAction: "Ouvrir",
-    lastActivity: "Dernière activité",
-    // Metrics
-    metricCommits: "Commits (7j)",
-    metricBranches: "Branches",
-    metricContributors: "Contributeurs",
-    metricChanges: "Changements",
-    metricFiles: "Fichiers suivis",
-    metricPrs: "PRs ouvertes",
-    prsMergedThisWeek: "{0} mergée(s) cette semaine",
-    staged: "indexé(s)",
-    modified: "modifié(s)",
-    new: "nouveau(x)",
     // Heatmap
     heatmapTitle: "Activité des 6 derniers mois",
-    viewAll: "Voir tout",
     less: "Moins",
     more: "Plus",
     dayMon: "Lun",
+    dayTue: "Mar",
     dayWed: "Mer",
+    dayThu: "Jeu",
     dayFri: "Ven",
+    daySat: "Sam",
+    daySun: "Dim",
     // Contributors / commit types
     contributorsTitle: "Contributeurs",
     noContributors: "Aucun contributeur",
@@ -309,11 +274,13 @@ const fr: Locale = {
     // Commits + chart
     recentCommits: "Commits récents",
     noCommits: "Aucun commit",
-    chartTitle: "Commits par jour (14j)",
+    chartTitle: "Activité des 14 derniers jours",
+    chartCommits: "commits",
     // README
     formatted: "Formaté",
     raw: "Brut",
     noReadme: "Aucun README.md trouvé dans ce dépôt",
+    backToReadme: "Retour au README",
     // Release notes
     releaseNotes: "Release notes",
     releaseNotesHint: "G\u00e9n\u00e9rer des release notes Markdown avec l'IA",
@@ -998,6 +965,7 @@ const fr: Locale = {
   settings: {
     title: "Param\u00e8tres",
     tabGeneral: "G\u00e9n\u00e9ral",
+    tabDashboard: "Tableau de bord",
     tabGit: "Git",
     tabEditor: "\u00c9diteur",
     tabAi: "IA",
@@ -1193,6 +1161,26 @@ const fr: Locale = {
       disableTeamTab: {
         label: "Désactiver l'onglet Équipe de Today",
         help: "L'onglet Équipe fait un appel API par PR de collègue (~10s sur un gros workspace). Désactive-le si tu n'as pas besoin de la vue chevauchement.",
+      },
+    },
+
+    // Disposition du tableau de bord
+    dashboard: {
+      readmeFirst: {
+        label: "Afficher le README en premier",
+        help: "Place la carte README au-dessus des rangées contributeurs et activité.",
+      },
+      hideContributors: {
+        label: "Masquer la rangée contributeurs",
+        help: "Masque le panneau des contributeurs et des types de commits.",
+      },
+      hideActivity: {
+        label: "Masquer la rangée activité",
+        help: "Masque la heatmap d'activité, le graphique des commits par jour et les commits récents.",
+      },
+      hideReadme: {
+        label: "Masquer le README",
+        help: "Masque la carte README sur le tableau de bord.",
       },
     },
 
@@ -1565,6 +1553,7 @@ const fr: Locale = {
       title: "Résolu par LLM (expérimental)",
       reject: "Rejeter → résolution manuelle",
       accept: "Accepter",
+      accepted: "Accepté",
       details: "Détails de la trace",
     },
   },

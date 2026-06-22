@@ -26,6 +26,8 @@ const en = {
     ok: "OK",
     open: "Open",
     optional: "optional",
+    previous: "Previous",
+    next: "Next",
     refresh: "Refresh",
     save: "Save",
     ctrlEnter: "Ctrl+Enter to confirm",
@@ -261,54 +263,17 @@ const en = {
   // ─── Dashboard ──────────────────────────────────────────
   dashboard: {
     loading: "Loading dashboard\u2026",
-    // Hero
-    repoState: "Repository state",
-    stateClean: "All clean",
-    stateDirty: "{0} pending change(s)",
-    stateAhead: "Ready to push — {0} commit(s) ahead",
-    stateBehind: "Sync needed — {0} commit(s) behind",
-    stateConflicts: "Conflicts to resolve",
-    stateVsRemote: "Compared to origin/{0}",
-    stateOnBranch: "On branch {0}",
-    chipNoConflict: "No conflict",
-    chipConflicts: "{0} conflict(s)",
-    chipAhead: "{0} ahead",
-    chipBehind: "{0} behind",
-    chipClean: "clean",
-    healthTitle: "Repository health",
-    healthExcellent: "Excellent",
-    healthGood: "Good",
-    healthFair: "Fair",
-    healthPoor: "Needs attention",
-    nextStep: "Next step",
-    nextResolveConflicts: "Resolve {0} conflict(s)",
-    nextCommit: "Commit {0} change(s)",
-    nextPush: "Push {0} commit(s)",
-    nextPublish: "Publish branch to origin",
-    nextSync: "Sync ({0} behind)",
-    nextReviewPrs: "Review {0} open PR(s)",
-    nextAllCaughtUp: "All caught up — browse history",
-    openAction: "Open",
-    lastActivity: "Last activity",
-    // Metrics
-    metricCommits: "Commits (7d)",
-    metricBranches: "Branches",
-    metricContributors: "Contributors",
-    metricChanges: "Changes",
-    metricFiles: "Tracked files",
-    metricPrs: "Open PRs",
-    prsMergedThisWeek: "{0} merged this week",
-    staged: "staged",
-    modified: "modified",
-    new: "new",
     // Heatmap
     heatmapTitle: "Activity — last 6 months",
-    viewAll: "View all",
     less: "Less",
     more: "More",
     dayMon: "Mon",
+    dayTue: "Tue",
     dayWed: "Wed",
+    dayThu: "Thu",
     dayFri: "Fri",
+    daySat: "Sat",
+    daySun: "Sun",
     // Contributors / commit types
     contributorsTitle: "Contributors",
     noContributors: "No contributors",
@@ -316,11 +281,13 @@ const en = {
     // Commits + chart
     recentCommits: "Recent commits",
     noCommits: "No commits",
-    chartTitle: "Commits per day (14d)",
+    chartTitle: "Activity in the last 14 days",
+    chartCommits: "commits",
     // README
     formatted: "Formatted",
     raw: "Raw",
     noReadme: "No README.md found in this repository",
+    backToReadme: "Back to README",
     // Release notes
     releaseNotes: "Release notes",
     releaseNotesHint: "Generate Markdown release notes with AI",
@@ -1006,6 +973,7 @@ const en = {
     title: "Settings",
     // Tab titles
     tabGeneral: "General",
+    tabDashboard: "Dashboard",
     tabGit: "Git",
     tabEditor: "Editor",
     tabAi: "AI",
@@ -1209,6 +1177,26 @@ const en = {
       disableTeamTab: {
         label: "Disable Today Team tab",
         help: "The Team tab fires one API call per colleague PR (~10s on large workspaces). Turn this off if you don't need the overlap view.",
+      },
+    },
+
+    // Dashboard layout
+    dashboard: {
+      readmeFirst: {
+        label: "Show README first",
+        help: "Move the README card above the contributors and activity rows.",
+      },
+      hideContributors: {
+        label: "Hide contributors row",
+        help: "Hide the contributors and commit-type panel on the dashboard.",
+      },
+      hideActivity: {
+        label: "Hide activity row",
+        help: "Hide the activity heatmap, commits-per-day chart and recent commits.",
+      },
+      hideReadme: {
+        label: "Hide README",
+        help: "Hide the README card on the dashboard.",
       },
     },
 
@@ -1588,6 +1576,7 @@ const en = {
       title: "Resolved by LLM (experimental)",
       reject: "Reject \u2192 resolve manually",
       accept: "Accept",
+      accepted: "Accepted",
       details: "Trace details",
     },
   },
