@@ -1026,19 +1026,21 @@ export function useGitRepo(opts: { confirm?: ConfirmFn } = {}) {
     }
   }
 
-  async function createBranch(name: string) {
-    if (!folderPath.value) return;
+  async function createBranch(name: string): Promise<boolean> {
+    if (!folderPath.value) return false;
     try {
       await gitCreateBranch(folderPath.value, name, true);
       await refresh();
       await loadBranches();
+      return true;
     } catch (err: any) {
       error.value = `create branch: ${err.message}`;
+      return false;
     }
   }
 
-  async function switchBranch(name: string) {
-    if (!folderPath.value) return;
+  async function switchBranch(name: string): Promise<boolean> {
+    if (!folderPath.value) return false;
     isSwitchingBranch.value = true;
     try {
       await gitSwitchBranch(folderPath.value, name);
@@ -1046,12 +1048,14 @@ export function useGitRepo(opts: { confirm?: ConfirmFn } = {}) {
       await refresh();
       await loadBranches();
       await loadWorktrees();
+      return true;
     } catch (err: any) {
       if (err.message?.includes("already used by worktree")) {
         error.value = t("branches.switchWorktree");
       } else {
         error.value = `switch branch: ${err.message}`;
       }
+      return false;
     } finally {
       isSwitchingBranch.value = false;
     }

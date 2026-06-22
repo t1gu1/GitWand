@@ -65,6 +65,7 @@ const BranchNameField = defineAsyncComponent(() => import("./components/BranchNa
 // splits a commit. Kept lazy to stay out of the main bundle (bundle budget).
 const EditCommitOverlay = defineAsyncComponent(() => import("./components/EditCommitOverlay.vue"));
 const SplitCommitModal = defineAsyncComponent(() => import("./components/SplitCommitModal.vue"));
+const BranchDirtySwitchModal = defineAsyncComponent(() => import("./components/BranchDirtySwitchModal.vue"));
 import { useStashMessage } from "./composables/useStashMessage";
 import { useAIProvider } from "./composables/useAIProvider";
 import { usePrPanel, PR_PANEL_KEY } from "./composables/usePrPanel";
@@ -120,6 +121,7 @@ const isOffline = computed(() => navIsOffline.value || !probedOnline.value);
 import { isTauri, registerBrowserFolderPicker, pickFolder, checkForUpdates, fetchBetaUpdate, installUpdate, gitRepoState, openExternalUrl } from "./utils/backend";
 import type { UpdateInfo, RepoOperationState, WorkspaceRepo, PullRequest } from "./utils/backend";
 import { onMarkdownLinkClick } from "./composables/useSafeHtml";
+import { resolveDirtySwitchAction, type DirtyFile } from "./utils/branchSwitchDecision";
 // UpdateModal moved above (lazy-loaded) — type imported as UpdateModalType for the template ref
 
 const { theme, toggle: toggleTheme } = useTheme();
@@ -408,13 +410,15 @@ const folderName = computed(() => {
   return parts[parts.length - 1] || p;
 });
 
-// Auto-dismiss error after 3s
+// Auto-dismiss error after a delay that scales with message length, so long
+// multi-line errors (e.g. a git carry-failure with file list) stay readable.
 let errorTimer: ReturnType<typeof setTimeout> | null = null;
 watch(repoError, (val) => {
   if (errorTimer) { clearTimeout(errorTimer); errorTimer = null; }
   if (val) {
     pushErrorLog(val);
-    errorTimer = setTimeout(() => { repoError.value = null; }, 3000);
+    const delay = Math.min(12000, 3000 + val.length * 40);
+    errorTimer = setTimeout(() => { repoError.value = null; }, delay);
   }
 });
 
@@ -935,43 +939,28 @@ async function handleSwitchBranch(name: string, isRemote = false) {
   const behavior = settings.value.switchBehavior;
   const dirty = isDirty();
 
-  if (!dirty || behavior === "ask" && !dirty) {
-    // Clean tree — just switch
-    await switchBranch(name);
-    await promptPullIfBehind();
-    return;
-  }
-
-  if (behavior === "refuse") {
-    repoError.value = t("branches.switchRefusedDirty");
-    return;
-  }
-
-  if (behavior === "stash") {
-    // Open the stash-message modal; the actual stash/switch/pop is driven
-    // by confirmSwitchStash() when the user confirms.
+  // Stash mode keeps its dedicated stash-message modal for switching. The
+  // generic decision helper maps stash → "direct" (only correct for the
+  // create-branch path), so intercept it here before delegating.
+  if (dirty && behavior === "stash") {
+    // The actual stash/switch/pop is driven by confirmSwitchStash().
     pendingSwitchBranch.value = name;
     switchStashMessage.value = "";
     return;
   }
 
-  if (behavior === "ask") {
-    // Show a professional confirmation modal
-    if (await askConfirm({
-      title: t("branches.switchConfirmDirtyTitle"),
-      message: t("branches.switchConfirmDirty"),
-      confirmLabel: t("common.confirm"),
-      danger: true,
-    })) {
+  switch (resolveDirtySwitchAction(dirty, behavior)) {
+    case "modal":
+      pendingDirtySwitch.value = { name, isCreate: false };
+      return;
+    case "refuse":
+      repoError.value = t("branches.switchRefusedDirty");
+      return;
+    default: // "direct" — clean tree (any mode) falls through to a plain switch
       await switchBranch(name);
       await promptPullIfBehind();
-    }
-    return;
+      return;
   }
-
-  // Fallback
-  await switchBranch(name);
-  await promptPullIfBehind();
 }
 
 async function promptPullIfBehind() {
@@ -982,6 +971,21 @@ async function promptPullIfBehind() {
   })) {
     await doPull();
   }
+}
+
+async function handleCreateBranch(name: string) {
+  if (!repoFolderPath.value) return;
+  const action = resolveDirtySwitchAction(isDirty(), settings.value.switchBehavior);
+  if (action === "modal") {
+    pendingDirtySwitch.value = { name, isCreate: true };
+    return;
+  }
+  if (action === "refuse") {
+    repoError.value = t("branches.switchRefusedDirty");
+    return;
+  }
+  // "direct": clean tree, or stash mode (keep historic checkout -b carry behavior)
+  await createBranch(name);
 }
 
 // ─── Sync-split button handlers (Phase 5) ─────────────────
@@ -1742,6 +1746,19 @@ async function deleteTagInModal(tagName: string) {
   }
 }
 
+// ─── Dirty-switch modal (carry / commit-first flow) ─────
+const pendingDirtySwitch = ref<{ name: string; isCreate: boolean } | null>(null);
+
+const pendingDirtySwitchFiles = computed<DirtyFile[]>(() => {
+  const s = repoStatus.value;
+  if (!s) return [];
+  return [
+    ...s.staged.map((f) => ({ path: f.path, kind: "staged" as const })),
+    ...s.unstaged.map((f) => ({ path: f.path, kind: "unstaged" as const })),
+    ...s.untracked.map((path) => ({ path, kind: "untracked" as const })),
+  ];
+});
+
 // ─── Stash-and-switch modal (Phase 1.3.3) ──────────────
 const pendingSwitchBranch = ref<string | null>(null);
 const switchStashMessage = ref("");
@@ -1831,6 +1848,30 @@ async function confirmSwitchStash() {
 function cancelSwitchStash() {
   pendingSwitchBranch.value = null;
   switchStashMessage.value = "";
+}
+
+async function confirmDirtyCarry() {
+  const pending = pendingDirtySwitch.value;
+  if (!pending) return;
+  pendingDirtySwitch.value = null;
+  const ok = pending.isCreate
+    ? await createBranch(pending.name)
+    : await switchBranch(pending.name);
+  if (!ok) {
+    // switchBranch/createBranch already set repoError to the underlying git
+    // error, prefixed with internal context ("switch branch: " / "create
+    // branch: "). Strip that prefix before surfacing it inside the
+    // user-facing carry-failure message.
+    const detail = (repoError.value ?? "").replace(/^(?:switch|create) branch:\s*/, "");
+    repoError.value = t("branches.dirtySwitchCarryFailed", detail);
+    return;
+  }
+  if (!pending.isCreate) await promptPullIfBehind();
+}
+
+function confirmDirtyCommitFirst() {
+  pendingDirtySwitch.value = null;
+  viewMode.value = "changes";
 }
 
 /**
@@ -2384,7 +2425,7 @@ onUnmounted(() => {
 
       :error-count="logUnreadCount" :is-offline="isOffline" @switch-branch="handleSwitchBranch" @open-logs="openLogsTab"
       @change-view="onViewModeChange"
-      @create-branch="createBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
+      @create-branch="handleCreateBranch" @delete-branch="deleteBranch" @open-rename-modal="showBranchRenameModal = true"
       @open-delete-modal="showBranchDeleteModal = true" @load-branches="loadBranches" @undo-performed="onUndoPerformed"
       @open-rebase="showRebase = true"
       @open-worktrees="(branch) => { pendingWorktreeBranch = branch; showWorktrees = true; }"
@@ -2765,6 +2806,17 @@ onUnmounted(() => {
         <button class="bm-btn bm-btn--danger" @click="confirmForcePush">{{ t('syncAction.forcePush') }}</button>
       </template>
     </BaseModal>
+
+    <!-- Dirty-switch modal (carry / commit-first) -->
+    <BranchDirtySwitchModal
+      v-if="pendingDirtySwitch"
+      :target-branch="pendingDirtySwitch.name"
+      :is-create="pendingDirtySwitch.isCreate"
+      :files="pendingDirtySwitchFiles"
+      @carry="confirmDirtyCarry"
+      @commit-first="confirmDirtyCommitFirst"
+      @close="pendingDirtySwitch = null"
+    />
 
     <!-- Stash-and-switch modal (asks for a stash label before switching branches) -->
     <div v-if="pendingSwitchBranch" class="switch-stash-overlay overlay-backdrop" @click.self="cancelSwitchStash">
