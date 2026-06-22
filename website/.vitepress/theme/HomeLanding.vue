@@ -106,8 +106,9 @@ onMounted(() => {
 // ── Hero visual: CLI ⇄ GUI toggle (#71) ───────────────────────────────────
 // The hero used to show only the terminal animation, which made GitWand read
 // as a CLI-only tool. This tab lets visitors flip to the desktop GUI screenshot
-// so the product's two faces are both visible above the fold.
-const heroTab = ref<'cli' | 'gui'>('cli')
+// so the product's two faces are both visible above the fold. Defaults to the
+// GUI — GitWand is first and foremost a desktop app, so lead with it.
+const heroTab = ref<'cli' | 'gui'>('gui')
 
 // ── Destinations for the clickable platform cards (#71) ───────────────────
 // Desktop cards point at the primary installer for each OS; asset names mirror
@@ -116,7 +117,6 @@ const heroTab = ref<'cli' | 'gui'>('cli')
 const dlMac = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_universal.dmg`
 const dlLinux = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_amd64.AppImage`
 const dlWin = `${RELEASES}/download/v${LATEST}/GitWand_${LATEST}_x64-setup.exe`
-const VSCODE_MARKETPLACE = 'https://marketplace.visualstudio.com/items?itemName=gitwand.gitwand-vscode'
 
 const i18n: Record<Locale, any> = {
   fr: {
@@ -192,7 +192,7 @@ const i18n: Record<Locale, any> = {
     plCli: 'CLI npm',
     plCliSub: 'npm i -g @gitwand/cli',
     plVscode: 'VS Code',
-    plVscodeSub: 'Extension Marketplace',
+    plVscodeSub: 'Guide d\'installation',
     ctaTitle: 'Prêt à simplifier votre workflow Git ?',
     ctaSub: 'Gratuit, open source, et conçu pour les développeurs qui veulent aller vite.',
     ctaDownload: 'Télécharger GitWand',
@@ -338,7 +338,7 @@ const i18n: Record<Locale, any> = {
     plCli: 'CLI npm',
     plCliSub: 'npm i -g @gitwand/cli',
     plVscode: 'VS Code',
-    plVscodeSub: 'Extension Marketplace',
+    plVscodeSub: 'Setup guide',
     ctaTitle: 'Ready to simplify your Git workflow?',
     ctaSub: 'Free, open source, and built for developers who want to move fast.',
     ctaDownload: 'Download GitWand',
@@ -484,7 +484,7 @@ const i18n: Record<Locale, any> = {
     plCli: 'CLI npm',
     plCliSub: 'npm i -g @gitwand/cli',
     plVscode: 'VS Code',
-    plVscodeSub: 'Marketplace de extensiones',
+    plVscodeSub: 'Guía de instalación',
     ctaTitle: '¿Listo para simplificar tu flujo Git?',
     ctaSub: 'Gratis, open source y hecho para desarrolladores que quieren ir rápido.',
     ctaDownload: 'Descargar GitWand',
@@ -630,7 +630,7 @@ const i18n: Record<Locale, any> = {
     plCli: 'CLI npm',
     plCliSub: 'npm i -g @gitwand/cli',
     plVscode: 'VS Code',
-    plVscodeSub: 'Extension Marketplace',
+    plVscodeSub: 'Guia de instalação',
     ctaTitle: 'Pronto para simplificar seu fluxo Git?',
     ctaSub: 'Gratuito, open source, feito para devs que querem ir rápido.',
     ctaDownload: 'Baixar o GitWand',
@@ -776,7 +776,7 @@ const i18n: Record<Locale, any> = {
     plCli: 'CLI npm',
     plCliSub: 'npm i -g @gitwand/cli',
     plVscode: 'VS Code',
-    plVscodeSub: '扩展市场',
+    plVscodeSub: '安装指南',
     ctaTitle: '准备好简化你的 Git 工作流了吗?',
     ctaSub: '免费、开源,为追求效率的开发者而生。',
     ctaDownload: '下载 GitWand',
@@ -1509,7 +1509,7 @@ function cellClass(v: CompareValue | undefined): string {
             <span class="pl-name">{{ t.plCli }}</span>
             <span class="pl-sub">{{ t.plCliSub }}</span>
           </a>
-          <a class="platform-card" :href="VSCODE_MARKETPLACE" target="_blank" rel="noopener">
+          <a class="platform-card" href="/guide/vscode">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="4" stroke="#10B981" stroke-width="1.5"/><path d="M8 14l2.5-5L13 14M9 12h3" stroke="#10B981" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 9v6" stroke="#10B981" stroke-width="1.5" stroke-linecap="round"/></svg>
             <span class="pl-name">{{ t.plVscode }}</span>
             <span class="pl-sub">{{ t.plVscodeSub }}</span>
