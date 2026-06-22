@@ -18,6 +18,7 @@ import type { AIProvider } from "./useAIProvider";
 
 export type PullMode = "merge" | "rebase";
 export type SwitchBehavior = "stash" | "ask" | "refuse";
+/** Active tab in the Today view — only "inbox" (unified list) and "team" survive Phase 2. */
 export type LaunchpadTab = "inbox" | "wip" | "prs" | "issues" | "team";
 /** Granularity of PR-activity OS notifications (v2.16). */
 export type NotificationLevel = "all" | "reviews" | "ci" | "none";
@@ -116,10 +117,14 @@ export interface AppSettings {
   aiOllamaUrl: string;
   /** Ollama model name. */
   aiOllamaModel: string;
-  /** Last active tab in Launchpad — persisted between openings (v2.9). */
+  /**
+   * Last active tab in Today view — persisted between openings (v2.9).
+   * After Phase 2 only "inbox" and "team" are live surfaces; legacy values
+   * ("wip"|"prs"|"issues") are migrated to "inbox" at read time.
+   */
   launchpadActiveTab: LaunchpadTab;
   /**
-   * Whether the Launchpad Team tab is enabled (v2.9). When false, the tab
+   * Whether the Today Team tab is enabled (v2.9). When false, the tab
    * is hidden and the (expensive) team activity fetch — one `gh pr view
    * --json files` per colleague PR, ~10s on a 50-PR workspace — is never
    * triggered. Default: true.

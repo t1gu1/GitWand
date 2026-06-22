@@ -137,9 +137,10 @@ interface Settings {
   aiModelByProvider: Partial<Record<AIProvider, string>>;
   aiOllamaUrl: string;
   aiOllamaModel: string;
-  // Launchpad — last active tab persisted between openings (v2.9)
-  launchpadActiveTab: "wip" | "prs" | "issues" | "team";
-  // Launchpad — Team tab enable/disable (v2.9). Hides tab + skips fetch.
+  // Today view — last active surface persisted between openings (v2.9 / Phase 2)
+  // Only "inbox" and "team" are live surfaces after Phase 2.
+  launchpadActiveTab: "inbox" | "wip" | "prs" | "issues" | "team";
+  // Today view — Team tab enable/disable (v2.9). Hides tab + skips fetch.
   launchpadTeamTabEnabled: boolean;
   // Automation settings (v2.8)
   automations: {
@@ -187,7 +188,7 @@ const defaultSettings: Settings = {
   aiOllamaUrl: "http://localhost:11434",
   aiOllamaModel: "codellama",
   blameAlgorithm: "histogram",
-  launchpadActiveTab: "wip",
+  launchpadActiveTab: "inbox",
   launchpadTeamTabEnabled: true,
   automations: {
     autoResolve: { enabled: false },

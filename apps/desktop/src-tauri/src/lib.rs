@@ -346,6 +346,7 @@ pub fn run() {
             commands::gh::gh_issue_comments,
             commands::gh::gh_issue_add_comment,
             commands::gh::gh_issue_set_state,
+            commands::gh::gh_list_issues,
             commands::gh::gh_pr_reviews,
             commands::gh::gh_check_annotations,
             commands::gh::gh_list_reactions,
@@ -441,6 +442,7 @@ pub fn run() {
             commands::network::check_remote_reachable,
             commands::gitlab::detect_glab,
             commands::gitlab::gl_list_mrs,
+            commands::gitlab::gl_list_issues,
             commands::gitlab::gl_mr_count,
             commands::gitlab::gl_get_mr,
             commands::gitlab::gl_mr_diff,
@@ -469,6 +471,7 @@ pub fn run() {
             commands::credentials::delete_credential,
             // ── Bitbucket Cloud REST v2 ──
             commands::bitbucket::bb_list_prs,
+            commands::bitbucket::bb_list_issues,
             commands::bitbucket::bb_pr_count,
             commands::bitbucket::bb_get_pr,
             commands::bitbucket::bb_pr_diff,
