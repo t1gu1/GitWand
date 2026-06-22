@@ -545,7 +545,7 @@ mod tests {
           "deletions": 3,
           "labels": [{"name": "bug"}],
           "assignees": [{"login": "bob"}],
-          "reviewRequests": [{"requestedReviewer": {"login": "carol"}}],
+          "reviewRequests": [{"__typename": "User", "login": "carol"}],
           "reviewDecision": "REVIEW_REQUIRED",
           "mergeStateStatus": "BLOCKED",
           "statusCheckRollup": [{"conclusion": "SUCCESS"}]
