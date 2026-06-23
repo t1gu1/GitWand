@@ -110,6 +110,36 @@ onMounted(() => {
 // GUI — GitWand is first and foremost a desktop app, so lead with it.
 const heroTab = ref<'cli' | 'gui'>('gui')
 
+// ── Screenshot slideshow ───────────────────────────────────────────────────
+const slides = [
+  { src: '/screenshots/GitWand_dashboard.png',        alt: 'GitWand — dashboard' },
+  { src: '/screenshots/GitWand_changes.png',          alt: 'GitWand — changes view' },
+  { src: '/screenshots/GitWand_GitTree.png',          alt: 'GitWand — git commit tree' },
+  { src: '/screenshots/GitWand_Branches_manager.png', alt: 'GitWand — branch manager' },
+  { src: '/screenshots/GitWand_Worktree.png',         alt: 'GitWand — worktrees' },
+  { src: '/screenshots/GitWand_settingAI.png',        alt: 'GitWand — AI settings' },
+]
+const slideIndex = ref(0)
+function goToSlide(i: number) { slideIndex.value = i }
+function prevSlide() { slideIndex.value = (slideIndex.value - 1 + slides.length) % slides.length }
+function nextSlide() { slideIndex.value = (slideIndex.value + 1) % slides.length }
+
+const lightboxOpen = ref(false)
+const lightboxIndex = ref(0)
+function openLightbox(i: number) { lightboxIndex.value = i; lightboxOpen.value = true }
+function closeLightbox() { lightboxOpen.value = false }
+function lightboxPrev() { lightboxIndex.value = (lightboxIndex.value - 1 + slides.length) % slides.length }
+function lightboxNext() { lightboxIndex.value = (lightboxIndex.value + 1) % slides.length }
+
+onMounted(() => {
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (!lightboxOpen.value) return
+    if (e.key === 'Escape') closeLightbox()
+    else if (e.key === 'ArrowLeft') lightboxPrev()
+    else if (e.key === 'ArrowRight') lightboxNext()
+  })
+})
+
 // ── Destinations for the clickable platform cards (#71) ───────────────────
 // Desktop cards point at the primary installer for each OS; asset names mirror
 // the release bundle (verified against the GitHub release). CLI/VS Code cards
@@ -249,9 +279,9 @@ const i18n: Record<Locale, any> = {
     featOAuth: 'GitHub OAuth, Azure DevOps & PRs cross-fork',
     featOAuthDesc: 'Connectez-vous à GitHub et Azure DevOps via OAuth device flow — tokens dans le trousseau de l\'OS, sans CLI gh. Azure DevOps devient une forge à part entière, et les PRs cross-fork ciblent le dépôt upstream.',
     // Encart Nouveautés
-    newReleaseBadge: 'Nouveau dans la v2.20',
-    newReleaseTitle: 'Résolvez dans un worktree scratch, prédisez rebase & cherry-pick',
-    newReleaseSub: 'Un worktree isolé jetable pour résoudre les conflits hors de votre checkout actif — ramenez le résultat en un clic. Et le Conflict Predictor s\'étend au rebase et au cherry-pick, sans effet de bord, dans l\'app, le serveur MCP et la nouvelle commande CLI gitwand preview.',
+    newReleaseBadge: 'Nouveau dans la v3.0',
+    newReleaseTitle: 'Dashboard Today, VS Code sur le Marketplace, moteur de validation',
+    newReleaseSub: 'Le panneau Today agrège PRs, issues et WIP de tous vos repos en une vue focalisée — ⌘L depuis n\'importe où. GitWand fait ses débuts sur le VS Code Marketplace avec le moteur de conflits complet intégré. CLI et extension VS Code remontent désormais les avertissements de validation : marqueurs résiduels, erreurs de syntaxe, résultats parse-tree.',
     newReleaseCta: 'Voir les nouveautés',
     faqTitle: 'Questions fréquentes',
     faqItems: [
@@ -395,9 +425,9 @@ const i18n: Record<Locale, any> = {
     featOAuth: 'GitHub OAuth, Azure DevOps & cross-fork PRs',
     featOAuthDesc: 'Sign in to GitHub and Azure DevOps with the OAuth device flow — tokens in your OS keychain, no gh CLI. Azure DevOps is a first-class forge, and cross-fork PRs target the upstream parent.',
     // Highlight banner
-    newReleaseBadge: 'New in v2.20',
-    newReleaseTitle: 'Resolve in a scratch worktree, predict rebase & cherry-pick',
-    newReleaseSub: 'A throwaway isolated worktree to resolve conflicts away from your live checkout — bring the result back in one click. And the Conflict Predictor now sees rebase and cherry-pick, side-effect-free, across the app, the MCP server, and a new gitwand preview CLI command.',
+    newReleaseBadge: 'New in v3.0',
+    newReleaseTitle: 'Today dashboard, VS Code on the Marketplace, validation engine',
+    newReleaseSub: 'The Today panel aggregates PRs, issues, and WIP across every repo into one focused view — ⌘L from anywhere. GitWand debuts on the VS Code Marketplace with the full conflict engine bundled in. CLI and VS Code now surface validation warnings: residual markers, syntax errors, and parse-tree results.',
     newReleaseCta: 'See what\'s new',
     faqTitle: 'Frequently asked questions',
     faqItems: [
@@ -541,9 +571,9 @@ const i18n: Record<Locale, any> = {
     featOAuth: 'GitHub OAuth, Azure DevOps y PRs cross-fork',
     featOAuthDesc: 'Inicia sesión en GitHub y Azure DevOps con OAuth device flow — tokens en el llavero del SO, sin CLI gh. Azure DevOps es una forge de primera clase y las PRs cross-fork apuntan al repo upstream.',
     // Encabezado Novedades
-    newReleaseBadge: 'Nuevo en v2.20',
-    newReleaseTitle: 'Resuelve en un worktree temporal, predice rebase y cherry-pick',
-    newReleaseSub: 'Un worktree aislado y desechable para resolver conflictos fuera de tu checkout activo — trae el resultado de vuelta en un clic. Y el Conflict Predictor ahora cubre rebase y cherry-pick, sin efectos secundarios, en la app, el servidor MCP y el nuevo comando CLI gitwand preview.',
+    newReleaseBadge: 'Nuevo en v3.0',
+    newReleaseTitle: 'Dashboard Today, VS Code en el Marketplace, motor de validación',
+    newReleaseSub: 'El panel Today agrega PRs, issues y WIP de todos tus repos en una vista enfocada — ⌘L desde cualquier lugar. GitWand debuta en el VS Code Marketplace con el motor de conflictos completo integrado. CLI y VS Code ahora muestran advertencias de validación: marcadores residuales, errores de sintaxis y resultados del árbol de análisis.',
     newReleaseCta: 'Ver las novedades',
     faqTitle: 'Preguntas frecuentes',
     faqItems: [
@@ -687,9 +717,9 @@ const i18n: Record<Locale, any> = {
     featOAuth: 'GitHub OAuth, Azure DevOps e PRs cross-fork',
     featOAuthDesc: 'Entre no GitHub e no Azure DevOps com OAuth device flow — tokens no keychain do SO, sem CLI gh. Azure DevOps é uma forge de primeira classe, e as PRs cross-fork miram o repositório upstream.',
     // Banner de Novidades
-    newReleaseBadge: 'Novo na v2.20',
-    newReleaseTitle: 'Resolva em um worktree temporário, preveja rebase e cherry-pick',
-    newReleaseSub: 'Um worktree isolado e descartável para resolver conflitos fora do seu checkout ativo — traga o resultado de volta em um clique. E o Conflict Predictor agora cobre rebase e cherry-pick, sem efeitos colaterais, no app, no servidor MCP e no novo comando CLI gitwand preview.',
+    newReleaseBadge: 'Novo na v3.0',
+    newReleaseTitle: 'Dashboard Today, VS Code no Marketplace, motor de validação',
+    newReleaseSub: 'O painel Today agrega PRs, issues e WIP de todos os seus repos em uma visão focada — ⌘L de qualquer lugar. GitWand estreia no VS Code Marketplace com o motor de conflitos completo embutido. CLI e VS Code agora exibem avisos de validação: marcadores residuais, erros de sintaxe e resultados da árvore de análise.',
     newReleaseCta: 'Ver as novidades',
     faqTitle: 'Perguntas frequentes',
     faqItems: [
@@ -833,9 +863,9 @@ const i18n: Record<Locale, any> = {
     featOAuth: 'GitHub OAuth、Azure DevOps 与跨 fork PR',
     featOAuthDesc: '通过 OAuth 设备流登录 GitHub 和 Azure DevOps — 令牌保存在系统钥匙串中，无需 gh CLI。Azure DevOps 成为一等 forge，跨 fork PR 直接面向上游仓库。',
     // 最新特性横幅
-    newReleaseBadge: 'v2.20 新特性',
-    newReleaseTitle: '在临时工作树中解决冲突，预测变基与拣选',
-    newReleaseSub: '一个可丢弃的隔离工作树，让你在不影响当前检出的情况下解决冲突 — 一键将结果合并回来。Conflict Predictor 现已覆盖变基和拣选，无副作用，贯穿桌面应用、MCP 服务器以及全新的 gitwand preview 命令行命令。',
+    newReleaseBadge: 'v3.0 新特性',
+    newReleaseTitle: 'Today 仪表盘、VS Code 上架应用市场、校验引擎',
+    newReleaseSub: 'Today 面板将所有仓库的 PR、issues 和 WIP 汇聚为一个专注视图 — ⌘L 随时唤起。GitWand 正式登陆 VS Code 应用市场，内置完整冲突引擎。CLI 和 VS Code 现在会提示校验警告：残留标记、语法错误与解析树结果。',
     newReleaseCta: '查看新特性',
     faqTitle: '常见问题',
     faqItems: [
@@ -894,6 +924,7 @@ const COMPARE_ROWS: CompareRow[] = [
   { label: 'Predict rebase & cherry-pick conflicts', gw: true, ghd: false, gk: 'partial', fork: 'partial', tower: false, sm: false, highlight: true },
   { label: 'Scratch worktree for isolated resolution', gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
   { label: 'Proactive conflict prevention', gw: true, ghd: false, gk: 'partial', fork: 'partial', tower: 'partial', sm: false },
+  { label: 'Conflict validation feedback (residual markers, parse errors)', gw: true, ghd: false, gk: false, fork: false, tower: false, sm: false, highlight: true },
 
   { category: true, label: 'Power Git' },
   { label: 'Interactive rebase',            gw: true, ghd: 'partial', gk: true, fork: true, tower: true, sm: true  },
@@ -910,14 +941,13 @@ const COMPARE_ROWS: CompareRow[] = [
   { label: 'GitLab MRs',                    gw: true,   ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
   { label: 'Bitbucket PRs',                 gw: true,   ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
   { label: 'Azure DevOps PRs',              gw: true,   ghd: false, gk: true,  fork: false,     tower: 'partial', sm: false },
-  { label: 'Git hooks manager',             gw: true,   ghd: 'partial', gk: false, fork: false,     tower: false,     sm: false },
+  { label: 'Git hooks manager',             gw: 'partial', ghd: 'partial', gk: false, fork: false,   tower: false,     sm: false },
 
   { category: true, label: 'AI & Agents', note: 'GitWand connects to your own LLM — Claude, OpenAI-compatible, or Ollama. No built-in model.' },
   { label: 'AI commit messages',            gw: true,   ghd: true,      gk: true,      fork: true,      tower: true,  sm: false },
   { label: 'AI conflict explanation',       gw: true,   ghd: false,     gk: 'partial', fork: false,     tower: false, sm: false, highlight: true },
   { label: 'AI PR description',             gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'MCP server for AI agents',      gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
-  { label: 'Agent Sessions panel',          gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'PR activity notifications',     gw: true,   ghd: false,     gk: true,      fork: false,     tower: false, sm: false },
   { label: 'Voice input (offline Whisper)', gw: 'soon', ghd: false,     gk: false,     fork: false,     tower: false, sm: false },
 ]
@@ -1478,7 +1508,57 @@ function cellClass(v: CompareValue | undefined): string {
         <h2 class="section-title">{{ t.previewTitle }}</h2>
         <p class="section-sub">{{ t.previewSub }}</p>
 
-        <img src="/screenshots/app-dashboard.png" alt="GitWand — dashboard with repo health, commit history and contributors" class="preview-window preview-screenshot" />
+        <div class="preview-slideshow preview-window">
+          <button class="slideshow-arrow slideshow-arrow--prev" @click="prevSlide" aria-label="Previous screenshot">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="slideshow-track" :style="{ transform: `translateX(-${slideIndex * 100}%)` }">
+            <img
+              v-for="(slide, i) in slides"
+              :key="i"
+              :src="slide.src"
+              :alt="slide.alt"
+              class="slideshow-img"
+              @click="openLightbox(i)"
+            />
+          </div>
+          <button class="slideshow-arrow slideshow-arrow--next" @click="nextSlide" aria-label="Next screenshot">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="slideshow-dots">
+          <button
+            v-for="(_, i) in slides"
+            :key="i"
+            :class="['slideshow-dot', { 'slideshow-dot--active': i === slideIndex }]"
+            @click="goToSlide(i)"
+            :aria-label="`Screenshot ${i + 1}`"
+          />
+        </div>
+
+        <Teleport to="body">
+          <div v-if="lightboxOpen" class="lightbox-overlay" @click.self="closeLightbox">
+            <button class="lightbox-close" @click="closeLightbox" aria-label="Close lightbox">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <button class="lightbox-arrow lightbox-arrow--prev" @click="lightboxPrev" aria-label="Previous">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <img :src="slides[lightboxIndex].src" :alt="slides[lightboxIndex].alt" class="lightbox-img" />
+            <button class="lightbox-arrow lightbox-arrow--next" @click="lightboxNext" aria-label="Next">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <div class="lightbox-dots">
+              <button
+                v-for="(_, i) in slides"
+                :key="i"
+                :class="['lightbox-dot', { 'lightbox-dot--active': i === lightboxIndex }]"
+                @click="lightboxIndex = i"
+                :aria-label="`Screenshot ${i + 1}`"
+              />
+            </div>
+          </div>
+        </Teleport>
       </div>
     </section>
 
@@ -2354,6 +2434,147 @@ function cellClass(v: CompareValue | undefined): string {
 }
 .preview-window.preview-screenshot {
   background: transparent;
+}
+.preview-slideshow {
+  overflow: hidden;
+  position: relative;
+}
+.slideshow-track {
+  display: flex;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+.slideshow-img {
+  flex: 0 0 100%;
+  width: 100%;
+  display: block;
+  object-fit: cover;
+}
+.slideshow-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+.slideshow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.18);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.slideshow-dot--active {
+  background: var(--gw-purple-light);
+  transform: scale(1.4);
+}
+.slideshow-dot:hover:not(.slideshow-dot--active) {
+  background: rgba(255,255,255,0.4);
+}
+.slideshow-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.85);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  backdrop-filter: blur(4px);
+}
+.slideshow-arrow--prev { left: 12px; }
+.slideshow-arrow--next { right: 12px; }
+.slideshow-arrow:hover { background: rgba(124,58,237,0.6); color: #fff; }
+.slideshow-img { cursor: zoom-in; }
+
+/* ── Lightbox ──────────────────────────────── */
+.lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0,0,0,0.92);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 64px 16px 80px;
+}
+.lightbox-img {
+  max-width: min(90vw, 1400px);
+  max-height: 85vh;
+  border-radius: 10px;
+  box-shadow: 0 40px 120px rgba(0,0,0,0.8);
+  object-fit: contain;
+  flex-shrink: 1;
+}
+.lightbox-close {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  z-index: 10000;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
+.lightbox-arrow {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+.lightbox-arrow:hover { background: rgba(124,58,237,0.6); color: #fff; }
+.lightbox-dots {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+}
+.lightbox-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.lightbox-dot--active {
+  background: #8B5CF6;
+  transform: scale(1.4);
+}
+@media (max-width: 600px) {
+  .lightbox-arrow { display: none; }
+  .lightbox-overlay { gap: 0; padding: 56px 8px 72px; }
 }
 .preview-window .win-body {
   height: 380px;
