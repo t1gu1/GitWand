@@ -1124,6 +1124,7 @@ watch(
                 <span v-if="commitsByType.fix > 0"><span class="dot dot--fix"></span>fix {{ commitsByType.fixPct }}%</span>
                 <span v-if="commitsByType.docs > 0"><span class="dot dot--docs"></span>docs {{ commitsByType.docsPct }}%</span>
                 <span v-if="commitsByType.chore > 0"><span class="dot dot--chore"></span>chore {{ commitsByType.chorePct }}%</span>
+                <span v-if="commitsByType.other > 0"><span class="dot dot--other"></span>other {{ commitsByType.otherPct }}%</span>
               </div>
             </div>
           </div>
@@ -1928,6 +1929,7 @@ watch(
 .dot--fix { background: var(--color-danger); }
 .dot--docs { background: var(--color-info); }
 .dot--chore { background: var(--color-warning); }
+.dot--other { background: var(--color-text-subtle); }
 
 /* ───────── Commits ───────── */
 .commits {
