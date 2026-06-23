@@ -986,6 +986,7 @@ const zhCN: Locale = {
       iconsOnly: {
         label: "仅图标",
         help: "隐藏停靠栏中的文字标签，仅显示图标。",
+        verticalHint: "停靠栏为垂直时始终启用。",
       },
       itemChanges: "更改",
       appearance: {
@@ -998,6 +999,10 @@ const zhCN: Locale = {
       unlock: {
         label: "解锁停靠栏位置",
         help: "在停靠栏左侧添加拖动手柄。右键单击可重置或锁定位置。",
+      },
+      vertical: {
+        label: "切换为垂直",
+        help: "垂直显示停靠栏，文字也垂直排列。",
       },
       resetPosition: "重置位置",
       lockDock: "锁定停靠栏",
@@ -1015,6 +1020,8 @@ const zhCN: Locale = {
         unlock: "解锁停靠栏",
         hideText: "隐藏文字",
         showText: "显示文字",
+        vertical: "切换为垂直",
+        horizontal: "切换为水平",
         openSettings: "停靠栏选项…",
       },
     },

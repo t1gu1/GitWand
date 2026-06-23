@@ -1241,6 +1241,7 @@ const en = {
       iconsOnly: {
         label: "Icons only",
         help: "Hide the text labels in the dock and show only icons.",
+        verticalHint: "Always on while the dock is vertical.",
       },
       itemChanges: "Changes",
       appearance: {
@@ -1253,6 +1254,10 @@ const en = {
       unlock: {
         label: "Unlock dock position",
         help: "Adds a drag handle on the left of the dock. Right-click it to reset or lock the position.",
+      },
+      vertical: {
+        label: "Turn to vertical",
+        help: "Lay the dock out vertically, with vertically-oriented labels.",
       },
       resetPosition: "Reset position",
       lockDock: "Lock dock",
@@ -1270,6 +1275,8 @@ const en = {
         unlock: "Unlock dock",
         hideText: "Hide text",
         showText: "Show text",
+        vertical: "Turn to vertical",
+        horizontal: "Turn to horizontal",
         openSettings: "Dock options…",
       },
     },

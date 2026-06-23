@@ -154,6 +154,7 @@ interface Settings {
   dockHideDashboard: boolean;
   dockHidePrs: boolean;
   dockIconsOnly: boolean;
+  dockVertical: boolean;
   dockUnlocked: boolean;
   dockPosition: { x: number; y: number } | null;
   dockOrder: DockEntryId[];
@@ -214,6 +215,7 @@ const defaultSettings: Settings = {
   dockHideDashboard: false,
   dockHidePrs: false,
   dockIconsOnly: false,
+  dockVertical: false,
   dockUnlocked: false,
   dockPosition: null,
   dockOrder: [...DEFAULT_DOCK_ORDER],
@@ -1368,15 +1370,17 @@ function savePresetForm() {
             <span class="sp-label">{{ t('settings.dock.appearance.label') }}</span>
           </div>
 
-          <!-- Icons only -->
+          <!-- Icons only — forced on (and disabled) while the dock is vertical. -->
           <div class="sp-row sp-row--checkbox">
-            <label class="sp-checkbox-label" for="setting-dock-icons-only">
+            <label class="sp-checkbox-label" :class="{ 'sp-checkbox-label--locked': settings.dockVertical }"
+              for="setting-dock-icons-only">
               <input id="setting-dock-icons-only" type="checkbox" class="sp-checkbox"
-                :checked="settings.dockIconsOnly"
+                :checked="settings.dockVertical || settings.dockIconsOnly"
+                :disabled="settings.dockVertical"
                 @change="updateSetting('dockIconsOnly', ($event.target as HTMLInputElement).checked)" />
               <span>{{ t('settings.dock.iconsOnly.label') }}</span>
             </label>
-            <span class="sp-hint">{{ t('settings.dock.iconsOnly.help') }}</span>
+            <span class="sp-hint">{{ settings.dockVertical ? t('settings.dock.iconsOnly.verticalHint') : t('settings.dock.iconsOnly.help') }}</span>
           </div>
 
           <!-- ── Position ── -->
@@ -1400,6 +1404,17 @@ function savePresetForm() {
             </button>
           </div>
           <span class="sp-hint">{{ t('settings.dock.unlock.help') }}</span>
+
+          <!-- Turn to vertical -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-vertical">
+              <input id="setting-dock-vertical" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockVertical"
+                @change="updateSetting('dockVertical', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.vertical.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dock.vertical.help') }}</span>
+          </div>
 
           <!-- ── Dock order ── -->
           <div class="sp-row">

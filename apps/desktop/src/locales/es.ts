@@ -1216,6 +1216,7 @@ const es: Locale = {
       iconsOnly: {
         label: "Solo iconos",
         help: "Oculta las etiquetas del dock y muestra solo los iconos.",
+        verticalHint: "Siempre activo cuando el dock está en vertical.",
       },
       itemChanges: "Cambios",
       appearance: {
@@ -1228,6 +1229,10 @@ const es: Locale = {
       unlock: {
         label: "Desbloquear la posición del dock",
         help: "Añade un asa a la izquierda del dock. Haz clic derecho para restablecer o bloquear la posición.",
+      },
+      vertical: {
+        label: "Poner en vertical",
+        help: "Muestra el dock verticalmente, con etiquetas orientadas en vertical.",
       },
       resetPosition: "Restablecer posición",
       lockDock: "Bloquear el dock",
@@ -1245,6 +1250,8 @@ const es: Locale = {
         unlock: "Desbloquear el dock",
         hideText: "Ocultar texto",
         showText: "Mostrar texto",
+        vertical: "Poner en vertical",
+        horizontal: "Poner en horizontal",
         openSettings: "Opciones del dock…",
       },
     },

@@ -41,6 +41,7 @@ function patch(p: Partial<typeof settings.value>) {
 // ─── Entry model ──────────────────────────────────────────
 
 const iconsOnly = computed(() => settings.value.dockIconsOnly);
+const vertical = computed(() => settings.value.dockVertical);
 
 function isHidden(id: DockEntryId): boolean {
   if (id === "launchpad") return settings.value.dockHideLaunchpad;
@@ -90,6 +91,9 @@ const unlocked = computed(() => settings.value.dockUnlocked);
 
 /** Live position during an active drag (committed to settings on release). */
 const livePos = ref<{ x: number; y: number } | null>(null);
+
+/** No custom position set — the dock sits at its CSS default anchor. */
+const atDefaultAnchor = computed(() => !(livePos.value ?? settings.value.dockPosition));
 
 const dockStyle = computed(() => {
   const p = livePos.value ?? settings.value.dockPosition;
@@ -228,6 +232,11 @@ function toggleText() {
   closeMenu();
 }
 
+function toggleVertical() {
+  patch({ dockVertical: !settings.value.dockVertical });
+  closeMenu();
+}
+
 function resetPosition() {
   patch({ dockPosition: null });
   closeMenu();
@@ -249,11 +258,11 @@ onBeforeUnmount(() => {
   <nav
     ref="dockEl"
     class="app-dock"
-    :class="{ 'app-dock--unlocked': unlocked }"
+    :class="{ 'app-dock--unlocked': unlocked, 'app-dock--vert-anchor': vertical && atDefaultAnchor }"
     :style="dockStyle"
     :aria-label="t('sidebar.tabChanges')"
   >
-    <div class="app-dock__pill" :class="{ 'app-dock__pill--icons-only': iconsOnly }">
+    <div class="app-dock__pill" :class="{ 'app-dock__pill--icons-only': iconsOnly, 'app-dock__pill--vertical': vertical }">
       <!-- Drag handle — only when the dock is unlocked. -->
       <button
         v-if="unlocked"
@@ -341,8 +350,11 @@ onBeforeUnmount(() => {
       <button class="dock-menu-item" role="menuitem" @click="toggleLock">
         {{ unlocked ? t('settings.dock.menu.lock') : t('settings.dock.menu.unlock') }}
       </button>
-      <button class="dock-menu-item" role="menuitem" @click="toggleText">
+      <button v-if="!vertical" class="dock-menu-item" role="menuitem" @click="toggleText">
         {{ iconsOnly ? t('settings.dock.menu.showText') : t('settings.dock.menu.hideText') }}
+      </button>
+      <button class="dock-menu-item" role="menuitem" @click="toggleVertical">
+        {{ vertical ? t('settings.dock.menu.horizontal') : t('settings.dock.menu.vertical') }}
       </button>
       <button class="dock-menu-item" role="menuitem" :disabled="!settings.dockPosition" @click="resetPosition">
         {{ t('settings.dock.resetPosition') }}
@@ -363,6 +375,14 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   z-index: 50;
   pointer-events: none;
+}
+
+/* Vertical dock with no custom position → anchor to the center-left edge. */
+.app-dock--vert-anchor {
+  left: var(--space-4, 12px);
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .app-dock__pill {
@@ -455,6 +475,41 @@ onBeforeUnmount(() => {
 
 .app-dock__pill--icons-only .dock-btn {
   padding: var(--space-3, 9px);
+}
+
+/* Vertical mode — stack the dock as a column; rotate icon + text 90°. */
+.app-dock__pill--vertical {
+  flex-direction: column;
+}
+
+.app-dock__pill--vertical .dock-handle {
+  padding: var(--space-1, 4px) 0;
+}
+
+.app-dock__pill--vertical .dock-handle svg {
+  transform: rotate(90deg);
+}
+
+.app-dock__pill--vertical .dock-btn {
+  flex-direction: column;
+  gap: var(--space-3, 9px);
+  padding: var(--space-3, 9px);
+}
+
+/* Vertical dock is icon-only; keep the glyphs upright. */
+.app-dock__pill--vertical .dock-label {
+  display: none;
+}
+
+.app-dock__pill--vertical .dock-icon {
+  transform: none;
+}
+
+.app-dock__pill--vertical .dock-sep {
+  align-self: stretch;
+  width: auto;
+  height: 1px;
+  margin: var(--space-1, 4px) var(--space-1, 4px);
 }
 
 .dock-badge {

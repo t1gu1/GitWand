@@ -1216,6 +1216,7 @@ const ptBR: Locale = {
       iconsOnly: {
         label: "Apenas \u00edcones",
         help: "Oculta os r\u00f3tulos do dock e mostra apenas os \u00edcones.",
+        verticalHint: "Sempre ativo quando o dock est\u00e1 na vertical.",
       },
       itemChanges: "Altera\u00e7\u00f5es",
       appearance: {
@@ -1228,6 +1229,10 @@ const ptBR: Locale = {
       unlock: {
         label: "Desbloquear a posi\u00e7\u00e3o do dock",
         help: "Adiciona uma al\u00e7a \u00e0 esquerda do dock. Clique com o bot\u00e3o direito para redefinir ou bloquear a posi\u00e7\u00e3o.",
+      },
+      vertical: {
+        label: "Mudar para vertical",
+        help: "Exibe o dock verticalmente, com r\u00f3tulos orientados na vertical.",
       },
       resetPosition: "Redefinir posi\u00e7\u00e3o",
       lockDock: "Bloquear o dock",
@@ -1245,6 +1250,8 @@ const ptBR: Locale = {
         unlock: "Desbloquear o dock",
         hideText: "Ocultar texto",
         showText: "Mostrar texto",
+        vertical: "Mudar para vertical",
+        horizontal: "Mudar para horizontal",
         openSettings: "Opções do dock…",
       },
     },

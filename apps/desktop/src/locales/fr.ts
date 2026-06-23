@@ -1225,6 +1225,7 @@ const fr: Locale = {
       iconsOnly: {
         label: "Icônes uniquement",
         help: "Masque les libellés du dock et n'affiche que les icônes.",
+        verticalHint: "Toujours activé lorsque le dock est vertical.",
       },
       itemChanges: "Modifications",
       appearance: {
@@ -1237,6 +1238,10 @@ const fr: Locale = {
       unlock: {
         label: "Déverrouiller la position du dock",
         help: "Ajoute une poignée à gauche du dock. Clic droit dessus pour réinitialiser ou verrouiller la position.",
+      },
+      vertical: {
+        label: "Passer en vertical",
+        help: "Affiche le dock verticalement, avec des libellés orientés à la verticale.",
       },
       resetPosition: "Réinitialiser la position",
       lockDock: "Verrouiller le dock",
@@ -1254,6 +1259,8 @@ const fr: Locale = {
         unlock: "Déverrouiller le dock",
         hideText: "Masquer le texte",
         showText: "Afficher le texte",
+        vertical: "Passer en vertical",
+        horizontal: "Passer en horizontal",
         openSettings: "Options du dock…",
       },
     },

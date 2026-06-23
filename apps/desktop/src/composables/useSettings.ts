@@ -172,6 +172,8 @@ export interface AppSettings {
   dockHidePrs: boolean;
   /** Show only icons in the bottom dock (hide text labels). */
   dockIconsOnly: boolean;
+  /** Lay the dock out vertically (column) with vertically-oriented labels. */
+  dockVertical: boolean;
   /**
    * When true, the dock can be dragged to a free position via its left handle.
    * When false (default) it stays pinned bottom-center.
@@ -296,6 +298,7 @@ export const defaultAppSettings: AppSettings = {
   dockHideDashboard: false,
   dockHidePrs: false,
   dockIconsOnly: false,
+  dockVertical: false,
   dockUnlocked: false,
   dockPosition: null,
   dockOrder: [...DEFAULT_DOCK_ORDER],
