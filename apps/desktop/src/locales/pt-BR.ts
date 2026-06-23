@@ -1238,6 +1238,15 @@ const ptBR: Locale = {
         moveUp: "Mover para cima",
         moveDown: "Mover para baixo",
       },
+      menu: {
+        remove: "Remover do dock",
+        setStartup: "Definir como vista inicial",
+        lock: "Bloquear o dock",
+        unlock: "Desbloquear o dock",
+        hideText: "Ocultar texto",
+        showText: "Mostrar texto",
+        openSettings: "Opções do dock…",
+      },
     },
 
     // Hooks tab (v2.7)

@@ -10,10 +10,11 @@
  * free (drag-to-move) position. When unlocked, a grip handle appears on the
  * left — drag it to move the dock, right-click it for reset/lock actions.
  */
-import { computed, ref, onBeforeUnmount } from "vue";
+import { computed, ref, inject, nextTick, onBeforeUnmount } from "vue";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
 import { useSettings, DEFAULT_DOCK_ORDER, type DockEntryId } from "../composables/useSettings";
+import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
 
 const props = defineProps<{
   viewMode: ViewMode;
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const { settings, saveSettings } = useSettings();
+const openSettings = inject(OPEN_SETTINGS_KEY, undefined);
 
 /** Mutate the shared settings object and persist it (reactive everywhere). */
 function patch(p: Partial<typeof settings.value>) {
@@ -132,21 +134,51 @@ function endDrag() {
   livePos.value = null;
 }
 
-// ─── Handle context menu ──────────────────────────────────
+// ─── Context menu (right-click on any entry or the handle) ─
 
-const menu = ref<{ x: number; y: number } | null>(null);
+/** target = the clicked entry, or null when invoked from the global handle. */
+const menu = ref<{ x: number; y: number; target: DockEntryId | null } | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
 
-function openMenu(e: MouseEvent) {
-  e.preventDefault();
-  menu.value = { x: e.clientX, y: e.clientY };
+let menuListening = false;
+
+function attachMenuListeners() {
+  if (menuListening) return;
   window.addEventListener("pointerdown", onOutsideMenu, true);
   window.addEventListener("keydown", onMenuKey);
+  menuListening = true;
+}
+
+function detachMenuListeners() {
+  if (!menuListening) return;
+  window.removeEventListener("pointerdown", onOutsideMenu, true);
+  window.removeEventListener("keydown", onMenuKey);
+  menuListening = false;
+}
+
+async function openMenu(e: MouseEvent, target: DockEntryId | null) {
+  e.preventDefault();
+  menu.value = { x: e.clientX, y: e.clientY, target };
+  // The dock sits at the bottom of the screen, so a downward menu overflows.
+  // Measure once rendered, then flip up / clamp into the viewport.
+  await nextTick();
+  const el = menuEl.value;
+  if (el && menu.value) {
+    const w = el.offsetWidth, h = el.offsetHeight;
+    let x = e.clientX, y = e.clientY;
+    if (x + w > window.innerWidth - 4) x = window.innerWidth - w - 4;
+    if (y + h > window.innerHeight - 4) y = e.clientY - h; // flip above the cursor
+    menu.value = { ...menu.value, x: Math.max(4, x), y: Math.max(4, y) };
+  }
+  // Attach the outside-close listener only after this event cycle, otherwise the
+  // opening right-click's own pointerdown immediately closes the menu — which
+  // looked like "right-click does nothing" right after a position reset.
+  setTimeout(attachMenuListeners, 0);
 }
 
 function closeMenu() {
   menu.value = null;
-  window.removeEventListener("pointerdown", onOutsideMenu, true);
-  window.removeEventListener("keydown", onMenuKey);
+  detachMenuListeners();
 }
 
 function onOutsideMenu(e: PointerEvent) {
@@ -157,13 +189,52 @@ function onMenuKey(e: KeyboardEvent) {
   if (e.key === "Escape") closeMenu();
 }
 
+/** Today / Dashboard / PRs can be removed; Git Tree & Changes cannot. */
+function isRemovable(id: DockEntryId): boolean {
+  return id === "launchpad" || id === "dashboard" || id === "prs";
+}
+
+function isStartup(id: DockEntryId): boolean {
+  return settings.value.startupView === id;
+}
+
+/** Changes has no diff-less landing, so it is not offered as a startup view. */
+function canBeStartup(id: DockEntryId): boolean {
+  return id !== "changes";
+}
+
+// ── Per-target actions ──
+function removeFromDock(id: DockEntryId) {
+  if (id === "launchpad") patch({ dockHideLaunchpad: true });
+  else if (id === "dashboard") patch({ dockHideDashboard: true });
+  else if (id === "prs") patch({ dockHidePrs: true });
+  closeMenu();
+}
+
+function setAsStartup(id: DockEntryId) {
+  if (id === "changes") return; // not a valid startup view
+  patch({ startupView: id });
+  closeMenu();
+}
+
+// ── Global actions ──
+function toggleLock() {
+  patch({ dockUnlocked: !settings.value.dockUnlocked });
+  closeMenu();
+}
+
+function toggleText() {
+  patch({ dockIconsOnly: !settings.value.dockIconsOnly });
+  closeMenu();
+}
+
 function resetPosition() {
   patch({ dockPosition: null });
   closeMenu();
 }
 
-function lockDock() {
-  patch({ dockUnlocked: false });
+function openDockSettings() {
+  openSettings?.("dock");
   closeMenu();
 }
 
@@ -190,7 +261,7 @@ onBeforeUnmount(() => {
         :title="t('settings.dock.handleTooltip')"
         :aria-label="t('settings.dock.handleTooltip')"
         @pointerdown="startDrag"
-        @contextmenu="openMenu"
+        @contextmenu="openMenu($event, null)"
       >
         <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
           <circle cx="4.5" cy="4" r="1.4" /><circle cx="9.5" cy="4" r="1.4" />
@@ -206,6 +277,7 @@ onBeforeUnmount(() => {
           :aria-pressed="isActive(id)"
           :title="entryLabel(id)"
           @click="emit('changeView', id)"
+          @contextmenu="openMenu($event, id)"
         >
           <!-- Today / Launchpad -->
           <svg v-if="id === 'launchpad'" class="dock-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -244,15 +316,42 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <!-- Handle context menu -->
-    <div v-if="menu" class="dock-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" role="menu">
+    <!-- Right-click context menu (entry-targeted + global actions).
+         Teleported to <body> so its fixed positioning is relative to the
+         viewport — the dock's own translateX(-50%) transform would otherwise
+         become the containing block and push the menu off-screen. -->
+    <Teleport to="body">
+    <div v-if="menu" ref="menuEl" class="dock-menu" :style="{ left: `${menu.x}px`, top: `${menu.y}px` }" role="menu">
+      <!-- Per-target section -->
+      <template v-if="menu.target">
+        <div class="dock-menu-label">{{ entryLabel(menu.target) }}</div>
+        <button v-if="isRemovable(menu.target)" class="dock-menu-item" role="menuitem"
+          @click="removeFromDock(menu.target)">
+          {{ t('settings.dock.menu.remove') }}
+        </button>
+        <button v-if="canBeStartup(menu.target)" class="dock-menu-item" role="menuitemcheckbox"
+          :aria-checked="isStartup(menu.target)" @click="setAsStartup(menu.target)">
+          {{ t('settings.dock.menu.setStartup') }}
+          <span class="dock-menu-check">{{ isStartup(menu.target) ? '✓' : '' }}</span>
+        </button>
+        <div class="dock-menu-sep" role="separator"></div>
+      </template>
+
+      <!-- Global section -->
+      <button class="dock-menu-item" role="menuitem" @click="toggleLock">
+        {{ unlocked ? t('settings.dock.menu.lock') : t('settings.dock.menu.unlock') }}
+      </button>
+      <button class="dock-menu-item" role="menuitem" @click="toggleText">
+        {{ iconsOnly ? t('settings.dock.menu.showText') : t('settings.dock.menu.hideText') }}
+      </button>
       <button class="dock-menu-item" role="menuitem" :disabled="!settings.dockPosition" @click="resetPosition">
         {{ t('settings.dock.resetPosition') }}
       </button>
-      <button class="dock-menu-item" role="menuitem" @click="lockDock">
-        {{ t('settings.dock.lockDock') }}
+      <button class="dock-menu-item" role="menuitem" @click="openDockSettings">
+        {{ t('settings.dock.menu.openSettings') }}
       </button>
     </div>
+    </Teleport>
   </nav>
 </template>
 
@@ -386,8 +485,25 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
+.dock-menu-label {
+  padding: var(--space-1, 4px) var(--space-3, 9px) var(--space-2, 6px);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.dock-menu-sep {
+  height: 1px;
+  margin: var(--space-1, 4px) 0;
+  background: var(--color-border);
+}
+
 .dock-menu-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 6px);
   width: 100%;
   padding: var(--space-2, 6px) var(--space-3, 9px);
   border: none;
@@ -397,6 +513,15 @@ onBeforeUnmount(() => {
   font-size: var(--font-size-md, 14px);
   text-align: left;
   cursor: pointer;
+}
+
+.dock-menu-check {
+  display: inline-block;
+  width: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+  text-align: right;
+  color: var(--color-accent);
 }
 
 .dock-menu-item:hover:not(:disabled) {

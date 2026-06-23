@@ -1238,6 +1238,15 @@ const es: Locale = {
         moveUp: "Subir",
         moveDown: "Bajar",
       },
+      menu: {
+        remove: "Quitar del dock",
+        setStartup: "Establecer como vista de inicio",
+        lock: "Bloquear el dock",
+        unlock: "Desbloquear el dock",
+        hideText: "Ocultar texto",
+        showText: "Mostrar texto",
+        openSettings: "Opciones del dock…",
+      },
     },
 
     // Hooks tab (v2.7)

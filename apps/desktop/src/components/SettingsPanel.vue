@@ -88,7 +88,7 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+  initialTab?: "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
   /** Current repo path (for Hooks tab) */
   cwd?: string;
 }>();

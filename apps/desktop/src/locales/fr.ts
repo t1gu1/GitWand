@@ -1247,6 +1247,15 @@ const fr: Locale = {
         moveUp: "Monter",
         moveDown: "Descendre",
       },
+      menu: {
+        remove: "Retirer du dock",
+        setStartup: "Définir comme vue de démarrage",
+        lock: "Verrouiller le dock",
+        unlock: "Déverrouiller le dock",
+        hideText: "Masquer le texte",
+        showText: "Afficher le texte",
+        openSettings: "Options du dock…",
+      },
     },
 
     // Hooks tab (v2.7)

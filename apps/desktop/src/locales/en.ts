@@ -1263,6 +1263,15 @@ const en = {
         moveUp: "Move up",
         moveDown: "Move down",
       },
+      menu: {
+        remove: "Remove from dock",
+        setStartup: "Set as startup view",
+        lock: "Lock dock",
+        unlock: "Unlock dock",
+        hideText: "Hide text",
+        showText: "Show text",
+        openSettings: "Dock options…",
+      },
     },
 
       // Hooks tab (v2.7)
