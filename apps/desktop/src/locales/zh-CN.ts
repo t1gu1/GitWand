@@ -987,6 +987,27 @@ const zhCN: Locale = {
         label: "仅图标",
         help: "隐藏停靠栏中的文字标签，仅显示图标。",
       },
+      itemChanges: "更改",
+      appearance: {
+        label: "外观",
+      },
+      position: {
+        label: "位置",
+        help: "将停靠栏移动到屏幕上的任意位置。",
+      },
+      unlock: {
+        label: "解锁停靠栏位置",
+        help: "在停靠栏左侧添加拖动手柄。右键单击可重置或锁定位置。",
+      },
+      resetPosition: "重置位置",
+      lockDock: "锁定停靠栏",
+      handleTooltip: "拖动以移动 — 右键单击查看选项",
+      order: {
+        label: "停靠栏顺序",
+        help: "重新排列停靠栏条目。",
+        moveUp: "上移",
+        moveDown: "下移",
+      },
     },
     tabDashboard: "仪表盘",
     tabGit: "Git",

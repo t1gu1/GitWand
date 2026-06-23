@@ -1242,6 +1242,27 @@ const en = {
         label: "Icons only",
         help: "Hide the text labels in the dock and show only icons.",
       },
+      itemChanges: "Changes",
+      appearance: {
+        label: "Appearance",
+      },
+      position: {
+        label: "Position",
+        help: "Move the dock anywhere on screen.",
+      },
+      unlock: {
+        label: "Unlock dock position",
+        help: "Adds a drag handle on the left of the dock. Right-click it to reset or lock the position.",
+      },
+      resetPosition: "Reset position",
+      lockDock: "Lock dock",
+      handleTooltip: "Drag to move — right-click for options",
+      order: {
+        label: "Dock order",
+        help: "Reorder the dock entries.",
+        moveUp: "Move up",
+        moveDown: "Move down",
+      },
     },
 
       // Hooks tab (v2.7)

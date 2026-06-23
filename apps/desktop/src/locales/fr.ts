@@ -1226,6 +1226,27 @@ const fr: Locale = {
         label: "Icônes uniquement",
         help: "Masque les libellés du dock et n'affiche que les icônes.",
       },
+      itemChanges: "Modifications",
+      appearance: {
+        label: "Apparence",
+      },
+      position: {
+        label: "Position",
+        help: "Déplacez le dock n'importe où à l'écran.",
+      },
+      unlock: {
+        label: "Déverrouiller la position du dock",
+        help: "Ajoute une poignée à gauche du dock. Clic droit dessus pour réinitialiser ou verrouiller la position.",
+      },
+      resetPosition: "Réinitialiser la position",
+      lockDock: "Verrouiller le dock",
+      handleTooltip: "Glisser pour déplacer — clic droit pour les options",
+      order: {
+        label: "Ordre du dock",
+        help: "Réorganisez les entrées du dock.",
+        moveUp: "Monter",
+        moveDown: "Descendre",
+      },
     },
 
     // Hooks tab (v2.7)

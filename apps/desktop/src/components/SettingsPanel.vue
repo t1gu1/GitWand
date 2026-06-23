@@ -75,7 +75,8 @@ import { useLogs, type LogEntry } from "../composables/useLogs";
 import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
-import type { IdentityProfile, CommitTemplate, AiPromptPreset } from "../composables/useSettings";
+import type { IdentityProfile, CommitTemplate, AiPromptPreset, DockEntryId } from "../composables/useSettings";
+import { DEFAULT_DOCK_ORDER, refreshSettings as refreshSharedSettings } from "../composables/useSettings";
 import { gitCommitTemplatePath, openExternalUrl } from "../utils/backend";
 export type { AIProvider };
 
@@ -153,6 +154,9 @@ interface Settings {
   dockHideDashboard: boolean;
   dockHidePrs: boolean;
   dockIconsOnly: boolean;
+  dockUnlocked: boolean;
+  dockPosition: { x: number; y: number } | null;
+  dockOrder: DockEntryId[];
   // Automation settings (v2.8)
   automations: {
     autoResolve: { enabled: boolean };
@@ -210,6 +214,9 @@ const defaultSettings: Settings = {
   dockHideDashboard: false,
   dockHidePrs: false,
   dockIconsOnly: false,
+  dockUnlocked: false,
+  dockPosition: null,
+  dockOrder: [...DEFAULT_DOCK_ORDER],
   automations: {
     autoResolve: { enabled: false },
     nightlyPull: { enabled: false, hour: 8, minute: 0 },
@@ -248,6 +255,41 @@ const settings = ref<Settings>(loadSettings());
 function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
   settings.value[key] = value;
   saveSettings(settings.value);
+  // Keep the shared reactive settings (read by AppDock and friends) in sync so
+  // changes like dock order / position apply live, not only on panel close.
+  refreshSharedSettings();
+}
+
+// ─── Dock order ───────────────────────────────────────────
+function dockEntryLabel(id: DockEntryId): string {
+  switch (id) {
+    case "launchpad": return t("settings.dock.itemToday");
+    case "dashboard": return t("settings.dock.itemDashboard");
+    case "prs": return t("settings.dock.itemPrs");
+    case "graph": return t("settings.dock.itemGitTree");
+    case "changes": return t("settings.dock.itemChanges");
+  }
+}
+
+/** Persisted order, normalised so all five entries are always present. */
+const dockOrder = computed<DockEntryId[]>(() => {
+  const stored = settings.value.dockOrder?.length ? settings.value.dockOrder : DEFAULT_DOCK_ORDER;
+  const known = stored.filter((id) => DEFAULT_DOCK_ORDER.includes(id));
+  const missing = DEFAULT_DOCK_ORDER.filter((id) => !known.includes(id));
+  return [...known, ...missing];
+});
+
+function moveDockEntry(id: DockEntryId, dir: -1 | 1) {
+  const arr = [...dockOrder.value];
+  const i = arr.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  updateSetting("dockOrder", arr);
+}
+
+function resetDockPosition() {
+  updateSetting("dockPosition", null);
 }
 
 // ─── Tab navigation ──────────────────────────────────────
@@ -1321,6 +1363,11 @@ function savePresetForm() {
             <span class="sp-hint">{{ t('settings.dock.lockedHint') }}</span>
           </div>
 
+          <!-- ── Appearance ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.appearance.label') }}</span>
+          </div>
+
           <!-- Icons only -->
           <div class="sp-row sp-row--checkbox">
             <label class="sp-checkbox-label" for="setting-dock-icons-only">
@@ -1331,6 +1378,52 @@ function savePresetForm() {
             </label>
             <span class="sp-hint">{{ t('settings.dock.iconsOnly.help') }}</span>
           </div>
+
+          <!-- ── Position ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.position.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.position.help') }}</span>
+          </div>
+
+          <!-- Unlock position + reset button -->
+          <div class="sp-row sp-row--checkbox sp-dock-pos-row">
+            <label class="sp-checkbox-label" for="setting-dock-unlocked">
+              <input id="setting-dock-unlocked" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockUnlocked"
+                @change="updateSetting('dockUnlocked', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.unlock.label') }}</span>
+            </label>
+            <button type="button" class="btn btn--ghost sp-btn--sm sp-dock-reset"
+              :disabled="!settings.dockPosition"
+              @click="resetDockPosition">
+              {{ t('settings.dock.resetPosition') }}
+            </button>
+          </div>
+          <span class="sp-hint">{{ t('settings.dock.unlock.help') }}</span>
+
+          <!-- ── Dock order ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.order.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.order.help') }}</span>
+          </div>
+
+          <ul class="sp-dock-order">
+            <li v-for="(id, i) in dockOrder" :key="id" class="sp-dock-order-item">
+              <span class="sp-dock-order-name">{{ dockEntryLabel(id) }}</span>
+              <span class="sp-dock-order-actions">
+                <button type="button" class="sp-dock-order-btn" :disabled="i === 0"
+                  :aria-label="t('settings.dock.order.moveUp')" :title="t('settings.dock.order.moveUp')"
+                  @click="moveDockEntry(id, -1)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4" /></svg>
+                </button>
+                <button type="button" class="sp-dock-order-btn" :disabled="i === dockOrder.length - 1"
+                  :aria-label="t('settings.dock.order.moveDown')" :title="t('settings.dock.order.moveDown')"
+                  @click="moveDockEntry(id, 1)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4" /></svg>
+                </button>
+              </span>
+            </li>
+          </ul>
         </template>
 
         <template v-if="activeSettingsTab === 'dashboard'">
@@ -2576,6 +2669,72 @@ function savePresetForm() {
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* Dock — position row: checkbox on the left, reset button pushed to the right. */
+.sp-dock-pos-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sp-dock-reset {
+  flex-shrink: 0;
+}
+
+/* Dock — reorderable entry list. */
+.sp-dock-order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sp-dock-order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.sp-dock-order-name {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.sp-dock-order-actions {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.sp-dock-order-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sp-dock-order-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.12));
+  color: var(--color-text);
+}
+
+.sp-dock-order-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .sp-select,

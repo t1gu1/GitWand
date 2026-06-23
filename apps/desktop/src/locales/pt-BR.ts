@@ -1217,6 +1217,27 @@ const ptBR: Locale = {
         label: "Apenas \u00edcones",
         help: "Oculta os r\u00f3tulos do dock e mostra apenas os \u00edcones.",
       },
+      itemChanges: "Altera\u00e7\u00f5es",
+      appearance: {
+        label: "Apar\u00eancia",
+      },
+      position: {
+        label: "Posi\u00e7\u00e3o",
+        help: "Mova o dock para qualquer lugar da tela.",
+      },
+      unlock: {
+        label: "Desbloquear a posi\u00e7\u00e3o do dock",
+        help: "Adiciona uma al\u00e7a \u00e0 esquerda do dock. Clique com o bot\u00e3o direito para redefinir ou bloquear a posi\u00e7\u00e3o.",
+      },
+      resetPosition: "Redefinir posi\u00e7\u00e3o",
+      lockDock: "Bloquear o dock",
+      handleTooltip: "Arraste para mover \u2014 clique direito para op\u00e7\u00f5es",
+      order: {
+        label: "Ordem do dock",
+        help: "Reordene as entradas do dock.",
+        moveUp: "Mover para cima",
+        moveDown: "Mover para baixo",
+      },
     },
 
     // Hooks tab (v2.7)

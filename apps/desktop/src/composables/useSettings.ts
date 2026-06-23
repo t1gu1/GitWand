@@ -25,6 +25,10 @@ export type { SwitchBehavior };
 export type LaunchpadTab = "inbox" | "wip" | "prs" | "issues" | "team";
 /** Granularity of PR-activity OS notifications (v2.16). */
 export type NotificationLevel = "all" | "reviews" | "ci" | "none";
+/** Dock entry ids (subset of ViewMode) — used for dock ordering (v3). */
+export type DockEntryId = "launchpad" | "dashboard" | "prs" | "graph" | "changes";
+/** Canonical default dock order, left → right. */
+export const DEFAULT_DOCK_ORDER: DockEntryId[] = ["launchpad", "dashboard", "prs", "graph", "changes"];
 
 /** Named committer identity — stored in AppSettings, selected per-commit or per-repo (v2.12). */
 export interface IdentityProfile {
@@ -168,6 +172,23 @@ export interface AppSettings {
   dockHidePrs: boolean;
   /** Show only icons in the bottom dock (hide text labels). */
   dockIconsOnly: boolean;
+  /**
+   * When true, the dock can be dragged to a free position via its left handle.
+   * When false (default) it stays pinned bottom-center.
+   */
+  dockUnlocked: boolean;
+  /**
+   * Custom dock position in viewport pixels (top-left of the pill). null means
+   * the default bottom-center anchor. Persisted across sessions; survives a
+   * lock (lock only disables dragging, it keeps the chosen spot).
+   */
+  dockPosition: { x: number; y: number } | null;
+  /**
+   * Order of dock entries, by ViewMode id. Entries absent from the list fall
+   * back to the default order; hidden entries stay in the list but are not
+   * rendered.
+   */
+  dockOrder: DockEntryId[];
 
   /** Automation settings (v2.8). */
   automations: {
@@ -275,6 +296,9 @@ export const defaultAppSettings: AppSettings = {
   dockHideDashboard: false,
   dockHidePrs: false,
   dockIconsOnly: false,
+  dockUnlocked: false,
+  dockPosition: null,
+  dockOrder: [...DEFAULT_DOCK_ORDER],
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },
