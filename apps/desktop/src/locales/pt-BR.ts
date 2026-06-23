@@ -2147,6 +2147,11 @@ const ptBR: Locale = {
     invalidNotice: "O escopo salvo \"{0}\" não existe mais — exibindo o repositório inteiro.",
     persistError: "Não foi possível salvar o escopo do espaço de trabalho.",
   },
+  terminal: {
+    newTab: "Nova aba",
+    hide: "Ocultar terminal",
+    closeTab: "Fechar aba",
+  },
 };
 
 export default ptBR;
