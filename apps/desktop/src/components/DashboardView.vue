@@ -427,6 +427,10 @@ const contribPrsError = ref(false);
  */
 const repoPrsCache = new Map<string, Promise<PullRequest[]>>();
 
+// Reactive mirror of the current repo's forge PR list — feeds the per-contributor
+// union PR count (combined with each contributor's local merged PRs).
+const repoPrs = ref<PullRequest[]>([]);
+
 function fetchRepoPrs(cwd: string): Promise<PullRequest[]> {
   let pending = repoPrsCache.get(cwd);
   if (!pending) {
@@ -436,9 +440,70 @@ function fetchRepoPrs(cwd: string): Promise<PullRequest[]> {
       return provider.listPRs(cwd, { state: "all", limit: 100 });
     })();
     repoPrsCache.set(cwd, pending);
-    pending.catch(() => repoPrsCache.delete(cwd));
+    pending
+      .then((list) => {
+        repoPrs.value = list;
+      })
+      .catch(() => {
+        repoPrsCache.delete(cwd);
+      });
   }
   return pending;
+}
+
+/** Build the merged-identity selector from a contributor card entry. */
+function toContribSel(c: ShortlogEntry): ContribSel {
+  return {
+    name: c.name,
+    email: c.email,
+    emails: c.emails?.length ? c.emails : [c.email].filter(Boolean),
+    names: c.names?.length ? c.names : [c.name].filter(Boolean),
+  };
+}
+
+// Per-contributor counts for the cards, keyed by representative id, both derived
+// from the SAME fetched data the modal uses so the numbers can't diverge:
+//  - commits: length of the contributor's fetched commit list (== modal tab)
+//  - PRs: union of forge matches + locally-derived merged PRs (== modal tab)
+// `null` = not computed yet (commits fall back to the shortlog stat meanwhile).
+const contribCommitCounts = ref<Map<string, number>>(new Map());
+const contribPrCounts = ref<Map<string, number>>(new Map());
+
+function contribCommitCount(c: ShortlogEntry): number | null {
+  return contribCommitCounts.value.get(c.email || c.name) ?? null;
+}
+function contribPrCount(c: ShortlogEntry): number | null {
+  return contribPrCounts.value.get(c.email || c.name) ?? null;
+}
+
+/** Compute + cache a card's commit + union-PR counts from the fetched data. Idempotent. */
+async function ensureContribCounts(c: ShortlogEntry): Promise<void> {
+  const id = c.email || c.name;
+  if (contribPrCounts.value.has(id)) return;
+  const sel = toContribSel(c);
+  let commitCount: number | null = null;
+  let prCount = 0;
+  try {
+    const [commits, prs] = await Promise.all([
+      fetchContribCommits(props.cwd, sel),
+      fetchRepoPrs(props.cwd),
+    ]);
+    commitCount = commits.length;
+    const nums = new Set<number>();
+    for (const pr of prs) if (sameAuthor(pr.author, sel)) nums.add(pr.number);
+    for (const m of localMergedPrs(commits)) nums.add(m.num);
+    prCount = nums.size;
+  } catch {
+    prCount = 0;
+  }
+  if (commitCount !== null) {
+    const nextC = new Map(contribCommitCounts.value);
+    nextC.set(id, commitCount);
+    contribCommitCounts.value = nextC;
+  }
+  const nextP = new Map(contribPrCounts.value);
+  nextP.set(id, prCount);
+  contribPrCounts.value = nextP;
 }
 
 // The contributor's full-history commits (HEAD), loaded on demand to match the
@@ -615,12 +680,7 @@ function onContribPrClick(pr: ContribPr) {
 }
 
 async function openContribModal(c: ShortlogEntry) {
-  const sel: ContribSel = {
-    name: c.name,
-    email: c.email,
-    emails: c.emails?.length ? c.emails : [c.email].filter(Boolean),
-    names: c.names?.length ? c.names : [c.name].filter(Boolean),
-  };
+  const sel = toContribSel(c);
   contribSel.value = sel;
   contribTab.value = "commits";
   const commits = await loadContribCommits(sel);
@@ -669,9 +729,12 @@ async function loadDashboard() {
 
   loading.value = false;
 
-  // Warm the forge PR cache in the background so the first contributor modal
-  // opens with the real PR count already resolved (no spinner). Fire-and-forget;
-  // failures are swallowed by fetchRepoPrs' own cache eviction.
+  // Warm the forge PR cache in the background so the contributor cards' PR counts
+  // and the first modal resolve without a wait. Reset the reactive mirror first so
+  // a repo switch doesn't show the previous repo's counts. Fire-and-forget.
+  repoPrs.value = [];
+  contribPrCounts.value = new Map();
+  contribCommitCounts.value = new Map();
   void fetchRepoPrs(props.cwd).catch(() => {});
 }
 
@@ -894,6 +957,15 @@ function scrollContrib(dir: 1 | -1) {
 
 // Recompute arrow visibility whenever the list changes.
 watch(topContributors, () => nextTick(updateContribArrows), { immediate: true });
+
+// Background-warm the per-card commit + PR counts as the contributor list resolves.
+watch(
+  topContributors,
+  (list) => {
+    for (const c of list) void ensureContribCounts(c);
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -986,7 +1058,19 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
                     <div class="contrib-name">{{ c.name }}</div>
                     <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
                   </div>
-                  <div class="contrib-stat">{{ c.count }}</div>
+                  <div class="contrib-stats">
+                    <div class="contrib-stat-row">
+                      <span class="contrib-stat-label">{{ t("dashboard.contribCommits") }}</span>
+                      <span class="contrib-stat-val">{{ contribCommitCount(c) ?? c.count }}</span>
+                    </div>
+                    <div class="contrib-stat-row">
+                      <span class="contrib-stat-label">{{ t("dashboard.contribPrs") }}</span>
+                      <span class="contrib-stat-val">
+                        <span v-if="contribPrCount(c) === null" class="cm-spin" aria-hidden="true"></span>
+                        <template v-else>{{ contribPrCount(c) }}</template>
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
               <button
@@ -1747,11 +1831,30 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   transition: width var(--transition-base);
 }
 
-.contrib-stat {
+.contrib-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.contrib-stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.contrib-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+}
+.contrib-stat-val {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  min-width: 1.5em;
+  text-align: right;
 }
 
 .contrib-divider {
