@@ -7,6 +7,7 @@ import {
   openExternalUrl,
   type GitLogEntry,
   type ShortlogEntry,
+  type PullRequest,
 } from "../utils/backend";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
@@ -17,6 +18,7 @@ import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useR
 import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 import AiSparkle from "./AiSparkle.vue";
 import BaseModal from "./BaseModal.vue";
+import { forgeForRepo, isForgeConnected } from "../composables/forge/useForge";
 
 const { t, locale } = useI18n();
 const { settings } = useSettings();
@@ -387,7 +389,246 @@ function closeDayModal() {
 
 function selectFromModal(hashFull: string) {
   closeDayModal();
+  closeContribModal();
   emit("selectCommit", hashFull);
+}
+
+// ─── Contributor modal — per-author commits + merged PRs ───
+/** Selected contributor — a merged identity, so it carries every name/email. */
+interface ContribSel {
+  name: string;
+  email: string;
+  emails: string[];
+  names: string[];
+}
+const contribSel = ref<ContribSel | null>(null);
+const contribTab = ref<"commits" | "prs">("commits");
+
+/** One row in the contributor's PR tab. `hashFull` set only for local-fallback PRs. */
+interface ContribPr {
+  num: number;
+  title: string;
+  /** Normalised lifecycle state: open · draft · merged · closed. */
+  state: "open" | "draft" | "merged" | "closed";
+  url: string;
+  date: string;
+  hashFull?: string;
+}
+
+const contribPrs = ref<ContribPr[]>([]);
+const contribPrsLoading = ref(false);
+const contribPrsError = ref(false);
+
+/**
+ * Per-repo cache of the full forge PR list (all states). The list is identical
+ * for every contributor, so it's fetched once per `cwd` and reused — the badge
+ * count and tab body resolve instantly after the first open. Stores the in-flight
+ * promise to dedupe concurrent opens; drops itself on failure so a retry can run.
+ */
+const repoPrsCache = new Map<string, Promise<PullRequest[]>>();
+
+function fetchRepoPrs(cwd: string): Promise<PullRequest[]> {
+  let pending = repoPrsCache.get(cwd);
+  if (!pending) {
+    pending = (async () => {
+      const provider = await forgeForRepo(cwd);
+      if (!isForgeConnected(provider.name)) return [];
+      return provider.listPRs(cwd, { state: "all", limit: 100 });
+    })();
+    repoPrsCache.set(cwd, pending);
+    pending.catch(() => repoPrsCache.delete(cwd));
+  }
+  return pending;
+}
+
+// The contributor's full-history commits (HEAD), loaded on demand to match the
+// `contrib-stat` count — the 250-commit `recentCommits` window is too small.
+const contribCommits = ref<GitLogEntry[]>([]);
+const contribCommitsLoading = ref(false);
+const contribCommitsCache = new Map<string, Promise<GitLogEntry[]>>();
+
+/**
+ * Escape a string for a git `--author` pattern. git matches with POSIX BASIC
+ * regex (BRE) by default, where only `\ . [ ] ^ $ *` are special — escaping the
+ * ERE metachars (`+ ( ) | ?`) would WRONGLY turn them into operators (e.g. `\+`
+ * becomes a quantifier in GNU BRE), which is how noreply emails like
+ * `123+login@…` silently stopped matching.
+ */
+function escapeBre(s: string): string {
+  return s.replace(/[\\.[\]^$*]/g, "\\$&");
+}
+
+/**
+ * Every commit by one contributor across all branches via `git log --all
+ * --author`, cached per cwd+name. `all=true` so the total is independent of the
+ * checked-out branch. Matched by the identity's emails (see the pattern below)
+ * so the count lines up with the contributor card, which clusters identities by
+ * shared name/email. A generous cap stands in for "no limit".
+ */
+function fetchContribCommits(cwd: string, sel: ContribSel): Promise<GitLogEntry[]> {
+  const emails = sel.emails.filter(Boolean);
+  const id = emails.length ? emails.map((e) => e.toLowerCase()).sort().join(",") : sel.name.toLowerCase();
+  const key = `${cwd} ${id}`;
+  let pending = contribCommitsCache.get(key);
+  if (!pending) {
+    // One query per email (BRE has no portable alternation), matching the email
+    // inside the `<…>` of the commit ident so every name under it is captured.
+    // Fall back to an anchored name pattern when the identity has no email.
+    const patterns = emails.length
+      ? emails.map((e) => `<${escapeBre(e)}>`)
+      : [`^${escapeBre(sel.name)} <`];
+    pending = Promise.all(patterns.map((p) => getGitLog(cwd, 5000, true, p))).then((lists) => {
+      const byHash = new Map<string, GitLogEntry>();
+      for (const list of lists) for (const c of list) byHash.set(c.hashFull, c);
+      return [...byHash.values()].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+    });
+    contribCommitsCache.set(key, pending);
+    pending.catch(() => contribCommitsCache.delete(key));
+  }
+  return pending;
+}
+
+async function loadContribCommits(sel: ContribSel): Promise<GitLogEntry[]> {
+  contribCommits.value = [];
+  contribCommitsLoading.value = true;
+  try {
+    const commits = await fetchContribCommits(props.cwd, sel);
+    contribCommits.value = commits;
+    return commits;
+  } catch {
+    contribCommits.value = [];
+    return [];
+  } finally {
+    contribCommitsLoading.value = false;
+  }
+}
+
+/** Selected contributor identity (commits/PRs live in their own refs). */
+const contribModal = computed(() => {
+  const sel = contribSel.value;
+  if (!sel) return null;
+  return { name: sel.name, email: sel.email, firstName: sel.names[0] || sel.name };
+});
+
+/**
+ * Loose git-identity to forge-login match — logins rarely equal git name/email.
+ * Candidates span every name/email in the merged identity: each name, each email
+ * local-part, and (best signal) the login embedded in a GitHub
+ * `…@users.noreply.github.com` address (`ID+login@…`).
+ */
+function sameAuthor(login: string, sel: ContribSel): boolean {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const l = norm(login);
+  if (!l) return false;
+  const candidates = [...sel.names];
+  for (const email of sel.emails) {
+    candidates.push(email.split("@")[0]);
+    const noreply = email.match(/^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/i);
+    if (noreply) candidates.push(noreply[1]);
+  }
+  return candidates.map(norm).filter(Boolean).includes(l);
+}
+
+/**
+ * Detect a merged PR from a commit message, the local way (no forge call):
+ *  - squash-merge: subject ends with `(#123)`
+ *  - merge commit: `Merge pull request #123 from …` (title in the body)
+ */
+function prRef(c: GitLogEntry): { num: number; title: string } | null {
+  const merge = c.message.match(/^Merge pull request #(\d+)/i);
+  if (merge) {
+    const title = (c.body || "").split("\n").map((l) => l.trim()).find(Boolean);
+    return { num: Number(merge[1]), title: title || c.message };
+  }
+  const squash = c.message.match(/\(#(\d+)\)\s*$/);
+  if (squash) {
+    return {
+      num: Number(squash[1]),
+      title: commitMessageBody(c.message).replace(/\s*\(#\d+\)\s*$/, ""),
+    };
+  }
+  return null;
+}
+
+/** Offline fallback: merged PRs derived from the contributor's commit messages. */
+function localMergedPrs(commits: GitLogEntry[]): ContribPr[] {
+  const out: ContribPr[] = [];
+  const seen = new Set<number>();
+  for (const c of commits) {
+    const ref = prRef(c);
+    if (ref && !seen.has(ref.num)) {
+      seen.add(ref.num);
+      out.push({ num: ref.num, title: ref.title, state: "merged", url: "", date: c.date, hashFull: c.hashFull });
+    }
+  }
+  return out;
+}
+
+/**
+ * Load the contributor's PRs across every state from the connected forge. Falls
+ * back to the local merged-commit heuristic when no forge is connected or the
+ * call fails — that path can only ever surface `merged` PRs.
+ */
+async function loadContribPrs(sel: ContribSel, commits: GitLogEntry[]) {
+  contribPrs.value = [];
+  contribPrsError.value = false;
+  contribPrsLoading.value = true;
+  // Seed with merged PRs derived from this contributor's own commits — always
+  // available offline, and independent of the fragile login↔git-identity match.
+  const byNum = new Map<number, ContribPr>(localMergedPrs(commits).map((pr) => [pr.num, pr]));
+  try {
+    const all = await fetchRepoPrs(props.cwd);
+    for (const pr of all) {
+      if (!sameAuthor(pr.author, sel)) continue;
+      const s = pr.state.toLowerCase();
+      const state: ContribPr["state"] =
+        s === "merged" ? "merged" : s === "closed" ? "closed" : pr.draft ? "draft" : "open";
+      // Forge data is authoritative for state/url/title; keep the local commit
+      // hash so a merged PR can still drill into the commit if it has no url.
+      byNum.set(pr.number, {
+        num: pr.number,
+        title: pr.title,
+        state,
+        url: pr.url,
+        date: pr.createdAt,
+        hashFull: byNum.get(pr.number)?.hashFull,
+      });
+    }
+  } catch {
+    contribPrsError.value = true;
+  } finally {
+    contribPrs.value = [...byNum.values()].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    contribPrsLoading.value = false;
+  }
+}
+
+function onContribPrClick(pr: ContribPr) {
+  if (pr.url) {
+    void openExternalUrl(pr.url);
+  } else if (pr.hashFull) {
+    selectFromModal(pr.hashFull);
+  }
+}
+
+async function openContribModal(c: ShortlogEntry) {
+  const sel: ContribSel = {
+    name: c.name,
+    email: c.email,
+    emails: c.emails?.length ? c.emails : [c.email].filter(Boolean),
+    names: c.names?.length ? c.names : [c.name].filter(Boolean),
+  };
+  contribSel.value = sel;
+  contribTab.value = "commits";
+  const commits = await loadContribCommits(sel);
+  void loadContribPrs(sel, commits);
+}
+
+function closeContribModal() {
+  contribSel.value = null;
 }
 
 // ─── Load dashboard data ───────────────────────────────────
@@ -427,6 +668,11 @@ async function loadDashboard() {
   }
 
   loading.value = false;
+
+  // Warm the forge PR cache in the background so the first contributor modal
+  // opens with the real PR count already resolved (no spinner). Fire-and-forget;
+  // failures are swallowed by fetchRepoPrs' own cache eviction.
+  void fetchRepoPrs(props.cwd).catch(() => {});
 }
 
 async function loadReadme() {
@@ -728,11 +974,14 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
                 <div
                   v-for="c in topContributors"
                   :key="c.email"
-                  class="contrib"
+                  class="contrib contrib--clickable"
                   role="listitem"
+                  tabindex="0"
                   :title="`${c.name} <${c.email}> · ${c.count}`"
+                  @click="openContribModal(c)"
+                  @keydown.enter="openContribModal(c)"
                 >
-                  <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.name) }}</span>
+                  <span class="avatar" :style="avatarStyle(c.email || c.name)">{{ initials(c.names?.[0] || c.name) }}</span>
                   <div class="contrib-body">
                     <div class="contrib-name">{{ c.name }}</div>
                     <div class="contrib-bar"><span :style="{ width: c.pct + '%' }"></span></div>
@@ -996,6 +1245,93 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
           <code class="commit-hash">{{ c.hash }}</code>
         </li>
       </ul>
+    </BaseModal>
+
+    <!-- ── Contributor modal — their commits + merged PRs ── -->
+    <BaseModal
+      v-if="contribModal"
+      :title="contribModal.name"
+      :subtitle="contribModal.email"
+      size="lg"
+      @close="closeContribModal"
+    >
+      <template #title-icon>
+        <span class="avatar" :style="avatarStyle(contribModal.email || contribModal.name)">{{ initials(contribModal.firstName) }}</span>
+      </template>
+
+      <template #toolbar>
+        <div class="cm-tabs" role="tablist">
+          <button
+            class="cm-tab"
+            :class="{ 'cm-tab--active': contribTab === 'commits' }"
+            role="tab"
+            :aria-selected="contribTab === 'commits'"
+            @click="contribTab = 'commits'"
+          >
+            {{ t("dashboard.contribCommits") }}
+            <span class="panel-count">
+              <span v-if="contribCommitsLoading" class="cm-spin" aria-hidden="true"></span>
+              <template v-else>{{ contribCommits.length }}</template>
+            </span>
+          </button>
+          <button
+            class="cm-tab"
+            :class="{ 'cm-tab--active': contribTab === 'prs' }"
+            role="tab"
+            :aria-selected="contribTab === 'prs'"
+            @click="contribTab = 'prs'"
+          >
+            {{ t("dashboard.contribPrs") }}
+            <span class="panel-count">
+              <span v-if="contribPrsLoading" class="cm-spin" aria-hidden="true"></span>
+              <template v-else>{{ contribPrs.length }}</template>
+            </span>
+          </button>
+        </div>
+      </template>
+
+      <!-- Commits tab -->
+      <p v-if="contribTab === 'commits' && contribCommitsLoading" class="cm-empty">{{ t("common.loading") }}</p>
+      <ul
+        v-else-if="contribTab === 'commits' && contribCommits.length"
+        class="commits commits--modal commits--contrib"
+      >
+        <li
+          v-for="c in contribCommits"
+          :key="c.hashFull"
+          class="commit"
+          @click="selectFromModal(c.hashFull)"
+        >
+          <div class="commit-body">
+            <div class="commit-title">
+              <span v-if="commitType(c.message)" class="tag" :class="`tag--${commitType(c.message)}`">
+                {{ commitType(c.message) }}
+              </span>
+              <span class="commit-msg">{{ commitMessageBody(c.message) }}</span>
+            </div>
+            <div class="commit-sub">{{ formatDate(c.date) }}</div>
+          </div>
+          <code class="commit-hash">{{ c.hash }}</code>
+        </li>
+      </ul>
+      <p v-else-if="contribTab === 'commits'" class="cm-empty">{{ t("dashboard.contribNoCommits") }}</p>
+
+      <!-- PRs tab -->
+      <p v-else-if="contribPrsLoading" class="cm-empty">{{ t("common.loading") }}</p>
+      <ul v-else-if="contribPrs.length" class="cm-prs">
+        <li
+          v-for="pr in contribPrs"
+          :key="pr.num"
+          class="cm-pr"
+          @click="onContribPrClick(pr)"
+        >
+          <span class="cm-pr-state" :class="`cm-pr-state--${pr.state}`">{{ t(`dashboard.prState_${pr.state}`) }}</span>
+          <code class="cm-pr-num">#{{ pr.num }}</code>
+          <span class="commit-msg">{{ pr.title }}</span>
+          <span class="commit-sub cm-pr-date">{{ formatDate(pr.date) }}</span>
+        </li>
+      </ul>
+      <p v-else class="cm-empty">{{ t("dashboard.contribNoPrs") }}</p>
     </BaseModal>
 
     <!-- ── Release notes modal (Phase 1.3.4) ────────────── -->
@@ -1622,6 +1958,118 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
 .commits--modal {
   max-height: 60vh;
   overflow-y: auto;
+}
+/* Contributor modal commits: single author, so drop the avatar column. */
+.commits--contrib .commit {
+  grid-template-columns: 1fr auto;
+}
+
+/* ───────── Contributor modal ───────── */
+.cm-tabs {
+  display: flex;
+  gap: var(--space-2);
+}
+.cm-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+.cm-tab:hover {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+}
+.cm-tab--active {
+  color: var(--color-text);
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-accent);
+}
+
+/* Inline spinner for the PR count badge while the forge list loads. */
+.cm-spin {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.cm-prs {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2) 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.cm-pr {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-5);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.cm-pr:hover {
+  background: var(--color-bg-tertiary);
+  border-left-color: var(--color-accent);
+}
+
+/* Lifecycle badge to the left of each PR. */
+.cm-pr-state {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: center;
+}
+.cm-pr-state--open { color: var(--color-success); background: var(--color-success-soft); }
+.cm-pr-state--draft { color: var(--color-text-muted); background: var(--color-bg-tertiary); }
+.cm-pr-state--merged { color: var(--color-accent); background: var(--color-accent-soft); }
+.cm-pr-state--closed { color: var(--color-danger); background: var(--color-danger-soft); }
+.cm-pr-num {
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.cm-pr-date {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.cm-empty {
+  padding: var(--space-4) var(--space-5);
+  margin: 0;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+.contrib--clickable {
+  cursor: pointer;
+}
+.contrib--clickable:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .bar-label {

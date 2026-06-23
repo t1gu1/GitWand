@@ -5429,7 +5429,7 @@ async function handleRequest(req, res) {
     if (url.pathname === "/api/git-shortlog" && req.method === "GET") {
       const cwd = url.searchParams.get("cwd");
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd" }, 400);
-      const r = spawnSync(GIT, ["shortlog", "-sne", "HEAD"], {
+      const r = spawnSync(GIT, ["shortlog", "-sne", "--all"], {
         cwd: resolve(cwd),
         encoding: "utf-8",
       });

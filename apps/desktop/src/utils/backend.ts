@@ -1801,19 +1801,26 @@ export async function gitDeleteRemoteTag(cwd: string, remote: string, name: stri
 // ─── Shortlog (v2.0) ───────────────────────────────────────
 
 export interface ShortlogEntry {
+  /** Display name. For a merged identity, the distinct names joined by " / ". */
   name: string;
+  /** Representative email (highest-count row in the cluster) — avatar + key. */
   email: string;
   count: number;
+  /** Every distinct email in the merged identity. */
+  emails: string[];
+  /** Every distinct name in the merged identity. */
+  names: string[];
 }
 
 /**
- * `git shortlog -sne HEAD` — full-history per-author commit count.
- * Returns entries sorted by count descending.
+ * `git shortlog -sne --all` — per-author commit count across all branches
+ * (independent of the checked-out branch). Returns entries sorted by count desc.
  */
 export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
-  let raw: ShortlogEntry[];
+  type RawRow = { name: string; email: string; count: number };
+  let raw: RawRow[];
   if (isTauri()) {
-    raw = await tauriInvoke<ShortlogEntry[]>("git_shortlog", { cwd });
+    raw = await tauriInvoke<RawRow[]>("git_shortlog", { cwd });
   } else {
     const res = await fetch(
       `${DEV_SERVER}/api/git-shortlog?cwd=${encodeURIComponent(cwd)}`,
@@ -1822,24 +1829,64 @@ export async function getGitShortlog(cwd: string): Promise<ShortlogEntry[]> {
       const body = (await res.json().catch(() => ({}))) as { error?: string };
       throw new Error(body.error ?? `git shortlog failed: ${res.status}`);
     }
-    raw = (await res.json()) as ShortlogEntry[];
+    raw = (await res.json()) as RawRow[];
   }
 
-  // Merge contributors with the same name (case-insensitive).
-  // This handles users with multiple email addresses or different name casing.
-  const merged = new Map<string, ShortlogEntry>();
-  for (const entry of raw) {
-    const key = entry.name.toLowerCase();
-    const existing = merged.get(key);
-    if (existing) {
-      existing.count += entry.count;
-    } else {
-      merged.set(key, { ...entry });
+  // Cluster identities linked by a shared name OR a shared email
+  // (case-insensitive), via union-find over the raw rows. This collapses both
+  // "one name, several emails" and "one email, several names" into a single
+  // contributor — the merged display name joins the distinct names with " / ".
+  const n = raw.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+  const union = (a: number, b: number) => {
+    parent[find(a)] = find(b);
+  };
+  const byName = new Map<string, number>();
+  const byEmail = new Map<string, number>();
+  raw.forEach((e, i) => {
+    const nk = e.name.trim().toLowerCase();
+    const ek = e.email.trim().toLowerCase();
+    if (nk) {
+      const j = byName.get(nk);
+      if (j !== undefined) union(i, j);
+      else byName.set(nk, i);
     }
-  }
+    if (ek) {
+      const j = byEmail.get(ek);
+      if (j !== undefined) union(i, j);
+      else byEmail.set(ek, i);
+    }
+  });
 
-  // Re-sort because merging might have changed the order
-  return Array.from(merged.values()).sort((a, b) => b.count - a.count);
+  type Cluster = { count: number; names: string[]; emails: string[]; repEmail: string; repCount: number };
+  const clusters = new Map<number, Cluster>();
+  raw.forEach((e, i) => {
+    const root = find(i);
+    let c = clusters.get(root);
+    if (!c) {
+      c = { count: 0, names: [], emails: [], repEmail: e.email, repCount: -1 };
+      clusters.set(root, c);
+    }
+    c.count += e.count;
+    if (e.name && !c.names.some((x) => x.toLowerCase() === e.name.toLowerCase())) c.names.push(e.name);
+    if (e.email && !c.emails.some((x) => x.toLowerCase() === e.email.toLowerCase())) c.emails.push(e.email);
+    // Representative email = the highest-count row, for a stable avatar/key.
+    if (e.count > c.repCount) {
+      c.repCount = e.count;
+      c.repEmail = e.email;
+    }
+  });
+
+  return Array.from(clusters.values())
+    .map((c) => ({
+      name: c.names.join(" / ") || c.repEmail,
+      email: c.repEmail,
+      count: c.count,
+      emails: c.emails,
+      names: c.names,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 export interface BranchTopAuthor {
