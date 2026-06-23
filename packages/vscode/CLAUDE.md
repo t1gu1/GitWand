@@ -47,13 +47,21 @@ src/
 ## Build & test
 
 ```bash
-pnpm build          # TypeScript → dist/
-pnpm package        # Build .vsix (via vsce)
-pnpm test           # Tests avec @vscode/test-electron
+pnpm typecheck      # tsc --noEmit (vérification de types)
+pnpm build          # Bundle esbuild → dist/extension.js (inline @gitwand/core)
+pnpm package        # Build + .vsix (via vsce, --no-dependencies)
 ```
+
+L'extension est **bundlée avec esbuild** (`esbuild.mjs`), pas un simple `tsc` :
+`@gitwand/core` (workspace) est inliné dans `dist/extension.js`. Le VSIX étant
+packagé avec `--no-dependencies` et `node_modules/` exclu via `.vscodeignore`,
+un build `tsc` seul produirait un `require("@gitwand/core")` introuvable au
+runtime. Construire `@gitwand/core` avant l'extension (le bundle résout son
+`dist/`).
 
 ## Publication
 
 - Publiée sur le VS Code Marketplace — séparément du reste du monorepo
-- Utiliser `vsce publish` — pas le workflow npm publish
+- Workflow CI : `.github/workflows/publish-vscode.yml` — push d'un tag
+  `vscode-v*` (ou `workflow_dispatch`) → `vsce publish`
 - Credential : Personal Access Token VS Code Marketplace (secret `VSCE_PAT` dans GitHub Actions)
