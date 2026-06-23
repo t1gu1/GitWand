@@ -277,6 +277,7 @@ const zhCN: Locale = {
     noCommits: "没有提交",
     chartTitle: "最近 14 天的活动",
     chartCommits: "次提交",
+    activityNoCommits: "无活动",
     formatted: "格式化",
     raw: "原文",
     noReadme: "此仓库中未找到 README.md",

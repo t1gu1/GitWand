@@ -275,6 +275,7 @@ const ptBR: Locale = {
     noCommits: "Sem commits",
     chartTitle: "Atividade dos últimos 14 dias",
     chartCommits: "commits",
+    activityNoCommits: "Sem atividade",
     formatted: "Formatado",
     raw: "Bruto",
     noReadme: "Nenhum README.md encontrado neste repositório",

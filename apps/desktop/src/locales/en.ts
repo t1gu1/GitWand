@@ -284,6 +284,7 @@ const en = {
     noCommits: "No commits",
     chartTitle: "Activity in the last 14 days",
     chartCommits: "commits",
+    activityNoCommits: "No activity",
     // README
     formatted: "Formatted",
     raw: "Raw",

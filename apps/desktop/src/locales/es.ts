@@ -274,6 +274,7 @@ const es: Locale = {
     noCommits: "Sin commits",
     chartTitle: "Actividad de los últimos 14 días",
     chartCommits: "commits",
+    activityNoCommits: "Sin actividad",
     formatted: "Formateado",
     raw: "Crudo",
     noReadme: "No se encontró README.md en este repositorio",

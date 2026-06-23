@@ -16,6 +16,7 @@ import { useAIProvider } from "../composables/useAIProvider";
 import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
 import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 import AiSparkle from "./AiSparkle.vue";
+import BaseModal from "./BaseModal.vue";
 
 const { t, locale } = useI18n();
 const { settings } = useSettings();
@@ -170,7 +171,7 @@ const contributorCount = computed(() => allContributors.value.length);
 
 /** Commits per day for the last 14 days (oldest → newest). Used for bar chart. */
 const barChartDays = computed(() => {
-  const days: { count: number; label: string; isWeekend: boolean }[] = [];
+  const days: { count: number; label: string; isWeekend: boolean; key: string }[] = [];
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
@@ -188,6 +189,7 @@ const barChartDays = computed(() => {
       count,
       label: ["D", "L", "M", "M", "J", "V", "S"][dow],
       isWeekend: dow === 0 || dow === 6,
+      key: dayKey(day),
     });
   }
   return days;
@@ -260,6 +262,132 @@ function commitType(msg: string): string {
 /** Message stripped of its `type(scope):` prefix for cleaner display. */
 function commitMessageBody(msg: string): string {
   return msg.replace(/^(feat|fix|docs|chore|refactor|test|style|perf|build|ci)(\([^)]+\))?:\s*/i, "");
+}
+
+// ─── Activity tooltip — who did what (P) ───────────────────
+/** Local date key `YYYY-MM-DD`, matching the heatmap / bar-chart bucketing. */
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+interface DayAuthor {
+  name: string;
+  email: string;
+  count: number;
+  /** First few commit subjects (prefix stripped) — the "what". */
+  messages: string[];
+}
+
+/**
+ * `YYYY-MM-DD` → per-author commit breakdown, sorted desc by count. Built from
+ * the already-loaded `recentCommits`, so the hover tooltip is consistent with
+ * the heatmap / bar-chart counts and needs no extra IPC.
+ */
+const commitsByDay = computed(() => {
+  const map = new Map<string, DayAuthor[]>();
+  const byDay = new Map<string, Map<string, DayAuthor>>();
+  for (const c of recentCommits.value) {
+    const key = dayKey(new Date(c.date));
+    let authors = byDay.get(key);
+    if (!authors) {
+      authors = new Map();
+      byDay.set(key, authors);
+    }
+    const id = c.email || c.author;
+    let a = authors.get(id);
+    if (!a) {
+      a = { name: c.author, email: c.email, count: 0, messages: [] };
+      authors.set(id, a);
+    }
+    a.count++;
+    if (a.messages.length < 3) a.messages.push(commitMessageBody(c.message));
+  }
+  for (const [key, authors] of byDay) {
+    map.set(key, [...authors.values()].sort((a, b) => b.count - a.count));
+  }
+  return map;
+});
+
+const activityTip = ref<{
+  x: number;
+  y: number;
+  label: string;
+  total: number;
+  authors: DayAuthor[];
+} | null>(null);
+
+/** Cursor-anchored tooltip position, flipped/clamped to stay on-screen. */
+const tipStyle = computed(() => {
+  const tip = activityTip.value;
+  if (!tip) return {};
+  const W = 280;
+  const pad = 12;
+  let left = tip.x + 14;
+  if (typeof window !== "undefined" && left + W + pad > window.innerWidth) {
+    left = tip.x - W - 14;
+  }
+  return { left: `${Math.max(pad, left)}px`, top: `${tip.y + 14}px` };
+});
+
+function showActivityTip(e: MouseEvent, key: string) {
+  if (!key) return;
+  const authors = commitsByDay.value.get(key) ?? [];
+  const [y, m, d] = key.split("-").map(Number);
+  const loc = typeof navigator !== "undefined" ? navigator.language : "en-US";
+  const label = new Date(y, m - 1, d).toLocaleDateString(loc, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+  const total = authors.reduce((s, a) => s + a.count, 0);
+  activityTip.value = { x: e.clientX, y: e.clientY, label, total, authors };
+}
+
+function moveActivityTip(e: MouseEvent) {
+  if (activityTip.value) {
+    activityTip.value.x = e.clientX;
+    activityTip.value.y = e.clientY;
+  }
+}
+
+function hideActivityTip() {
+  activityTip.value = null;
+}
+
+// ─── Day commits modal — click a cell/bar to drill in ──────
+const dayModalKey = ref<string | null>(null);
+
+/** Resolved modal payload: the day label + its commits (newest first). */
+const dayModal = computed(() => {
+  const key = dayModalKey.value;
+  if (!key) return null;
+  const commits = recentCommits.value
+    .filter((c) => dayKey(new Date(c.date)) === key)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const [y, m, d] = key.split("-").map(Number);
+  const loc = typeof navigator !== "undefined" ? navigator.language : "en-US";
+  const label = new Date(y, m - 1, d).toLocaleDateString(loc, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  return { label, commits };
+});
+
+function openDayModal(key: string, count: number) {
+  if (!key || count < 1) return;
+  hideActivityTip();
+  dayModalKey.value = key;
+}
+
+function closeDayModal() {
+  dayModalKey.value = null;
+}
+
+function selectFromModal(hashFull: string) {
+  closeDayModal();
+  emit("selectCommit", hashFull);
 }
 
 // ─── Load dashboard data ───────────────────────────────────
@@ -524,6 +652,38 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
 
 <template>
   <div class="dashboard">
+    <!-- ── Activity hover tooltip — who did what that day ── -->
+    <div
+      v-if="activityTip"
+      class="activity-tip"
+      :style="tipStyle"
+      role="tooltip"
+    >
+      <div class="atip-head">
+        <span class="atip-date">{{ activityTip.label }}</span>
+        <span class="atip-total">{{ activityTip.total }} {{ t("dashboard.chartCommits") }}</span>
+      </div>
+      <template v-if="activityTip.authors.length">
+        <div
+          v-for="a in activityTip.authors.slice(0, 5)"
+          :key="a.email || a.name"
+          class="atip-author"
+        >
+          <span class="avatar avatar--sm" :style="avatarStyle(a.email || a.name)">{{ initials(a.name) }}</span>
+          <div class="atip-author-body">
+            <div class="atip-name">
+              {{ a.name }}<span class="atip-count">{{ a.count }}</span>
+            </div>
+            <div v-for="(m, i) in a.messages.slice(0, 2)" :key="i" class="atip-msg">{{ m }}</div>
+          </div>
+        </div>
+        <div v-if="activityTip.authors.length > 5" class="atip-more">
+          +{{ activityTip.authors.length - 5 }}
+        </div>
+      </template>
+      <div v-else class="atip-empty">{{ t("dashboard.activityNoCommits") }}</div>
+    </div>
+
     <!-- Loading skeleton -->
     <div v-if="loading" class="dashboard-loading">
       <div class="spinner"></div>
@@ -645,8 +805,11 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
                   v-for="(cell, i) in col.cells"
                   :key="i"
                   class="heatmap-cell"
-                  :class="`heatmap-cell--l${cell.level}`"
-                  :title="cell.date ? `${cell.date}: ${cell.count}` : ''"
+                  :class="[`heatmap-cell--l${cell.level}`, { 'heatmap-cell--clickable': cell.count > 0 }]"
+                  @mouseenter="cell.date && showActivityTip($event, cell.date)"
+                  @mousemove="moveActivityTip"
+                  @mouseleave="hideActivityTip"
+                  @click="openDayModal(cell.date, cell.count)"
                 ></div>
               </div>
             </div>
@@ -685,7 +848,11 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
               v-for="(day, i) in barChartDays"
               :key="i"
               class="bar-wrap"
-              :title="`${day.count}`"
+              :class="{ 'bar-wrap--clickable': day.count > 0 }"
+              @mouseenter="showActivityTip($event, day.key)"
+              @mousemove="moveActivityTip"
+              @mouseleave="hideActivityTip"
+              @click="openDayModal(day.key, day.count)"
             >
               <div class="bar-val" v-if="day.count > 0">{{ day.count }}</div>
               <div
@@ -800,6 +967,36 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
         </div>
       </div>
     </template>
+
+    <!-- ── Day commits modal — commits done that day ────── -->
+    <BaseModal
+      v-if="dayModal"
+      :title="dayModal.label"
+      :subtitle="`${dayModal.commits.length} ${t('dashboard.chartCommits')}`"
+      size="lg"
+      @close="closeDayModal"
+    >
+      <ul class="commits commits--modal">
+        <li
+          v-for="c in dayModal.commits"
+          :key="c.hashFull"
+          class="commit"
+          @click="selectFromModal(c.hashFull)"
+        >
+          <span class="avatar avatar--sm" :style="avatarStyle(c.email || c.author)">{{ initials(c.author) }}</span>
+          <div class="commit-body">
+            <div class="commit-title">
+              <span v-if="commitType(c.message)" class="tag" :class="`tag--${commitType(c.message)}`">
+                {{ commitType(c.message) }}
+              </span>
+              <span class="commit-msg">{{ commitMessageBody(c.message) }}</span>
+            </div>
+            <div class="commit-sub">{{ c.author }} · {{ formatDate(c.date) }}</div>
+          </div>
+          <code class="commit-hash">{{ c.hash }}</code>
+        </li>
+      </ul>
+    </BaseModal>
 
     <!-- ── Release notes modal (Phase 1.3.4) ────────────── -->
     <div
@@ -1042,6 +1239,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   transition: transform var(--transition-fast);
 }
 .heatmap-cell:hover { transform: scale(1.2); }
+.heatmap-cell--clickable { cursor: pointer; }
 .heatmap-cell--l0 { background: var(--color-bg-tertiary); }
 .heatmap-cell--l1 { background: rgba(139, 92, 246, 0.25); }
 .heatmap-cell--l2 { background: rgba(139, 92, 246, 0.5); }
@@ -1418,12 +1616,108 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
 .bar--weekend { background: linear-gradient(180deg, var(--color-info), rgba(96, 165, 250, 0.25)); }
 .bar--empty { background: var(--color-bg-tertiary); min-height: 3px; }
 .bar-wrap:hover .bar { opacity: 0.8; }
+.bar-wrap--clickable { cursor: pointer; }
+
+/* Commit list reused inside the day modal — cap height, own scroll. */
+.commits--modal {
+  max-height: 60vh;
+  overflow-y: auto;
+}
 
 .bar-label {
   position: absolute;
   bottom: 2px;
   font-size: 11px;
   color: var(--color-text-subtle);
+}
+
+/* ───────── Activity hover tooltip ───────── */
+/* Cursor-anchored, fixed to the viewport. pointer-events:none so it never
+   steals the hover from the cell/bar underneath (which would flicker it). */
+.activity-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  width: 280px;
+  max-width: 280px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px -6px rgba(0, 0, 0, 0.45);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.atip-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.atip-date {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.atip-total {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.atip-author {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+.atip-author-body { min-width: 0; }
+
+.atip-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.atip-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.atip-msg {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.atip-more {
+  font-size: 11px;
+  color: var(--color-text-subtle);
+  text-align: center;
+}
+
+.atip-empty {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-subtle);
+  text-align: center;
+  padding: var(--space-1) 0;
 }
 
 /* ───────── README card (trimmed — only styling deltas kept) ───────── */
@@ -1715,6 +2009,7 @@ watch(topContributors, () => nextTick(updateContribArrows), { immediate: true })
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  line-height: 0;
 }
 
 /* ─── Release notes modal ────────────────────────────── */

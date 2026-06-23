@@ -277,6 +277,7 @@ const fr: Locale = {
     noCommits: "Aucun commit",
     chartTitle: "Activité des 14 derniers jours",
     chartCommits: "commits",
+    activityNoCommits: "Aucune activité",
     // README
     formatted: "Formaté",
     raw: "Brut",
