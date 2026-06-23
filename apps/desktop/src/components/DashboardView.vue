@@ -729,8 +729,14 @@ async function loadDashboard() {
   // (heatmap / bar chart / commit-types), the README, and the full-history
   // shortlog (contributors panel). The branch / PR-count / file-count probes
   // were dropped when their cards were removed; those tabs load lazily.
+  //
+  // The heatmap spans 26 weeks (aligned to Monday), so the commit log is bounded
+  // by DATE (~27 weeks) rather than a fixed count — a 250-commit window left the
+  // oldest heatmap columns empty on busy repos. The high count is just a safety
+  // cap; the `--since` bound governs.
+  const since = new Date(Date.now() - 27 * 7 * 86400000).toISOString().slice(0, 10);
   const results = await Promise.allSettled([
-    getGitLog(props.cwd, 250, true),
+    getGitLog(props.cwd, 10000, true, undefined, undefined, undefined, undefined, since),
     loadReadme(),
     getGitShortlog(props.cwd).catch(() => [] as ShortlogEntry[]),
   ]);

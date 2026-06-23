@@ -595,6 +595,7 @@ export async function getGitLog(
   offset?: number,
   branch?: string,
   pathspec?: string,
+  since?: string,
 ): Promise<GitLogEntry[]> {
   if (isTauri()) {
     const raw = await tauriInvoke<
@@ -609,7 +610,7 @@ export async function getGitLog(
         parents: string[];
         refs: string;
       }>
-    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0, branch: branch ?? null, pathspec: pathspec ?? null });
+    >("git_log", { cwd, count: count ?? 100, all: all ?? true, author: author ?? null, offset: offset ?? 0, branch: branch ?? null, pathspec: pathspec ?? null, since: since ?? null });
 
     return raw.map((e) => ({
       hash: e.hash,
@@ -624,7 +625,7 @@ export async function getGitLog(
     }));
   }
 
-  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}${branch ? `&branch=${encodeURIComponent(branch)}` : ""}${pathspec ? `&pathspec=${encodeURIComponent(pathspec)}` : ""}`;
+  const qs = `?cwd=${encodeURIComponent(cwd)}&count=${count ?? 100}&all=${(all ?? true) ? "true" : "false"}${author ? `&author=${encodeURIComponent(author)}` : ""}${offset ? `&offset=${offset}` : ""}${branch ? `&branch=${encodeURIComponent(branch)}` : ""}${pathspec ? `&pathspec=${encodeURIComponent(pathspec)}` : ""}${since ? `&since=${encodeURIComponent(since)}` : ""}`;
   const res = await devFetch(`${DEV_SERVER}/api/git-log${qs}`);
   if (!res.ok) throw new Error(`Failed to get git log: ${res.status}`);
   return res.json();

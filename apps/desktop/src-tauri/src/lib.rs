@@ -206,7 +206,7 @@ pub fn git_log_parity(
     // Command fns are now `async` (run off the UI thread). These `*_parity`
     // wrappers are sync entry points for the parity-probe example, so block on
     // the future here to keep their signatures unchanged.
-    tauri::async_runtime::block_on(commands::read::git_log(cwd, count, all, author, None, None, None))
+    tauri::async_runtime::block_on(commands::read::git_log(cwd, count, all, author, None, None, None, None))
 }
 
 pub fn git_branches_parity(cwd: String) -> Result<Vec<types::GitBranch>, String> {

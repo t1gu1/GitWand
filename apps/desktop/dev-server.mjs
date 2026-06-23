@@ -1422,6 +1422,7 @@ async function handleRequest(req, res) {
       const all = url.searchParams.get("all") === "true";
       const author = url.searchParams.get("author") || "";
       const branch = url.searchParams.get("branch") || "";
+      const since = url.searchParams.get("since") || "";
 
       if (!cwd) return jsonResponse(req, res, { error: "Missing cwd param" }, 400);
 
@@ -1431,6 +1432,7 @@ async function handleRequest(req, res) {
         const args = ["log"];
         if (all) args.push("--all");
         if (author) args.push(`--author=${author}`);
+        if (since) args.push(`--since=${since}`);
         if (offset > 0) args.push(`--skip=${offset}`);
         args.push(`-n${count}`);
         if (branch) args.push(branch);
