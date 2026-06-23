@@ -789,6 +789,7 @@ pub(crate) async fn git_log(
     offset: Option<i32>,
     branch: Option<String>,
     pathspec: Option<String>,
+    since: Option<String>,
 ) -> Result<Vec<GitLogEntry>, String> {
     let limit = count.unwrap_or(100);
     let skip  = offset.unwrap_or(0).max(0);
@@ -805,6 +806,13 @@ pub(crate) async fn git_log(
     if let Some(ref author_filter) = author {
         if !author_filter.is_empty() {
             args.push(format!("--author={}", author_filter));
+        }
+    }
+    // Date lower bound (e.g. the heatmap's 6-month window). git accepts ISO
+    // dates and relative forms like "27.weeks". Passed as one arg, no shell.
+    if let Some(ref s) = since {
+        if !s.is_empty() {
+            args.push(format!("--since={}", s));
         }
     }
     if skip > 0 {
@@ -2287,7 +2295,7 @@ mod pathspec_tests {
 
         let all_entries = tauri::async_runtime::block_on(git_log(
             repo.cwd(),
-            None, None, None, None, None, None,
+            None, None, None, None, None, None, None,
         ))
         .expect("git_log(all) failed");
 
@@ -2295,6 +2303,7 @@ mod pathspec_tests {
             repo.cwd(),
             None, None, None, None, None,
             Some("packages/a".to_string()),
+            None,
         ))
         .expect("git_log(pathspec=a) failed");
 
@@ -2302,6 +2311,7 @@ mod pathspec_tests {
             repo.cwd(),
             None, None, None, None, None,
             Some("packages/b".to_string()),
+            None,
         ))
         .expect("git_log(pathspec=b) failed");
 
@@ -2323,7 +2333,7 @@ mod pathspec_tests {
 
         let entries = tauri::async_runtime::block_on(git_log(
             repo.cwd(),
-            None, None, None, None, None, None,
+            None, None, None, None, None, None, None,
         ))
         .expect("git_log failed");
 
@@ -2349,7 +2359,7 @@ mod pathspec_tests {
 
         let log = tauri::async_runtime::block_on(git_log(
             repo.cwd(),
-            Some(1000), None, None, None, None, None,
+            Some(1000), None, None, None, None, None, None,
         ))
         .expect("git_log failed");
 
@@ -2377,6 +2387,7 @@ mod pathspec_tests {
             repo.cwd(),
             Some(1000), None, None, None, None,
             Some("packages/a".to_string()),
+            None,
         ))
         .expect("git_log(a) failed");
 
