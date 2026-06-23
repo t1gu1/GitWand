@@ -75,6 +75,8 @@ const ALLOWED_ATTR = [
   "target", "rel",
   // For diff / code rendering:
   "data-line", "data-lang",
+  // For image / display attributes:
+  "width", "height",
 ];
 
 /**
@@ -146,12 +148,12 @@ export function safeHtml(raw: string | null | undefined): string {
 // ─── Markdown ──────────────────────────────────────────────────────
 
 /**
- * `markdown-it` instance shared across the app. `html: false` means raw
- * `<script>` tags inside markdown are left as text, not parsed as HTML.
- * DOMPurify takes care of anything markdown-it still passes through.
+ * `markdown-it` instance shared across the app. `html: true` allows raw
+ * HTML tags (like `<img>` or `<details>`) inside markdown.
+ * DOMPurify downstream takes care of sanitizing the raw HTML output.
  */
 const md = new MarkdownIt({
-  html: false, // do not let source markdown embed arbitrary HTML
+  html: true, // let source markdown embed raw HTML (DOMPurify will sanitize)
   linkify: true,
   breaks: true,
   typographer: false,

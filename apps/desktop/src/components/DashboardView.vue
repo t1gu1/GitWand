@@ -2522,8 +2522,10 @@ watch(
   color: var(--color-success);
 }
 
-.readme-formatted :deep(.md-img) {
+.readme-formatted :deep(.md-img),
+.readme-formatted :deep(img) {
   max-width: 100%;
+  height: auto !important;
   border-radius: var(--radius-md);
   margin: var(--space-3) 0;
 }
