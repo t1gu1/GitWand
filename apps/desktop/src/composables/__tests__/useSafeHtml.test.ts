@@ -112,32 +112,29 @@ describe("renderMarkdown — markdown → sanitized HTML", () => {
     expect(out).toContain('<pre class="md-code-block">');
   });
 
-  it("does NOT parse raw HTML embedded in markdown (html: false)", () => {
-    // With html: false, markdown-it escapes raw HTML to entities rather
-    // than emitting real tags. The &lt;script&gt; text that remains is
-    // rendered as inert text, not executable code. Belt-and-suspenders:
-    // even if markdown-it did emit it, DOMPurify would strip the script.
+  it("strips raw HTML <script> tags embedded in markdown", () => {
+    // markdown-it (html: true) parses the raw HTML tag, and DOMPurify strips it.
     const out = renderMarkdown("normal\n\n<script>alert(1)</script>\n\nmore");
-    // No real <script> tag — only the escaped entity form.
-    expect(out).not.toMatch(/<script[\s>]/i);
-    expect(out).toContain("&lt;script&gt;");
+    expect(out).not.toContain("<script");
+    expect(out).not.toContain("alert(1)");
     expect(out).toContain("normal");
     expect(out).toContain("more");
   });
 
   it("strips XSS payloads smuggled via inline HTML in markdown", () => {
     const out = renderMarkdown('click <img src=x onerror="alert(1)"> here');
-    // markdown-it (html: false) escapes the raw HTML to entities, so
-    // what lands in the DOM is a text node — `&lt;img...&gt;` — and
-    // the browser does NOT re-parse it as markup. The substring
-    // `onerror="..."` may appear in that escaped text, which is inert.
-    // What we must guarantee: no real <img> tag and no real attribute.
-    expect(out).not.toMatch(/<img[\s>]/i);
-    // No real element with an onerror attribute (i.e. onerror inside
-    // an opening tag, not inside escaped text).
-    expect(out).not.toMatch(/<[^>]*\sonerror\s*=[^>]*>/i);
-    expect(out).toContain("&lt;img");
+    // markdown-it (html: true) parses the raw HTML tag. DOMPurify allows the img tag,
+    // but strips the onerror handler.
+    expect(out).toContain('<img src="x">');
+    expect(out.toLowerCase()).not.toContain("onerror");
+    expect(out).not.toContain("alert(1)");
   });
+
+  it("renders raw HTML img tags with width and height in markdown", () => {
+    const out = renderMarkdown('hello <img width="2521" height="203" alt="image" src="https://github.com/user-attachments/assets/5284ccc2-4567-40f0-88b7-1faec2289bbe" /> world');
+    expect(out).toContain('<img width="2521" height="203" alt="image" src="https://github.com/user-attachments/assets/5284ccc2-4567-40f0-88b7-1faec2289bbe">');
+  });
+
 
   it("neutralises javascript: links in markdown", () => {
     // markdown-it's default link validator rejects javascript: URIs, so

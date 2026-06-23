@@ -392,6 +392,13 @@ function timeAgo(dateStr: string): string {
   background: var(--color-bg-secondary);
 }
 
+.pct-body :deep(img),
+.pct-body :deep(.md-img) {
+  max-width: 100%;
+  height: auto !important;
+  border-radius: var(--radius-sm);
+}
+
 /* Suggestion apply button */
 .pct-suggestion-actions {
   margin-top: 6px;

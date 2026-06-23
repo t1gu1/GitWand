@@ -11,7 +11,7 @@
  * - Stat cards refined with icons + gradient hover
  * - Polished tabs with animation + count badges
  */
-import { computed, inject, nextTick, ref } from "vue";
+import { computed, inject, nextTick, ref, onMounted, onUnmounted, watch } from "vue";
 import { PR_PANEL_KEY, isMergeConflict, type PrPanelState } from "../composables/usePrPanel";
 import { renderMarkdown, onMarkdownLinkClick } from "../composables/useSafeHtml";
 import { useAvatar } from "../composables/useAvatar";
@@ -173,6 +173,70 @@ const timeline = computed<TimelineItem[]>(() => {
 
 /** PR description rendered once (see `sortedComments` for the rationale). */
 const descriptionHtml = computed(() => renderMarkdown(p.prDetail.value?.body));
+
+const fullscreenImageUrl = ref<string | null>(null);
+
+function handleDescriptionClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null;
+  const img = target?.closest("img");
+  if (img) {
+    const src = img.getAttribute("src");
+    if (src) {
+      fullscreenImageUrl.value = src;
+      return;
+    }
+  }
+  onMarkdownLinkClick(e);
+}
+
+const lastMousePos = { x: 0, y: 0 };
+function trackMouse(e: MouseEvent) {
+  lastMousePos.x = e.clientX;
+  lastMousePos.y = e.clientY;
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape" && fullscreenImageUrl.value) {
+    fullscreenImageUrl.value = null;
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", handleKeydown);
+  window.addEventListener("mousemove", trackMouse);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleKeydown);
+  window.removeEventListener("mousemove", trackMouse);
+  document.body.style.cursor = "";
+});
+
+watch(fullscreenImageUrl, (newUrl) => {
+  if (newUrl) {
+    document.body.style.cursor = "zoom-out";
+    nextTick(() => {
+      const dummyEvent = new MouseEvent("mousemove", {
+        bubbles: true,
+        cancelable: true,
+        clientX: lastMousePos.x,
+        clientY: lastMousePos.y,
+      });
+      document.dispatchEvent(dummyEvent);
+    });
+  }
+});
+
+function handleAfterLeave() {
+  document.body.style.cursor = "";
+  const dummyEvent = new MouseEvent("mousemove", {
+    bubbles: true,
+    cancelable: true,
+    clientX: lastMousePos.x,
+    clientY: lastMousePos.y,
+  });
+  document.dispatchEvent(dummyEvent);
+}
 
 /** Anchor at the bottom of the comments list — target for the Comments tile. */
 const commentsEnd = ref<HTMLElement | null>(null);
@@ -605,7 +669,7 @@ function commentTimeAgo(dateStr: string): string {
               <div
                 v-if="descriptionTab === 'formatted'"
                 class="pdv-body-formatted"
-                @click="onMarkdownLinkClick"
+                @click="handleDescriptionClick"
                 v-html="descriptionHtml"
               />
               <pre v-else class="pdv-body-raw"><code>{{ p.prDetail.value.body }}</code></pre>
@@ -821,6 +885,28 @@ function commentTimeAgo(dateStr: string): string {
       @submit="p.handleSubmitReview"
       @close="p.showReviewModal.value = false"
     />
+
+    <!-- Fullscreen Image Viewer Modal -->
+    <Transition name="pdv-fade" @after-leave="handleAfterLeave">
+      <div
+        v-if="fullscreenImageUrl"
+        class="pdv-image-overlay"
+        @click="fullscreenImageUrl = null"
+      >
+        <button
+          type="button"
+          class="pdv-image-overlay-close"
+          @click="fullscreenImageUrl = null"
+          aria-label="Close fullscreen view"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+        <img
+          :src="fullscreenImageUrl"
+          class="pdv-image-overlay-content"
+        />
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -1835,7 +1921,14 @@ function commentTimeAgo(dateStr: string): string {
 .pdv-body-formatted :deep(img),
 .pdv-body-formatted :deep(.md-img) {
   max-width: 100%;
+  height: auto !important;
   border-radius: var(--radius-sm);
+  cursor: zoom-in;
+  transition: opacity 0.2s ease;
+}
+.pdv-body-formatted :deep(img:hover),
+.pdv-body-formatted :deep(.md-img:hover) {
+  opacity: 0.95;
 }
 
 .pdv-body-raw {
@@ -2151,5 +2244,77 @@ function commentTimeAgo(dateStr: string): string {
   .pdv-spinner {
     animation: none;
   }
+}
+
+/* Image overlay transition */
+.pdv-fade-enter-active,
+.pdv-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.pdv-fade-enter-active .pdv-image-overlay-content,
+.pdv-fade-leave-active .pdv-image-overlay-content {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pdv-fade-enter-from,
+.pdv-fade-leave-to {
+  opacity: 0;
+}
+.pdv-fade-enter-from .pdv-image-overlay-content,
+.pdv-fade-leave-to .pdv-image-overlay-content {
+  transform: scale(0.96);
+}
+
+/* Image overlay styling */
+.pdv-image-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  cursor: zoom-out;
+}
+
+.pdv-image-overlay-content {
+  width: 90vw;
+  height: 90vh;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  cursor: zoom-out;
+  user-select: none;
+}
+
+.pdv-image-overlay-close {
+  position: absolute;
+  top: var(--space-6);
+  right: var(--space-6);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.pdv-image-overlay-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.pdv-image-overlay-close svg {
+  width: 20px;
+  height: 20px;
 }
 </style>
