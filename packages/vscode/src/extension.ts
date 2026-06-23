@@ -14,6 +14,8 @@ import {
   parseConflictMarkers,
   classifyConflict,
   type ConflictType,
+  type Confidence,
+  type ConfidenceScore,
 } from "@gitwand/core";
 
 // ─── Constants ──────────────────────────────────────────────────
@@ -27,16 +29,27 @@ let statusBarItem: vscode.StatusBarItem;
 
 // ─── Helpers ────────────────────────────────────────────────────
 
+const VALID_CONFIDENCE: readonly Confidence[] = ["certain", "high", "medium", "low"];
+const CONFIDENCE_RANK: Record<Confidence, number> = { certain: 4, high: 3, medium: 2, low: 1 };
+
 function getConfig() {
   const config = vscode.workspace.getConfiguration("gitwand");
+  const raw = config.get<string>("minConfidence", "high");
+  const minConfidence: Confidence = (VALID_CONFIDENCE as readonly string[]).includes(raw)
+    ? (raw as Confidence)
+    : "high";
   return {
     resolveWhitespace: config.get<boolean>("resolveWhitespace", true),
-    minConfidence: config.get<string>("minConfidence", "high") as
-      | "certain"
-      | "high"
-      | "medium"
-      | "low",
+    minConfidence,
   };
+}
+
+function isResolvableHunk(
+  classification: { type: ConflictType; confidence: ConfidenceScore },
+  minConfidence: Confidence,
+): boolean {
+  if (classification.type === "complex") return false;
+  return (CONFIDENCE_RANK[classification.confidence.label] ?? 0) >= CONFIDENCE_RANK[minConfidence];
 }
 
 /** Labels lisibles pour chaque type de conflit */
@@ -90,7 +103,8 @@ function updateDiagnostics(document: vscode.TextDocument) {
     } else {
       const conflict = segment.conflict;
       const classification = classifyConflict(conflict);
-      const isResolvable = classification.type !== "complex";
+      const config = getConfig();
+      const isResolvable = isResolvableHunk(classification, config.minConfidence);
 
       // Trouver la ligne du marqueur <<<<<<< dans le document
       const startLine = findMarkerLine(document, lineOffset);
@@ -177,7 +191,8 @@ class GitWandCodeLensProvider implements vscode.CodeLensProvider {
       } else {
         const conflict = segment.conflict;
         const classification = classifyConflict(conflict);
-        const isResolvable = classification.type !== "complex";
+        const config = getConfig();
+        const isResolvable = isResolvableHunk(classification, config.minConfidence);
 
         const markerLine = findMarkerLine(document, lineOffset);
         if (markerLine === -1) {
@@ -276,40 +291,7 @@ async function cmdResolveFile() {
     return;
   }
 
-  // Reconstruire le contenu avec les résolutions appliquées
-  const { segments } = parseConflictMarkers(content);
-  const outputParts: string[] = [];
-
-  for (const segment of segments) {
-    if (segment.type === "text") {
-      outputParts.push(segment.lines.join("\n"));
-    } else {
-      const singleResult = resolve(
-        // Recréer le marqueur pour un seul conflit
-        `<<<<<<< ours\n${segment.conflict.oursLines.join("\n")}\n${
-          segment.conflict.baseLines.length > 0
-            ? `||||||| base\n${segment.conflict.baseLines.join("\n")}\n`
-            : ""
-        }=======\n${segment.conflict.theirsLines.join("\n")}\n>>>>>>> theirs`,
-        document.fileName,
-        { resolveWhitespace: config.resolveWhitespace, minConfidence: config.minConfidence },
-      );
-
-      if (singleResult.mergedContent) {
-        outputParts.push(singleResult.mergedContent);
-      } else {
-        // Garder les marqueurs pour les conflits non résolus
-        const lines = [`<<<<<<< ours`, ...segment.conflict.oursLines];
-        if (segment.conflict.baseLines.length > 0) {
-          lines.push(`||||||| base`, ...segment.conflict.baseLines);
-        }
-        lines.push(`=======`, ...segment.conflict.theirsLines, `>>>>>>> theirs`);
-        outputParts.push(lines.join("\n"));
-      }
-    }
-  }
-
-  const newContent = outputParts.join("\n");
+  if (!result.mergedContent) return;
 
   const fullRange = new vscode.Range(
     document.positionAt(0),
@@ -317,75 +299,124 @@ async function cmdResolveFile() {
   );
 
   await editor.edit((editBuilder) => {
-    editBuilder.replace(fullRange, newContent);
+    editBuilder.replace(fullRange, result.mergedContent!);
   });
 
-  vscode.window.showInformationMessage(
-    `${WAND} GitWand: ${result.stats.autoResolved}/${result.stats.totalConflicts} conflict(s) auto-resolved.`,
-  );
+  if (!result.validation.isValid) {
+    const reasons: string[] = [];
+    if (result.validation.hasResidualMarkers) reasons.push("residual conflict markers");
+    if (result.validation.syntaxError) reasons.push(result.validation.syntaxError);
+    else if ((result.validation.parseTreeErrors ?? 0) > 0)
+      reasons.push(`${result.validation.parseTreeErrors} parse error(s)`);
+    vscode.window.showWarningMessage(
+      `${WAND} GitWand: ${result.stats.autoResolved} conflict(s) resolved — validation issues: ${reasons.join("; ")}. Review before committing.`,
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `${WAND} GitWand: ${result.stats.autoResolved}/${result.stats.totalConflicts} conflict(s) auto-resolved.`,
+    );
+  }
 }
 
 async function cmdResolveAll() {
   const config = getConfig();
+  const CONFLICT_RE = /^<{7} /m;
+  const MAX_FILE_SIZE = 2 * 1024 * 1024; // skip files > 2 MB
 
-  // Trouver tous les fichiers avec des diagnostics GitWand
+  const allUris = await vscode.workspace.findFiles(
+    "**/*",
+    "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**}",
+  );
+
+  const workspaceEdit = new vscode.WorkspaceEdit();
   let totalResolved = 0;
   let totalConflicts = 0;
-  let filesProcessed = 0;
+  let filesResolved = 0;
+  let filesWithValidationIssues = 0;
 
-  diagnosticCollection.forEach((uri, diagnostics) => {
-    if (diagnostics.length > 0) {
-      filesProcessed++;
+  for (const uri of allUris) {
+    let content: string;
+    try {
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      if (bytes.length > MAX_FILE_SIZE) continue;
+      content = Buffer.from(bytes).toString("utf8");
+    } catch {
+      continue;
     }
-  });
 
-  if (filesProcessed === 0) {
-    vscode.window.showInformationMessage("No conflicted files detected.");
-    return;
-  }
+    if (!CONFLICT_RE.test(content)) continue;
 
-  // Parcourir tous les fichiers ouverts avec des conflits
-  for (const document of vscode.workspace.textDocuments) {
-    const diags = diagnosticCollection.get(document.uri);
-    if (!diags || diags.length === 0) continue;
-
-    const content = document.getText();
-    const result = resolve(content, document.fileName, {
+    const result = resolve(content, uri.fsPath, {
       resolveWhitespace: config.resolveWhitespace,
       minConfidence: config.minConfidence,
     });
 
-    if (result.stats.autoResolved > 0 && result.mergedContent) {
-      const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(
-        document.positionAt(0),
-        document.positionAt(content.length),
-      );
-      edit.replace(document.uri, fullRange, result.mergedContent);
-      await vscode.workspace.applyEdit(edit);
-    }
-
-    totalResolved += result.stats.autoResolved;
+    if (result.stats.totalConflicts === 0) continue;
     totalConflicts += result.stats.totalConflicts;
+
+    if (result.stats.autoResolved > 0 && result.mergedContent) {
+      if (result.validation.hasResidualMarkers) {
+        filesWithValidationIssues++;
+      } else {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(content.length));
+        workspaceEdit.replace(uri, fullRange, result.mergedContent);
+        totalResolved += result.stats.autoResolved;
+        filesResolved++;
+        if (!result.validation.isValid) filesWithValidationIssues++;
+      }
+    }
   }
 
-  vscode.window.showInformationMessage(
-    `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved across ${filesProcessed} file(s).`,
-  );
+  if (totalConflicts === 0) {
+    vscode.window.showInformationMessage(`${WAND} GitWand: No conflicted files in workspace.`);
+    return;
+  }
+
+  if (totalResolved === 0) {
+    vscode.window.showWarningMessage(
+      `${WAND} GitWand: ${totalConflicts} conflict(s) found, none auto-resolvable.`,
+    );
+    return;
+  }
+
+  await vscode.workspace.applyEdit(workspaceEdit);
+
+  if (filesWithValidationIssues > 0) {
+    vscode.window.showWarningMessage(
+      `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved — ${filesWithValidationIssues} file(s) have validation issues. Review before committing.`,
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved across ${filesResolved} file(s).`,
+    );
+  }
 }
 
 async function cmdStatus() {
-  // Gather stats from all open documents
-  const fileStats: Array<{
-    name: string;
-    total: number;
-    resolvable: number;
-  }> = [];
+  const config = getConfig();
+  const CONFLICT_RE = /^<{7} /m;
+  const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
-  for (const document of vscode.workspace.textDocuments) {
-    if (document.uri.scheme !== "file") continue;
+  const allUris = await vscode.workspace.findFiles(
+    "**/*",
+    "{**/node_modules/**,**/.git/**,**/dist/**,**/build/**}",
+  );
 
-    const content = document.getText();
+  const fileStats: Array<{ name: string; total: number; resolvable: number }> = [];
+
+  for (const uri of allUris) {
+    let content: string;
+    try {
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      if (bytes.length > MAX_FILE_SIZE) continue;
+      content = Buffer.from(bytes).toString("utf8");
+    } catch {
+      continue;
+    }
+
+    if (!CONFLICT_RE.test(content)) continue;
+
     const { segments } = parseConflictMarkers(content);
     const conflicts = segments.filter((s) => s.type === "conflict");
     if (conflicts.length === 0) continue;
@@ -393,16 +424,19 @@ async function cmdStatus() {
     let resolvable = 0;
     for (const seg of conflicts) {
       const classification = classifyConflict(seg.conflict);
-      if (classification.type !== "complex") resolvable++;
+      if (isResolvableHunk(classification, config.minConfidence)) resolvable++;
     }
 
-    const name = vscode.workspace.asRelativePath(document.uri);
-    fileStats.push({ name, total: conflicts.length, resolvable });
+    fileStats.push({
+      name: vscode.workspace.asRelativePath(uri),
+      total: conflicts.length,
+      resolvable,
+    });
   }
 
   if (fileStats.length === 0) {
     vscode.window.showInformationMessage(
-      `${WAND} GitWand: No conflicted files open.`,
+      `${WAND} GitWand: No conflicted files in workspace.`,
     );
     return;
   }

@@ -8,7 +8,10 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["SCM Providers", "Other"],
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/devlint/GitWand",
@@ -18,7 +21,15 @@
   "bugs": {
     "url": "https://github.com/devlint/GitWand/issues"
   },
-  "keywords": ["git", "merge", "conflict", "resolution", "diff", "rebase", "auto-resolve"],
+  "keywords": [
+    "git",
+    "merge",
+    "conflict",
+    "resolution",
+    "diff",
+    "rebase",
+    "auto-resolve"
+  ],
   "galleryBanner": {
     "color": "#1a1a24",
     "theme": "dark"
@@ -49,7 +60,12 @@
         },
         "gitwand.minConfidence": {
           "type": "string",
-          "enum": ["certain", "high", "medium", "low"],
+          "enum": [
+            "certain",
+            "high",
+            "medium",
+            "low"
+          ],
           "default": "high",
           "description": "Minimum confidence level for auto-resolution"
         }
@@ -67,6 +83,7 @@
     "@gitwand/core": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.24.0",
