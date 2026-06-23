@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, watch, nextTick, type Ref } from "vue";
 import {
   getGitLog,
   getGitShortlog,
@@ -204,8 +204,7 @@ const heatmapCells = computed(() => {
   // Build a map of YYYY-MM-DD → count
   const counts = new Map<string, number>();
   for (const c of recentCommits.value) {
-    const d = new Date(c.date);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const key = dayKey(new Date(c.date));
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
@@ -228,7 +227,7 @@ const heatmapCells = computed(() => {
         weekCells.push({ date: "", count: 0, level: 0 });
         continue;
       }
-      const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+      const key = dayKey(day);
       const count = counts.get(key) ?? 0;
       let level = 0;
       if (count >= 10) level = 4;
@@ -270,6 +269,13 @@ function commitMessageBody(msg: string): string {
 /** Local date key `YYYY-MM-DD`, matching the heatmap / bar-chart bucketing. */
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Render a `YYYY-MM-DD` day key as a locale-formatted label. */
+function formatDayKey(key: string, opts: Intl.DateTimeFormatOptions): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const loc = typeof navigator !== "undefined" ? navigator.language : "en-US";
+  return new Date(y, m - 1, d).toLocaleDateString(loc, opts);
 }
 
 interface DayAuthor {
@@ -363,13 +369,7 @@ const tipStyle = computed(() => {
 function showActivityTip(e: MouseEvent, key: string) {
   if (!key) return;
   const authors = commitsByDay.value.get(key) ?? [];
-  const [y, m, d] = key.split("-").map(Number);
-  const loc = typeof navigator !== "undefined" ? navigator.language : "en-US";
-  const label = new Date(y, m - 1, d).toLocaleDateString(loc, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  const label = formatDayKey(key, { weekday: "short", day: "numeric", month: "short" });
   const total = authors.reduce((s, a) => s + a.count, 0);
   activityTip.value = { x: e.clientX, y: e.clientY, label, total, authors };
 }
@@ -395,14 +395,7 @@ const dayModal = computed(() => {
   const commits = recentCommits.value
     .filter((c) => dayKey(new Date(c.date)) === key)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  const [y, m, d] = key.split("-").map(Number);
-  const loc = typeof navigator !== "undefined" ? navigator.language : "en-US";
-  const label = new Date(y, m - 1, d).toLocaleDateString(loc, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const label = formatDayKey(key, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   return { label, commits };
 });
 
@@ -456,10 +449,6 @@ const contribPrsError = ref(false);
  */
 const repoPrsCache = new Map<string, Promise<PullRequest[]>>();
 
-// Reactive mirror of the current repo's forge PR list — feeds the per-contributor
-// union PR count (combined with each contributor's local merged PRs).
-const repoPrs = ref<PullRequest[]>([]);
-
 function fetchRepoPrs(cwd: string): Promise<PullRequest[]> {
   let pending = repoPrsCache.get(cwd);
   if (!pending) {
@@ -469,13 +458,7 @@ function fetchRepoPrs(cwd: string): Promise<PullRequest[]> {
       return provider.listPRs(cwd, { state: "all", limit: 100 });
     })();
     repoPrsCache.set(cwd, pending);
-    pending
-      .then((list) => {
-        repoPrs.value = list;
-      })
-      .catch(() => {
-        repoPrsCache.delete(cwd);
-      });
+    pending.catch(() => repoPrsCache.delete(cwd));
   }
   return pending;
 }
@@ -498,41 +481,40 @@ function toContribSel(c: ShortlogEntry): ContribSel {
 const contribCommitCounts = ref<Map<string, number>>(new Map());
 const contribPrCounts = ref<Map<string, number>>(new Map());
 
+/** Representative id for a contributor cluster (matches the card `:key`). */
+function contribId(c: ShortlogEntry): string {
+  return c.email || c.name;
+}
+/** Copy-on-write set into a reactive count map (triggers reactivity). */
+function setCount(r: Ref<Map<string, number>>, id: string, n: number) {
+  r.value = new Map(r.value).set(id, n);
+}
+
 function contribCommitCount(c: ShortlogEntry): number | null {
-  return contribCommitCounts.value.get(c.email || c.name) ?? null;
+  return contribCommitCounts.value.get(contribId(c)) ?? null;
 }
 function contribPrCount(c: ShortlogEntry): number | null {
-  return contribPrCounts.value.get(c.email || c.name) ?? null;
+  return contribPrCounts.value.get(contribId(c)) ?? null;
 }
 
 /** Compute + cache a card's commit + union-PR counts from the fetched data. Idempotent. */
 async function ensureContribCounts(c: ShortlogEntry): Promise<void> {
-  const id = c.email || c.name;
+  const id = contribId(c);
   if (contribPrCounts.value.has(id)) return;
   const sel = toContribSel(c);
-  let commitCount: number | null = null;
-  let prCount = 0;
   try {
     const [commits, prs] = await Promise.all([
       fetchContribCommits(props.cwd, sel),
       fetchRepoPrs(props.cwd),
     ]);
-    commitCount = commits.length;
     const nums = new Set<number>();
     for (const pr of prs) if (sameAuthor(pr.author, sel)) nums.add(pr.number);
     for (const m of localMergedPrs(commits)) nums.add(m.num);
-    prCount = nums.size;
+    setCount(contribCommitCounts, id, commits.length);
+    setCount(contribPrCounts, id, nums.size);
   } catch {
-    prCount = 0;
+    setCount(contribPrCounts, id, 0);
   }
-  if (commitCount !== null) {
-    const nextC = new Map(contribCommitCounts.value);
-    nextC.set(id, commitCount);
-    contribCommitCounts.value = nextC;
-  }
-  const nextP = new Map(contribPrCounts.value);
-  nextP.set(id, prCount);
-  contribPrCounts.value = nextP;
 }
 
 // The contributor's full-history commits (HEAD), loaded on demand to match the
@@ -736,7 +718,7 @@ async function loadDashboard() {
   // cap; the `--since` bound governs.
   const since = new Date(Date.now() - 27 * 7 * 86400000).toISOString().slice(0, 10);
   const results = await Promise.allSettled([
-    getGitLog(props.cwd, 10000, true, undefined, undefined, undefined, undefined, since),
+    getGitLog(props.cwd, 5000, true, undefined, undefined, undefined, undefined, since),
     loadReadme(),
     getGitShortlog(props.cwd).catch(() => [] as ShortlogEntry[]),
   ]);
@@ -765,11 +747,13 @@ async function loadDashboard() {
   loading.value = false;
 
   // Warm the forge PR cache in the background so the contributor cards' PR counts
-  // and the first modal resolve without a wait. Reset the reactive mirror first so
-  // a repo switch doesn't show the previous repo's counts. Fire-and-forget.
-  repoPrs.value = [];
+  // and the first modal resolve without a wait. Reset per-repo state first so a
+  // repo switch doesn't show stale counts or grow the caches unbounded across a
+  // long session. Fire-and-forget.
   contribPrCounts.value = new Map();
   contribCommitCounts.value = new Map();
+  repoPrsCache.clear();
+  contribCommitsCache.clear();
   void fetchRepoPrs(props.cwd).catch(() => {});
 }
 
