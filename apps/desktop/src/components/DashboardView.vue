@@ -273,7 +273,10 @@ function dayKey(d: Date): string {
 }
 
 interface DayAuthor {
+  /** Display name — the merged identity (names joined by " / "). */
   name: string;
+  /** First name of the cluster, for clean avatar initials. */
+  firstName: string;
   email: string;
   count: number;
   /** First few commit subjects (prefix stripped) — the "what". */
@@ -281,9 +284,35 @@ interface DayAuthor {
 }
 
 /**
- * `YYYY-MM-DD` → per-author commit breakdown, sorted desc by count. Built from
- * the already-loaded `recentCommits`, so the hover tooltip is consistent with
- * the heatmap / bar-chart counts and needs no extra IPC.
+ * Lookup from `allContributors` (the merged shortlog clusters): every email and
+ * name in a cluster maps back to its canonical entry. Lets the activity panels
+ * group commits by the SAME merged identity the contributor cards use.
+ */
+const identityIndex = computed(() => {
+  const byEmail = new Map<string, ShortlogEntry>();
+  const byName = new Map<string, ShortlogEntry>();
+  for (const c of allContributors.value) {
+    for (const e of c.emails ?? []) byEmail.set(e.toLowerCase(), c);
+    for (const nm of c.names ?? []) byName.set(nm.toLowerCase(), c);
+  }
+  return { byEmail, byName };
+});
+
+/** Resolve a raw commit author to its merged identity (falls back to raw). */
+function resolveIdentity(author: string, email: string) {
+  const idx = identityIndex.value;
+  const c =
+    (email && idx.byEmail.get(email.toLowerCase())) ||
+    (author && idx.byName.get(author.toLowerCase())) ||
+    null;
+  if (c) return { key: c.email || c.name, name: c.name, firstName: c.names?.[0] || c.name, email: c.email };
+  return { key: email || author, name: author, firstName: author, email };
+}
+
+/**
+ * `YYYY-MM-DD` → per-identity commit breakdown, sorted desc by count. Built from
+ * the already-loaded `recentCommits`, grouped by the merged identity so the
+ * tooltip matches the contributor cards. No extra IPC.
  */
 const commitsByDay = computed(() => {
   const map = new Map<string, DayAuthor[]>();
@@ -295,11 +324,11 @@ const commitsByDay = computed(() => {
       authors = new Map();
       byDay.set(key, authors);
     }
-    const id = c.email || c.author;
-    let a = authors.get(id);
+    const ident = resolveIdentity(c.author, c.email);
+    let a = authors.get(ident.key);
     if (!a) {
-      a = { name: c.author, email: c.email, count: 0, messages: [] };
-      authors.set(id, a);
+      a = { name: ident.name, firstName: ident.firstName, email: ident.email, count: 0, messages: [] };
+      authors.set(ident.key, a);
     }
     a.count++;
     if (a.messages.length < 3) a.messages.push(commitMessageBody(c.message));
@@ -987,7 +1016,7 @@ watch(
           :key="a.email || a.name"
           class="atip-author"
         >
-          <span class="avatar avatar--sm" :style="avatarStyle(a.email || a.name)">{{ initials(a.name) }}</span>
+          <span class="avatar avatar--sm" :style="avatarStyle(a.email || a.name)">{{ initials(a.firstName) }}</span>
           <div class="atip-author-body">
             <div class="atip-name">
               {{ a.name }}<span class="atip-count">{{ a.count }}</span>
