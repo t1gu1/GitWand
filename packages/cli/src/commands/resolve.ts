@@ -128,13 +128,30 @@ export async function cmdResolve(
           resolveWhitespace,
         });
 
-    // Écriture sur disque (sauf dry-run). L'écriture est concurrente entre
-    // fichiers distincts, mais chaque fichier n'a qu'un seul writer — il n'y
-    // a donc pas de write-race possible tant que les chemins sont distincts.
+    // Écriture sur disque (sauf dry-run). Bloquée si des marqueurs résiduels
+    // sont détectés dans mergedContent (résolution complète) — écrire un tel
+    // fichier laisserait le repo dans un état conflictuel apparent. Les erreurs
+    // de syntaxe n'empêchent pas l'écriture mais génèrent un avertissement.
+    // buildPartialContent conserve intentionnellement les marqueurs des conflits
+    // non résolus — ceux-là ne déclenchent pas le blocage.
+    let skipWrite = false;
+    let validationWarning: string | null = null;
     if (!flags["dry-run"] && result.stats.autoResolved > 0) {
-      const newContent =
-        result.mergedContent ?? buildPartialContent(content, result.resolutions);
-      await writeFile(filePath, newContent, "utf-8");
+      if (result.mergedContent !== null && result.validation.hasResidualMarkers) {
+        skipWrite = true;
+        validationWarning = "residual conflict markers detected — file NOT written";
+      } else if (result.mergedContent !== null && !result.validation.isValid) {
+        const reasons: string[] = [];
+        if (result.validation.syntaxError) reasons.push(result.validation.syntaxError);
+        else if ((result.validation.parseTreeErrors ?? 0) > 0)
+          reasons.push(`${result.validation.parseTreeErrors} parse-tree error(s)`);
+        if (reasons.length) validationWarning = reasons.join("; ");
+      }
+      if (!skipWrite) {
+        const newContent =
+          result.mergedContent ?? buildPartialContent(content, result.resolutions);
+        await writeFile(filePath, newContent, "utf-8");
+      }
     }
 
     const printLines: string[] = [];
@@ -148,6 +165,11 @@ export async function cmdResolve(
         printLines.push(
           `${color}  ${icon} ${file} — ${result.stats.autoResolved}/${result.stats.totalConflicts} resolved${c.reset}`,
         );
+
+        if (validationWarning) {
+          const warnColor = skipWrite ? c.red : c.yellow;
+          printLines.push(`${warnColor}    ⚠ validation: ${validationWarning}${c.reset}`);
+        }
 
         if (verbose) {
           for (const res of result.resolutions) {

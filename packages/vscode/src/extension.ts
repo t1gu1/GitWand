@@ -302,9 +302,20 @@ async function cmdResolveFile() {
     editBuilder.replace(fullRange, result.mergedContent!);
   });
 
-  vscode.window.showInformationMessage(
-    `${WAND} GitWand: ${result.stats.autoResolved}/${result.stats.totalConflicts} conflict(s) auto-resolved.`,
-  );
+  if (!result.validation.isValid) {
+    const reasons: string[] = [];
+    if (result.validation.hasResidualMarkers) reasons.push("residual conflict markers");
+    if (result.validation.syntaxError) reasons.push(result.validation.syntaxError);
+    else if ((result.validation.parseTreeErrors ?? 0) > 0)
+      reasons.push(`${result.validation.parseTreeErrors} parse error(s)`);
+    vscode.window.showWarningMessage(
+      `${WAND} GitWand: ${result.stats.autoResolved} conflict(s) resolved — validation issues: ${reasons.join("; ")}. Review before committing.`,
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `${WAND} GitWand: ${result.stats.autoResolved}/${result.stats.totalConflicts} conflict(s) auto-resolved.`,
+    );
+  }
 }
 
 async function cmdResolveAll() {
@@ -321,6 +332,7 @@ async function cmdResolveAll() {
   let totalResolved = 0;
   let totalConflicts = 0;
   let filesResolved = 0;
+  let filesWithValidationIssues = 0;
 
   for (const uri of allUris) {
     let content: string;
@@ -343,11 +355,16 @@ async function cmdResolveAll() {
     totalConflicts += result.stats.totalConflicts;
 
     if (result.stats.autoResolved > 0 && result.mergedContent) {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(content.length));
-      workspaceEdit.replace(uri, fullRange, result.mergedContent);
-      totalResolved += result.stats.autoResolved;
-      filesResolved++;
+      if (result.validation.hasResidualMarkers) {
+        filesWithValidationIssues++;
+      } else {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        const fullRange = new vscode.Range(doc.positionAt(0), doc.positionAt(content.length));
+        workspaceEdit.replace(uri, fullRange, result.mergedContent);
+        totalResolved += result.stats.autoResolved;
+        filesResolved++;
+        if (!result.validation.isValid) filesWithValidationIssues++;
+      }
     }
   }
 
@@ -364,9 +381,16 @@ async function cmdResolveAll() {
   }
 
   await vscode.workspace.applyEdit(workspaceEdit);
-  vscode.window.showInformationMessage(
-    `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved across ${filesResolved} file(s).`,
-  );
+
+  if (filesWithValidationIssues > 0) {
+    vscode.window.showWarningMessage(
+      `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved — ${filesWithValidationIssues} file(s) have validation issues. Review before committing.`,
+    );
+  } else {
+    vscode.window.showInformationMessage(
+      `${WAND} GitWand: ${totalResolved}/${totalConflicts} conflict(s) resolved across ${filesResolved} file(s).`,
+    );
+  }
 }
 
 async function cmdStatus() {
