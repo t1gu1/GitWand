@@ -1274,6 +1274,7 @@ const terminalPanelRef = ref<any>(null);
 async function openTerminalTab(cwd?: string) {
   if (!repoFolderPath.value) return;
   showTerminal.value = true;
+  const shell = settings.value.terminalShell || undefined;
   const tab = await termSessions.openTab(
     repoFolderPath.value,
     cwd ?? repoFolderPath.value,
@@ -1281,6 +1282,7 @@ async function openTerminalTab(cwd?: string) {
       terminalPanelRef.value?.writeChunk(sessionId, chunk);
       termSessions.notifyOutput(repoFolderPath.value!);
     },
+    shell !== undefined ? { shell } : undefined,
   );
   return tab;
 }
