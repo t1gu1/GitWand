@@ -29,7 +29,7 @@ const KIND_BADGE: Record<DirtyFileKind, string> = {
 <template>
   <BaseModal
     :title="t('branches.dirtySwitchTitle')"
-    size="sm"
+    size="2x"
     role="alertdialog"
     @close="emit('close')"
   >
@@ -50,10 +50,7 @@ const KIND_BADGE: Record<DirtyFileKind, string> = {
     </div>
 
     <template #footer>
-      <button type="button" class="bm-btn bm-btn--ghost" @click="emit('close')">
-        {{ t('branches.dirtySwitchCancel') }}
-      </button>
-      <button type="button" class="bm-btn" @click="emit('commit-first')">
+      <button type="button" class="bm-btn bm-btn--ghost" @click="emit('commit-first')">
         {{ t('branches.dirtySwitchCommitFirst') }}
       </button>
       <button type="button" class="bm-btn bm-btn--primary" @click="emit('carry')">
@@ -68,6 +65,9 @@ const KIND_BADGE: Record<DirtyFileKind, string> = {
   margin: 0 0 var(--space-3);
   color: var(--text-secondary);
   line-height: 1.5;
+}
+.dsm-files {
+  margin-top: var(--space-4);
 }
 .dsm-files__label {
   font-size: 0.8rem;

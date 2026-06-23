@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted } from "vue";
 import { useI18n } from "../composables/useI18n";
 
-type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
+type ModalSize = "sm" | "md" | "lg" | "xl" | "full" | "2x";
 type ModalPosition = "center" | "top";
 
 const props = withDefaults(
@@ -11,7 +11,7 @@ const props = withDefaults(
     title?: string;
     /** Optional subtitle / secondary text shown next to or below the title (e.g. commit hash). */
     subtitle?: string;
-    /** Panel max-width preset. sm=400, md=520, lg=640, xl=960, full=90vw. */
+    /** Panel max-width preset. sm=400, md=520, lg=640, xl=960, full=90vw. 2x=800. */
     size?: ModalSize;
     /** Vertical alignment. "top" keeps the panel pinned toward the top (command palette style). */
     position?: ModalPosition;
@@ -183,6 +183,7 @@ onUnmounted(() => {
 .base-modal--sm   { width: min(400px, 92vw); }
 .base-modal--md   { width: min(520px, 92vw); }
 .base-modal--lg   { width: min(640px, 92vw); }
+.base-modal--2x   { width: min(800px, 92vw); }
 .base-modal--xl   { width: min(960px, 94vw); max-height: 92vh; }
 .base-modal--full { width: min(1200px, 94vw); max-height: 92vh; }
 
