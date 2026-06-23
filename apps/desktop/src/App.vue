@@ -82,7 +82,7 @@ import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useWorkspaceScope } from "./composables/useWorkspaceScope";
 import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
-import { useSettings, DEFAULT_DOCK_ORDER } from "./composables/useSettings";
+import { useSettings, normalizeDockOrder, isDockEntryHidden } from "./composables/useSettings";
 import { useNetworkStatus } from "./composables/useNetworkStatus";
 import { useConnectivity } from "./composables/useConnectivity";
 import { useScheduler } from "./composables/useScheduler";
@@ -391,12 +391,9 @@ onMounted(() => {
     return;
   }
   // "default" → first dock entry the user has left visible, in dock order.
-  const order = settings.value.dockOrder?.length ? settings.value.dockOrder : DEFAULT_DOCK_ORDER;
-  const hidden = (id: string) =>
-    (id === "launchpad" && settings.value.dockHideLaunchpad) ||
-    (id === "dashboard" && settings.value.dockHideDashboard) ||
-    (id === "prs" && settings.value.dockHidePrs);
-  const first = order.find((id) => !hidden(id));
+  const first = normalizeDockOrder(settings.value.dockOrder).find(
+    (id) => !isDockEntryHidden(id, settings.value),
+  );
   if (first) viewMode.value = first as ViewMode;
 });
 

@@ -1009,7 +1009,6 @@ const zhCN: Locale = {
         help: "垂直显示停靠栏，文字也垂直排列。",
       },
       resetPosition: "重置位置",
-      lockDock: "锁定停靠栏",
       handleTooltip: "拖动以移动 — 右键单击查看选项",
       order: {
         label: "停靠栏顺序",

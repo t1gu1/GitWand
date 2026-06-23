@@ -1248,7 +1248,6 @@ const fr: Locale = {
         help: "Affiche le dock verticalement, avec des libellés orientés à la verticale.",
       },
       resetPosition: "Réinitialiser la position",
-      lockDock: "Verrouiller le dock",
       handleTooltip: "Glisser pour déplacer — clic droit pour les options",
       order: {
         label: "Ordre du dock",

@@ -13,7 +13,7 @@
 import { computed, ref, inject, nextTick, onBeforeUnmount } from "vue";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
-import { useSettings, DEFAULT_DOCK_ORDER, type DockEntryId } from "../composables/useSettings";
+import { useSettings, normalizeDockOrder, isDockEntryHidden, type DockEntryId } from "../composables/useSettings";
 import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
 
 const props = defineProps<{
@@ -45,10 +45,7 @@ const vertical = computed(() => settings.value.dockVertical);
 const idleOpacity = computed(() => settings.value.dockIdleOpacity ?? 0.45);
 
 function isHidden(id: DockEntryId): boolean {
-  if (id === "launchpad") return settings.value.dockHideLaunchpad;
-  if (id === "dashboard") return settings.value.dockHideDashboard;
-  if (id === "prs") return settings.value.dockHidePrs;
-  return false; // graph + changes are always shown
+  return isDockEntryHidden(id, settings.value);
 }
 
 function entryLabel(id: DockEntryId): string {
@@ -62,12 +59,7 @@ function entryLabel(id: DockEntryId): string {
 }
 
 /** Persisted order, normalised so all five entries are always present. */
-const orderedIds = computed<DockEntryId[]>(() => {
-  const stored = settings.value.dockOrder?.length ? settings.value.dockOrder : DEFAULT_DOCK_ORDER;
-  const known = stored.filter((id) => DEFAULT_DOCK_ORDER.includes(id));
-  const missing = DEFAULT_DOCK_ORDER.filter((id) => !known.includes(id));
-  return [...known, ...missing];
-});
+const orderedIds = computed<DockEntryId[]>(() => normalizeDockOrder(settings.value.dockOrder));
 
 /** Order, minus the entries the user has hidden. */
 const visibleIds = computed<DockEntryId[]>(() => orderedIds.value.filter((id) => !isHidden(id)));

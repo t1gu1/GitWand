@@ -76,7 +76,7 @@ import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
 import type { IdentityProfile, CommitTemplate, AiPromptPreset, DockEntryId } from "../composables/useSettings";
-import { DEFAULT_DOCK_ORDER, refreshSettings as refreshSharedSettings } from "../composables/useSettings";
+import { DEFAULT_DOCK_ORDER, normalizeDockOrder, refreshSettings as refreshSharedSettings } from "../composables/useSettings";
 import { gitCommitTemplatePath, openExternalUrl } from "../utils/backend";
 export type { AIProvider };
 
@@ -276,12 +276,7 @@ function dockEntryLabel(id: DockEntryId): string {
 }
 
 /** Persisted order, normalised so all five entries are always present. */
-const dockOrder = computed<DockEntryId[]>(() => {
-  const stored = settings.value.dockOrder?.length ? settings.value.dockOrder : DEFAULT_DOCK_ORDER;
-  const known = stored.filter((id) => DEFAULT_DOCK_ORDER.includes(id));
-  const missing = DEFAULT_DOCK_ORDER.filter((id) => !known.includes(id));
-  return [...known, ...missing];
-});
+const dockOrder = computed<DockEntryId[]>(() => normalizeDockOrder(settings.value.dockOrder));
 
 function moveDockEntry(id: DockEntryId, dir: -1 | 1) {
   const arr = [...dockOrder.value];

@@ -30,6 +30,29 @@ export type DockEntryId = "launchpad" | "dashboard" | "prs" | "graph" | "changes
 /** Canonical default dock order, left → right. */
 export const DEFAULT_DOCK_ORDER: DockEntryId[] = ["launchpad", "dashboard", "prs", "graph", "changes"];
 
+/**
+ * Normalise a stored dock order so all five entries are present exactly once:
+ * keep the known/persisted order, then append any missing entries in default
+ * order. Shared by AppDock (render order) and SettingsPanel (reorder list).
+ */
+export function normalizeDockOrder(stored: DockEntryId[] | undefined): DockEntryId[] {
+  const order = stored?.length ? stored : DEFAULT_DOCK_ORDER;
+  const known = order.filter((id) => DEFAULT_DOCK_ORDER.includes(id));
+  const missing = DEFAULT_DOCK_ORDER.filter((id) => !known.includes(id));
+  return [...known, ...missing];
+}
+
+/** Per-entry "hidden from dock" flag. Git Tree & Changes are never hideable. */
+export function isDockEntryHidden(
+  id: DockEntryId,
+  flags: Pick<AppSettings, "dockHideLaunchpad" | "dockHideDashboard" | "dockHidePrs">,
+): boolean {
+  if (id === "launchpad") return flags.dockHideLaunchpad;
+  if (id === "dashboard") return flags.dockHideDashboard;
+  if (id === "prs") return flags.dockHidePrs;
+  return false;
+}
+
 /** Named committer identity — stored in AppSettings, selected per-commit or per-repo (v2.12). */
 export interface IdentityProfile {
   /** UUID v4 — stable key across renames. */

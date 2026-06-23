@@ -1264,7 +1264,6 @@ const en = {
         help: "Lay the dock out vertically, with vertically-oriented labels.",
       },
       resetPosition: "Reset position",
-      lockDock: "Lock dock",
       handleTooltip: "Drag to move — right-click for options",
       order: {
         label: "Dock order",

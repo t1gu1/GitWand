@@ -1239,7 +1239,6 @@ const ptBR: Locale = {
         help: "Exibe o dock verticalmente, com r\u00f3tulos orientados na vertical.",
       },
       resetPosition: "Redefinir posi\u00e7\u00e3o",
-      lockDock: "Bloquear o dock",
       handleTooltip: "Arraste para mover \u2014 clique direito para op\u00e7\u00f5es",
       order: {
         label: "Ordem do dock",
