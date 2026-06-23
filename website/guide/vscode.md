@@ -2,6 +2,23 @@
 
 The GitWand VS Code extension brings conflict resolution directly into your editor with CodeLens annotations, diagnostics, and one-click resolution.
 
+## Installation
+
+The extension is not yet published to the VS Code Marketplace — install it from source by building a `.vsix` from the monorepo:
+
+```bash
+# From the GitWand monorepo root
+pnpm install
+pnpm --filter @gitwand/core build
+
+cd packages/vscode
+pnpm build
+npx @vscode/vsce package --no-dependencies
+
+# Install the generated .vsix into VS Code
+code --install-extension gitwand-vscode-*.vsix
+```
+
 ## Features
 
 ### CodeLens
