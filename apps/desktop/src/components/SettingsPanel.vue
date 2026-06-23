@@ -1092,10 +1092,8 @@ function savePresetForm() {
               </svg>
               <svg v-else-if="tab.icon === 'dock'" width="15" height="15" viewBox="0 0 16 16" fill="none"
                 stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="1.5" y="9.5" width="13" height="4" rx="2" />
-                <circle cx="4.5" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
-                <circle cx="8" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
-                <circle cx="11.5" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
+                <rect x="1.75" y="2.5" width="12.5" height="11" rx="2" />
+                <rect x="4" y="9.5" width="8" height="2.25" rx="1.1" fill="currentColor" stroke="none" />
               </svg>
               <svg v-else-if="tab.icon === 'dashboard'" width="15" height="15" viewBox="0 0 16 16" fill="none"
                 stroke="currentColor" stroke-width="1.4">
