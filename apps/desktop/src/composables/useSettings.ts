@@ -152,6 +152,23 @@ export interface AppSettings {
   /** Hide the README card on the dashboard. */
   dashboardHideReadme: boolean;
 
+  // ── Dock & startup view (v3) ──────────────────────────────
+
+  /**
+   * View shown when the app opens. "default" keeps the built-in dashboard
+   * landing; other values force Today (launchpad), Dashboard, PRs, or the
+   * Git Tree (graph) as the starting page.
+   */
+  startupView: "default" | "launchpad" | "dashboard" | "prs" | "graph";
+  /** Hide the Today (launchpad) entry from the bottom dock. */
+  dockHideLaunchpad: boolean;
+  /** Hide the Dashboard entry from the bottom dock. */
+  dockHideDashboard: boolean;
+  /** Hide the PRs entry from the bottom dock. */
+  dockHidePrs: boolean;
+  /** Show only icons in the bottom dock (hide text labels). */
+  dockIconsOnly: boolean;
+
   /** Automation settings (v2.8). */
   automations: {
     /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
@@ -253,6 +270,11 @@ export const defaultAppSettings: AppSettings = {
   dashboardHideContributors: false,
   dashboardHideActivity: false,
   dashboardHideReadme: false,
+  startupView: "default",
+  dockHideLaunchpad: false,
+  dockHideDashboard: false,
+  dockHidePrs: false,
+  dockIconsOnly: false,
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },

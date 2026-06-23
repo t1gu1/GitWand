@@ -12,6 +12,7 @@
 import { computed } from "vue";
 import type { ViewMode } from "../composables/useGitRepo";
 import { useI18n } from "../composables/useI18n";
+import { useSettings } from "../composables/useSettings";
 
 const props = defineProps<{
   viewMode: ViewMode;
@@ -26,13 +27,21 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { settings } = useSettings();
 
 type DockItem = { id: ViewMode; label: string };
 
-const items = computed<DockItem[]>(() => [
-  { id: "dashboard", label: t("sidebar.tabDashboard") },
-  { id: "prs", label: "PRs" },
-]);
+const items = computed<DockItem[]>(() => {
+  const list: DockItem[] = [];
+  if (!settings.value.dockHideDashboard) list.push({ id: "dashboard", label: t("sidebar.tabDashboard") });
+  if (!settings.value.dockHidePrs) list.push({ id: "prs", label: "PRs" });
+  return list;
+});
+
+/** Today (launchpad) entry is hideable; Git Tree & Changes are always shown. */
+const showLaunchpad = computed(() => !settings.value.dockHideLaunchpad);
+/** When true, the dock renders icons only — text labels are hidden. */
+const iconsOnly = computed(() => settings.value.dockIconsOnly);
 
 function isActive(id: ViewMode): boolean {
   // History is a sub-view reached from the Git Tree (clicking a commit), so
@@ -44,9 +53,10 @@ function isActive(id: ViewMode): boolean {
 
 <template>
   <nav class="app-dock" :aria-label="t('sidebar.tabChanges')">
-    <div class="app-dock__pill">
+    <div class="app-dock__pill" :class="{ 'app-dock__pill--icons-only': iconsOnly }">
       <!-- Launchpad — cross-repo hub (relocated here from the header). -->
       <button
+        v-if="showLaunchpad"
         class="dock-btn"
         :class="{ 'dock-btn--active': isActive('launchpad') }"
         :aria-pressed="isActive('launchpad')"
@@ -64,7 +74,7 @@ function isActive(id: ViewMode): boolean {
       </button>
 
       <!-- Separates the cross-repo Launchpad from the per-repo views. -->
-      <span class="dock-sep" aria-hidden="true"></span>
+      <span v-if="showLaunchpad" class="dock-sep" aria-hidden="true"></span>
 
       <button
         v-for="item in items"
@@ -187,6 +197,15 @@ function isActive(id: ViewMode): boolean {
 
 .dock-label {
   line-height: 1;
+}
+
+/* Icons-only mode — hide labels, tighten the buttons to square icon tiles. */
+.app-dock__pill--icons-only .dock-label {
+  display: none;
+}
+
+.app-dock__pill--icons-only .dock-btn {
+  padding: var(--space-3, 9px);
 }
 
 .dock-badge {

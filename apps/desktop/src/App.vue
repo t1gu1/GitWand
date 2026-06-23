@@ -381,6 +381,21 @@ watch(
   { immediate: true },
 );
 
+// Apply the user's configured starting view (Settings → Dock). "default"
+// lands on the first dock entry the user has left visible (dock order: Today →
+// Dashboard → PRs → Git Tree); any explicit value forces that view directly.
+onMounted(() => {
+  const sv = settings.value.startupView;
+  if (sv && sv !== "default") {
+    viewMode.value = sv;
+    return;
+  }
+  if (!settings.value.dockHideLaunchpad) viewMode.value = "launchpad";
+  else if (!settings.value.dockHideDashboard) viewMode.value = "dashboard";
+  else if (!settings.value.dockHidePrs) viewMode.value = "prs";
+  else viewMode.value = "graph";
+});
+
 // ─── Computed state ─────────────────────────────────────
 const hasFiles = computed(() => repoFiles.value.length > 0);
 

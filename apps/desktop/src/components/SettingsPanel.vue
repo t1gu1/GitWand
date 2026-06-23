@@ -147,6 +147,12 @@ interface Settings {
   dashboardHideContributors: boolean;
   dashboardHideActivity: boolean;
   dashboardHideReadme: boolean;
+  // Dock & startup view (v3)
+  startupView: "default" | "launchpad" | "dashboard" | "prs" | "graph";
+  dockHideLaunchpad: boolean;
+  dockHideDashboard: boolean;
+  dockHidePrs: boolean;
+  dockIconsOnly: boolean;
   // Automation settings (v2.8)
   automations: {
     autoResolve: { enabled: boolean };
@@ -199,6 +205,11 @@ const defaultSettings: Settings = {
   dashboardHideContributors: false,
   dashboardHideActivity: false,
   dashboardHideReadme: false,
+  startupView: "default",
+  dockHideLaunchpad: false,
+  dockHideDashboard: false,
+  dockHidePrs: false,
+  dockIconsOnly: false,
   automations: {
     autoResolve: { enabled: false },
     nightlyPull: { enabled: false, hour: 8, minute: 0 },
@@ -240,7 +251,7 @@ function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+type SettingsTab = "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 // ─── Logs tab — formatting + clipboard ──────────────────
@@ -293,6 +304,7 @@ async function copyAllLogs() {
 
 const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "general", icon: "general" },
+  { id: "dock", icon: "dock" },
   { id: "dashboard", icon: "dashboard" },
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
@@ -306,7 +318,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
 
 // ─── Nav sidebar groups (OpenCode-style left nav) ────────
 const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = [
-  { label: "Application", tabs: ["general", "dashboard", "editor"] },
+  { label: "Application", tabs: ["general", "dock", "dashboard", "editor"] },
   { label: "Dépôt", tabs: ["git", "hooks", "accounts"] },
   { label: "IA & Agents", tabs: ["ai", "mcp", "automations"] },
   { label: "Système", tabs: ["logs"] },
@@ -315,6 +327,7 @@ const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = 
 function tabLabel(id: SettingsTab): string {
   switch (id) {
     case "general": return t("settings.tabGeneral");
+    case "dock": return t("settings.tabDock");
     case "dashboard": return t("settings.tabDashboard");
     case "git": return t("settings.tabGit");
     case "editor": return t("settings.tabEditor");
@@ -1031,6 +1044,13 @@ function savePresetForm() {
                 <path
                   d="M8 1v2m0 10v2m-7-7h2m10 0h2m-2.05-4.95-1.41 1.41m-7.08 7.08-1.41 1.41m0-9.9 1.41 1.41m7.08 7.08 1.41 1.41" />
               </svg>
+              <svg v-else-if="tab.icon === 'dock'" width="15" height="15" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1.5" y="9.5" width="13" height="4" rx="2" />
+                <circle cx="4.5" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
+                <circle cx="8" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
+                <circle cx="11.5" cy="11.5" r="0.9" fill="currentColor" stroke="none" />
+              </svg>
               <svg v-else-if="tab.icon === 'dashboard'" width="15" height="15" viewBox="0 0 16 16" fill="none"
                 stroke="currentColor" stroke-width="1.4">
                 <rect x="2" y="2" width="5" height="5" rx="1" />
@@ -1242,6 +1262,77 @@ function savePresetForm() {
         </template>
 
         <!-- ═══ DASHBOARD ═══ -->
+        <!-- ═══ DOCK ═══ -->
+        <template v-if="activeSettingsTab === 'dock'">
+          <!-- Starting view -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-startup-view">{{ t('settings.dock.startupView.label') }}</label>
+            <select id="setting-startup-view" class="sp-select" :value="settings.startupView"
+              @change="updateSetting('startupView', ($event.target as HTMLSelectElement).value as Settings['startupView'])">
+              <option value="default">{{ t('settings.dock.startupView.default') }}</option>
+              <option value="launchpad">{{ t('settings.dock.itemToday') }}</option>
+              <option value="dashboard">{{ t('settings.dock.itemDashboard') }}</option>
+              <option value="prs">{{ t('settings.dock.itemPrs') }}</option>
+              <option value="graph">{{ t('settings.dock.itemGitTree') }}</option>
+            </select>
+            <span class="sp-hint">{{ t('settings.dock.startupView.help') }}</span>
+          </div>
+
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.visibility.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.visibility.help') }}</span>
+          </div>
+
+          <!-- Show Today -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-today">
+              <input id="setting-dock-today" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHideLaunchpad"
+                @change="updateSetting('dockHideLaunchpad', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showToday') }}</span>
+            </label>
+          </div>
+
+          <!-- Show Dashboard -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-dashboard">
+              <input id="setting-dock-dashboard" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHideDashboard"
+                @change="updateSetting('dockHideDashboard', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showDashboard') }}</span>
+            </label>
+          </div>
+
+          <!-- Show PRs -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-prs">
+              <input id="setting-dock-prs" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHidePrs"
+                @change="updateSetting('dockHidePrs', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showPrs') }}</span>
+            </label>
+          </div>
+
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label sp-checkbox-label--locked">
+              <input type="checkbox" class="sp-checkbox" checked disabled />
+              <span>{{ t('settings.dock.gitTreeLocked') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dock.lockedHint') }}</span>
+          </div>
+
+          <!-- Icons only -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-icons-only">
+              <input id="setting-dock-icons-only" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockIconsOnly"
+                @change="updateSetting('dockIconsOnly', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.iconsOnly.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dock.iconsOnly.help') }}</span>
+          </div>
+        </template>
+
         <template v-if="activeSettingsTab === 'dashboard'">
           <!-- README first row -->
           <div class="sp-row sp-row--checkbox">

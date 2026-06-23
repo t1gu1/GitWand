@@ -984,6 +984,7 @@ const fr: Locale = {
   settings: {
     title: "Param\u00e8tres",
     tabGeneral: "G\u00e9n\u00e9ral",
+    tabDock: "Dock",
     tabDashboard: "Tableau de bord",
     tabGit: "Git",
     tabEditor: "\u00c9diteur",
@@ -1200,6 +1201,30 @@ const fr: Locale = {
       hideReadme: {
         label: "Masquer le README",
         help: "Masque la carte README sur le tableau de bord.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vue de démarrage",
+        default: "Par défaut",
+        help: "Vue affichée à l'ouverture de GitWand. « Par défaut » utilise la première entrée visible du dock.",
+      },
+      visibility: {
+        label: "Entrées du dock",
+        help: "Choisissez les entrées affichées dans le dock en bas.",
+      },
+      itemToday: "Aujourd'hui",
+      itemDashboard: "Tableau de bord",
+      itemPrs: "PRs",
+      itemGitTree: "Arbre Git",
+      showToday: "Afficher Aujourd'hui",
+      showDashboard: "Afficher le tableau de bord",
+      showPrs: "Afficher les PRs",
+      gitTreeLocked: "Arbre Git & Modifications",
+      lockedHint: "Toujours affichés — non supprimables.",
+      iconsOnly: {
+        label: "Icônes uniquement",
+        help: "Masque les libellés du dock et n'affiche que les icônes.",
       },
     },
 

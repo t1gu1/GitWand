@@ -992,6 +992,7 @@ const en = {
     title: "Settings",
     // Tab titles
     tabGeneral: "General",
+    tabDock: "Dock",
     tabDashboard: "Dashboard",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1216,6 +1217,30 @@ const en = {
       hideReadme: {
         label: "Hide README",
         help: "Hide the README card on the dashboard.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Starting view",
+        default: "Default",
+        help: "View shown when GitWand opens. \"Default\" uses the first visible dock entry.",
+      },
+      visibility: {
+        label: "Dock entries",
+        help: "Choose which entries appear in the bottom dock.",
+      },
+      itemToday: "Today",
+      itemDashboard: "Dashboard",
+      itemPrs: "PRs",
+      itemGitTree: "Git Tree",
+      showToday: "Show Today",
+      showDashboard: "Show Dashboard",
+      showPrs: "Show PRs",
+      gitTreeLocked: "Git Tree & Changes",
+      lockedHint: "Always shown — cannot be removed.",
+      iconsOnly: {
+        label: "Icons only",
+        help: "Hide the text labels in the dock and show only icons.",
       },
     },
 

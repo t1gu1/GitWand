@@ -963,6 +963,31 @@ const zhCN: Locale = {
   settings: {
     title: "设置",
     tabGeneral: "通用",
+    tabDock: "停靠栏",
+    dock: {
+      startupView: {
+        label: "起始视图",
+        default: "默认",
+        help: "打开 GitWand 时显示的视图。“默认”使用停靠栏中第一个可见项目。",
+      },
+      visibility: {
+        label: "停靠栏项目",
+        help: "选择底部停靠栏中显示的项目。",
+      },
+      itemToday: "今天",
+      itemDashboard: "仪表板",
+      itemPrs: "PRs",
+      itemGitTree: "Git 树",
+      showToday: "显示今天",
+      showDashboard: "显示仪表板",
+      showPrs: "显示 PRs",
+      gitTreeLocked: "Git 树和更改",
+      lockedHint: "始终显示 — 无法移除。",
+      iconsOnly: {
+        label: "仅图标",
+        help: "隐藏停靠栏中的文字标签，仅显示图标。",
+      },
+    },
     tabDashboard: "仪表盘",
     tabGit: "Git",
     tabEditor: "编辑器",

@@ -976,6 +976,7 @@ const ptBR: Locale = {
   settings: {
     title: "Configurações",
     tabGeneral: "Geral",
+    tabDock: "Dock",
     tabDashboard: "Painel",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1191,6 +1192,30 @@ const ptBR: Locale = {
       hideReadme: {
         label: "Ocultar o README",
         help: "Oculta o cart\u00e3o README no painel.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vista inicial",
+        default: "Padr\u00e3o",
+        help: "Vista exibida ao abrir o GitWand. \"Padr\u00e3o\" usa a primeira entrada vis\u00edvel do dock.",
+      },
+      visibility: {
+        label: "Entradas do dock",
+        help: "Escolha quais entradas aparecem no dock inferior.",
+      },
+      itemToday: "Hoje",
+      itemDashboard: "Painel",
+      itemPrs: "PRs",
+      itemGitTree: "\u00c1rvore Git",
+      showToday: "Mostrar Hoje",
+      showDashboard: "Mostrar Painel",
+      showPrs: "Mostrar PRs",
+      gitTreeLocked: "\u00c1rvore Git e Altera\u00e7\u00f5es",
+      lockedHint: "Sempre vis\u00edveis \u2014 n\u00e3o podem ser removidos.",
+      iconsOnly: {
+        label: "Apenas \u00edcones",
+        help: "Oculta os r\u00f3tulos do dock e mostra apenas os \u00edcones.",
       },
     },
 

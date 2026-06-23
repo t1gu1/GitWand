@@ -975,6 +975,7 @@ const es: Locale = {
   settings: {
     title: "Ajustes",
     tabGeneral: "General",
+    tabDock: "Dock",
     tabDashboard: "Panel",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1191,6 +1192,30 @@ const es: Locale = {
       hideReadme: {
         label: "Ocultar el README",
         help: "Oculta la tarjeta README en el panel.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vista de inicio",
+        default: "Predeterminada",
+        help: "Vista mostrada al abrir GitWand. «Predeterminada» usa la primera entrada visible del dock.",
+      },
+      visibility: {
+        label: "Entradas del dock",
+        help: "Elige qué entradas aparecen en el dock inferior.",
+      },
+      itemToday: "Hoy",
+      itemDashboard: "Panel",
+      itemPrs: "PRs",
+      itemGitTree: "Árbol Git",
+      showToday: "Mostrar Hoy",
+      showDashboard: "Mostrar Panel",
+      showPrs: "Mostrar PRs",
+      gitTreeLocked: "Árbol Git y Cambios",
+      lockedHint: "Siempre visibles — no se pueden quitar.",
+      iconsOnly: {
+        label: "Solo iconos",
+        help: "Oculta las etiquetas del dock y muestra solo los iconos.",
       },
     },
 
