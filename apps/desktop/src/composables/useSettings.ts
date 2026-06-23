@@ -174,6 +174,8 @@ export interface AppSettings {
   dockIconsOnly: boolean;
   /** Lay the dock out vertically (column) with vertically-oriented labels. */
   dockVertical: boolean;
+  /** Dock opacity (0–1) when the cursor is not over it. 1 = always opaque. */
+  dockIdleOpacity: number;
   /**
    * When true, the dock can be dragged to a free position via its left handle.
    * When false (default) it stays pinned bottom-center.
@@ -299,6 +301,7 @@ export const defaultAppSettings: AppSettings = {
   dockHidePrs: false,
   dockIconsOnly: false,
   dockVertical: false,
+  dockIdleOpacity: 0.45,
   dockUnlocked: false,
   dockPosition: null,
   dockOrder: [...DEFAULT_DOCK_ORDER],

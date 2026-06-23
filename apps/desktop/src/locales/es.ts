@@ -1218,6 +1218,10 @@ const es: Locale = {
         help: "Oculta las etiquetas del dock y muestra solo los iconos.",
         verticalHint: "Siempre activo cuando el dock está en vertical.",
       },
+      idleOpacity: {
+        label: "Opacidad en reposo",
+        help: "Opacidad del dock cuando el cursor no está encima. Vuelve a ser opaco al pasar el ratón.",
+      },
       itemChanges: "Cambios",
       appearance: {
         label: "Apariencia",

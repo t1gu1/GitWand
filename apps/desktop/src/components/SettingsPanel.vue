@@ -155,6 +155,7 @@ interface Settings {
   dockHidePrs: boolean;
   dockIconsOnly: boolean;
   dockVertical: boolean;
+  dockIdleOpacity: number;
   dockUnlocked: boolean;
   dockPosition: { x: number; y: number } | null;
   dockOrder: DockEntryId[];
@@ -216,6 +217,7 @@ const defaultSettings: Settings = {
   dockHidePrs: false,
   dockIconsOnly: false,
   dockVertical: false,
+  dockIdleOpacity: 0.45,
   dockUnlocked: false,
   dockPosition: null,
   dockOrder: [...DEFAULT_DOCK_ORDER],
@@ -1381,6 +1383,17 @@ function savePresetForm() {
               <span>{{ t('settings.dock.iconsOnly.label') }}</span>
             </label>
             <span class="sp-hint">{{ settings.dockVertical ? t('settings.dock.iconsOnly.verticalHint') : t('settings.dock.iconsOnly.help') }}</span>
+          </div>
+
+          <!-- Idle opacity -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-dock-idle-opacity">
+              {{ t('settings.dock.idleOpacity.label') }} — {{ Math.round(settings.dockIdleOpacity * 100) }}%
+            </label>
+            <input id="setting-dock-idle-opacity" type="range" class="sp-range" style="max-width: 300px;"
+              min="0.1" max="1" step="0.05" :value="settings.dockIdleOpacity"
+              @input="updateSetting('dockIdleOpacity', parseFloat(($event.target as HTMLInputElement).value))" />
+            <span class="sp-hint">{{ t('settings.dock.idleOpacity.help') }}</span>
           </div>
 
           <!-- ── Position ── -->

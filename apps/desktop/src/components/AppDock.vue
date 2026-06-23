@@ -42,6 +42,7 @@ function patch(p: Partial<typeof settings.value>) {
 
 const iconsOnly = computed(() => settings.value.dockIconsOnly);
 const vertical = computed(() => settings.value.dockVertical);
+const idleOpacity = computed(() => settings.value.dockIdleOpacity ?? 0.45);
 
 function isHidden(id: DockEntryId): boolean {
   if (id === "launchpad") return settings.value.dockHideLaunchpad;
@@ -262,7 +263,7 @@ onBeforeUnmount(() => {
     :style="dockStyle"
     :aria-label="t('sidebar.tabChanges')"
   >
-    <div class="app-dock__pill" :class="{ 'app-dock__pill--icons-only': iconsOnly, 'app-dock__pill--vertical': vertical }">
+    <div class="app-dock__pill" :class="{ 'app-dock__pill--icons-only': iconsOnly, 'app-dock__pill--vertical': vertical }" :style="{ '--dock-idle-opacity': idleOpacity }">
       <!-- Drag handle — only when the dock is unlocked. -->
       <button
         v-if="unlocked"
@@ -396,6 +397,12 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md, 10px);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(8px);
+  opacity: var(--dock-idle-opacity, 0.45);
+  transition: opacity 0.2s ease;
+}
+
+.app-dock__pill:hover {
+  opacity: 1;
 }
 
 .dock-handle {

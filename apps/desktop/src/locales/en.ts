@@ -1243,6 +1243,10 @@ const en = {
         help: "Hide the text labels in the dock and show only icons.",
         verticalHint: "Always on while the dock is vertical.",
       },
+      idleOpacity: {
+        label: "Idle opacity",
+        help: "Dock opacity when the cursor is not over it. It fades back to full on hover.",
+      },
       itemChanges: "Changes",
       appearance: {
         label: "Appearance",

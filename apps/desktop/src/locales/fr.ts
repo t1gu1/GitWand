@@ -1227,6 +1227,10 @@ const fr: Locale = {
         help: "Masque les libellés du dock et n'affiche que les icônes.",
         verticalHint: "Toujours activé lorsque le dock est vertical.",
       },
+      idleOpacity: {
+        label: "Opacité au repos",
+        help: "Opacité du dock quand le curseur n'est pas dessus. Il redevient opaque au survol.",
+      },
       itemChanges: "Modifications",
       appearance: {
         label: "Apparence",

@@ -1218,6 +1218,10 @@ const ptBR: Locale = {
         help: "Oculta os r\u00f3tulos do dock e mostra apenas os \u00edcones.",
         verticalHint: "Sempre ativo quando o dock est\u00e1 na vertical.",
       },
+      idleOpacity: {
+        label: "Opacidade em repouso",
+        help: "Opacidade do dock quando o cursor n\u00e3o est\u00e1 sobre ele. Volta a ficar opaco ao passar o mouse.",
+      },
       itemChanges: "Altera\u00e7\u00f5es",
       appearance: {
         label: "Apar\u00eancia",

@@ -988,6 +988,10 @@ const zhCN: Locale = {
         help: "隐藏停靠栏中的文字标签，仅显示图标。",
         verticalHint: "停靠栏为垂直时始终启用。",
       },
+      idleOpacity: {
+        label: "空闲时不透明度",
+        help: "光标不在停靠栏上时的不透明度。悬停时恢复为完全不透明。",
+      },
       itemChanges: "更改",
       appearance: {
         label: "外观",
