@@ -7,9 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-06-23
+
+### Added
+
+- **Today — triaged action inbox** (was: Launchpad, v2.9.0+) — urgency tiers (À traiter / En attente / Plus tard), state-aware primary action per row (Merge · Review · Resolve · Reply · See failure), local working-state band, reworked card UI (left accent · state pills · CI/review chips · diff stat · avatars · action hierarchy), pill-chip tab bar, centered max-width layout. The rename Launchpad → Today drops the GitKraken-associated term in favour of a daily-driver framing.
+- **VS Code extension on the Marketplace** — `gitwand-vscode` is now published at `marketplace.visualstudio.com/items?itemName=Gitwand.gitwand-vscode`. The extension is bundled with esbuild (inlines `@gitwand/core`, no runtime `node_modules`), published via a new `.github/workflows/publish-vscode.yml` workflow on `vscode-v*` tags or `workflow_dispatch`. The website hero card links directly to the Marketplace.
+- **Dashboard enhancements** — contributor modal with per-contributor stats, activity-bar tooltips with exact commit counts, fortnight (14-day) commit stats replacing the previous 7-day window, trimmed dashboard cards; clicking a commit in the dashboard graph navigates directly to the Git Tree.
+- **Branch management improvements** — top-contributor avatars on branch rows, inline row actions, pinned-branch section; uncommitted working-tree changes are now automatically moved to the target branch when switching or creating a branch; force-delete now prompts for confirmation when the branch is not fully merged.
+- **Full-screen image viewer** — images embedded in markdown files open in a full-screen overlay viewer.
+- **Website** — GUI/CLI hero toggle (Desktop tab focused by default), all platform cards are now clickable links (correct release/npm/Marketplace destinations), Linux download URL casing fixed, launch-directory badge strip below the CTA.
+
 ### Fixed
 
-- **PR panel stuck after a transient "current user" failure** — `ghCurrentUser()` cached its result promise unconditionally, so a one-off failure (a rate-limit blip or momentary GitHub 5xx surfacing as `Failed to get current user: 500`) poisoned the cached identity for the whole app session — the PR panel stayed broken until restart. Only successful results are cached now; a failure is evicted so the next caller retries. The thrown error also carries the server's response body instead of a bare status code.
+- **PR panel stuck after a transient "current user" failure** — `ghCurrentUser()` cached its result promise unconditionally; a rate-limit blip or GitHub 5xx poisoned the identity for the whole session. Only successful results are now cached; failures are evicted so the next caller retries. The error carries the server's response body instead of a bare status code.
+- **CLI: validation issues surfaced in terminal output** — `gitwand resolve` silently wrote merged files even when `result.validation` reported residual conflict markers or post-merge syntax errors. Writes with residual markers are now blocked (red warning, file NOT written); syntax or parse-tree errors emit a yellow warning. The `--ci`/`--json` report already included this data; the human-readable output now matches.
+- **DOMPurify** bumped 3.4.9 → 3.4.11 (security).
+
+### VS Code extension — v1.3.0 (independently versioned)
+
+- **`Resolve All` now covers the entire workspace** — previously iterated only open text documents; now uses `vscode.workspace.findFiles` + `vscode.workspace.fs.readFile` to scan all files, pre-filtered with a conflict-marker regex, capped at 2 MB.
+- **File resolution no longer breaks the confidence penalty** — `cmdResolveFile` was re-resolving each hunk individually, resetting the per-file frequency context; it now calls `resolve()` once on the full content and applies `result.mergedContent` directly.
+- **CodeLens and diagnostics respect `minConfidence`** — the "resolvable" label previously ignored the configured threshold; it now compares `classification.confidence.label` against `minConfidence` via a `CONFIDENCE_RANK` map.
+- **Validation failures surfaced as warnings** — `cmdResolveFile` shows a warning notification when `result.validation.isValid` is false; `cmdResolveAll` skips files with residual markers and reports the count in the completion notification.
 
 ## [2.24.0] - 2026-06-19
 

@@ -5,6 +5,34 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v3.0.0 — June 2026
+
+### Today — your daily-driver action inbox
+
+The Launchpad is now **Today**. The name change is deliberate: "Launchpad" was borrowed vocabulary; "Today" is a frame — _what do I actually do next?_ The surface has been rebuilt around that question.
+
+Every item is now sorted into three collapsible urgency tiers: **À traiter** (needs you now — review requested, CI failed, merge conflicts, ready to merge), **En attente** (waiting on others, CI running, approved-but-blocked), and **Plus tard** (dependency bumps, auto-mergeable, low-priority). Each row surfaces a single, context-aware primary action — not a generic "Open in GitHub" — that routes directly to the right GitWand surface: merge, review, resolve conflicts, reply, or see CI failures. The card UI is completely reworked: a left-side accent band, state pills, CI/review chips, diff stats, contributor avatars, and a clear action hierarchy.
+
+### The VS Code extension is on the Marketplace
+
+The GitWand VS Code extension is now published and installable directly from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Gitwand.gitwand-vscode) — no build-from-source required. Under the hood, the extension was rewritten to bundle `@gitwand/core` inline (using esbuild), so the published VSIX is fully self-contained.
+
+Four correctness bugs were also fixed: **Resolve All** now covers every file in the workspace instead of only the ones currently open in the editor. **Resolve File** no longer re-resolves each conflict hunk in isolation, which was silently breaking the engine's per-file confidence context — it now calls the resolver once on the full file content. The **CodeLens "Resolve" button** now correctly respects your configured minimum-confidence threshold. And **validation failures** — residual conflict markers or post-merge syntax errors — now surface as warning notifications.
+
+The same validation visibility lands in the CLI: `gitwand resolve` blocks a write and prints a red warning if the merged output still contains conflict markers, and emits a yellow warning for syntax errors detected post-merge.
+
+### Dashboard & branch management
+
+The dashboard now shows a contributor modal with per-contributor stats, activity-bar tooltips with exact commit counts, and fortnight (14-day) commit windows instead of the previous 7-day view. Clicking a commit in the dashboard graph takes you straight to that commit in the Git Tree.
+
+In the branch panel, each row now shows top-contributor avatars and inline actions, and you can pin branches to keep the ones you use most at the top. When you switch or create a branch, GitWand now automatically carries your uncommitted working-tree changes with you — no more stash-switch-unstash. And if you try to force-delete a branch that hasn't been fully merged, GitWand asks before it acts.
+
+### Small things that add up
+
+Images in markdown files now open in a full-screen overlay viewer. The website hero now has a GUI/CLI toggle with the Desktop app focused by default, and every platform card is a working link that goes where it should — release downloads, npm, or the VS Code Marketplace.
+
+---
+
 ## v2.24.0 — June 2026
 
 ### Full-screen views and a floating dock
