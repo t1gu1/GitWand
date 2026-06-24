@@ -3197,6 +3197,7 @@ onUnmounted(() => {
 
 .app-body {
   display: flex;
+  flex-direction: column;
   flex: 1;
   overflow: hidden;
   position: relative; /* anchor for the floating AppDock */
