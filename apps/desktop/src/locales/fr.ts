@@ -2165,6 +2165,12 @@ const fr: Locale = {
     newTab: "Nouvel onglet",
     hide: "Masquer le terminal",
     closeTab: "Fermer l'onglet",
+    headerLabel: "Terminal",
+    headerTooltip: "Ouvrir le terminal",
+    menuShell: "Shell",
+    menuClaude: "Claude Code",
+    menuCodex: "Codex",
+    menuSessions: "Voir les sessions",
   },
 };
 

@@ -2193,6 +2193,12 @@ const en = {
     newTab: "New tab",
     hide: "Hide terminal",
     closeTab: "Close tab",
+    headerLabel: "Terminal",
+    headerTooltip: "Open terminal",
+    menuShell: "Shell",
+    menuClaude: "Claude Code",
+    menuCodex: "Codex",
+    menuSessions: "View sessions",
   },
 } as const;
 
