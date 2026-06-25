@@ -732,6 +732,7 @@ const ptBR: Locale = {
       intoLabel: "Para",
       branchesHint: "Os commits presentes no branch da esquerda mas não no branch alvo serão incluídos na PR.",
       sameBranchWarn: "O branch alvo precisa ser diferente do branch atual.",
+      unpublishedBranchWarn: "Este branch ainda não foi enviado. Para publicar esta PR, envie o branch primeiro.",
       titleLabel: "Título",
       titlePlaceholder: "Curto, claro, imperativo (ex. «Fix: evitar render duplo do loader»)",
       titleHint: "Um bom título tem menos de 72 caracteres e descreve o «o quê» — o «porquê» vai na descrição.",
