@@ -1030,17 +1030,20 @@ function cellClass(v: CompareValue | undefined): string {
             >{{ t.heroTabCli }}</button>
           </div>
 
+          <!-- Both panels share one grid cell so the stage keeps the height of the
+               taller panel — toggling visibility (not display) avoids any reflow. -->
+          <div class="hero-stage">
           <!-- GUI: desktop dashboard screenshot -->
-          <div v-show="heroTab === 'gui'" class="hero-gui" role="tabpanel">
+          <div class="hero-gui" :class="{ 'hero-pane--hidden': heroTab !== 'gui' }" role="tabpanel" :aria-hidden="heroTab !== 'gui'">
             <img
-              src="/screenshots/app-dashboard.png" :alt="t.heroGuiAlt"
-              class="hero-gui__img" width="1200" height="617"
+              src="/screenshots/GitWand_dashboard.png" :alt="t.heroGuiAlt"
+              class="hero-gui__img" width="1842" height="931"
               loading="lazy" decoding="async"
             />
           </div>
 
           <!-- CLI: terminal animation -->
-          <div v-show="heroTab === 'cli'" class="hero-term" role="tabpanel">
+          <div class="hero-term" :class="{ 'hero-pane--hidden': heroTab !== 'cli' }" role="tabpanel" :aria-hidden="heroTab !== 'cli'">
             <div class="hero-term__bar">
               <span class="tl tl-r"></span><span class="tl tl-y"></span><span class="tl tl-g"></span>
               <span class="hero-term__title">~/projects/myapp — gitwand</span>
@@ -1054,6 +1057,7 @@ function cellClass(v: CompareValue | undefined): string {
               >{{ line.text }}</div>
               <span v-if="termRunning" class="hero-term__cursor">▋</span>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -3184,6 +3188,20 @@ function cellClass(v: CompareValue | undefined): string {
 .hero-tab--active {
   background: var(--gw-purple);
   color: #fff;
+}
+/* Stack both panels in a single grid cell: the stage sizes to the taller of the
+   two, so toggling the tab never changes the visual's height (no reflow). */
+.hero-stage {
+  display: grid;
+  width: 100%;
+  justify-items: center;
+}
+.hero-stage > * {
+  grid-area: 1 / 1;
+}
+.hero-pane--hidden {
+  /* visibility:hidden keeps the box in the grid cell (no reflow) while hiding it. */
+  visibility: hidden;
 }
 .hero-gui {
   width: 100%;
