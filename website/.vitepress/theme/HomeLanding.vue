@@ -3200,9 +3200,8 @@ function cellClass(v: CompareValue | undefined): string {
   grid-area: 1 / 1;
 }
 .hero-pane--hidden {
+  /* visibility:hidden keeps the box in the grid cell (no reflow) while hiding it. */
   visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
 }
 .hero-gui {
   width: 100%;
