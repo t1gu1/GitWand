@@ -11,6 +11,14 @@ import { t } from "./useI18n";
  * plumbing as commit messages and PR descriptions.
  */
 
+/**
+ * Sentinel `from` value meaning "from the very first commit" — generate notes
+ * over the entire history reachable from the target ref. Chosen to contain
+ * characters that are illegal in a git ref name, so it can never collide with a
+ * real branch/tag.
+ */
+export const FROM_PROJECT_START = "(project start)";
+
 export interface ReleaseNotesOptions {
   /** UI locale — drives section headings and prose. Defaults to "fr". */
   locale?: string;
@@ -128,7 +136,10 @@ export function useReleaseNotes() {
         throw new Error(t("errors.sameRefs"));
       }
 
-      const range = `${fromRef}..${toRef}`;
+      // "From the project creation" → every commit reachable from the target
+      // ref (no lower bound). Otherwise the usual `from..to` range.
+      const fromProjectStart = fromRef === FROM_PROJECT_START;
+      const range = fromProjectStart ? toRef : `${fromRef}..${toRef}`;
       const logRes = await gitExec(cwd, [
         "log",
         range,

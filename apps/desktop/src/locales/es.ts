@@ -300,6 +300,7 @@ const es: Locale = {
     releaseNotesBranches: "Ramas",
     releaseNotesRemoteBranches: "Ramas remotas",
     releaseNotesTags: "Etiquetas",
+    releaseNotesFromCreation: "Desde la creación del proyecto",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

@@ -303,6 +303,7 @@ const zhCN: Locale = {
     releaseNotesBranches: "分支",
     releaseNotesRemoteBranches: "远程分支",
     releaseNotesTags: "标签",
+    releaseNotesFromCreation: "从项目创建开始",
   },
 
   fileList: {

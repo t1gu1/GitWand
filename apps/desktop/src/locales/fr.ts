@@ -305,6 +305,7 @@ const fr: Locale = {
     releaseNotesBranches: "Branches",
     releaseNotesRemoteBranches: "Branches distantes",
     releaseNotesTags: "Tags",
+    releaseNotesFromCreation: "Depuis la création du projet",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

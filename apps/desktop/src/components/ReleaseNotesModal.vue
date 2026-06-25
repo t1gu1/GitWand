@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from "vue";
 import { gitListTags, getGitBranches, gitExec, type GitBranch } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
-import { useReleaseNotes } from "../composables/useReleaseNotes";
+import { useReleaseNotes, FROM_PROJECT_START } from "../composables/useReleaseNotes";
 import BaseModal from "./BaseModal.vue";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   cwd: string;
@@ -42,6 +43,27 @@ function sameCommit(a: string, b: string): boolean {
   return !!x && !!y && (x.startsWith(y) || y.startsWith(x));
 }
 
+/**
+ * Closest local branch strictly *behind* HEAD (an ancestor with ≥1 commit
+ * between it and HEAD) — the branch HEAD most recently grew out of. Mirrors the
+ * "latest tag before HEAD" logic, for repos with no tags. Returns "" if none.
+ */
+async function previousBranch(localNames: string[]): Promise<string> {
+  const checked = await Promise.all(
+    localNames.map(async (name) => {
+      const anc = await gitExec(props.cwd, ["merge-base", "--is-ancestor", name, "HEAD"]).catch(() => null);
+      if (!anc || anc.exitCode !== 0) return null; // not an ancestor of HEAD
+      const cnt = await gitExec(props.cwd, ["rev-list", "--count", `${name}..HEAD`]).catch(() => null);
+      const n = cnt && cnt.exitCode === 0 ? parseInt((cnt.stdout ?? "").trim(), 10) : NaN;
+      if (!Number.isFinite(n) || n <= 0) return null; // n<=0 ⇒ same commit as HEAD (e.g. current branch)
+      return { name, n };
+    }),
+  );
+  const valid = checked.filter((x): x is { name: string; n: number } => x !== null);
+  valid.sort((a, b) => a.n - b.n); // closest to HEAD first
+  return valid[0]?.name ?? "";
+}
+
 onMounted(async () => {
   const [, tags, headSha] = await Promise.all([
     getGitBranches(props.cwd)
@@ -57,12 +79,19 @@ onMounted(async () => {
   const sorted = [...tags].sort((a, b) => b.date.localeCompare(a.date));
   tagNames.value = sorted.map((tg) => tg.name);
 
-  // Default "from" = newest tag that is NOT on HEAD — otherwise `tag..HEAD`
-  // would be an empty range. Fall back to the newest tag if every tag is on HEAD.
-  const beforeHead = headSha
-    ? sorted.find((tg) => !sameCommit(tg.hash, headSha))
-    : undefined;
-  from.value = (beforeHead ?? sorted[0])?.name ?? "";
+  if (sorted.length) {
+    // Default "from" = newest tag that is NOT on HEAD — otherwise `tag..HEAD`
+    // would be an empty range. Fall back to the newest tag if every tag is on HEAD.
+    const beforeHead = headSha
+      ? sorted.find((tg) => !sameCommit(tg.hash, headSha))
+      : undefined;
+    from.value = (beforeHead ?? sorted[0])?.name ?? "";
+  } else {
+    // No tags: fall back to the closest ancestor branch, then to the very first
+    // commit ("from the project creation").
+    const prev = await previousBranch(localBranchNames.value);
+    from.value = prev || FROM_PROJECT_START;
+  }
 });
 
 async function runGenerate() {
@@ -101,6 +130,7 @@ async function copy() {
         <span>{{ t('dashboard.releaseNotesFrom') }}</span>
         <select v-model="from" class="rn-input mono">
           <option value="HEAD">HEAD</option>
+          <option :value="FROM_PROJECT_START">{{ t('dashboard.releaseNotesFromCreation') }}</option>
           <optgroup v-if="tagNames.length" :label="t('dashboard.releaseNotesTags')">
             <option v-for="tn in tagNames" :key="`f-${tn}`" :value="tn">{{ tn }}</option>
           </optgroup>
@@ -129,11 +159,13 @@ async function copy() {
         </select>
       </label>
       <button
-        class="bm-btn bm-btn--primary rn-btn-sm"
+        class="bm-btn bm-btn--primary rn-btn-sm rn-generate"
+        :class="{ 'rn-generate--loading': isGenerating }"
         :disabled="isGenerating || !from.trim() || !to.trim()"
         @click="runGenerate"
       >
-        {{ isGenerating ? '…' : t('dashboard.releaseNotesGenerate') }}
+        <span class="rn-generate-label">{{ t('dashboard.releaseNotesGenerate') }}</span>
+        <AiSparkle v-if="isGenerating" class="rn-generate-loader" :size="15" />
       </button>
     </div>
     <p v-if="lastError" class="rn-error">{{ lastError }}</p>
@@ -169,6 +201,17 @@ async function copy() {
   padding: var(--space-2) var(--space-4);
   font-size: var(--font-size-sm);
   line-height: 1;
+}
+
+/* Loader swap: keep the label in the DOM (reserves width across states and
+   locales) but hide it while generating, with the sparkle centred on top. */
+.rn-generate { position: relative; }
+.rn-generate--loading .rn-generate-label { visibility: hidden; }
+.rn-generate-loader {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .rn-input,

@@ -301,6 +301,7 @@ const ptBR: Locale = {
     releaseNotesBranches: "Branches",
     releaseNotesRemoteBranches: "Branches remotas",
     releaseNotesTags: "Tags",
+    releaseNotesFromCreation: "Desde a criação do projeto",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

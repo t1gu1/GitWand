@@ -312,6 +312,7 @@ const en = {
     releaseNotesBranches: "Branches",
     releaseNotesRemoteBranches: "Remote branches",
     releaseNotesTags: "Tags",
+    releaseNotesFromCreation: "From the project creation",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────
