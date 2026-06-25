@@ -223,14 +223,14 @@ const canSubmit = computed(
     p.newPrTitle.value.trim().length > 0 &&
     p.newPrBase.value.trim().length > 0 &&
     p.newPrBase.value.trim() !== props.currentBranch &&
+    isCurrentBranchPublished.value &&
     !p.isCreating.value,
 );
 const baseIsSameAsHead = computed(() => p.newPrBase.value.trim() === props.currentBranch);
 
 // The current branch is "published" when it has a configured upstream or a
-// remote-tracking branch with the same name exists. When it doesn't, `gh pr
-// create` still works — it pushes the branch first — so we only warn, never
-// block.
+// remote-tracking branch with the same name exists. When it doesn't, creating
+// the PR is blocked — the branch must be pushed first.
 const isCurrentBranchPublished = computed<boolean>(() => {
   const cur = props.currentBranch;
   if (!cur) return true; // unknown branch — don't nag
@@ -239,18 +239,8 @@ const isCurrentBranchPublished = computed<boolean>(() => {
   return props.branches.some((b) => b.isRemote && bareRemoteName(b.name) === cur);
 });
 
-// First submit click on an unpublished branch reveals the warning and waits;
-// the next click goes through.
-const unpublishedWarned = ref(false);
-
 async function onSubmit() {
   if (!canSubmit.value) return;
-  // Warn once that the branch is unpublished — the PR can still be created
-  // (gh pushes it first), so the next click proceeds.
-  if (!isCurrentBranchPublished.value && !unpublishedWarned.value) {
-    unpublishedWarned.value = true;
-    return;
-  }
   await p.createPr();
 }
 
@@ -690,7 +680,7 @@ function removeReviewer(name: string) {
 
       <!-- Footer -->
       <footer class="pcv-footer">
-        <div v-if="unpublishedWarned && !isCurrentBranchPublished" class="pcv-note">
+        <div v-if="!isCurrentBranchPublished" class="pcv-note">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4M12 16h0" />
