@@ -736,6 +736,7 @@ const fr: Locale = {
       intoLabel: "Vers",
       branchesHint: "Les commits présents dans la branche de gauche mais pas dans la branche cible seront inclus dans la PR.",
       sameBranchWarn: "La branche cible doit être différente de la branche courante.",
+      unpublishedBranchWarn: "Cette branche n'a pas encore été poussée — créer la PR la publiera d'abord sur le dépôt distant.",
       titleLabel: "Titre",
       titlePlaceholder: "Court, explicite, à l'impératif (ex : « Fix: éviter le double-render du loader »)",
       titleHint: "Un bon titre tient en moins de 72 caractères et décrit le « quoi » — le « pourquoi » va dans la description.",

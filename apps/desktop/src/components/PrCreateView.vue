@@ -224,6 +224,20 @@ const canSubmit = computed(
 );
 const baseIsSameAsHead = computed(() => p.newPrBase.value.trim() === props.currentBranch);
 
+// The current branch is "published" when it has a configured upstream or a
+// remote-tracking branch with the same name exists. When it doesn't, `gh pr
+// create` still works — it pushes the branch first — so we only warn, never
+// block.
+const isCurrentBranchPublished = computed<boolean>(() => {
+  const cur = props.currentBranch;
+  if (!cur) return true; // unknown branch — don't nag
+  const local = props.branches.find((b) => !b.isRemote && b.name === cur);
+  if (local?.upstream) return true;
+  return props.branches.some(
+    (b) => b.isRemote && b.name.replace(/^[^/]+\//, "") === cur,
+  );
+});
+
 async function onSubmit() {
   if (!canSubmit.value) return;
   await p.createPr();
@@ -455,6 +469,13 @@ function removeReviewer(name: string) {
         </div>
         <p v-if="baseIsSameAsHead" class="pcv-hint pcv-hint--warn">{{ t("pr.create.sameBranchWarn") }}</p>
         <p v-else class="pcv-hint">{{ t("pr.create.branchesHint") }}</p>
+        <div v-if="!isCurrentBranchPublished && !baseIsSameAsHead" class="pcv-note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h0" />
+          </svg>
+          <span>{{ t("pr.create.unpublishedBranchWarn") }}</span>
+        </div>
       </section>
 
       <!-- Title -->
@@ -995,6 +1016,19 @@ function removeReviewer(name: string) {
   line-height: 1.5;
 }
 .pcv-hint--warn { color: var(--color-danger); }
+.pcv-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft, var(--color-bg-tertiary));
+  color: var(--color-warning);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+.pcv-note svg { flex-shrink: 0; }
 .pcv-hint-row {
   display: flex;
   justify-content: space-between;
