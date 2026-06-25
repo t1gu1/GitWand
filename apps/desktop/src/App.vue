@@ -1854,19 +1854,43 @@ async function confirmDirtyCarry() {
   const pending = pendingDirtySwitch.value;
   if (!pending) return;
   pendingDirtySwitch.value = null;
+  // First attempt: let git carry the WIP across as-is. This succeeds when the
+  // changes don't collide with the files differing between the two branches.
   const ok = pending.isCreate
     ? await createBranch(pending.name)
     : await switchBranch(pending.name);
-  if (!ok) {
-    // switchBranch/createBranch already set repoError to the underlying git
-    // error, prefixed with internal context ("switch branch: " / "create
-    // branch: "). Strip that prefix before surfacing it inside the
-    // user-facing carry-failure message.
-    const detail = (repoError.value ?? "").replace(/^(?:switch|create) branch:\s*/, "");
-    repoError.value = t("branches.dirtySwitchCarryFailed", detail);
+  if (ok) {
+    if (!pending.isCreate) await promptPullIfBehind();
     return;
   }
-  if (!pending.isCreate) await promptPullIfBehind();
+  // Carry refused (git would overwrite local changes). Fall back to
+  // stash → switch → pop, which is exactly what the user asked for by
+  // confirming the carry — bring the WIP along to the target branch.
+  if (!repoFolderPath.value) return;
+  repoError.value = "";
+  isSwitchingBranch.value = true;
+  try {
+    await gitStash(repoFolderPath.value);
+    const switched = pending.isCreate
+      ? await createBranch(pending.name)
+      : await switchBranch(pending.name);
+    if (!switched) {
+      // Even stashing didn't let us switch — restore the WIP where it was and
+      // surface the underlying git error. switchBranch/createBranch prefix it
+      // with internal context ("switch branch: " / "create branch: "); strip
+      // that before showing the user-facing carry-failure message.
+      await gitStashPop(repoFolderPath.value);
+      const detail = (repoError.value ?? "").replace(/^(?:switch|create) branch:\s*/, "");
+      repoError.value = t("branches.dirtySwitchCarryFailed", detail);
+      return;
+    }
+    await gitStashPop(repoFolderPath.value);
+    if (!pending.isCreate) await promptPullIfBehind();
+  } catch (err: any) {
+    repoError.value = `switch (stash): ${err.message}`;
+  } finally {
+    isSwitchingBranch.value = false;
+  }
 }
 
 function confirmDirtyCommitFirst() {
