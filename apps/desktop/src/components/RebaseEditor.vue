@@ -9,7 +9,7 @@ import {
   type RebaseAction,
 } from "../composables/useInteractiveRebase";
 import { useSplitCommit } from "../composables/useSplitCommit";
-import { getGitBranches, gitResetToCommit, type GitBranch } from "../utils/backend";
+import { getGitBranches, type GitBranch } from "../utils/backend";
 import { branchSort } from "../utils/branchSort";
 import { useAIProvider } from "../composables/useAIProvider";
 import { useSquashSuggestion, type SquashSuggestion } from "../composables/useSquashSuggestion";
@@ -55,6 +55,10 @@ async function fetchBranches() {
 const emit = defineEmits<{
   close: [];
   done: [];
+  // Destructive hard-reset of the current branch onto `base`. App-level owns the
+  // confirmation, execution, refresh and error reporting (same path as the
+  // "reset to origin" shortcut) — the editor only signals intent.
+  resetOnto: [base: string];
 }>();
 
 const { t, locale } = useI18n();
@@ -134,7 +138,6 @@ function onBaseInputEnter() {
 
 async function selectBase(name: string) {
   baseInput.value = name;
-  confirmReset.value = false;
   const entries = await rebase.listCommits(props.cwd, name);
   // Hide the picker only when there's a todo to edit. With nothing to replay we
   // keep the picker open so the user can pick a different base, and surface a
@@ -154,27 +157,6 @@ const noCommitsForBase = computed(
     rebase.todoEntries.value.length === 0,
 );
 
-// "No commits to rebase" usually means the chosen base is ahead of the current
-// branch. Offer to move the branch onto it via a hard reset. Destructive
-// (discards uncommitted changes), so gated behind an inline confirmation.
-const confirmReset = ref(false);
-const resetting = ref(false);
-async function resetOntoBase() {
-  if (!confirmReset.value) {
-    confirmReset.value = true;
-    return;
-  }
-  resetting.value = true;
-  try {
-    await gitResetToCommit(props.cwd, baseInput.value, "hard");
-    emit("done");
-  } catch (e: any) {
-    branchError.value = e?.message ?? String(e);
-  } finally {
-    resetting.value = false;
-    confirmReset.value = false;
-  }
-}
 
 // ─── Drag & drop ─────────────────────────────────────────────
 const dragIndex = ref<number | null>(null);
@@ -718,18 +700,7 @@ const hasTodo = computed(
     <div v-if="noCommitsForBase" class="rb-empty">
       <p class="rb-empty-title">{{ t('rebase.noCommits') }}</p>
       <p class="rb-hint">{{ t('rebase.noCommitsHint', baseInput) }}</p>
-      <template v-if="confirmReset">
-        <p class="rb-hint rb-hint--error">{{ t('rebase.resetWarn', currentBranch, baseInput) }}</p>
-        <div class="rb-empty-actions">
-          <button class="bm-btn bm-btn--danger" :disabled="resetting" @click="resetOntoBase">
-            {{ t('rebase.resetConfirm') }}
-          </button>
-          <button class="bm-btn bm-btn--ghost" :disabled="resetting" @click="confirmReset = false">
-            {{ t('common.cancel') }}
-          </button>
-        </div>
-      </template>
-      <button v-else class="bm-btn bm-btn--primary" @click="resetOntoBase">
+      <button class="bm-btn bm-btn--danger" @click="emit('resetOnto', baseInput)">
         {{ t('rebase.resetOntoBase', baseInput) }}
       </button>
     </div>
@@ -1107,10 +1078,6 @@ const hasTodo = computed(
   font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text);
-}
-.rb-empty-actions {
-  display: flex;
-  gap: var(--space-2);
 }
 
 /* ─── Todo list ────────────────────────────────────────────── */

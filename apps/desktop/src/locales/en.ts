@@ -539,6 +539,7 @@ const en = {
     noCommits: "No commits to rebase",
     noCommitsHint: 'Your branch has nothing to replay onto "{0}" — it\'s already up to date. Pick a different base.',
     resetOntoBase: 'Reset branch onto "{0}"',
+    resetTitle: "Reset branch",
     resetConfirm: "Confirm reset",
     resetWarn: 'This moves {0} to "{1}" and discards any uncommitted changes.',
     cycleAction: "Cycle action (click)",

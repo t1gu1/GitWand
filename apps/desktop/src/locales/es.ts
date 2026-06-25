@@ -527,6 +527,7 @@ const es: Locale = {
     noCommits: "No hay commits para rebasar",
     noCommitsHint: 'Tu rama no tiene nada que reaplicar sobre "{0}": ya está actualizada. Elige otra base.',
     resetOntoBase: 'Restablecer la rama sobre "{0}"',
+    resetTitle: "Restablecer la rama",
     resetConfirm: "Confirmar restablecimiento",
     resetWarn: 'Esto mueve {0} a "{1}" y descarta los cambios sin confirmar.',
     cycleAction: "Ciclar acción (clic)",

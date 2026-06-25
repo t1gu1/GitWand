@@ -522,6 +522,7 @@ const zhCN: Locale = {
     noCommits: "没有可变基的提交",
     noCommitsHint: '当前分支没有需要在 "{0}" 上重放的提交 — 已是最新。请选择其他基底。',
     resetOntoBase: '将分支重置到 "{0}"',
+    resetTitle: "重置分支",
     resetConfirm: "确认重置",
     resetWarn: '这会将 {0} 移动到 "{1}"，并丢弃所有未提交的更改。',
     cycleAction: "循环操作（点击）",

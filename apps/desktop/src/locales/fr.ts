@@ -532,6 +532,7 @@ const fr: Locale = {
     noCommits: "Aucun commit à rebaser",
     noCommitsHint: 'Votre branche n\'a rien à rejouer sur « {0} » — elle est déjà à jour. Choisissez une autre base.',
     resetOntoBase: 'Réinitialiser la branche sur « {0} »',
+    resetTitle: "Réinitialiser la branche",
     resetConfirm: "Confirmer la réinitialisation",
     resetWarn: 'Cela déplace {0} sur « {1} » et supprime les modifications non validées.',
     cycleAction: "Changer l\u2019action (clic)",

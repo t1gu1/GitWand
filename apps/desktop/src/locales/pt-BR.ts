@@ -528,6 +528,7 @@ const ptBR: Locale = {
     noCommits: "Nenhum commit para rebasear",
     noCommitsHint: 'Seu branch não tem nada para reaplicar sobre "{0}" — já está atualizado. Escolha outra base.',
     resetOntoBase: 'Redefinir o branch sobre "{0}"',
+    resetTitle: "Redefinir o branch",
     resetConfirm: "Confirmar redefinição",
     resetWarn: 'Isso move {0} para "{1}" e descarta alterações não confirmadas.',
     cycleAction: "Alternar ação (clique)",
