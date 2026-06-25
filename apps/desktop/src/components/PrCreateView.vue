@@ -238,8 +238,21 @@ const isCurrentBranchPublished = computed<boolean>(() => {
   );
 });
 
+// First submit click on an unpublished branch reveals the warning and waits;
+// the next click goes through. Reset whenever the branch becomes published.
+const unpublishedWarned = ref(false);
+watch(isCurrentBranchPublished, (published) => {
+  if (published) unpublishedWarned.value = false;
+});
+
 async function onSubmit() {
   if (!canSubmit.value) return;
+  // Warn once that the branch is unpublished — the PR can still be created
+  // (gh pushes it first), so the next click proceeds.
+  if (!isCurrentBranchPublished.value && !unpublishedWarned.value) {
+    unpublishedWarned.value = true;
+    return;
+  }
   await p.createPr();
 }
 
@@ -469,13 +482,6 @@ function removeReviewer(name: string) {
         </div>
         <p v-if="baseIsSameAsHead" class="pcv-hint pcv-hint--warn">{{ t("pr.create.sameBranchWarn") }}</p>
         <p v-else class="pcv-hint">{{ t("pr.create.branchesHint") }}</p>
-        <div v-if="!isCurrentBranchPublished && !baseIsSameAsHead" class="pcv-note">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 8v4M12 16h0" />
-          </svg>
-          <span>{{ t("pr.create.unpublishedBranchWarn") }}</span>
-        </div>
       </section>
 
       <!-- Title -->
@@ -686,6 +692,13 @@ function removeReviewer(name: string) {
 
       <!-- Footer -->
       <footer class="pcv-footer">
+        <div v-if="unpublishedWarned && !baseIsSameAsHead" class="pcv-note">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h0" />
+          </svg>
+          <span>{{ t("pr.create.unpublishedBranchWarn") }}</span>
+        </div>
         <button
           class="pcv-btn pcv-btn--primary"
           :disabled="!canSubmit"
@@ -1487,7 +1500,8 @@ function removeReviewer(name: string) {
 /* ─── Footer ─────────────────────────────────────────── */
 .pcv-footer {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-3);
   padding: var(--space-5) 0;
   border-top: 1px solid var(--color-border);

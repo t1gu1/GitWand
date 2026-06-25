@@ -743,7 +743,7 @@ const en = {
       intoLabel: "Into",
       branchesHint: "Commits present in the left branch but not in the target branch will be included in the PR.",
       sameBranchWarn: "The target branch must differ from the current branch.",
-      unpublishedBranchWarn: "This branch hasn't been pushed yet — creating the PR will publish it to the remote first.",
+      unpublishedBranchWarn: "This branch hasn't been pushed yet. To publish this PR, push the branch first.",
       titleLabel: "Title",
       titlePlaceholder: "Short, clear, imperative (e.g. \u201cFix: avoid double-render of loader\u201d)",
       titleHint: "A good title is under 72 chars and describes the \u201cwhat\u201d \u2014 the \u201cwhy\u201d goes in the description.",

@@ -720,7 +720,7 @@ const zhCN: Locale = {
       intoLabel: "目标",
       branchesHint: "左侧分支上存在但目标分支上没有的提交将被包含在此 PR 中。",
       sameBranchWarn: "目标分支必须不同于当前分支。",
-      unpublishedBranchWarn: "此分支尚未推送 — 创建 PR 时会先将其发布到远程。",
+      unpublishedBranchWarn: "此分支尚未推送。要发布此 PR，请先推送该分支。",
       titleLabel: "标题",
       titlePlaceholder: "简短、清晰、使用祈使句（例如 \u201c修复：避免 loader 双重渲染\u201d）",
       titleHint: "好的标题不超过 72 个字符，描述\u201c是什么\u201d — \u201c为什么\u201d留给描述部分。",

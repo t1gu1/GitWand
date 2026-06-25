@@ -731,7 +731,7 @@ const es: Locale = {
       intoLabel: "Hacia",
       branchesHint: "Los commits presentes en la rama de la izquierda pero no en la rama objetivo se incluirán en la PR.",
       sameBranchWarn: "La rama objetivo debe ser diferente de la rama actual.",
-      unpublishedBranchWarn: "Esta rama aún no se ha enviado — crear la PR la publicará primero en el remoto.",
+      unpublishedBranchWarn: "Esta rama aún no se ha enviado. Para publicar esta PR, envía la rama primero.",
       titleLabel: "Título",
       titlePlaceholder: "Corto, claro, imperativo (p. ej. «Fix: evitar doble renderizado del loader»)",
       titleHint: "Un buen título tiene menos de 72 caracteres y describe el «qué» — el «por qué» va en la descripción.",
