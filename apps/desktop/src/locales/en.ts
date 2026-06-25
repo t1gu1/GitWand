@@ -313,6 +313,8 @@ const en = {
     releaseNotesRemoteBranches: "Remote branches",
     releaseNotesTags: "Tags",
     releaseNotesFromCreation: "From the project creation",
+    releaseNotesTemplate: "Template",
+    releaseNotesTemplateShortcut: "Configure templates",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────
@@ -544,6 +546,11 @@ const en = {
     bannerTitle: "Rebase paused",
     bannerConflictHint: "Resolve conflicts then click Continue.",
     bannerReadyHint: "Conflicts resolved — ready to continue.",
+    resolveAi: "Resolve with AI",
+    resolveAiBusy: "Resolving…",
+    resolveAuto: "Auto-resolve",
+    resolveAutoBusy: "Auto-resolving…",
+    resolveAutoHint: "Resolve every step and continue the rebase automatically until it finishes or hits a conflict it can't resolve.",
     reword: "Edit message",
     drop: "Drop",
     restore: "Restore",
@@ -1142,6 +1149,17 @@ const en = {
         formPromptPlaceholder: "System prompt sent to the AI provider. Use ${lang} as a language placeholder.",
         formLangHint: "Tip: use ${lang} in your prompt — it is replaced with the resolved language (e.g. \"French\").",
       },
+      releaseNotes: {
+        title: "Release notes templates",
+        hint: "Templates allow you to add custom instructions/rules over the base prompt for generating release notes.",
+        sharedNote: "Templates are shared across projects, but the assigned template is remembered for each project.",
+        defaultTemplate: "Default",
+        empty: "No custom templates yet.",
+        add: "Add template",
+        formName: "Template name",
+        formRules: "Custom rules",
+        formRulesPlaceholder: "e.g., Focus on security fixes, group by backend/frontend, use English...",
+      },
     },
     language: "Interface language",
     languageAuto: "Automatic (system)",
@@ -1291,6 +1309,7 @@ const en = {
       // Hooks tab (v2.7)
     tabHooks: "Hooks",
     tabAutomations: "Automations",
+    tabReleaseNotes: "Release notes",
     // Accounts + MCP tabs (v2.10)
     tabAccounts: "Accounts",
     tabMcp: "MCP",

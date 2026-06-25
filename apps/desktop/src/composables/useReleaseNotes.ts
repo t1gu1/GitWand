@@ -3,6 +3,8 @@ import { gitExec } from "../utils/backend";
 import { useAIProvider } from "./useAIProvider";
 import { localeLabels, type SupportedLocale } from "../locales";
 import { t } from "./useI18n";
+import { getActiveTemplate } from "./useReleaseNoteTemplates";
+
 
 /**
  * Generate Keep-a-Changelog-style markdown release notes from the
@@ -238,7 +240,11 @@ export function useReleaseNotes() {
         throw new Error(t("errors.noCommitsInRange", fromRef, toRef));
       }
 
-      const systemPrompt = buildSystemPrompt(locale, fromProjectStart);
+      let systemPrompt = buildSystemPrompt(locale, fromProjectStart);
+      const template = getActiveTemplate(cwd);
+      if (template && template.customRules.trim()) {
+        systemPrompt += `\n\nAdditional instructions and custom rules:\n${template.customRules.trim()}`;
+      }
       const userPrompt = buildUserPrompt(fromRef, toRef, commits);
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);

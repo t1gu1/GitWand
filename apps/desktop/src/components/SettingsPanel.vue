@@ -75,7 +75,8 @@ import { useLogs, type LogEntry } from "../composables/useLogs";
 import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
-import type { IdentityProfile, CommitTemplate, AiPromptPreset, DockEntryId } from "../composables/useSettings";
+import { useReleaseNoteTemplates } from "../composables/useReleaseNoteTemplates";
+import type { IdentityProfile, CommitTemplate, AiPromptPreset, DockEntryId, ReleaseNoteTemplate } from "../composables/useSettings";
 import { DEFAULT_DOCK_ORDER, normalizeDockOrder, refreshSettings as refreshSharedSettings } from "../composables/useSettings";
 import { gitCommitTemplatePath, openExternalUrl } from "../utils/backend";
 export type { AIProvider };
@@ -88,7 +89,7 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+  initialTab?: "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | "releaseNotes";
   /** Current repo path (for Hooks tab) */
   cwd?: string;
 }>();
@@ -177,6 +178,9 @@ interface Settings {
   // v2.13 AI Prompt Presets
   aiPromptPresets: AiPromptPreset[];
   activePresetIdByRepo: Record<string, string | null>;
+  // v3 Release Note Templates
+  releaseNoteTemplates: ReleaseNoteTemplate[];
+  activeReleaseNoteTemplateIdByRepo: Record<string, string | null>;
 }
 
 const defaultSettings: Settings = {
@@ -238,6 +242,9 @@ const defaultSettings: Settings = {
   // v2.13
   aiPromptPresets: [],
   activePresetIdByRepo: {},
+  // v3 Release Note Templates
+  releaseNoteTemplates: [],
+  activeReleaseNoteTemplateIdByRepo: {},
 };
 
 function loadSettings(): Settings {
@@ -292,7 +299,7 @@ function resetDockPosition() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+type SettingsTab = "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | "releaseNotes";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 // ─── Logs tab — formatting + clipboard ──────────────────
@@ -350,6 +357,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
   { id: "ai", icon: "ai" },
+  { id: "releaseNotes", icon: "releaseNotes" },
   { id: "accounts", icon: "accounts" },
   { id: "mcp", icon: "mcp" },
   { id: "automations", icon: "automations" },
@@ -361,7 +369,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
 const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = [
   { label: "Application", tabs: ["general", "dock", "dashboard", "editor"] },
   { label: "Dépôt", tabs: ["git", "hooks", "accounts"] },
-  { label: "IA & Agents", tabs: ["ai", "mcp", "automations"] },
+  { label: "IA & Agents", tabs: ["ai", "releaseNotes", "mcp", "automations"] },
   { label: "Système", tabs: ["logs"] },
 ];
 
@@ -373,6 +381,7 @@ function tabLabel(id: SettingsTab): string {
     case "git": return t("settings.tabGit");
     case "editor": return t("settings.tabEditor");
     case "ai": return t("settings.tabAi");
+    case "releaseNotes": return t("settings.tabReleaseNotes");
     case "accounts": return t("settings.tabAccounts");
     case "mcp": return t("settings.tabMcp");
     case "automations": return t("settings.tabAutomations");
@@ -1053,6 +1062,58 @@ function savePresetForm() {
   showPresetForm.value = false;
 }
 
+// ─── v3 Release Note Templates ─────────────────────────────
+
+const {
+  templates: releaseNoteTemplates,
+  add: addReleaseNoteTemplate,
+  update: updateReleaseNoteTemplate,
+  remove: removeReleaseNoteTemplate,
+} = useReleaseNoteTemplates();
+
+const releaseNoteTemplateForm = ref<{ name: string; customRules: string }>({
+  name: "",
+  customRules: "",
+});
+const editingReleaseNoteTemplateId = ref<string | null>(null);
+const showReleaseNoteTemplateForm = ref(false);
+
+function openAddReleaseNoteTemplate() {
+  releaseNoteTemplateForm.value = { name: "", customRules: "" };
+  editingReleaseNoteTemplateId.value = null;
+  showReleaseNoteTemplateForm.value = true;
+}
+
+function openEditReleaseNoteTemplate(tpl: ReleaseNoteTemplate) {
+  releaseNoteTemplateForm.value = {
+    name: tpl.name,
+    customRules: tpl.customRules,
+  };
+  editingReleaseNoteTemplateId.value = tpl.id;
+  showReleaseNoteTemplateForm.value = true;
+}
+
+function saveReleaseNoteTemplateForm() {
+  const { name, customRules } = releaseNoteTemplateForm.value;
+  if (!name.trim() || !customRules.trim()) return;
+  if (editingReleaseNoteTemplateId.value) {
+    updateReleaseNoteTemplate(editingReleaseNoteTemplateId.value, { name, customRules });
+  } else {
+    addReleaseNoteTemplate({ name, customRules });
+  }
+  showReleaseNoteTemplateForm.value = false;
+  // Sync the local settings state
+  const updated = loadSettings();
+  settings.value.releaseNoteTemplates = updated.releaseNoteTemplates;
+}
+
+function deleteReleaseNoteTemplate(id: string) {
+  removeReleaseNoteTemplate(id);
+  const updated = loadSettings();
+  settings.value.releaseNoteTemplates = updated.releaseNoteTemplates;
+  settings.value.activeReleaseNoteTemplateIdByRepo = updated.activeReleaseNoteTemplateIdByRepo;
+}
+
 </script>
 
 <template>
@@ -1115,6 +1176,12 @@ function savePresetForm() {
                 <path d="M8 1v2m0 10v2M1 8h2m10 0h2" />
                 <circle cx="8" cy="8" r="4" />
                 <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none" />
+              </svg>
+              <svg v-else-if="tab.icon === 'releaseNotes'" width="15" height="15" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 2h7l3 3v9H3z" />
+                <path d="M9 2v4h4" />
+                <path d="M5.5 8.5h5M5.5 11h3" />
               </svg>
               <svg v-else-if="tab.icon === 'hooks'" width="15" height="15" viewBox="0 0 16 16" fill="none"
                 stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -2460,6 +2527,83 @@ function savePresetForm() {
           </template>
         </template>
 
+        <!-- ═══ RELEASE NOTES ═══ -->
+        <template v-if="activeSettingsTab === 'releaseNotes'">
+          <div class="sp-group">
+            <div class="sp-group__head">
+              <div class="sp-group__head-text">
+                <span class="sp-group__label">{{ t('settings.ai.releaseNotes.title') }}</span>
+                <span class="sp-group__sublabel">
+                  {{ t('settings.ai.releaseNotes.hint') }}
+                  <span style="display: block; margin-top: 4px; font-style: italic; opacity: 0.85;">
+                    {{ t('settings.ai.releaseNotes.sharedNote') }}
+                  </span>
+                </span>
+              </div>
+            </div>
+
+            <div class="sp-group__body">
+              <!-- Custom templates empty -->
+              <div v-if="settings.releaseNoteTemplates.length === 0 && !showReleaseNoteTemplateForm" class="sp-group__empty">
+                {{ t('settings.ai.releaseNotes.empty') }}
+              </div>
+
+              <!-- Custom template rows -->
+              <div v-for="tpl in settings.releaseNoteTemplates" :key="tpl.id" class="sp-group__row">
+                <div class="sp-group__row-info">
+                  <span class="sp-group__row-name">{{ tpl.name }}</span>
+                  <span class="sp-group__row-meta mono" style="font-size: var(--font-size-xs); max-height: 48px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 500px;">
+                    {{ tpl.customRules }}
+                  </span>
+                </div>
+                <div class="sp-group__row-aside">
+                  <button class="sp-ghost-btn" @click="openEditReleaseNoteTemplate(tpl)"
+                    :title="t('settings.git.identityEdit')">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                      stroke-width="1.5">
+                      <path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" />
+                    </svg>
+                  </button>
+                  <button class="sp-ghost-btn sp-ghost-btn--danger" @click="deleteReleaseNoteTemplate(tpl.id)"
+                    :title="t('settings.git.identityDelete')">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                      stroke-width="1.5">
+                      <path d="M4 4l8 8M12 4l-8 8" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Template add/edit form -->
+              <div v-if="showReleaseNoteTemplateForm" class="sp-group__form">
+                <div class="sp-group__form-grid sp-group__form-grid--1col">
+                  <div class="sp-field">
+                    <label class="sp-field__label">{{ t('settings.ai.releaseNotes.formName') }}</label>
+                    <input class="sp-input sp-input--sm" v-model="releaseNoteTemplateForm.name"
+                      :placeholder="t('settings.ai.releaseNotes.formName')" />
+                  </div>
+                  <div class="sp-field">
+                    <label class="sp-field__label">{{ t('settings.ai.releaseNotes.formRules') }}</label>
+                    <textarea class="sp-textarea sp-input--sm mono" style="min-height: 260px;" v-model="releaseNoteTemplateForm.customRules"
+                      :placeholder="t('settings.ai.releaseNotes.formRulesPlaceholder')" rows="12" />
+                  </div>
+                </div>
+                <div class="sp-group__form-footer">
+                  <button class="btn btn--ghost sp-btn--sm" @click="showReleaseNoteTemplateForm = false">{{ t('common.cancel')
+                  }}</button>
+                  <button class="btn btn--primary sp-btn--sm" @click="saveReleaseNoteTemplateForm"
+                    :disabled="!releaseNoteTemplateForm.name.trim() || !releaseNoteTemplateForm.customRules.trim()">{{ t('common.save')
+                    }}</button>
+                </div>
+              </div>
+            </div>
+
+            <button v-if="!showReleaseNoteTemplateForm" class="btn btn--primary add-btn" @click="openAddReleaseNoteTemplate">
+                {{ t('settings.ai.releaseNotes.add') }}
+            </button>
+          </div>
+        </template>
+
         <!-- ═══ AUTOMATIONS ═══ -->
         <!-- ═══ ACCOUNTS ═══ -->
         <template v-if="activeSettingsTab === 'accounts'">
@@ -3532,6 +3676,11 @@ function savePresetForm() {
   height: 28px;
   padding: 0 var(--space-3);
   font-size: var(--font-size-sm);
+}
+
+.add-btn {
+  width: 100%;
+  margin-top: 10px;
 }
 
 /* ── v2.13 / sp-group extensions ─────────────────────── */

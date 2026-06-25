@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, inject } from "vue";
 import { gitListTags, getGitBranches, gitExec, type GitBranch } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import { useReleaseNotes, FROM_PROJECT_START } from "../composables/useReleaseNotes";
 import BaseModal from "./BaseModal.vue";
+import { OPEN_SETTINGS_KEY } from "../composables/branchPickerBridge";
+import { useReleaseNoteTemplates, getActiveTemplateId } from "../composables/useReleaseNoteTemplates";
 
 const props = defineProps<{
   cwd: string;
@@ -19,6 +21,21 @@ const {
   generate: generateReleaseNotes,
   lastError,
 } = useReleaseNotes();
+
+const openSettings = inject(OPEN_SETTINGS_KEY, undefined);
+const { templates, activate } = useReleaseNoteTemplates(() => props.cwd);
+const selectedTemplateId = ref<string | null>(null);
+
+function saveTemplate() {
+  activate(selectedTemplateId.value);
+}
+
+function goToSettings() {
+  emit("close");
+  if (openSettings) {
+    openSettings("releaseNotes");
+  }
+}
 
 const from = ref("");
 const to = ref("HEAD");
@@ -64,6 +81,7 @@ async function previousBranch(localNames: string[]): Promise<string> {
 }
 
 onMounted(async () => {
+  selectedTemplateId.value = getActiveTemplateId(props.cwd);
   const [, tags, headSha] = await Promise.all([
     getGitBranches(props.cwd)
       .then((b) => { branches.value = b; })
@@ -155,6 +173,20 @@ async function copy() {
           <optgroup v-if="remoteBranchNames.length" :label="t('dashboard.releaseNotesRemoteBranches')">
             <option v-for="b in remoteBranchNames" :key="`t-${b}`" :value="b">{{ b }}</option>
           </optgroup>
+        </select>
+      </label>
+      <label class="rn-field">
+        <span class="rn-template-label-container">
+          <span>{{ t('dashboard.releaseNotesTemplate') }}</span>
+          <button class="rn-settings-link" @click="goToSettings" :title="t('dashboard.releaseNotesTemplateShortcut')">
+            <svg viewBox="0 0 24 24" width="12" height="12">
+              <path fill="currentColor" d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+            </svg>
+          </button>
+        </span>
+        <select v-model="selectedTemplateId" class="rn-input" @change="saveTemplate">
+          <option :value="null">{{ t('settings.ai.releaseNotes.defaultTemplate') }}</option>
+          <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.name }}</option>
         </select>
       </label>
       <button
@@ -266,4 +298,29 @@ select.rn-input {
   border-radius: var(--radius-sm);
   border-left: 3px solid var(--color-danger, #ef4444);
 }
+
+.rn-template-label-container {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.rn-settings-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast), color var(--transition-fast);
+}
+
+.rn-settings-link:hover {
+  opacity: 1;
+  color: var(--color-accent);
+}
 </style>
+

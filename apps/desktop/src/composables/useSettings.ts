@@ -79,6 +79,17 @@ export interface CommitTemplate {
   body: string;
 }
 
+/** Named release note template (v3). */
+export interface ReleaseNoteTemplate {
+  /** UUID v4. */
+  id: string;
+  /** Display name, e.g. "Security focus", "SaaS". */
+  name: string;
+  /** Custom rules to be appended to the prompt. */
+  customRules: string;
+}
+
+
 /**
  * Named AI prompt preset for commit message generation (v2.13).
  *
@@ -282,6 +293,16 @@ export interface AppSettings {
    * "use the default prompt". Special value "__builtin_*" for built-in presets.
    */
   activePresetIdByRepo: Record<string, string | null>;
+
+  // ── v3 Release Note Templates ─────────────────────────────
+  /** Saved release note templates (v3). */
+  releaseNoteTemplates: ReleaseNoteTemplate[];
+
+  /**
+   * ID of the active release note template per repo (keyed by cwd).
+   * Null / absent / "__builtin_default" means "use the default prompt".
+   */
+  activeReleaseNoteTemplateIdByRepo: Record<string, string | null>;
 }
 
 // ─── Defaults ─────────────────────────────────────────────
@@ -345,6 +366,9 @@ export const defaultAppSettings: AppSettings = {
   // v2.13
   aiPromptPresets:        [],
   activePresetIdByRepo:   {},
+  // v3
+  releaseNoteTemplates:              [],
+  activeReleaseNoteTemplateIdByRepo: {},
 };
 
 const SETTINGS_KEY = "gitwand-settings";

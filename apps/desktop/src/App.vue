@@ -1232,7 +1232,7 @@ function onPaletteSelectCommit(hash: string) {
 
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
-const settingsInitialTab = ref<"general" | "dock" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | undefined>(undefined);
+const settingsInitialTab = ref<"general" | "dock" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | "releaseNotes" | undefined>(undefined);
 
 // ─── Error log (in-memory ring buffer, feeds SettingsPanel Logs tab) ─
 // Uses the useLogs() singleton composable — no localStorage persistence so a
@@ -1384,6 +1384,85 @@ async function onRebaseBannerActionDone() {
   // After continue/abort/skip: re-poll state, refresh repo
   await refreshRepoState();
   await repoRefresh();
+}
+
+// Driven into RebaseProgressBanner so it can show a spinner while we run.
+const rebaseAiResolving = ref(false);
+
+/**
+ * "Resolve with AI" from the paused-rebase banner: run the same resolution
+ * pipeline the MergeEditor uses (LLM fallback included when configured), write
+ * the results to disk and stage every file that came out conflict-free. We stop
+ * short of `--continue` on purpose — the now-enabled Continue button stays a
+ * deliberate user action, matching the rest of the banner's UX.
+ */
+async function onRebaseBannerResolveAi() {
+  if (!repoFolderPath.value || rebaseAiResolving.value) return;
+  rebaseAiResolving.value = true;
+  try {
+    await mergeOpenPath(repoFolderPath.value);
+    resolveAll();
+    await saveAllFiles();
+    const resolved = mergeFiles.value
+      .filter((f) => f.result.stats.totalConflicts === 0)
+      .map((f) => f.path);
+    if (resolved.length) await stageFiles(resolved);
+    await refreshRepoState();
+    await repoRefresh();
+  } catch (err: any) {
+    repoError.value = `ai-resolve: ${err?.message || String(err)}`;
+  } finally {
+    rebaseAiResolving.value = false;
+  }
+}
+
+// Driven into RebaseProgressBanner so it can show a spinner during the loop.
+const rebaseAutoResolving = ref(false);
+
+/**
+ * "Auto-resolve" from the paused-rebase banner: drive the WHOLE rebase to
+ * completion. Each iteration resolves the current step (engine first, AI
+ * fallback when configured), stages the conflict-free files and runs
+ * `--continue`, then re-polls. We stop when the rebase finishes or when a step
+ * leaves conflicts we couldn't resolve (the user then takes over). Bounded so a
+ * step that never makes progress can't spin forever.
+ */
+async function onRebaseBannerAutoResolve() {
+  if (!repoFolderPath.value || rebaseAutoResolving.value) return;
+  rebaseAutoResolving.value = true;
+  const cwd = repoFolderPath.value;
+  try {
+    const { gitRebaseAction } = await import("./utils/backend");
+    for (let i = 0; i < 100; i++) {
+      await refreshRepoState();
+      // Rebase finished (or no longer paused) — we're done.
+      if (!repoOperationState.value) break;
+      // Paused without conflicts (e.g. an `edit`/`break` stop) — just advance.
+      if (!repoOperationState.value.hasConflict) {
+        await gitRebaseAction(cwd, "continue");
+        continue;
+      }
+      // Resolve this step.
+      await mergeOpenPath(cwd);
+      resolveAll();
+      await saveAllFiles();
+      const resolved = mergeFiles.value
+        .filter((f) => f.result.stats.totalConflicts === 0)
+        .map((f) => f.path);
+      if (resolved.length) await stageFiles(resolved);
+      await repoRefresh();
+      // Couldn't fully resolve this step → stop and hand back to the user.
+      if (repoStatus.value && repoStatus.value.conflicted.length > 0) break;
+      // Step clear → advance the rebase and loop.
+      await gitRebaseAction(cwd, "continue");
+    }
+    await refreshRepoState();
+    await repoRefresh();
+  } catch (err: any) {
+    repoError.value = `auto-resolve: ${err?.message || String(err)}`;
+  } finally {
+    rebaseAutoResolving.value = false;
+  }
 }
 
 // ─── Rebase-state polling ────────────────────────────────────────────────────
@@ -2487,7 +2566,10 @@ onUnmounted(() => {
                  Non-blocking: sits at the top of the view so the resolution area
                  below stays reachable. -->
             <RebaseProgressBanner v-if="showRebaseBanner && repoOperationState" :repo-state="repoOperationState"
-              :cwd="repoFolderPath ?? ''" @action-done="onRebaseBannerActionDone" @error="(msg) => { repoError = msg; }" />
+              :cwd="repoFolderPath ?? ''" :ai-available="aiProvider.isAvailable.value" :ai-resolving="rebaseAiResolving"
+              :auto-resolving="rebaseAutoResolving"
+              @action-done="onRebaseBannerActionDone" @resolve-ai="onRebaseBannerResolveAi"
+              @auto-resolve="onRebaseBannerAutoResolve" @error="(msg) => { repoError = msg; }" />
 
             <!-- Conflict banner (merge or cherry-pick) — suppressed during a
                  paused rebase, which has its own banner + Continue/Skip/Abort. -->

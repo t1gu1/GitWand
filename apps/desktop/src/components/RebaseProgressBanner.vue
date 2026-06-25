@@ -13,18 +13,34 @@
 import { ref, computed } from "vue";
 import type { RepoOperationState } from "../utils/backend";
 import { t } from "../composables/useI18n";
+import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   repoState: RepoOperationState;
   cwd: string;
+  /** Whether an AI provider is configured — gates the "Resolve with AI" button. */
+  aiAvailable?: boolean;
+  /** Driven by the parent while the per-step AI resolution runs (App.vue owns the flow). */
+  aiResolving?: boolean;
+  /** Driven by the parent while the whole-rebase auto-resolve loop runs. */
+  autoResolving?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "action-done"): void;
+  (e: "resolve-ai"): void;
+  (e: "auto-resolve"): void;
   (e: "error", msg: string): void;
 }>();
 
 const busy = ref(false);
+
+// Any in-flight action (Continue/Skip/Abort, the per-step AI resolution, or the
+// whole-rebase auto-resolve loop) disables the whole button row to avoid
+// overlapping git operations.
+const anyBusy = computed(
+  () => busy.value || props.aiResolving === true || props.autoResolving === true
+);
 
 const shortHead = computed(() =>
   props.repoState.operationHead
@@ -82,13 +98,28 @@ async function runAction(action: "continue" | "abort" | "skip") {
 
     <!-- Actions -->
     <div class="rpm-actions">
-      <button class="rpm-btn rpm-btn--danger" :disabled="busy" @click="runAction('abort')">
+      <button class="rpm-btn rpm-btn--danger" :disabled="anyBusy" @click="runAction('abort')">
         {{ t('rebase.abort') }}
       </button>
-      <button class="rpm-btn" :disabled="busy" @click="runAction('skip')">
+      <button class="rpm-btn" :disabled="anyBusy" @click="runAction('skip')">
         {{ t('rebase.skip') }}
       </button>
-      <button class="rpm-btn rpm-btn--primary" :disabled="busy || repoState.hasConflict"
+      <!-- Auto-resolve: drives the WHOLE rebase (resolve → stage → continue,
+           looped across every step) until it finishes or hits a conflict it
+           can't resolve. Engine-first, with AI fallback when configured. -->
+      <button v-if="repoState.hasConflict" class="rpm-btn rpm-btn--auto"
+        :disabled="anyBusy" :title="t('rebase.resolveAutoHint')" @click="emit('auto-resolve')">
+        <span v-if="autoResolving" class="rpm-spinner" aria-hidden="true" />
+        {{ autoResolving ? t('rebase.resolveAutoBusy') : t('rebase.resolveAuto') }}
+      </button>
+      <!-- AI resolution (current step only): offered while conflicts remain and a provider is set. -->
+      <button v-if="aiAvailable && repoState.hasConflict" class="rpm-btn rpm-btn--ai"
+        :disabled="anyBusy" @click="emit('resolve-ai')">
+        <span v-if="aiResolving" class="rpm-spinner" aria-hidden="true" />
+        <AiSparkle v-else :size="13" />
+        {{ aiResolving ? t('rebase.resolveAiBusy') : t('rebase.resolveAi') }}
+      </button>
+      <button class="rpm-btn rpm-btn--primary" :disabled="anyBusy || repoState.hasConflict"
         :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
         @click="runAction('continue')">
         <span v-if="busy" class="rpm-spinner" aria-hidden="true" />
@@ -254,6 +285,32 @@ async function runAction(action: "continue" | "abort" | "skip") {
   border-color: var(--color-border);
   color: var(--color-text-muted);
   box-shadow: none;
+}
+
+/* AI resolution: accent-tinted outline so it reads as the smart shortcut
+   without competing with the primary Continue call-to-action. */
+.rpm-btn--ai {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.rpm-btn--ai:hover:not(:disabled) {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text, #fff);
+}
+
+/* Auto-resolve: solid accent fill — the one-click "walk the whole rebase"
+   shortcut, the boldest action in the row while conflicts remain. */
+.rpm-btn--auto {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text, #fff);
+}
+
+.rpm-btn--auto:hover:not(:disabled) {
+  background: var(--color-accent-hover, var(--color-accent));
+  border-color: var(--color-accent-hover, var(--color-accent));
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────── */
