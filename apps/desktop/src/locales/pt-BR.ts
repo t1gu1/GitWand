@@ -976,6 +976,7 @@ const ptBR: Locale = {
   settings: {
     title: "Configurações",
     tabGeneral: "Geral",
+    tabDock: "Dock",
     tabDashboard: "Painel",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1191,6 +1192,70 @@ const ptBR: Locale = {
       hideReadme: {
         label: "Ocultar o README",
         help: "Oculta o cart\u00e3o README no painel.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vista inicial",
+        default: "Padr\u00e3o",
+        help: "Vista exibida ao abrir o GitWand. \"Padr\u00e3o\" usa a primeira entrada vis\u00edvel do dock.",
+      },
+      visibility: {
+        label: "Entradas do dock",
+        help: "Escolha quais entradas aparecem no dock inferior.",
+      },
+      itemToday: "Hoje",
+      itemDashboard: "Painel",
+      itemPrs: "PRs",
+      itemGitTree: "\u00c1rvore Git",
+      showToday: "Mostrar Hoje",
+      showDashboard: "Mostrar Painel",
+      showPrs: "Mostrar PRs",
+      gitTreeLocked: "\u00c1rvore Git e Altera\u00e7\u00f5es",
+      lockedHint: "Sempre vis\u00edveis \u2014 n\u00e3o podem ser removidos.",
+      iconsOnly: {
+        label: "Apenas \u00edcones",
+        help: "Oculta os r\u00f3tulos do dock e mostra apenas os \u00edcones.",
+        verticalHint: "Sempre ativo quando o dock est\u00e1 na vertical.",
+      },
+      idleOpacity: {
+        label: "Opacidade em repouso",
+        help: "Opacidade do dock quando o cursor n\u00e3o est\u00e1 sobre ele. Volta a ficar opaco ao passar o mouse.",
+      },
+      itemChanges: "Altera\u00e7\u00f5es",
+      appearance: {
+        label: "Apar\u00eancia",
+      },
+      position: {
+        label: "Posi\u00e7\u00e3o",
+        help: "Mova o dock para qualquer lugar da tela.",
+      },
+      unlock: {
+        label: "Desbloquear a posi\u00e7\u00e3o do dock",
+        help: "Adiciona uma al\u00e7a \u00e0 esquerda do dock. Clique com o bot\u00e3o direito para redefinir ou bloquear a posi\u00e7\u00e3o.",
+      },
+      vertical: {
+        label: "Mudar para vertical",
+        help: "Exibe o dock verticalmente, com r\u00f3tulos orientados na vertical.",
+      },
+      resetPosition: "Redefinir posi\u00e7\u00e3o",
+      handleTooltip: "Arraste para mover \u2014 clique direito para op\u00e7\u00f5es",
+      order: {
+        label: "Ordem do dock",
+        help: "Reordene as entradas do dock.",
+        moveUp: "Mover para cima",
+        moveDown: "Mover para baixo",
+      },
+      menu: {
+        remove: "Remover do dock",
+        setStartup: "Definir como vista inicial",
+        lock: "Bloquear o dock",
+        unlock: "Desbloquear o dock",
+        hideText: "Ocultar texto",
+        showText: "Mostrar texto",
+        vertical: "Mudar para vertical",
+        horizontal: "Mudar para horizontal",
+        openSettings: "Opções do dock…",
       },
     },
 

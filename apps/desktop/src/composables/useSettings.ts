@@ -25,6 +25,33 @@ export type { SwitchBehavior };
 export type LaunchpadTab = "inbox" | "wip" | "prs" | "issues" | "team";
 /** Granularity of PR-activity OS notifications (v2.16). */
 export type NotificationLevel = "all" | "reviews" | "ci" | "none";
+/** Dock entry ids (subset of ViewMode) — used for dock ordering (v3). */
+export type DockEntryId = "launchpad" | "dashboard" | "prs" | "graph" | "changes";
+/** Canonical default dock order, left → right. */
+export const DEFAULT_DOCK_ORDER: DockEntryId[] = ["launchpad", "dashboard", "prs", "graph", "changes"];
+
+/**
+ * Normalise a stored dock order so all five entries are present exactly once:
+ * keep the known/persisted order, then append any missing entries in default
+ * order. Shared by AppDock (render order) and SettingsPanel (reorder list).
+ */
+export function normalizeDockOrder(stored: DockEntryId[] | undefined): DockEntryId[] {
+  const order = stored?.length ? stored : DEFAULT_DOCK_ORDER;
+  const known = order.filter((id) => DEFAULT_DOCK_ORDER.includes(id));
+  const missing = DEFAULT_DOCK_ORDER.filter((id) => !known.includes(id));
+  return [...known, ...missing];
+}
+
+/** Per-entry "hidden from dock" flag. Git Tree & Changes are never hideable. */
+export function isDockEntryHidden(
+  id: DockEntryId,
+  flags: Pick<AppSettings, "dockHideLaunchpad" | "dockHideDashboard" | "dockHidePrs">,
+): boolean {
+  if (id === "launchpad") return flags.dockHideLaunchpad;
+  if (id === "dashboard") return flags.dockHideDashboard;
+  if (id === "prs") return flags.dockHidePrs;
+  return false;
+}
 
 /** Named committer identity — stored in AppSettings, selected per-commit or per-repo (v2.12). */
 export interface IdentityProfile {
@@ -152,6 +179,44 @@ export interface AppSettings {
   /** Hide the README card on the dashboard. */
   dashboardHideReadme: boolean;
 
+  // ── Dock & startup view (v3) ──────────────────────────────
+
+  /**
+   * View shown when the app opens. "default" keeps the built-in dashboard
+   * landing; other values force Today (launchpad), Dashboard, PRs, or the
+   * Git Tree (graph) as the starting page.
+   */
+  startupView: "default" | "launchpad" | "dashboard" | "prs" | "graph";
+  /** Hide the Today (launchpad) entry from the bottom dock. */
+  dockHideLaunchpad: boolean;
+  /** Hide the Dashboard entry from the bottom dock. */
+  dockHideDashboard: boolean;
+  /** Hide the PRs entry from the bottom dock. */
+  dockHidePrs: boolean;
+  /** Show only icons in the bottom dock (hide text labels). */
+  dockIconsOnly: boolean;
+  /** Lay the dock out vertically (column) with vertically-oriented labels. */
+  dockVertical: boolean;
+  /** Dock opacity (0–1) when the cursor is not over it. 1 = always opaque. */
+  dockIdleOpacity: number;
+  /**
+   * When true, the dock can be dragged to a free position via its left handle.
+   * When false (default) it stays pinned bottom-center.
+   */
+  dockUnlocked: boolean;
+  /**
+   * Custom dock position in viewport pixels (top-left of the pill). null means
+   * the default bottom-center anchor. Persisted across sessions; survives a
+   * lock (lock only disables dragging, it keeps the chosen spot).
+   */
+  dockPosition: { x: number; y: number } | null;
+  /**
+   * Order of dock entries, by ViewMode id. Entries absent from the list fall
+   * back to the default order; hidden entries stay in the list but are not
+   * rendered.
+   */
+  dockOrder: DockEntryId[];
+
   /** Automation settings (v2.8). */
   automations: {
     /** Auto-resolve conflicts the moment MERGE_HEAD appears. */
@@ -253,6 +318,16 @@ export const defaultAppSettings: AppSettings = {
   dashboardHideContributors: false,
   dashboardHideActivity: false,
   dashboardHideReadme: false,
+  startupView: "default",
+  dockHideLaunchpad: false,
+  dockHideDashboard: false,
+  dockHidePrs: false,
+  dockIconsOnly: false,
+  dockVertical: false,
+  dockIdleOpacity: 0.45,
+  dockUnlocked: false,
+  dockPosition: null,
+  dockOrder: [...DEFAULT_DOCK_ORDER],
   automations: {
     autoResolve:    { enabled: false },
     nightlyPull:    { enabled: false, hour: 8, minute: 0 },

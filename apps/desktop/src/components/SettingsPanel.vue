@@ -75,7 +75,8 @@ import { useLogs, type LogEntry } from "../composables/useLogs";
 import { useIdentity } from "../composables/useIdentity";
 import { useCommitTemplates } from "../composables/useCommitTemplates";
 import { useAiPromptPresets, BUILTIN_PRESETS } from "../composables/useAiPromptPresets";
-import type { IdentityProfile, CommitTemplate, AiPromptPreset } from "../composables/useSettings";
+import type { IdentityProfile, CommitTemplate, AiPromptPreset, DockEntryId } from "../composables/useSettings";
+import { DEFAULT_DOCK_ORDER, normalizeDockOrder, refreshSettings as refreshSharedSettings } from "../composables/useSettings";
 import { gitCommitTemplatePath, openExternalUrl } from "../utils/backend";
 export type { AIProvider };
 
@@ -87,7 +88,7 @@ const props = defineProps<{
   /** Accumulated error log passed down from App.vue */
   errorLog?: LogEntry[];
   /** Open directly on this tab (e.g. "logs" when clicking the error badge) */
-  initialTab?: "general" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+  initialTab?: "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
   /** Current repo path (for Hooks tab) */
   cwd?: string;
 }>();
@@ -147,6 +148,17 @@ interface Settings {
   dashboardHideContributors: boolean;
   dashboardHideActivity: boolean;
   dashboardHideReadme: boolean;
+  // Dock & startup view (v3)
+  startupView: "default" | "launchpad" | "dashboard" | "prs" | "graph";
+  dockHideLaunchpad: boolean;
+  dockHideDashboard: boolean;
+  dockHidePrs: boolean;
+  dockIconsOnly: boolean;
+  dockVertical: boolean;
+  dockIdleOpacity: number;
+  dockUnlocked: boolean;
+  dockPosition: { x: number; y: number } | null;
+  dockOrder: DockEntryId[];
   // Automation settings (v2.8)
   automations: {
     autoResolve: { enabled: boolean };
@@ -199,6 +211,16 @@ const defaultSettings: Settings = {
   dashboardHideContributors: false,
   dashboardHideActivity: false,
   dashboardHideReadme: false,
+  startupView: "default",
+  dockHideLaunchpad: false,
+  dockHideDashboard: false,
+  dockHidePrs: false,
+  dockIconsOnly: false,
+  dockVertical: false,
+  dockIdleOpacity: 0.45,
+  dockUnlocked: false,
+  dockPosition: null,
+  dockOrder: [...DEFAULT_DOCK_ORDER],
   automations: {
     autoResolve: { enabled: false },
     nightlyPull: { enabled: false, hour: 8, minute: 0 },
@@ -237,10 +259,40 @@ const settings = ref<Settings>(loadSettings());
 function updateSetting<K extends keyof Settings>(key: K, value: Settings[K]) {
   settings.value[key] = value;
   saveSettings(settings.value);
+  // Keep the shared reactive settings (read by AppDock and friends) in sync so
+  // changes like dock order / position apply live, not only on panel close.
+  refreshSharedSettings();
+}
+
+// ─── Dock order ───────────────────────────────────────────
+function dockEntryLabel(id: DockEntryId): string {
+  switch (id) {
+    case "launchpad": return t("settings.dock.itemToday");
+    case "dashboard": return t("settings.dock.itemDashboard");
+    case "prs": return t("settings.dock.itemPrs");
+    case "graph": return t("settings.dock.itemGitTree");
+    case "changes": return t("settings.dock.itemChanges");
+  }
+}
+
+/** Persisted order, normalised so all five entries are always present. */
+const dockOrder = computed<DockEntryId[]>(() => normalizeDockOrder(settings.value.dockOrder));
+
+function moveDockEntry(id: DockEntryId, dir: -1 | 1) {
+  const arr = [...dockOrder.value];
+  const i = arr.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  updateSetting("dockOrder", arr);
+}
+
+function resetDockPosition() {
+  updateSetting("dockPosition", null);
 }
 
 // ─── Tab navigation ──────────────────────────────────────
-type SettingsTab = "general" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
+type SettingsTab = "general" | "dock" | "dashboard" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp";
 const activeSettingsTab = ref<SettingsTab>(props.initialTab ?? "general");
 
 // ─── Logs tab — formatting + clipboard ──────────────────
@@ -293,6 +345,7 @@ async function copyAllLogs() {
 
 const settingsTabs: { id: SettingsTab; icon: string }[] = [
   { id: "general", icon: "general" },
+  { id: "dock", icon: "dock" },
   { id: "dashboard", icon: "dashboard" },
   { id: "git", icon: "git" },
   { id: "editor", icon: "editor" },
@@ -306,7 +359,7 @@ const settingsTabs: { id: SettingsTab; icon: string }[] = [
 
 // ─── Nav sidebar groups (OpenCode-style left nav) ────────
 const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = [
-  { label: "Application", tabs: ["general", "dashboard", "editor"] },
+  { label: "Application", tabs: ["general", "dock", "dashboard", "editor"] },
   { label: "Dépôt", tabs: ["git", "hooks", "accounts"] },
   { label: "IA & Agents", tabs: ["ai", "mcp", "automations"] },
   { label: "Système", tabs: ["logs"] },
@@ -315,6 +368,7 @@ const settingsNavGroups: Array<{ label: string | null; tabs: SettingsTab[] }> = 
 function tabLabel(id: SettingsTab): string {
   switch (id) {
     case "general": return t("settings.tabGeneral");
+    case "dock": return t("settings.tabDock");
     case "dashboard": return t("settings.tabDashboard");
     case "git": return t("settings.tabGit");
     case "editor": return t("settings.tabEditor");
@@ -1031,6 +1085,11 @@ function savePresetForm() {
                 <path
                   d="M8 1v2m0 10v2m-7-7h2m10 0h2m-2.05-4.95-1.41 1.41m-7.08 7.08-1.41 1.41m0-9.9 1.41 1.41m7.08 7.08 1.41 1.41" />
               </svg>
+              <svg v-else-if="tab.icon === 'dock'" width="15" height="15" viewBox="0 0 16 16" fill="none"
+                stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1.75" y="2.5" width="12.5" height="11" rx="2" />
+                <rect x="4" y="9.5" width="8" height="2.25" rx="1.1" fill="currentColor" stroke="none" />
+              </svg>
               <svg v-else-if="tab.icon === 'dashboard'" width="15" height="15" viewBox="0 0 16 16" fill="none"
                 stroke="currentColor" stroke-width="1.4">
                 <rect x="2" y="2" width="5" height="5" rx="1" />
@@ -1242,6 +1301,152 @@ function savePresetForm() {
         </template>
 
         <!-- ═══ DASHBOARD ═══ -->
+        <!-- ═══ DOCK ═══ -->
+        <template v-if="activeSettingsTab === 'dock'">
+          <!-- Starting view -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-startup-view">{{ t('settings.dock.startupView.label') }}</label>
+            <select id="setting-startup-view" class="sp-select" :value="settings.startupView"
+              @change="updateSetting('startupView', ($event.target as HTMLSelectElement).value as Settings['startupView'])">
+              <option value="default">{{ t('settings.dock.startupView.default') }}</option>
+              <option value="launchpad">{{ t('settings.dock.itemToday') }}</option>
+              <option value="dashboard">{{ t('settings.dock.itemDashboard') }}</option>
+              <option value="prs">{{ t('settings.dock.itemPrs') }}</option>
+              <option value="graph">{{ t('settings.dock.itemGitTree') }}</option>
+            </select>
+            <span class="sp-hint">{{ t('settings.dock.startupView.help') }}</span>
+          </div>
+
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.visibility.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.visibility.help') }}</span>
+          </div>
+
+          <!-- Show Today -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-today">
+              <input id="setting-dock-today" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHideLaunchpad"
+                @change="updateSetting('dockHideLaunchpad', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showToday') }}</span>
+            </label>
+          </div>
+
+          <!-- Show Dashboard -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-dashboard">
+              <input id="setting-dock-dashboard" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHideDashboard"
+                @change="updateSetting('dockHideDashboard', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showDashboard') }}</span>
+            </label>
+          </div>
+
+          <!-- Show PRs -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-prs">
+              <input id="setting-dock-prs" type="checkbox" class="sp-checkbox"
+                :checked="!settings.dockHidePrs"
+                @change="updateSetting('dockHidePrs', !($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.showPrs') }}</span>
+            </label>
+          </div>
+
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label sp-checkbox-label--locked">
+              <input type="checkbox" class="sp-checkbox" checked disabled />
+              <span>{{ t('settings.dock.gitTreeLocked') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dock.lockedHint') }}</span>
+          </div>
+
+          <!-- ── Appearance ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.appearance.label') }}</span>
+          </div>
+
+          <!-- Icons only — forced on (and disabled) while the dock is vertical. -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" :class="{ 'sp-checkbox-label--locked': settings.dockVertical }"
+              for="setting-dock-icons-only">
+              <input id="setting-dock-icons-only" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockVertical || settings.dockIconsOnly"
+                :disabled="settings.dockVertical"
+                @change="updateSetting('dockIconsOnly', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.iconsOnly.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ settings.dockVertical ? t('settings.dock.iconsOnly.verticalHint') : t('settings.dock.iconsOnly.help') }}</span>
+          </div>
+
+          <!-- Idle opacity -->
+          <div class="sp-row">
+            <label class="sp-label" for="setting-dock-idle-opacity">
+              {{ t('settings.dock.idleOpacity.label') }} — {{ Math.round(settings.dockIdleOpacity * 100) }}%
+            </label>
+            <input id="setting-dock-idle-opacity" type="range" class="sp-range" style="max-width: 300px;"
+              min="0.1" max="1" step="0.05" :value="settings.dockIdleOpacity"
+              @input="updateSetting('dockIdleOpacity', parseFloat(($event.target as HTMLInputElement).value))" />
+            <span class="sp-hint">{{ t('settings.dock.idleOpacity.help') }}</span>
+          </div>
+
+          <!-- ── Position ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.position.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.position.help') }}</span>
+          </div>
+
+          <!-- Unlock position + reset button -->
+          <div class="sp-row sp-row--checkbox sp-dock-pos-row">
+            <label class="sp-checkbox-label" for="setting-dock-unlocked">
+              <input id="setting-dock-unlocked" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockUnlocked"
+                @change="updateSetting('dockUnlocked', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.unlock.label') }}</span>
+            </label>
+            <button type="button" class="btn btn--ghost sp-btn--sm sp-dock-reset"
+              :disabled="!settings.dockPosition"
+              @click="resetDockPosition">
+              {{ t('settings.dock.resetPosition') }}
+            </button>
+          </div>
+          <span class="sp-hint">{{ t('settings.dock.unlock.help') }}</span>
+
+          <!-- Turn to vertical -->
+          <div class="sp-row sp-row--checkbox">
+            <label class="sp-checkbox-label" for="setting-dock-vertical">
+              <input id="setting-dock-vertical" type="checkbox" class="sp-checkbox"
+                :checked="settings.dockVertical"
+                @change="updateSetting('dockVertical', ($event.target as HTMLInputElement).checked)" />
+              <span>{{ t('settings.dock.vertical.label') }}</span>
+            </label>
+            <span class="sp-hint">{{ t('settings.dock.vertical.help') }}</span>
+          </div>
+
+          <!-- ── Dock order ── -->
+          <div class="sp-row">
+            <span class="sp-label">{{ t('settings.dock.order.label') }}</span>
+            <span class="sp-hint">{{ t('settings.dock.order.help') }}</span>
+          </div>
+
+          <ul class="sp-dock-order">
+            <li v-for="(id, i) in dockOrder" :key="id" class="sp-dock-order-item">
+              <span class="sp-dock-order-name">{{ dockEntryLabel(id) }}</span>
+              <span class="sp-dock-order-actions">
+                <button type="button" class="sp-dock-order-btn" :disabled="i === 0"
+                  :aria-label="t('settings.dock.order.moveUp')" :title="t('settings.dock.order.moveUp')"
+                  @click="moveDockEntry(id, -1)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4" /></svg>
+                </button>
+                <button type="button" class="sp-dock-order-btn" :disabled="i === dockOrder.length - 1"
+                  :aria-label="t('settings.dock.order.moveDown')" :title="t('settings.dock.order.moveDown')"
+                  @click="moveDockEntry(id, 1)">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4" /></svg>
+                </button>
+              </span>
+            </li>
+          </ul>
+        </template>
+
         <template v-if="activeSettingsTab === 'dashboard'">
           <!-- README first row -->
           <div class="sp-row sp-row--checkbox">
@@ -2485,6 +2690,72 @@ function savePresetForm() {
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+/* Dock — position row: checkbox on the left, reset button pushed to the right. */
+.sp-dock-pos-row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sp-dock-reset {
+  flex-shrink: 0;
+}
+
+/* Dock — reorderable entry list. */
+.sp-dock-order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sp-dock-order-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.sp-dock-order-name {
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+}
+
+.sp-dock-order-actions {
+  display: inline-flex;
+  gap: var(--space-1);
+}
+
+.sp-dock-order-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sp-dock-order-btn:hover:not(:disabled) {
+  background: var(--color-bg-hover, rgba(127, 127, 127, 0.12));
+  color: var(--color-text);
+}
+
+.sp-dock-order-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .sp-select,

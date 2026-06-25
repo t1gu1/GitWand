@@ -975,6 +975,7 @@ const es: Locale = {
   settings: {
     title: "Ajustes",
     tabGeneral: "General",
+    tabDock: "Dock",
     tabDashboard: "Panel",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1191,6 +1192,70 @@ const es: Locale = {
       hideReadme: {
         label: "Ocultar el README",
         help: "Oculta la tarjeta README en el panel.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vista de inicio",
+        default: "Predeterminada",
+        help: "Vista mostrada al abrir GitWand. «Predeterminada» usa la primera entrada visible del dock.",
+      },
+      visibility: {
+        label: "Entradas del dock",
+        help: "Elige qué entradas aparecen en el dock inferior.",
+      },
+      itemToday: "Hoy",
+      itemDashboard: "Panel",
+      itemPrs: "PRs",
+      itemGitTree: "Árbol Git",
+      showToday: "Mostrar Hoy",
+      showDashboard: "Mostrar Panel",
+      showPrs: "Mostrar PRs",
+      gitTreeLocked: "Árbol Git y Cambios",
+      lockedHint: "Siempre visibles — no se pueden quitar.",
+      iconsOnly: {
+        label: "Solo iconos",
+        help: "Oculta las etiquetas del dock y muestra solo los iconos.",
+        verticalHint: "Siempre activo cuando el dock está en vertical.",
+      },
+      idleOpacity: {
+        label: "Opacidad en reposo",
+        help: "Opacidad del dock cuando el cursor no está encima. Vuelve a ser opaco al pasar el ratón.",
+      },
+      itemChanges: "Cambios",
+      appearance: {
+        label: "Apariencia",
+      },
+      position: {
+        label: "Posición",
+        help: "Mueve el dock a cualquier parte de la pantalla.",
+      },
+      unlock: {
+        label: "Desbloquear la posición del dock",
+        help: "Añade un asa a la izquierda del dock. Haz clic derecho para restablecer o bloquear la posición.",
+      },
+      vertical: {
+        label: "Poner en vertical",
+        help: "Muestra el dock verticalmente, con etiquetas orientadas en vertical.",
+      },
+      resetPosition: "Restablecer posición",
+      handleTooltip: "Arrastra para mover — clic derecho para opciones",
+      order: {
+        label: "Orden del dock",
+        help: "Reordena las entradas del dock.",
+        moveUp: "Subir",
+        moveDown: "Bajar",
+      },
+      menu: {
+        remove: "Quitar del dock",
+        setStartup: "Establecer como vista de inicio",
+        lock: "Bloquear el dock",
+        unlock: "Desbloquear el dock",
+        hideText: "Ocultar texto",
+        showText: "Mostrar texto",
+        vertical: "Poner en vertical",
+        horizontal: "Poner en horizontal",
+        openSettings: "Opciones del dock…",
       },
     },
 

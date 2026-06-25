@@ -992,6 +992,7 @@ const en = {
     title: "Settings",
     // Tab titles
     tabGeneral: "General",
+    tabDock: "Dock",
     tabDashboard: "Dashboard",
     tabGit: "Git",
     tabEditor: "Editor",
@@ -1216,6 +1217,70 @@ const en = {
       hideReadme: {
         label: "Hide README",
         help: "Hide the README card on the dashboard.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Starting view",
+        default: "Default",
+        help: "View shown when GitWand opens. \"Default\" uses the first visible dock entry.",
+      },
+      visibility: {
+        label: "Dock entries",
+        help: "Choose which entries appear in the bottom dock.",
+      },
+      itemToday: "Today",
+      itemDashboard: "Dashboard",
+      itemPrs: "PRs",
+      itemGitTree: "Git Tree",
+      showToday: "Show Today",
+      showDashboard: "Show Dashboard",
+      showPrs: "Show PRs",
+      gitTreeLocked: "Git Tree & Changes",
+      lockedHint: "Always shown — cannot be removed.",
+      iconsOnly: {
+        label: "Icons only",
+        help: "Hide the text labels in the dock and show only icons.",
+        verticalHint: "Always on while the dock is vertical.",
+      },
+      idleOpacity: {
+        label: "Idle opacity",
+        help: "Dock opacity when the cursor is not over it. It fades back to full on hover.",
+      },
+      itemChanges: "Changes",
+      appearance: {
+        label: "Appearance",
+      },
+      position: {
+        label: "Position",
+        help: "Move the dock anywhere on screen.",
+      },
+      unlock: {
+        label: "Unlock dock position",
+        help: "Adds a drag handle on the left of the dock. Right-click it to reset or lock the position.",
+      },
+      vertical: {
+        label: "Turn to vertical",
+        help: "Lay the dock out vertically, with vertically-oriented labels.",
+      },
+      resetPosition: "Reset position",
+      handleTooltip: "Drag to move — right-click for options",
+      order: {
+        label: "Dock order",
+        help: "Reorder the dock entries.",
+        moveUp: "Move up",
+        moveDown: "Move down",
+      },
+      menu: {
+        remove: "Remove from dock",
+        setStartup: "Set as startup view",
+        lock: "Lock dock",
+        unlock: "Unlock dock",
+        hideText: "Hide text",
+        showText: "Show text",
+        vertical: "Turn to vertical",
+        horizontal: "Turn to horizontal",
+        openSettings: "Dock options…",
       },
     },
 

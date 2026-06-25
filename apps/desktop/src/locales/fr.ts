@@ -984,6 +984,7 @@ const fr: Locale = {
   settings: {
     title: "Param\u00e8tres",
     tabGeneral: "G\u00e9n\u00e9ral",
+    tabDock: "Dock",
     tabDashboard: "Tableau de bord",
     tabGit: "Git",
     tabEditor: "\u00c9diteur",
@@ -1200,6 +1201,70 @@ const fr: Locale = {
       hideReadme: {
         label: "Masquer le README",
         help: "Masque la carte README sur le tableau de bord.",
+      },
+    },
+    dock: {
+      startupView: {
+        label: "Vue de démarrage",
+        default: "Par défaut",
+        help: "Vue affichée à l'ouverture de GitWand. « Par défaut » utilise la première entrée visible du dock.",
+      },
+      visibility: {
+        label: "Entrées du dock",
+        help: "Choisissez les entrées affichées dans le dock en bas.",
+      },
+      itemToday: "Aujourd'hui",
+      itemDashboard: "Tableau de bord",
+      itemPrs: "PRs",
+      itemGitTree: "Arbre Git",
+      showToday: "Afficher Aujourd'hui",
+      showDashboard: "Afficher le tableau de bord",
+      showPrs: "Afficher les PRs",
+      gitTreeLocked: "Arbre Git & Modifications",
+      lockedHint: "Toujours affichés — non supprimables.",
+      iconsOnly: {
+        label: "Icônes uniquement",
+        help: "Masque les libellés du dock et n'affiche que les icônes.",
+        verticalHint: "Toujours activé lorsque le dock est vertical.",
+      },
+      idleOpacity: {
+        label: "Opacité au repos",
+        help: "Opacité du dock quand le curseur n'est pas dessus. Il redevient opaque au survol.",
+      },
+      itemChanges: "Modifications",
+      appearance: {
+        label: "Apparence",
+      },
+      position: {
+        label: "Position",
+        help: "Déplacez le dock n'importe où à l'écran.",
+      },
+      unlock: {
+        label: "Déverrouiller la position du dock",
+        help: "Ajoute une poignée à gauche du dock. Clic droit dessus pour réinitialiser ou verrouiller la position.",
+      },
+      vertical: {
+        label: "Passer en vertical",
+        help: "Affiche le dock verticalement, avec des libellés orientés à la verticale.",
+      },
+      resetPosition: "Réinitialiser la position",
+      handleTooltip: "Glisser pour déplacer — clic droit pour les options",
+      order: {
+        label: "Ordre du dock",
+        help: "Réorganisez les entrées du dock.",
+        moveUp: "Monter",
+        moveDown: "Descendre",
+      },
+      menu: {
+        remove: "Retirer du dock",
+        setStartup: "Définir comme vue de démarrage",
+        lock: "Verrouiller le dock",
+        unlock: "Déverrouiller le dock",
+        hideText: "Masquer le texte",
+        showText: "Afficher le texte",
+        vertical: "Passer en vertical",
+        horizontal: "Passer en horizontal",
+        openSettings: "Options du dock…",
       },
     },
 

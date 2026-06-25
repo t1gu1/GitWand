@@ -82,7 +82,7 @@ import { useGitRepo, type ViewMode } from "./composables/useGitRepo";
 import { useWorkspaceScope } from "./composables/useWorkspaceScope";
 import { useTheme } from "./composables/useTheme";
 import { useI18n } from "./composables/useI18n";
-import { useSettings } from "./composables/useSettings";
+import { useSettings, normalizeDockOrder, isDockEntryHidden } from "./composables/useSettings";
 import { useNetworkStatus } from "./composables/useNetworkStatus";
 import { useConnectivity } from "./composables/useConnectivity";
 import { useScheduler } from "./composables/useScheduler";
@@ -380,6 +380,22 @@ watch(
   },
   { immediate: true },
 );
+
+// Apply the user's configured starting view (Settings → Dock). "default"
+// lands on the first dock entry the user has left visible (dock order: Today →
+// Dashboard → PRs → Git Tree); any explicit value forces that view directly.
+onMounted(() => {
+  const sv = settings.value.startupView;
+  if (sv && sv !== "default") {
+    viewMode.value = sv;
+    return;
+  }
+  // "default" → first dock entry the user has left visible, in dock order.
+  const first = normalizeDockOrder(settings.value.dockOrder).find(
+    (id) => !isDockEntryHidden(id, settings.value),
+  );
+  if (first) viewMode.value = first as ViewMode;
+});
 
 // ─── Computed state ─────────────────────────────────────
 const hasFiles = computed(() => repoFiles.value.length > 0);
@@ -1215,7 +1231,7 @@ function onPaletteSelectCommit(hash: string) {
 
 // ─── Settings panel ─────────────────────────────────────
 const showSettings = ref(false);
-const settingsInitialTab = ref<"general" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | undefined>(undefined);
+const settingsInitialTab = ref<"general" | "dock" | "git" | "editor" | "ai" | "automations" | "logs" | "hooks" | "accounts" | "mcp" | undefined>(undefined);
 
 // ─── Error log (in-memory ring buffer, feeds SettingsPanel Logs tab) ─
 // Uses the useLogs() singleton composable — no localStorage persistence so a
