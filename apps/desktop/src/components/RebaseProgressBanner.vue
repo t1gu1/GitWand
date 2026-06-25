@@ -17,14 +17,21 @@ import { t } from "../composables/useI18n";
 const props = defineProps<{
   repoState: RepoOperationState;
   cwd: string;
+  /** Driven by the parent while the whole-rebase auto-resolve loop runs. */
+  autoResolving?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: "action-done"): void;
+  (e: "action-done", action: "continue" | "abort" | "skip"): void;
+  (e: "auto-resolve"): void;
   (e: "error", msg: string): void;
 }>();
 
 const busy = ref(false);
+
+// Any in-flight action (Continue/Skip/Abort or the whole-rebase auto-resolve
+// loop) disables the whole button row to avoid overlapping git operations.
+const anyBusy = computed(() => busy.value || props.autoResolving === true);
 
 const shortHead = computed(() =>
   props.repoState.operationHead
@@ -44,7 +51,7 @@ async function runAction(action: "continue" | "abort" | "skip") {
   try {
     const { gitRebaseAction } = await import("../utils/backend");
     await gitRebaseAction(props.cwd, action);
-    emit("action-done");
+    emit("action-done", action);
   } catch (err: any) {
     emit("error", err?.message ?? String(err));
   } finally {
@@ -82,13 +89,21 @@ async function runAction(action: "continue" | "abort" | "skip") {
 
     <!-- Actions -->
     <div class="rpm-actions">
-      <button class="rpm-btn rpm-btn--danger" :disabled="busy" @click="runAction('abort')">
+      <button class="rpm-btn rpm-btn--danger" :disabled="anyBusy" @click="runAction('abort')">
         {{ t('rebase.abort') }}
       </button>
-      <button class="rpm-btn" :disabled="busy" @click="runAction('skip')">
+      <button class="rpm-btn" :disabled="anyBusy" @click="runAction('skip')">
         {{ t('rebase.skip') }}
       </button>
-      <button class="rpm-btn rpm-btn--primary" :disabled="busy || repoState.hasConflict"
+      <!-- Auto-resolve: drives the WHOLE rebase (resolve → stage → continue,
+           looped across every step) until it finishes or hits a conflict it
+           can't resolve. Engine-first, with AI fallback when configured. -->
+      <button v-if="repoState.hasConflict" class="rpm-btn rpm-btn--auto"
+        :disabled="anyBusy" :title="t('rebase.resolveAutoHint')" @click="emit('auto-resolve')">
+        <span v-if="autoResolving" class="rpm-spinner" aria-hidden="true" />
+        {{ autoResolving ? t('rebase.resolveAutoBusy') : t('rebase.resolveAuto') }}
+      </button>
+      <button class="rpm-btn rpm-btn--primary" :disabled="anyBusy || repoState.hasConflict"
         :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
         @click="runAction('continue')">
         <span v-if="busy" class="rpm-spinner" aria-hidden="true" />
@@ -254,6 +269,19 @@ async function runAction(action: "continue" | "abort" | "skip") {
   border-color: var(--color-border);
   color: var(--color-text-muted);
   box-shadow: none;
+}
+
+/* Auto-resolve: solid accent fill — the one-click "walk the whole rebase"
+   shortcut, the boldest action in the row while conflicts remain. */
+.rpm-btn--auto {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text, #fff);
+}
+
+.rpm-btn--auto:hover:not(:disabled) {
+  background: var(--color-accent-hover, var(--color-accent));
+  border-color: var(--color-accent-hover, var(--color-accent));
 }
 
 /* ── Spinner ─────────────────────────────────────────────────────────── */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, type Ref } from "vue";
+import { ref, computed, onMounted, watch, nextTick, defineAsyncComponent, type Ref } from "vue";
 import {
   getGitLog,
   getGitShortlog,
@@ -14,68 +14,18 @@ import { useI18n } from "../composables/useI18n";
 import { useSettings } from "../composables/useSettings";
 import { avatarStyle, avatarInitials as initials } from "../composables/useAvatar";
 import { useAIProvider } from "../composables/useAIProvider";
-import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
 import { renderMarkdown, safeHtml } from "../composables/useSafeHtml";
 import AiSparkle from "./AiSparkle.vue";
 import BaseModal from "./BaseModal.vue";
 import { forgeForRepo, isForgeConnected } from "../composables/forge/useForge";
 
-const { t, locale } = useI18n();
+const ReleaseNotesModal = defineAsyncComponent(() => import("./ReleaseNotesModal.vue"));
+
+const { t } = useI18n();
 const { settings } = useSettings();
 const ai = useAIProvider();
-const {
-  isGenerating: isGeneratingReleaseNotes,
-  generate: generateReleaseNotes,
-  lastError: releaseNotesError,
-} = useReleaseNotes();
-
-// ─── Release notes modal (Phase 1.3.4) ────────────────────
+// ─── Release notes modal (shared with TagsPanel) ──────────
 const releaseNotesOpen = ref(false);
-const releaseNotesFrom = ref("");
-const releaseNotesTo = ref("HEAD");
-const releaseNotesMarkdown = ref("");
-const releaseNotesCopied = ref(false);
-
-async function openReleaseNotes() {
-  releaseNotesMarkdown.value = "";
-  releaseNotesTo.value = "HEAD";
-  releaseNotesCopied.value = false;
-  const tag = await findLatestTag(props.cwd);
-  releaseNotesFrom.value = tag || "";
-  releaseNotesOpen.value = true;
-}
-
-function closeReleaseNotes() {
-  releaseNotesOpen.value = false;
-}
-
-async function runGenerateReleaseNotes() {
-  releaseNotesCopied.value = false;
-  try {
-    const md = await generateReleaseNotes(
-      props.cwd,
-      releaseNotesFrom.value,
-      releaseNotesTo.value,
-      { locale: locale.value },
-    );
-    releaseNotesMarkdown.value = md;
-  } catch {
-    releaseNotesMarkdown.value = "";
-  }
-}
-
-async function copyReleaseNotes() {
-  if (!releaseNotesMarkdown.value) return;
-  try {
-    await navigator.clipboard.writeText(releaseNotesMarkdown.value);
-    releaseNotesCopied.value = true;
-    setTimeout(() => {
-      releaseNotesCopied.value = false;
-    }, 1500);
-  } catch {
-    // ignore — clipboard permissions may not be granted in some envs
-  }
-}
 
 const props = defineProps<{
   cwd: string;
@@ -544,7 +494,7 @@ function escapeBre(s: string): string {
 function fetchContribCommits(cwd: string, sel: ContribSel): Promise<GitLogEntry[]> {
   const emails = sel.emails.filter(Boolean);
   const id = emails.length ? emails.map((e) => e.toLowerCase()).sort().join(",") : sel.name.toLowerCase();
-  const key = `${cwd} ${id}`;
+  const key = `${cwd} ${id}`;
   let pending = contribCommitsCache.get(key);
   if (!pending) {
     // One query per email (BRE has no portable alternation), matching the email
@@ -1227,7 +1177,7 @@ watch(
                 v-if="ai.isAvailable.value"
                 class="btn btn--ai panel-link-ai"
                 :title="t('dashboard.releaseNotesHint')"
-                @click="openReleaseNotes"
+                @click="releaseNotesOpen = true"
               >
                 <span class="dv-ai-label">
                   <AiSparkle :size="13" />
@@ -1438,64 +1388,12 @@ watch(
       <p v-else class="cm-empty">{{ t("dashboard.contribNoPrs") }}</p>
     </BaseModal>
 
-    <!-- ── Release notes modal (Phase 1.3.4) ────────────── -->
-    <div
+    <!-- ── Release notes modal (shared with TagsPanel) ───── -->
+    <ReleaseNotesModal
       v-if="releaseNotesOpen"
-      class="rn-overlay overlay-backdrop"
-      @click.self="closeReleaseNotes"
-    >
-      <div class="rn-modal" role="dialog" aria-modal="true">
-        <header class="rn-head">
-          <h3 class="rn-title">
-            <AiSparkle :size="16" />
-            {{ t('dashboard.releaseNotesTitle') }}
-          </h3>
-          <button class="rn-close" @click="closeReleaseNotes" aria-label="Close">✕</button>
-        </header>
-        <p class="rn-desc">{{ t('dashboard.releaseNotesDesc') }}</p>
-        <div class="rn-refs">
-          <label class="rn-field">
-            <span>{{ t('dashboard.releaseNotesFrom') }}</span>
-            <input v-model="releaseNotesFrom" type="text" class="rn-input mono" :placeholder="t('dashboard.releaseNotesFromPlaceholder')" />
-          </label>
-          <span class="rn-sep">..</span>
-          <label class="rn-field">
-            <span>{{ t('dashboard.releaseNotesTo') }}</span>
-            <input v-model="releaseNotesTo" type="text" class="rn-input mono" placeholder="HEAD" />
-          </label>
-          <button
-            class="rn-generate"
-            :disabled="isGeneratingReleaseNotes || !releaseNotesFrom.trim() || !releaseNotesTo.trim()"
-            @click="runGenerateReleaseNotes"
-          >
-            <span v-if="isGeneratingReleaseNotes">…</span>
-            <span v-else>{{ t('dashboard.releaseNotesGenerate') }}</span>
-          </button>
-        </div>
-        <p v-if="releaseNotesError" class="rn-error">{{ releaseNotesError }}</p>
-        <div class="rn-output">
-          <textarea
-            v-model="releaseNotesMarkdown"
-            class="rn-textarea mono"
-            rows="16"
-            spellcheck="false"
-            :placeholder="t('dashboard.releaseNotesPlaceholder')"
-          />
-        </div>
-        <footer class="rn-foot">
-          <button
-            class="rn-copy"
-            :disabled="!releaseNotesMarkdown"
-            @click="copyReleaseNotes"
-          >
-            {{ releaseNotesCopied ? t('dashboard.releaseNotesCopied') : t('dashboard.releaseNotesCopy') }}
-          </button>
-          <button class="rn-close-btn" @click="closeReleaseNotes">
-            {{ t('common.close') }}
-          </button>
-        </footer>
-      </div>
-    </div>
+      :cwd="props.cwd"
+      @close="releaseNotesOpen = false"
+    />
   </div>
 </template>
 
@@ -2585,178 +2483,4 @@ watch(
   gap: 5px;
   line-height: 0;
 }
-
-/* ─── Release notes modal ────────────────────────────── */
-.rn-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 24px;
-  /* backdrop tint + blur come from the global .overlay-backdrop class */
-}
-
-.rn-modal {
-  width: min(760px, 100%);
-  max-height: 90vh;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg, 0 16px 48px rgba(0, 0, 0, 0.35));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.rn-head {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.rn-title {
-  flex: 1;
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-ai);
-}
-
-.rn-close {
-  background: none;
-  border: none;
-  font-size: 16px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.rn-close:hover { color: var(--color-text); }
-
-.rn-desc {
-  margin: 0;
-  padding: 12px 20px 0;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.rn-refs {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-}
-
-.rn-field {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-}
-
-.rn-input {
-  padding: 6px 10px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  outline: none;
-}
-
-.rn-input:focus { border-color: var(--color-accent); }
-
-.rn-sep {
-  padding-bottom: 6px;
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-}
-
-.rn-generate {
-  padding: 6px 14px;
-  background: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
-  color: var(--color-accent-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.rn-generate:hover:not(:disabled) { filter: brightness(1.08); }
-.rn-generate:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.rn-error {
-  margin: 0;
-  padding: 0 20px 8px;
-  font-size: var(--font-size-sm);
-  color: var(--color-danger, #ef4444);
-}
-
-.rn-output {
-  flex: 1;
-  min-height: 0;
-  padding: 0 20px 12px;
-  display: flex;
-}
-
-.rn-textarea {
-  width: 100%;
-  flex: 1;
-  min-height: 260px;
-  padding: 12px 14px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  line-height: 1.5;
-  resize: vertical;
-  outline: none;
-}
-
-.rn-textarea:focus { border-color: var(--color-accent); }
-
-.rn-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
-  border-top: 1px solid var(--color-border);
-}
-
-.rn-copy,
-.rn-close-btn {
-  padding: 6px 14px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-}
-
-.rn-copy {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border-color: var(--color-accent);
-}
-
-.rn-copy:hover:not(:disabled) { filter: brightness(1.08); }
-.rn-copy:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.rn-close-btn {
-  background: transparent;
-  color: var(--color-text);
-}
-
-.rn-close-btn:hover { background: var(--color-bg-secondary); }
 </style>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, defineAsyncComponent } from "vue";
 import { gitListTags, gitDeleteTag, gitPushTags, gitDeleteRemoteTag, gitRemoteInfo, gitRetagTo, gitForcePushTag, gitUnpushedTags, type GitTag } from "../utils/backend";
 import { useI18n } from "../composables/useI18n";
 import BaseModal from "./BaseModal.vue";
 import AiSparkle from "./AiSparkle.vue";
 import { useAIProvider } from "../composables/useAIProvider";
-import { useReleaseNotes, latestTag as findLatestTag } from "../composables/useReleaseNotes";
+
+const ReleaseNotesModal = defineAsyncComponent(() => import("./ReleaseNotesModal.vue"));
 
 const props = defineProps<{
   cwd: string;
@@ -17,54 +18,13 @@ const emit = defineEmits<{
   (e: "refresh"): void;     // ask host to refresh repo data (v2.12 bug fix)
 }>();
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const ai = useAIProvider();
 
-// ─── Release notes (relocated from the Dashboard, v3) ────
-// A release = a tag, so the generator lives with Tags now. The automation
+// ─── Release notes (shared modal, also reachable from the Dashboard) ────
+// A release = a tag, so the entry point lives with Tags too. The automation
 // "release notes on tag creation" is unchanged (AutomationsPanel).
-const {
-  isGenerating: isGeneratingReleaseNotes,
-  generate: generateReleaseNotes,
-  lastError: releaseNotesError,
-} = useReleaseNotes();
 const releaseNotesOpen = ref(false);
-const releaseNotesFrom = ref("");
-const releaseNotesTo = ref("HEAD");
-const releaseNotesMarkdown = ref("");
-const releaseNotesCopied = ref(false);
-
-async function openReleaseNotes() {
-  releaseNotesMarkdown.value = "";
-  releaseNotesTo.value = "HEAD";
-  releaseNotesCopied.value = false;
-  releaseNotesFrom.value = (await findLatestTag(props.cwd)) || "";
-  releaseNotesOpen.value = true;
-}
-function closeReleaseNotes() {
-  releaseNotesOpen.value = false;
-}
-async function runGenerateReleaseNotes() {
-  releaseNotesCopied.value = false;
-  try {
-    releaseNotesMarkdown.value = await generateReleaseNotes(
-      props.cwd,
-      releaseNotesFrom.value,
-      releaseNotesTo.value,
-      { locale: locale.value },
-    );
-  } catch {
-    releaseNotesMarkdown.value = "";
-  }
-}
-async function copyReleaseNotes() {
-  if (!releaseNotesMarkdown.value) return;
-  try {
-    await navigator.clipboard.writeText(releaseNotesMarkdown.value);
-    releaseNotesCopied.value = true;
-    setTimeout(() => { releaseNotesCopied.value = false; }, 1500);
-  } catch { /* clipboard perms may be denied */ }
-}
 
 // ─── State ──────────────────────────────────────────────
 const tags = ref<GitTag[]>([]);
@@ -248,7 +208,7 @@ async function pushAllTags() {
           v-if="ai.isAvailable.value"
           class="bm-btn bm-btn--ghost tp-btn-sm"
           :title="t('dashboard.releaseNotesHint')"
-          @click="openReleaseNotes"
+          @click="releaseNotesOpen = true"
         >
           <AiSparkle :size="12" />
           {{ t('dashboard.releaseNotes') }}
@@ -380,47 +340,12 @@ async function pushAllTags() {
       </template>
     </BaseModal>
 
-    <!-- Release notes generator (relocated from the Dashboard, v3) -->
-    <BaseModal
+    <!-- Release notes generator (shared modal, also on the Dashboard) -->
+    <ReleaseNotesModal
       v-if="releaseNotesOpen"
-      :title="t('dashboard.releaseNotesTitle')"
-      size="lg"
-      @close="closeReleaseNotes"
-    >
-      <p class="tp-rn-desc">{{ t('dashboard.releaseNotesDesc') }}</p>
-      <div class="tp-rn-refs">
-        <label class="tp-rn-field">
-          <span>{{ t('dashboard.releaseNotesFrom') }}</span>
-          <input v-model="releaseNotesFrom" type="text" class="tp-form-input mono" :placeholder="t('dashboard.releaseNotesFromPlaceholder')" />
-        </label>
-        <span class="tp-rn-sep">..</span>
-        <label class="tp-rn-field">
-          <span>{{ t('dashboard.releaseNotesTo') }}</span>
-          <input v-model="releaseNotesTo" type="text" class="tp-form-input mono" placeholder="HEAD" />
-        </label>
-        <button
-          class="bm-btn bm-btn--primary tp-btn-sm"
-          :disabled="isGeneratingReleaseNotes || !releaseNotesFrom.trim() || !releaseNotesTo.trim()"
-          @click="runGenerateReleaseNotes"
-        >
-          {{ isGeneratingReleaseNotes ? '…' : t('dashboard.releaseNotesGenerate') }}
-        </button>
-      </div>
-      <p v-if="releaseNotesError" class="tp-error">{{ releaseNotesError }}</p>
-      <textarea
-        v-model="releaseNotesMarkdown"
-        class="tp-form-textarea mono"
-        rows="14"
-        spellcheck="false"
-        :placeholder="t('dashboard.releaseNotesPlaceholder')"
-      />
-      <template #footer>
-        <button class="bm-btn bm-btn--ghost" :disabled="!releaseNotesMarkdown" @click="copyReleaseNotes">
-          {{ releaseNotesCopied ? t('dashboard.releaseNotesCopied') : t('dashboard.releaseNotesCopy') }}
-        </button>
-        <button class="bm-btn bm-btn--primary" @click="closeReleaseNotes">{{ t('common.close') }}</button>
-      </template>
-    </BaseModal>
+      :cwd="cwd"
+      @close="releaseNotesOpen = false"
+    />
   </BaseModal>
 </template>
 
@@ -441,19 +366,6 @@ async function pushAllTags() {
   font-size: var(--font-size-sm);
   line-height: 1;
 }
-
-
-/* ─── Release notes ─────────────────────────────────────── */
-.tp-rn-desc { color: var(--color-text-muted); font-size: var(--font-size-sm); margin: 0 0 var(--space-4); }
-.tp-rn-refs {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-.tp-rn-field { display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--font-size-xs); color: var(--color-text-muted); }
-.tp-rn-field .tp-form-input { min-width: 140px; }
-.tp-rn-sep { padding-bottom: var(--space-3); color: var(--color-text-muted); }
 
 /* ─── List ──────────────────────────────────────────────── */
 .tp-list {
