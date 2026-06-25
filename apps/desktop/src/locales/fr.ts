@@ -297,12 +297,14 @@ const fr: Locale = {
     releaseNotesTitle: "G\u00e9n\u00e9rateur de release notes",
     releaseNotesDesc: "Choisis une plage de r\u00e9f\u00e9rences (tags ou branches). GitWand analyse les commits et produit un changelog Markdown pr\u00eat \u00e0 coller.",
     releaseNotesFrom: "Depuis",
-    releaseNotesFromPlaceholder: "ex. v1.2.0",
     releaseNotesTo: "Jusqu'\u00e0",
     releaseNotesGenerate: "G\u00e9n\u00e9rer",
     releaseNotesPlaceholder: "Le changelog appara\u00eetra ici apr\u00e8s g\u00e9n\u00e9ration.",
     releaseNotesCopy: "Copier",
     releaseNotesCopied: "Copi\u00e9 \u2713",
+    releaseNotesBranches: "Branches",
+    releaseNotesRemoteBranches: "Branches distantes",
+    releaseNotesTags: "Tags",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

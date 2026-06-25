@@ -292,12 +292,14 @@ const es: Locale = {
     releaseNotesTitle: "Generador de notas de versión",
     releaseNotesDesc: "Elige un rango de referencias (tags o ramas). GitWand analiza los commits y produce un changelog en Markdown listo para pegar.",
     releaseNotesFrom: "Desde",
-    releaseNotesFromPlaceholder: "ej. v1.2.0",
     releaseNotesTo: "Hasta",
     releaseNotesGenerate: "Generar",
     releaseNotesPlaceholder: "El changelog aparecerá aquí una vez generado.",
     releaseNotesCopy: "Copiar",
     releaseNotesCopied: "Copiado ✓",
+    releaseNotesBranches: "Ramas",
+    releaseNotesRemoteBranches: "Ramas remotas",
+    releaseNotesTags: "Etiquetas",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

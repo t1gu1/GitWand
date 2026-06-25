@@ -293,12 +293,14 @@ const ptBR: Locale = {
     releaseNotesTitle: "Gerador de notas de versão",
     releaseNotesDesc: "Escolha um intervalo de referência (tags ou branches). GitWand analisa os commits e produz um changelog em Markdown pronto para colar.",
     releaseNotesFrom: "De",
-    releaseNotesFromPlaceholder: "ex. v1.2.0",
     releaseNotesTo: "Até",
     releaseNotesGenerate: "Gerar",
     releaseNotesPlaceholder: "O changelog aparecerá aqui quando for gerado.",
     releaseNotesCopy: "Copiar",
     releaseNotesCopied: "Copiado ✓",
+    releaseNotesBranches: "Branches",
+    releaseNotesRemoteBranches: "Branches remotas",
+    releaseNotesTags: "Tags",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

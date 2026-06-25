@@ -304,12 +304,14 @@ const en = {
     releaseNotesTitle: "Release notes generator",
     releaseNotesDesc: "Pick a reference range (tags or branches). GitWand analyses the commits and produces a Markdown changelog ready to paste.",
     releaseNotesFrom: "From",
-    releaseNotesFromPlaceholder: "e.g. v1.2.0",
     releaseNotesTo: "To",
     releaseNotesGenerate: "Generate",
     releaseNotesPlaceholder: "The changelog will appear here once generated.",
     releaseNotesCopy: "Copy",
     releaseNotesCopied: "Copied \u2713",
+    releaseNotesBranches: "Branches",
+    releaseNotesRemoteBranches: "Remote branches",
+    releaseNotesTags: "Tags",
   },
 
   // ─── FileList (merge mode) ──────────────────────────────

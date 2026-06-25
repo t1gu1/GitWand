@@ -295,12 +295,14 @@ const zhCN: Locale = {
     releaseNotesTitle: "发布说明生成器",
     releaseNotesDesc: "选择参考范围（标签或分支）。GitWand 分析提交并生成可直接粘贴的 Markdown 更新日志。",
     releaseNotesFrom: "起点",
-    releaseNotesFromPlaceholder: "例如 v1.2.0",
     releaseNotesTo: "终点",
     releaseNotesGenerate: "生成",
     releaseNotesPlaceholder: "生成后更新日志将显示在此处。",
     releaseNotesCopy: "复制",
     releaseNotesCopied: "已复制 ✓",
+    releaseNotesBranches: "分支",
+    releaseNotesRemoteBranches: "远程分支",
+    releaseNotesTags: "标签",
   },
 
   fileList: {
