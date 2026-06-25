@@ -2199,6 +2199,7 @@ const en = {
     menuClaude: "Claude Code",
     menuCodex: "Codex",
     menuSessions: "View sessions",
+    menuNewAiTask: "New AI task",
     searchPlaceholder: "Search…",
     searchNoResult: "No results",
   },
