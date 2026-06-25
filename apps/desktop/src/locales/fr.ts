@@ -2171,6 +2171,8 @@ const fr: Locale = {
     menuClaude: "Claude Code",
     menuCodex: "Codex",
     menuSessions: "Voir les sessions",
+    searchPlaceholder: "Rechercher…",
+    searchNoResult: "Aucun résultat",
   },
 };
 

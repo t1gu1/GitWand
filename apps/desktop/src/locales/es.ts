@@ -2160,6 +2160,8 @@ const es: Locale = {
     menuClaude: "Claude Code",
     menuCodex: "Codex",
     menuSessions: "Ver sesiones",
+    searchPlaceholder: "Buscar…",
+    searchNoResult: "Sin resultados",
   },
 };
 
