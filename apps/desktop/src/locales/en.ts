@@ -2202,6 +2202,8 @@ const en = {
     menuNewAiTask: "New AI task",
     searchPlaceholder: "Search…",
     searchNoResult: "No results",
+    searchPrev: "Previous (Shift+Enter)",
+    searchNext: "Next (Enter)",
   },
 } as const;
 
