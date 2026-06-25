@@ -230,6 +230,7 @@ const {
   loadBranches,
   createBranch,
   switchBranch,
+  carryChangesToBranch,
   deleteBranch,
   deleteRemoteBranch,
   deleteTag,
@@ -1870,14 +1871,14 @@ async function confirmDirtyCarry() {
   const pending = pendingDirtySwitch.value;
   if (!pending) return;
   pendingDirtySwitch.value = null;
-  const ok = pending.isCreate
-    ? await createBranch(pending.name)
-    : await switchBranch(pending.name);
+  // Carry the WIP across, stashing as a fallback when git refuses a plain
+  // switch (see carryChangesToBranch). Confirming the carry *is* confirming
+  // the stash/pop — that is what the user asked for.
+  const ok = await carryChangesToBranch(pending.name, pending.isCreate);
   if (!ok) {
-    // switchBranch/createBranch already set repoError to the underlying git
-    // error, prefixed with internal context ("switch branch: " / "create
-    // branch: "). Strip that prefix before surfacing it inside the
-    // user-facing carry-failure message.
+    // carryChangesToBranch leaves repoError set to the underlying git error,
+    // prefixed with internal context ("switch branch: " / "create branch: ").
+    // Strip that prefix before surfacing the user-facing carry-failure message.
     const detail = (repoError.value ?? "").replace(/^(?:switch|create) branch:\s*/, "");
     repoError.value = t("branches.dirtySwitchCarryFailed", detail);
     return;

@@ -30,6 +30,8 @@ import {
   gitCherryPick,
   gitCherryPickAbort,
   gitCherryPickContinue,
+  gitStash,
+  gitStashPop,
   gitStashList,
   gitStashApply,
   gitStashDrop,
@@ -1064,6 +1066,36 @@ export function useGitRepo(opts: { confirm?: ConfirmFn } = {}) {
     }
   }
 
+  /**
+   * Switch to (or create) a branch, carrying uncommitted WIP across.
+   *
+   * First tries a plain switch/create, which git allows when the WIP doesn't
+   * collide with the files differing between the two branches. If git refuses
+   * (it would overwrite local changes), falls back to stash → switch → pop so
+   * the WIP still follows the user to the target branch.
+   *
+   * On failure leaves `error.value` set to the underlying git error (prefixed
+   * "switch branch: " / "create branch: " / "switch (stash): ") and returns
+   * false; callers map that to their own user-facing message.
+   */
+  async function carryChangesToBranch(name: string, isCreate: boolean): Promise<boolean> {
+    if (!folderPath.value) return false;
+    const direct = isCreate ? await createBranch(name) : await switchBranch(name);
+    if (direct) return true;
+    isSwitchingBranch.value = true;
+    try {
+      await gitStash(folderPath.value);
+      const switched = isCreate ? await createBranch(name) : await switchBranch(name);
+      await gitStashPop(folderPath.value);
+      return switched;
+    } catch (err: any) {
+      error.value = `switch (stash): ${err.message}`;
+      return false;
+    } finally {
+      isSwitchingBranch.value = false;
+    }
+  }
+
   async function deleteBranch(name: string, force = false) {
     if (!folderPath.value) return;
     try {
@@ -1242,6 +1274,7 @@ export function useGitRepo(opts: { confirm?: ConfirmFn } = {}) {
     loadWorktrees,
     createBranch,
     switchBranch,
+    carryChangesToBranch,
     deleteBranch,
     deleteRemoteBranch,
     deleteTag,
