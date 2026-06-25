@@ -988,6 +988,7 @@ const es: Locale = {
     tabDashboard: "Panel",
     tabGit: "Git",
     tabEditor: "Editor",
+    tabTerminal: "Terminal",
     tabAi: "IA",
     tabLogs: "Registros",
     checkForUpdates: "Buscar actualizaciones",

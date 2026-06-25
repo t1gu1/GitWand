@@ -1005,6 +1005,7 @@ const en = {
     tabDashboard: "Dashboard",
     tabGit: "Git",
     tabEditor: "Editor",
+    tabTerminal: "Terminal",
     tabAi: "AI",
     tabLogs: "Logs",
     checkForUpdates: "Check for updates",
