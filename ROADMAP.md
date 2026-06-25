@@ -6,7 +6,7 @@
 
 ## What's Next
 
-### v3.1.0 — Terminal tabs & AI workspace
+### v3.2.0 — Terminal tabs & AI workspace
 
 _Inspired by t1gu1's feedback: "How can I code with AI in GitWand?" — GitWand as a native AI workspace._
 
@@ -33,7 +33,7 @@ The Agent Sessions launch action is wired end-to-end but doesn't produce a worki
 
 ---
 
-### v3.2.0 — Safety Bundle: pre-commit secrets scanner
+### v3.3.0 — Safety Bundle: pre-commit secrets scanner
 
 _Inspired by GitSquid. A "safety" feature with zero network dependency — everything local._
 
@@ -45,7 +45,7 @@ _Inspired by GitSquid. A "safety" feature with zero network dependency — every
 
 ---
 
-### v3.3.0 — Stacked Branches (native)
+### v3.4.0 — Stacked Branches (native)
 
 _A differentiating feature: stacked PRs workflow without an external CLI (Graphite, ghstack…)._
 
@@ -63,7 +63,7 @@ The paradigm: short stacked branches (`feat/step-1` → `feat/step-2` → `feat/
 
 ---
 
-### v3.4.0 — Voice Input (experimental)
+### v3.5.0 — Voice Input (experimental)
 
 - **Local dictation**: microphone button in the commit panel — transcription via embedded Whisper (`whisper-rs` Rust) — zero cloud
 - **Optional AI enrichment**: pass dictated text through `useAIProvider` for conventional commit formatting

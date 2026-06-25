@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-06-25
+
+### Added
+
+- **Customizable dock and startup view** — the AppDock position and visible tabs are now configurable in Settings; the startup view (which pane opens first on launch) is also user-selectable.
+- **PR create: unpublished branch warning** — GitWand warns when you try to open a pull request from a branch that hasn't been pushed to the remote yet, and offers to publish it in one click.
+- **Customizable release notes** — release note templates can be customized per-repo; the default template is smarter, deriving content from merged commit messages.
+- **Anonymous launch ping (GDPR-compliant telemetry)** — a single fire-and-forget ping on launch counts active installations; no personal data, no user identifiers, no tracking.
+- **Website: screenshot slideshow & lightbox** — the landing page features a scrollable screenshot gallery with a click-to-zoom lightbox.
+- **pnpm 11.9.0** — bumped via the `packageManager` field.
+
+### Fixed
+
+- **NUL bytes in AI CLI prompts** — diff content containing NUL bytes was silently corrupting prompts passed to AI CLI processes on spawn; they are now stripped before the process is launched.
+- **Website hero reflow on tab switch** — the hero section no longer jumps in height when switching between the Desktop and CLI tabs.
+- **VS Code: esbuild CVE** — esbuild bumped to `^0.28.1` (CVE GHSA-67mh-4wv8-2f99).
+- **CI: tag pattern narrowed** — the release workflow tag trigger now matches `v[0-9]*.*.*` only, excluding `vscode-v*` tags that were incorrectly triggering the desktop release pipeline.
+
 ## [3.0.0] - 2026-06-23
 
 ### Added
@@ -1117,7 +1135,11 @@ Design-system foundations — the app header and every overlay now ride on a sha
 - CI pipeline via GitHub Actions (Node 18, 20, 22)
 - 28 tests covering all patterns + real-world scenarios (package.json, Laravel routes, Vue SFC, CSS, .env files)
 
-[Unreleased]: https://github.com/devlint/GitWand/compare/v2.18.0...HEAD
+[Unreleased]: https://github.com/devlint/GitWand/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/devlint/GitWand/compare/v3.0.0...v3.1.0
+[3.0.0]: https://github.com/devlint/GitWand/compare/v2.24.0...v3.0.0
+[2.24.0]: https://github.com/devlint/GitWand/compare/v2.23.0...v2.24.0
+[2.23.0]: https://github.com/devlint/GitWand/compare/v2.22.0...v2.23.0
 [2.18.0]: https://github.com/devlint/GitWand/compare/v2.17.0...v2.18.0
 [2.17.0]: https://github.com/devlint/GitWand/compare/v2.16.0...v2.17.0
 [2.16.0]: https://github.com/devlint/GitWand/compare/v2.15.1...v2.16.0

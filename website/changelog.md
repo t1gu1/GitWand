@@ -5,6 +5,30 @@ description: Release history for GitWand — the native Git client with AI confl
 
 # Changelog
 
+## v3.1.0 — June 2026
+
+### Dock, startup, and a few quality-of-life wins
+
+The floating AppDock is now yours to configure: choose which tabs appear, where the dock sits, and which view opens when you launch the app. Small change, big difference if you spend your day in the same two or three views.
+
+When creating a pull request, GitWand now catches the case where your branch hasn't been pushed yet and offers to publish it for you — no more switching to the terminal to figure out why GitHub is confused.
+
+Release notes for your PRs can now be customized per-repo, and the default template got smarter: it derives a first draft from the merged commit messages so you're editing, not writing from scratch.
+
+### GDPR-compliant anonymous telemetry
+
+GitWand now sends a single anonymous ping when it launches. That's it — one request, no user identifiers, no device fingerprinting, no analytics events. The only thing it counts is "someone launched GitWand today." This is used purely to understand how many people are actively using the app. You can opt out in Settings.
+
+### AI CLI fix: NUL bytes stripped before spawn
+
+Diff content that contained NUL bytes (`\0`) — which can appear in binary-adjacent files — was silently corrupting the prompts GitWand passes to AI CLI tools like Claude Code. Those bytes are now stripped before the process is launched.
+
+### Website and small fixes
+
+The landing page has a new screenshot gallery with a lightbox. The hero no longer jumps in height when you switch between the Desktop and CLI tabs. The VS Code extension's esbuild dependency was bumped to address CVE GHSA-67mh-4wv8-2f99, and the CI tag filter was tightened to prevent `vscode-v*` tags from accidentally triggering the desktop release pipeline.
+
+---
+
 ## v3.0.0 — June 2026
 
 ### Today — your daily-driver action inbox
