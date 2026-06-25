@@ -234,6 +234,60 @@ export async function ghPrCount(cwd: string, state: string = "open"): Promise<nu
   }
 }
 
+// Minimal branch shape for the publish guard — only the fields it reads.
+interface BranchPublishInfo {
+  name: string;
+  isCurrent: boolean;
+  isRemote: boolean;
+  upstream: string | null;
+}
+
+// Strip the remote prefix from a remote-tracking ref ("origin/feat/x" → "feat/x").
+const bareRemoteName = (ref: string): string => ref.replace(/^[^/]+\//, "");
+
+// Fetch branches (camelCased) for the publish guard. Kept local to avoid a
+// circular import on backend.ts, which re-exports this module.
+async function listBranchesForGuard(cwd: string): Promise<BranchPublishInfo[]> {
+  if (isTauri()) {
+    const raw = await tauriInvoke<
+      Array<{ name: string; is_current: boolean; is_remote: boolean; upstream: string | null }>
+    >("git_branches", { cwd });
+    return raw.map((b) => ({
+      name: b.name,
+      isCurrent: b.is_current,
+      isRemote: b.is_remote,
+      upstream: b.upstream,
+    }));
+  }
+  const res = await devFetch(`${DEV_SERVER}/api/git-branches?cwd=${encodeURIComponent(cwd)}`);
+  if (!res.ok) throw new Error(`Failed to get branches: ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Server-side guard mirroring the PrCreateView UI block: refuse to create a PR
+ * while the current branch is unpublished (no upstream and no remote-tracking
+ * branch of the same name). The branch must be pushed first.
+ */
+async function assertCurrentBranchPublished(cwd: string): Promise<void> {
+  let branches: BranchPublishInfo[];
+  try {
+    branches = await listBranchesForGuard(cwd);
+  } catch {
+    // Can't determine branch state — don't block on a transient query failure.
+    return;
+  }
+  const cur = branches.find((b) => b.isCurrent && !b.isRemote);
+  if (!cur) return; // detached HEAD / unknown — let `gh` decide.
+  if (cur.upstream) return;
+  const published = branches.some((b) => b.isRemote && bareRemoteName(b.name) === cur.name);
+  if (!published) {
+    throw new Error(
+      "Branch is not published. Push the branch to its remote before creating a pull request.",
+    );
+  }
+}
+
 /**
  * Create a pull request (requires `gh` CLI).
  */
@@ -247,6 +301,7 @@ export async function ghCreatePr(
   /** Cross-fork target as "owner/repo". Empty → open against the origin repo. */
   baseRepo: string = "",
 ): Promise<PullRequest> {
+  await assertCurrentBranchPublished(cwd);
   if (isTauri()) {
     const raw = await tauriInvoke<{
       number: number;

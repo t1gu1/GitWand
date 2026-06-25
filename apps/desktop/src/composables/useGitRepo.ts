@@ -759,6 +759,9 @@ export function useGitRepo(opts: { confirm?: ConfirmFn } = {}) {
         forcePushPreferred.value = false;
       }
       await refresh();
+      // Publishing sets the branch upstream — reload branches so consumers
+      // (e.g. the PR-create publish guard) see the new tracking state.
+      await loadBranches();
     } catch (err: any) {
       error.value = `push: ${err.message}`;
     } finally {
