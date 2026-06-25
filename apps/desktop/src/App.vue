@@ -1394,36 +1394,6 @@ async function onRebaseBannerActionDone(action: "continue" | "abort" | "skip") {
   }
 }
 
-// Driven into RebaseProgressBanner so it can show a spinner while we run.
-const rebaseAiResolving = ref(false);
-
-/**
- * "Resolve with AI" from the paused-rebase banner: run the same resolution
- * pipeline the MergeEditor uses (LLM fallback included when configured), write
- * the results to disk and stage every file that came out conflict-free. We stop
- * short of `--continue` on purpose — the now-enabled Continue button stays a
- * deliberate user action, matching the rest of the banner's UX.
- */
-async function onRebaseBannerResolveAi() {
-  if (!repoFolderPath.value || rebaseAiResolving.value) return;
-  rebaseAiResolving.value = true;
-  try {
-    await mergeOpenPath(repoFolderPath.value);
-    resolveAll();
-    await saveAllFiles();
-    const resolved = mergeFiles.value
-      .filter((f) => f.result.stats.totalConflicts === 0)
-      .map((f) => f.path);
-    if (resolved.length) await stageFiles(resolved);
-    await refreshRepoState();
-    await repoRefresh();
-  } catch (err: any) {
-    repoError.value = `ai-resolve: ${err?.message || String(err)}`;
-  } finally {
-    rebaseAiResolving.value = false;
-  }
-}
-
 // Driven into RebaseProgressBanner so it can show a spinner during the loop.
 const rebaseAutoResolving = ref(false);
 
@@ -2580,9 +2550,8 @@ onUnmounted(() => {
                  Non-blocking: sits at the top of the view so the resolution area
                  below stays reachable. -->
             <RebaseProgressBanner v-if="showRebaseBanner && repoOperationState" :repo-state="repoOperationState"
-              :cwd="repoFolderPath ?? ''" :ai-available="aiProvider.isAvailable.value" :ai-resolving="rebaseAiResolving"
-              :auto-resolving="rebaseAutoResolving"
-              @action-done="onRebaseBannerActionDone" @resolve-ai="onRebaseBannerResolveAi"
+              :cwd="repoFolderPath ?? ''" :auto-resolving="rebaseAutoResolving"
+              @action-done="onRebaseBannerActionDone"
               @auto-resolve="onRebaseBannerAutoResolve" @error="(msg) => { repoError = msg; }" />
 
             <!-- Conflict banner (merge or cherry-pick) — suppressed during a

@@ -529,8 +529,6 @@ const zhCN: Locale = {
     bannerTitle: "Rebase 已暂停",
     bannerConflictHint: "解决冲突后点击继续。",
     bannerReadyHint: "冲突已解决 — 可以继续。",
-    resolveAi: "用 AI 解决",
-    resolveAiBusy: "正在解决…",
     resolveAuto: "自动解决",
     resolveAutoBusy: "正在自动解决…",
     resolveAutoHint: "自动解决每一步并继续变基，直到完成或遇到无法解决的冲突。",

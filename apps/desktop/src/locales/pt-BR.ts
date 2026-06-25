@@ -535,8 +535,6 @@ const ptBR: Locale = {
     bannerTitle: "Rebase pausado",
     bannerConflictHint: "Resolva os conflitos e clique em Continuar.",
     bannerReadyHint: "Conflitos resolvidos — pronto para continuar.",
-    resolveAi: "Resolver com IA",
-    resolveAiBusy: "Resolvendo…",
     resolveAuto: "Resolução auto",
     resolveAutoBusy: "Resolvendo auto…",
     resolveAutoHint: "Resolve cada etapa e continua o rebase automaticamente até terminar ou até um conflito que não consiga resolver.",

@@ -539,8 +539,6 @@ const fr: Locale = {
     bannerTitle: "Rebase en pause",
     bannerConflictHint: "Résolvez les conflits puis cliquez sur Continuer.",
     bannerReadyHint: "Conflits résolus — vous pouvez continuer.",
-    resolveAi: "Résoudre avec l'IA",
-    resolveAiBusy: "Résolution…",
     resolveAuto: "Résolution auto",
     resolveAutoBusy: "Résolution auto…",
     resolveAutoHint: "Résout chaque étape et continue le rebase automatiquement jusqu'à la fin ou jusqu'à un conflit insoluble.",

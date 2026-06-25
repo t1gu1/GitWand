@@ -546,8 +546,6 @@ const en = {
     bannerTitle: "Rebase paused",
     bannerConflictHint: "Resolve conflicts then click Continue.",
     bannerReadyHint: "Conflicts resolved — ready to continue.",
-    resolveAi: "Resolve with AI",
-    resolveAiBusy: "Resolving…",
     resolveAuto: "Auto-resolve",
     resolveAutoBusy: "Auto-resolving…",
     resolveAutoHint: "Resolve every step and continue the rebase automatically until it finishes or hits a conflict it can't resolve.",

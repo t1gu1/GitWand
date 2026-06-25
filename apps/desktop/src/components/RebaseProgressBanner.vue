@@ -13,34 +13,25 @@
 import { ref, computed } from "vue";
 import type { RepoOperationState } from "../utils/backend";
 import { t } from "../composables/useI18n";
-import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   repoState: RepoOperationState;
   cwd: string;
-  /** Whether an AI provider is configured — gates the "Resolve with AI" button. */
-  aiAvailable?: boolean;
-  /** Driven by the parent while the per-step AI resolution runs (App.vue owns the flow). */
-  aiResolving?: boolean;
   /** Driven by the parent while the whole-rebase auto-resolve loop runs. */
   autoResolving?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "action-done", action: "continue" | "abort" | "skip"): void;
-  (e: "resolve-ai"): void;
   (e: "auto-resolve"): void;
   (e: "error", msg: string): void;
 }>();
 
 const busy = ref(false);
 
-// Any in-flight action (Continue/Skip/Abort, the per-step AI resolution, or the
-// whole-rebase auto-resolve loop) disables the whole button row to avoid
-// overlapping git operations.
-const anyBusy = computed(
-  () => busy.value || props.aiResolving === true || props.autoResolving === true
-);
+// Any in-flight action (Continue/Skip/Abort or the whole-rebase auto-resolve
+// loop) disables the whole button row to avoid overlapping git operations.
+const anyBusy = computed(() => busy.value || props.autoResolving === true);
 
 const shortHead = computed(() =>
   props.repoState.operationHead
@@ -111,13 +102,6 @@ async function runAction(action: "continue" | "abort" | "skip") {
         :disabled="anyBusy" :title="t('rebase.resolveAutoHint')" @click="emit('auto-resolve')">
         <span v-if="autoResolving" class="rpm-spinner" aria-hidden="true" />
         {{ autoResolving ? t('rebase.resolveAutoBusy') : t('rebase.resolveAuto') }}
-      </button>
-      <!-- AI resolution (current step only): offered while conflicts remain and a provider is set. -->
-      <button v-if="aiAvailable && repoState.hasConflict" class="rpm-btn rpm-btn--ai"
-        :disabled="anyBusy" @click="emit('resolve-ai')">
-        <span v-if="aiResolving" class="rpm-spinner" aria-hidden="true" />
-        <AiSparkle v-else :size="13" />
-        {{ aiResolving ? t('rebase.resolveAiBusy') : t('rebase.resolveAi') }}
       </button>
       <button class="rpm-btn rpm-btn--primary" :disabled="anyBusy || repoState.hasConflict"
         :title="repoState.hasConflict ? t('rebase.bannerConflictHint') : t('rebase.continue')"
@@ -285,19 +269,6 @@ async function runAction(action: "continue" | "abort" | "skip") {
   border-color: var(--color-border);
   color: var(--color-text-muted);
   box-shadow: none;
-}
-
-/* AI resolution: accent-tinted outline so it reads as the smart shortcut
-   without competing with the primary Continue call-to-action. */
-.rpm-btn--ai {
-  color: var(--color-accent);
-  border-color: var(--color-accent);
-}
-
-.rpm-btn--ai:hover:not(:disabled) {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-text, #fff);
 }
 
 /* Auto-resolve: solid accent fill — the one-click "walk the whole rebase"
