@@ -188,7 +188,7 @@ async function copy() {
 </template>
 
 <style scoped>
-.rn-desc { color: var(--color-text-muted); font-size: var(--font-size-sm); margin: 0 0 var(--space-4); }
+.rn-desc { color: var(--color-text-muted); font-size: var(--font-size-sm); margin: 0 0 var(--space-6); }
 .rn-refs {
   display: flex;
   align-items: flex-end;
