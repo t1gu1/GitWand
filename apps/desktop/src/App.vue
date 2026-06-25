@@ -1380,18 +1380,25 @@ async function refreshRepoState() {
   }
 }
 
+/**
+ * A rebase that ran to completion replays local commits, rewriting history
+ * relative to the remote, so the next push must be a force push — surface it on
+ * the header's sync-split button. "Completed" = a rebase that was in progress
+ * is gone after the refresh. Callers pass the pre-action `wasRebasing` snapshot.
+ */
+function preferForcePushIfRebaseCompleted(wasRebasing: boolean) {
+  if (wasRebasing && repoOperationState.value === null) {
+    forcePushPreferred.value = true;
+  }
+}
+
 async function onRebaseBannerActionDone(action: "continue" | "abort" | "skip") {
   // After continue/abort/skip: re-poll state, refresh repo
   const wasRebasing = repoOperationState.value !== null;
   await refreshRepoState();
   await repoRefresh();
-  // A rebase that ran to completion (continue/skip walked off the last step)
-  // rewrote local history relative to the remote, so the next push must be a
-  // force push — surface it on the header's sync-split button. Abort restores
-  // the pre-rebase state, so it must NOT flip the preference.
-  if (action !== "abort" && wasRebasing && repoOperationState.value === null) {
-    forcePushPreferred.value = true;
-  }
+  // Abort restores the pre-rebase state, so it must NOT flip the preference.
+  if (action !== "abort") preferForcePushIfRebaseCompleted(wasRebasing);
 }
 
 // Driven into RebaseProgressBanner so it can show a spinner during the loop.
@@ -1437,11 +1444,7 @@ async function onRebaseBannerAutoResolve() {
     }
     await refreshRepoState();
     await repoRefresh();
-    // Rebase walked to completion → local history was rewritten vs the remote,
-    // so prefer a force push on the header's sync-split button.
-    if (wasRebasing && repoOperationState.value === null) {
-      forcePushPreferred.value = true;
-    }
+    preferForcePushIfRebaseCompleted(wasRebasing);
   } catch (err: any) {
     repoError.value = `auto-resolve: ${err?.message || String(err)}`;
   } finally {
