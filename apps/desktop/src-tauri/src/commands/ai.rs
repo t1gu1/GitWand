@@ -191,6 +191,12 @@ pub(crate) async fn claude_cli_prompt(
 
     let fmt = output_format.unwrap_or_else(|| "text".to_string());
 
+    // The prompt is passed as a CLI argument, and spawning a process with an
+    // interior NUL byte fails with "nul byte found in provided data". Binary
+    // or malformed content can leak a `\0` into the prompt via diffs or file
+    // snapshots, so strip NULs defensively before building the command.
+    let full_prompt = full_prompt.replace('\0', "");
+
     let mut cmd = hidden_cmd(&binary);
     cmd.args(["-p", &full_prompt, "--output-format", &fmt]);
     // v2.17 — explicit per-provider model selection. When empty, the CLI
@@ -294,6 +300,10 @@ pub(crate) async fn codex_cli_prompt(
         }
         _ => prompt,
     };
+
+    // Strip NUL bytes — the prompt is passed as a CLI argument and an interior
+    // `\0` makes the spawn fail with "nul byte found in provided data".
+    let full_prompt = full_prompt.replace('\0', "");
 
     let mut cmd = hidden_cmd(&binary);
     cmd.arg("exec");
@@ -432,6 +442,10 @@ pub(crate) async fn opencode_cli_prompt(
         }
         _ => prompt,
     };
+
+    // Strip NUL bytes — the prompt is passed as a CLI argument and an interior
+    // `\0` makes the spawn fail with "nul byte found in provided data".
+    let full_prompt = full_prompt.replace('\0', "");
 
     let mut cmd = hidden_cmd(&binary);
     cmd.arg("run");
@@ -602,6 +616,10 @@ pub(crate) fn copilot_cli_prompt(
         }
         _ => prompt,
     };
+
+    // Strip NUL bytes — the prompt is passed as a CLI argument and an interior
+    // `\0` makes the spawn fail with "nul byte found in provided data".
+    let full_prompt = full_prompt.replace('\0', "");
 
     let mut cmd = hidden_cmd(&binary);
     // `--no-color` keeps stdout free of ANSI escapes. Flags precede the
