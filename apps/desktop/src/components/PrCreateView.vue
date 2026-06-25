@@ -64,6 +64,9 @@ const forkTargets = computed(() => {
   ];
 });
 
+// Strip the remote prefix from a remote-tracking ref ("origin/feat/x" → "feat/x").
+const bareRemoteName = (ref: string) => ref.replace(/^[^/]+\//, "");
+
 // ─── Base branch candidates ─────────────────────────────
 const baseCandidates = computed<string[]>(() => {
   const locals = new Set<string>();
@@ -73,7 +76,7 @@ const baseCandidates = computed<string[]>(() => {
   }
   for (const b of props.branches) {
     if (b.isRemote) {
-      const bare = b.name.replace(/^[^/]+\//, "");
+      const bare = bareRemoteName(b.name);
       if (!locals.has(bare) && bare !== props.currentBranch) remoteOnly.push(bare);
     }
   }
@@ -233,17 +236,12 @@ const isCurrentBranchPublished = computed<boolean>(() => {
   if (!cur) return true; // unknown branch — don't nag
   const local = props.branches.find((b) => !b.isRemote && b.name === cur);
   if (local?.upstream) return true;
-  return props.branches.some(
-    (b) => b.isRemote && b.name.replace(/^[^/]+\//, "") === cur,
-  );
+  return props.branches.some((b) => b.isRemote && bareRemoteName(b.name) === cur);
 });
 
 // First submit click on an unpublished branch reveals the warning and waits;
-// the next click goes through. Reset whenever the branch becomes published.
+// the next click goes through.
 const unpublishedWarned = ref(false);
-watch(isCurrentBranchPublished, (published) => {
-  if (published) unpublishedWarned.value = false;
-});
 
 async function onSubmit() {
   if (!canSubmit.value) return;
@@ -692,7 +690,7 @@ function removeReviewer(name: string) {
 
       <!-- Footer -->
       <footer class="pcv-footer">
-        <div v-if="unpublishedWarned && !baseIsSameAsHead" class="pcv-note">
+        <div v-if="unpublishedWarned && !isCurrentBranchPublished" class="pcv-note">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="10" />
             <path d="M12 8v4M12 16h0" />
