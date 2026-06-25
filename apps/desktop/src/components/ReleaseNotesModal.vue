@@ -4,7 +4,6 @@ import { gitListTags, getGitBranches, gitExec, type GitBranch } from "../utils/b
 import { useI18n } from "../composables/useI18n";
 import { useReleaseNotes, FROM_PROJECT_START } from "../composables/useReleaseNotes";
 import BaseModal from "./BaseModal.vue";
-import AiSparkle from "./AiSparkle.vue";
 
 const props = defineProps<{
   cwd: string;
@@ -165,7 +164,10 @@ async function copy() {
         @click="runGenerate"
       >
         <span class="rn-generate-label">{{ t('dashboard.releaseNotesGenerate') }}</span>
-        <AiSparkle v-if="isGenerating" class="rn-generate-loader" :size="15" />
+        <svg v-if="isGenerating" class="rn-generate-loader" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+          <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.3" />
+          <path d="M7 1.5A5.5 5.5 0 0112.5 7" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" />
+        </svg>
       </button>
     </div>
     <p v-if="lastError" class="rn-error">{{ lastError }}</p>
@@ -211,7 +213,12 @@ async function copy() {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  margin: -7px 0 0 -7px; /* half the 14px box — keeps it centred under rotation */
+  animation: rn-spin 0.7s linear infinite;
+}
+
+@keyframes rn-spin {
+  to { transform: rotate(360deg); }
 }
 
 .rn-input,

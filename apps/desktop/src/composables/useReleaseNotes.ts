@@ -28,16 +28,68 @@ export interface ReleaseNotesOptions {
 
 function localeToEnglishName(code: string): string {
   const map: Record<string, string> = {
-    fr: "French", en: "English", es: "Spanish", de: "German",
-    it: "Italian", pt: "Portuguese", ja: "Japanese", ko: "Korean",
-    zh: "Chinese", nl: "Dutch", ru: "Russian", ar: "Arabic",
-    pl: "Polish", sv: "Swedish", da: "Danish", nb: "Norwegian",
+    fr: "French",
+    en: "English",
+    es: "Spanish",
+    de: "German",
+    it: "Italian",
+    pt: "Portuguese",
+    ja: "Japanese",
+    ko: "Korean",
+    zh: "Chinese",
+    nl: "Dutch",
+    ru: "Russian",
+    ar: "Arabic",
+    pl: "Polish",
+    sv: "Swedish",
+    da: "Danish",
+    nb: "Norwegian",
   };
   return map[code] ?? localeLabels[code as SupportedLocale] ?? code;
 }
 
-function buildSystemPrompt(locale: string): string {
+function buildSystemPrompt(locale: string, firstRelease = false): string {
   const lang = localeToEnglishName(locale);
+
+  if (firstRelease) {
+    // The project has never been released. Frame this as an inaugural
+    // announcement that introduces the project and showcases what it offers —
+    // NOT a changelog of edits. There is no prior version to diff against.
+    return `You write the announcement for a project's very FIRST release.
+This project has never been released before, so there is NO previous
+version to compare against. Do NOT frame anything as changes, updates,
+fixes, or breaking changes — nothing is "new since last time" because
+there was no last time. This is the debut.
+
+Tone: warm, welcoming, a little proud. "Here is this project and
+everything it offers." Present the features that exist today, not a
+history of how they were built.
+
+Rules:
+- Output strict Markdown, ready to paste into a GitHub release. No code
+  fences around the whole thing, no preamble outside the document itself.
+- Start with a single H2 heading announcing the release, including the
+  target ref shown below (never higher than H2), followed by ONE or two
+  sentences introducing what the project is and who it's for.
+- Then list what the project offers under these sections, ONLY if
+  non-empty:
+    ## Highlights — the headline capabilities, the reasons to care
+    ## Features   — the full set of user-facing features it ships with
+- Each bullet is ONE line, user-centric, written in the PRESENT tense as
+  a capability the project HAS ("Resolves merge conflicts automatically",
+  not "Added automatic conflict resolution"). No commit hashes, no author
+  names, no trailers.
+- Collapse build/CI/refactor/chore/"wip"/"fix typo" commits away
+  entirely — an inaugural announcement never mentions internal plumbing.
+- Do NOT include Changed, Fixed, Security, Breaking changes, or Internal
+  sections. There are no deltas to report.
+- Synthesize the commit list into the product's capabilities; do not
+  enumerate commits. Do not invent features that aren't supported by the
+  commit list.
+- Write every heading and bullet in ${lang}.
+- Keep the whole output under 3000 characters.`;
+  }
+
   return `You write clean, user-facing release notes from a list of Git
 commits.
 
@@ -67,7 +119,24 @@ Rules:
 - Do not invent features that aren't in the commit list.`;
 }
 
-function buildUserPrompt(fromRef: string, toRef: string, commits: string): string {
+function buildUserPrompt(
+  fromRef: string,
+  toRef: string,
+  commits: string,
+): string {
+  // "From the project creation" covers the entire history up to the target,
+  // including the initial commit — make that explicit so the model doesn't
+  // treat the base as an excluded lower bound.
+  if (fromRef === FROM_PROJECT_START) {
+    return `Base ref: the project's initial commit (inclusive)
+Target ref: ${toRef}
+
+--- commits (entire history through ${toRef}, including the very first commit of the project, newest first) ---
+${commits.trim() || "(no commits)"}
+
+Write the release notes.`;
+  }
+
   return `Base ref: ${fromRef}
 Target ref: ${toRef}
 
@@ -90,14 +159,23 @@ function stripMarkdownFences(raw: string): string {
 }
 
 /**
+ * Drop any preamble the model leaks before the document itself — e.g. a stray
+ * "Release notes = document → write normal English (per rules)." line. Both
+ * prompts require the output to start with an H2 heading, so anything before
+ * the first Markdown heading is noise. No-op when no heading is found.
+ */
+function stripPreamble(s: string): string {
+  const idx = s.search(/^#{1,6}\s/m);
+  return idx > 0 ? s.slice(idx).trimStart() : s;
+}
+
+/**
  * Try to find the most recent tag for a sensible default "from" value.
  * Falls back to an empty string, letting the caller prompt the user.
  */
 export async function latestTag(cwd: string): Promise<string> {
   try {
-    const res = await gitExec(cwd, [
-      "describe", "--tags", "--abbrev=0",
-    ]);
+    const res = await gitExec(cwd, ["describe", "--tags", "--abbrev=0"]);
     if (res.exitCode !== 0) return "";
     return (res.stdout ?? "").trim();
   } catch {
@@ -160,14 +238,14 @@ export function useReleaseNotes() {
         throw new Error(t("errors.noCommitsInRange", fromRef, toRef));
       }
 
-      const systemPrompt = buildSystemPrompt(locale);
+      const systemPrompt = buildSystemPrompt(locale, fromProjectStart);
       const userPrompt = buildUserPrompt(fromRef, toRef, commits);
 
       const raw = await ai.rawPrompt(systemPrompt, userPrompt);
       if (!raw) {
         throw new Error(t("errors.emptyAiResponse"));
       }
-      const markdown = stripMarkdownFences(raw);
+      const markdown = stripPreamble(stripMarkdownFences(raw));
       lastMarkdown.value = markdown;
       return markdown;
     } catch (err: unknown) {
