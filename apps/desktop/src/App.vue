@@ -1380,10 +1380,18 @@ async function refreshRepoState() {
   }
 }
 
-async function onRebaseBannerActionDone() {
+async function onRebaseBannerActionDone(action: "continue" | "abort" | "skip") {
   // After continue/abort/skip: re-poll state, refresh repo
+  const wasRebasing = repoOperationState.value !== null;
   await refreshRepoState();
   await repoRefresh();
+  // A rebase that ran to completion (continue/skip walked off the last step)
+  // rewrote local history relative to the remote, so the next push must be a
+  // force push — surface it on the header's sync-split button. Abort restores
+  // the pre-rebase state, so it must NOT flip the preference.
+  if (action !== "abort" && wasRebasing && repoOperationState.value === null) {
+    forcePushPreferred.value = true;
+  }
 }
 
 // Driven into RebaseProgressBanner so it can show a spinner while we run.
@@ -1431,6 +1439,7 @@ async function onRebaseBannerAutoResolve() {
   if (!repoFolderPath.value || rebaseAutoResolving.value) return;
   rebaseAutoResolving.value = true;
   const cwd = repoFolderPath.value;
+  const wasRebasing = repoOperationState.value !== null;
   try {
     const { gitRebaseAction } = await import("./utils/backend");
     for (let i = 0; i < 100; i++) {
@@ -1458,6 +1467,11 @@ async function onRebaseBannerAutoResolve() {
     }
     await refreshRepoState();
     await repoRefresh();
+    // Rebase walked to completion → local history was rewritten vs the remote,
+    // so prefer a force push on the header's sync-split button.
+    if (wasRebasing && repoOperationState.value === null) {
+      forcePushPreferred.value = true;
+    }
   } catch (err: any) {
     repoError.value = `auto-resolve: ${err?.message || String(err)}`;
   } finally {

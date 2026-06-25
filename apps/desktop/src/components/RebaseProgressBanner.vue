@@ -27,7 +27,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "action-done"): void;
+  (e: "action-done", action: "continue" | "abort" | "skip"): void;
   (e: "resolve-ai"): void;
   (e: "auto-resolve"): void;
   (e: "error", msg: string): void;
@@ -60,7 +60,7 @@ async function runAction(action: "continue" | "abort" | "skip") {
   try {
     const { gitRebaseAction } = await import("../utils/backend");
     await gitRebaseAction(props.cwd, action);
-    emit("action-done");
+    emit("action-done", action);
   } catch (err: any) {
     emit("error", err?.message ?? String(err));
   } finally {
